@@ -58,6 +58,13 @@ test('drag and drop ordering is translated', () => {
   assert.match(translate('Spunta le colonne da mostrare e trascinale (o usa le frecce) per cambiarne l’ordine. Nascondere una colonna non cancella i dati.', 'en'), /^Tick the columns to show and drag them/);
   assert.equal(translate('Trascina per riordinare, oppure usa i tasti ↑ ↓', 'it'), 'Trascina per riordinare, oppure usa i tasti ↑ ↓');
 });
+test('duplicate detection texts are translated, placeholders and markup included', () => {
+  assert.equal(translate('<label class="toggle-label duplicate-toggle"><input type="checkbox"> Duplicati <span class="tiny-count">', 'en'), '<label class="toggle-label duplicate-toggle"><input type="checkbox"> Duplicates <span class="tiny-count">');
+  assert.deepEqual(['{0} è collegato anche a: {1}', '{0} è presente anche in: {1}', '{0} attività con incident duplicato', '{0} associazioni con incident duplicato'].map(text => translate(text, 'en')), ['{0} is also linked to: {1}', '{0} also appears in: {1}', '{0} tasks with a duplicate incident', '{0} associations with a duplicate incident']);
+  assert.deepEqual(['Possibile duplicato', 'Rimuovi identiche', 'Esiste già un’associazione identica', 'Incident già presente', 'identica', 'nascosta'].map(text => translate(text, 'en')), ['Possible duplicate', 'Remove identical', 'An identical association already exists', 'Incident already present', 'identical', 'hidden']);
+  assert.equal(translate('Attività che condividono l’incident {0}.', 'en'), 'Tasks sharing incident {0}.');
+  assert.equal(translate('Possibile duplicato', 'it'), 'Possibile duplicato');
+});
 
 test('built-in language files are valid and every Italian key used for counts and defaults is covered', () => {
   const en = builtIn('en'), it = builtIn('it');

@@ -1,7 +1,7 @@
 'use strict';
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { APP_NAME, initialData, baseData, demoData, demoReleaseDates, validateData, migrateArchive, validateArchive, createOrganization, matchIssues, sortTasks, dateColor, extractThemePalette, themeFromLogo, normalizeUrl, isWebUrl, validPortalTemplate, portalUrl, ORGANIZATION_FILE_KINDS, organizationExport, organizationFileName, parseOrganizationFile, applyOrganizationImport, importedOrganizationData, uniqueOrganizationName, FONT_SIZE_PARTS, FONT_SIZE_STEP, defaultFontSizes, clampFontSize, HIGHLIGHT_LIMIT, defaultHighlights, TASK_COLUMN_IDS, defaultTaskColumns, normalizeTaskColumns, nextReleaseDate, today } = require('./core');
+const { APP_NAME, initialData, baseData, demoData, demoReleaseDates, validateData, migrateArchive, validateArchive, createOrganization, matchIssues, findDuplicates, sortTasks, dateColor, extractThemePalette, themeFromLogo, normalizeUrl, isWebUrl, validPortalTemplate, portalUrl, ORGANIZATION_FILE_KINDS, organizationExport, organizationFileName, parseOrganizationFile, applyOrganizationImport, importedOrganizationData, uniqueOrganizationName, FONT_SIZE_PARTS, FONT_SIZE_STEP, defaultFontSizes, clampFontSize, HIGHLIGHT_LIMIT, defaultHighlights, TASK_COLUMN_IDS, defaultTaskColumns, normalizeTaskColumns, nextReleaseDate, today } = require('./core');
 
 test('default archive is valid and independent between invocations', () => {
   const first = initialData(), second = initialData();
@@ -666,4 +666,40 @@ test('organization files from previous versions still import and keep current hi
   const bad = organizationExport(organization, 'data');
   bad.data.highlights = [{ id: 'x', name: 'X', color: 'giallo' }];
   assert.throws(() => parseOrganizationFile(bad), /Evidenziatori non validi/);
+});
+
+test('duplicates are detected by incident in associations and in the tasks they resolve to', () => {
+  const task = (id, code, hidden = false) => ({ id, code, hidden });
+  const tasks = [task('t1', 'ORB-1'), task('t2', 'orb-2'), task('t3', 'ORB-3'), task('t4', ' orb-3 ', true), task('t5', 'ORB-5')];
+  const issues = [
+    { id: 'i1', code: 'ORB-1', incident: 'INC-1', problem: 'PRB-1' },
+    { id: 'i2', code: 'ORB-2', incident: ' inc-1 ', problem: '' },
+    { id: 'i3', code: 'orb-1', incident: 'INC-1', problem: 'prb-1' },
+    { id: 'i4', code: 'ORB-3', incident: 'INC-3', problem: '' },
+    { id: 'i5', code: 'ORB-5', incident: '', problem: 'PRB-1' },
+    { id: 'i6', code: 'ORB-5', incident: '', problem: 'PRB-1' },
+    { id: 'i7', code: 'ORB-5', incident: 'INC-5', problem: '' },
+    { id: 'i8', code: 'ORB-9', incident: 'INC-9', problem: '' },
+    { id: 'i9', code: 'ORB-10', incident: 'inc-9', problem: '' }
+  ];
+  const result = findDuplicates(tasks, issues);
+  assert.deepEqual(result.groups.map(group => [group.key, group.incident, group.issueIds, group.taskIds]), [
+    ['INC-1', 'INC-1', ['i1', 'i2', 'i3'], ['t1', 't2']],
+    ['INC-3', 'INC-3', ['i4'], ['t3', 't4']],
+    ['INC-9', 'INC-9', ['i8', 'i9'], []]
+  ]);
+  assert.deepEqual([...result.issues.keys()], ['i1', 'i2', 'i3', 'i8', 'i9']);
+  assert.deepEqual([...result.tasks.keys()], ['t1', 't2', 't3', 't4']);
+  assert.deepEqual(result.tasks.get('t1').map(group => group.key), ['INC-1']);
+  assert.deepEqual(result.identical, ['i3'], 'only the later copy of an identical association is removable; rows without incident are ignored');
+  assert.equal(result.tasks.has('t5') || result.issues.has('i5') || result.issues.has('i7'), false);
+  const clean = findDuplicates(tasks, issues.filter(issue => !['i2', 'i3', 'i9'].includes(issue.id)));
+  assert.deepEqual(clean.groups.map(group => group.key), ['INC-3'], 'same portal code on two tasks still shares the incident');
+  assert.deepEqual(findDuplicates([], []), { groups: [], issues: new Map(), tasks: new Map(), identical: [] });
+});
+test('demo data has no duplicated incidents', () => {
+  const data = demoData('it', new Date('2026-03-15T12:00:00'));
+  const result = findDuplicates(data.tasks, data.issues);
+  assert.equal(result.groups.length, 0);
+  assert.equal(result.identical.length, 0);
 });

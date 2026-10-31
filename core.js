@@ -554,6 +554,44 @@ function matchIssues(task, issues) {
     problems: [...new Set(matches.map(x => x.problem.trim()).filter(Boolean))]
   };
 }
+const referenceKey = value => String(value ?? '').trim().toUpperCase();
+// The incident is the duplicate key: it is compared like portal codes, ignoring case and surrounding spaces.
+// An incident is duplicated in the issue list when it appears in more than one association, and among tasks
+// when, through its associations, it resolves to more than one task. Associations without incident are never duplicates.
+function findDuplicates(tasks, issues) {
+  const tasksByCode = new Map(), groups = new Map();
+  for (const task of tasks) {
+    const code = referenceKey(task.code);
+    if (!tasksByCode.has(code)) tasksByCode.set(code, []);
+    tasksByCode.get(code).push(task.id);
+  }
+  for (const issue of issues) {
+    const key = referenceKey(issue.incident);
+    if (!key) continue;
+    if (!groups.has(key)) groups.set(key, { key, incident: issue.incident.trim(), issueIds: [], codes: [], taskIds: [] });
+    const group = groups.get(key), code = referenceKey(issue.code);
+    group.issueIds.push(issue.id);
+    if (!group.codes.includes(code)) {
+      group.codes.push(code);
+      group.taskIds.push(...(tasksByCode.get(code) || []));
+    }
+  }
+  const result = { groups: [], issues: new Map(), tasks: new Map(), identical: [] };
+  for (const group of groups.values()) {
+    if (group.issueIds.length < 2 && group.taskIds.length < 2) continue;
+    result.groups.push(group);
+    if (group.issueIds.length > 1) for (const issueId of group.issueIds) result.issues.set(issueId, group);
+    if (group.taskIds.length > 1) for (const taskId of group.taskIds) result.tasks.set(taskId, [...(result.tasks.get(taskId) || []), group]);
+  }
+  // Associations repeating code, incident and problem of an earlier one add nothing: the first of each set is kept.
+  const seen = new Set();
+  for (const issue of issues) {
+    if (!referenceKey(issue.incident)) continue;
+    const triple = [issue.code, issue.incident, issue.problem].map(referenceKey).join('\u0000');
+    if (seen.has(triple)) result.identical.push(issue.id); else seen.add(triple);
+  }
+  return result;
+}
 function sortTasks(tasks, sort = [{ key: 'releaseDate', direction: 'asc' }]) {
   return [...tasks].sort((a, b) => {
     for (const { key, direction } of sort) {
@@ -650,7 +688,7 @@ function themeFromLogo(pixels) {
   return palette;
 }
 const core = {
-  APP_NAME, initialData, baseData, demoData, demoReleaseDates, validateData, migrateArchive, validateArchive, createOrganization, matchIssues, sortTasks, dateColor, today, validLanguage,
+  APP_NAME, initialData, baseData, demoData, demoReleaseDates, validateData, migrateArchive, validateArchive, createOrganization, matchIssues, findDuplicates, sortTasks, dateColor, today, validLanguage,
   extractThemePalette, themeFromLogo, normalizeUrl, isWebUrl, validPortalTemplate, portalUrl,
   ORGANIZATION_FILE_KINDS, organizationExport, organizationFileName, parseOrganizationFile, applyOrganizationImport, importedOrganizationData, uniqueOrganizationName,
   FONT_SIZE_PARTS, FONT_SIZE_STEP, defaultFontSizes, clampFontSize,

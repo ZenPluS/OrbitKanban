@@ -1,9 +1,9 @@
 'use strict';
-const { APP_NAME, validateData, matchIssues, sortTasks, dateColor, extractThemePalette, themeFromLogo, normalizeUrl, isWebUrl, validPortalTemplate, portalUrl, parseOrganizationFile, applyOrganizationImport, importedOrganizationData, uniqueOrganizationName, FONT_SIZE_PARTS, FONT_SIZE_STEP, defaultFontSizes, clampFontSize, HIGHLIGHT_LIMIT, defaultTaskColumns, normalizeTaskColumns, TAG_LIMIT, TAG_NAME_MAX, today, nextReleaseDate } = window.OrbitaCore;
+const { APP_NAME, validateData, matchIssues, findDuplicates, sortTasks, dateColor, extractThemePalette, themeFromLogo, normalizeUrl, isWebUrl, validPortalTemplate, portalUrl, parseOrganizationFile, applyOrganizationImport, importedOrganizationData, uniqueOrganizationName, FONT_SIZE_PARTS, FONT_SIZE_STEP, defaultFontSizes, clampFontSize, HIGHLIGHT_LIMIT, defaultTaskColumns, normalizeTaskColumns, TAG_LIMIT, TAG_NAME_MAX, today, nextReleaseDate } = window.OrbitaCore;
 const $ = selector => document.querySelector(selector);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const uid = () => crypto.randomUUID();
-let data, dataFolder, view = 0, search = '', showHidden = false, statusFilter = '', highlightFilter = '', highlighter = '', sort = [{ key: 'releaseDate', direction: 'asc' }];
+let data, dataFolder, view = 0, search = '', showHidden = false, duplicatesOnly = false, issueDuplicatesOnly = false, statusFilter = '', highlightFilter = '', highlighter = '', sort = [{ key: 'releaseDate', direction: 'asc' }];
 let settingsDraft, saving = false, organizationBusy = false, organizations = [], activeOrganizationId, lastOpenedLink = '';
 let revision = '', appVersion = '', browserUrl = '', online = true, refreshing = false, pendingChange = null, renderAfterModal = false, adoptions = 0, subscribed = false;
 let languageInfo = { folder: '', template: '', languages: [], errors: [] };
@@ -119,8 +119,18 @@ function matchesHighlightFilter(task) {
   if (highlightFilter === '__none') return !highlightOf(task);
   return task.highlightId === highlightFilter;
 }
-function filteredTasks() {
-  return data.tasks.filter(t => (showHidden || !t.hidden) && (!statusFilter || t.statusId === statusFilter) && matchesHighlightFilter(t) && (
+const duplicatesOf = () => findDuplicates(data.tasks, data.issues);
+const taskLabel = task => `#${task.sequence} ${task.code}${task.hidden ? ` (${t('nascosta')})` : ''}`;
+// One line per duplicated incident, naming the other tasks or associations that share it.
+function taskDuplicateLines(taskId, groups) {
+  return groups.map(group => fillText('{0} è collegato anche a: {1}', group.incident, group.taskIds.filter(id => id !== taskId).map(id => taskLabel(data.tasks.find(task => task.id === id))).join(', ')));
+}
+function issueDuplicateLine(issueId, group, issues = data.issues) {
+  const others = group.issueIds.filter(id => id !== issueId).map(id => issues.find(issue => issue.id === id)).map(issue => issue.problem.trim() ? `${issue.code} · ${issue.problem}` : issue.code);
+  return fillText('{0} è presente anche in: {1}', group.incident, others.join(', '));
+}
+function filteredTasks(duplicates = duplicatesOf()) {
+  return data.tasks.filter(t => (duplicatesOnly ? duplicates.tasks.has(t.id) : showHidden || !t.hidden) && (!statusFilter || t.statusId === statusFilter) && matchesHighlightFilter(t) && (
     !search || [t.code, String(t.sequence), plain(t.description), plain(t.notes), highlightOf(t)?.name || '', ...tagsOf(t).map(tag => tag.name), ...Object.values(matchIssues(t, data.issues)).flat()].some(v => v.toLowerCase().includes(search.toLowerCase()))
   ));
 }
@@ -151,7 +161,13 @@ function render() {
   content.dataset.workspaceView = nextView;
   applyTheme();
   renderChrome();
-  $('#navigation').innerHTML = data.settings.tabNames.map((name, i) => `<button class="nav-button ${view === i ? 'active' : ''}" data-view="${i}"><span class="nav-icon">${icons[i]}</span><span>${esc(name)}</span>${i === 0 ? `<span class="nav-count">${visibleTasks().length}</span>` : ''}</button>`).join('');
+  const duplicates = duplicatesOf(), alerts = [duplicates.tasks.size, duplicates.issues.size];
+  const alert = i => {
+    if (!alerts[i]) return '';
+    const label = fillText(i ? '{0} associazioni con incident duplicato' : '{0} attività con incident duplicato', alerts[i]);
+    return `<span class="nav-alert" title="${esc(label)}"><span aria-hidden="true">${alerts[i]}</span><span class="sr-only">${esc(label)}</span></span>`;
+  };
+  $('#navigation').innerHTML = data.settings.tabNames.map((name, i) => `<button class="nav-button ${view === i ? 'active' : ''}" data-view="${i}"><span class="nav-icon">${icons[i]}${alert(i)}</span><span>${esc(name)}</span>${i === 0 ? `<span class="nav-count">${visibleTasks().length}</span>` : ''}</button>`).join('');
   document.querySelectorAll('#navigation [data-view]').forEach(button => button.onclick = () => { view = Number(button.dataset.view); render(); });
   $('#settings-button').classList.toggle('active', view === 4);
   $('#current-tab').textContent = view === 4 ? t('Impostazioni') : data.settings.tabNames[view];
@@ -222,7 +238,7 @@ function applyRemoteSnapshot(snapshot, previousId) {
     renderAfterModal = false;
     if ($('#modal').open) $('#modal').close();
     adoptSnapshot(snapshot);
-    search = ''; statusFilter = ''; highlightFilter = ''; highlighter = ''; showHidden = false; sort = [{ key: 'releaseDate', direction: 'asc' }];
+    search = ''; statusFilter = ''; highlightFilter = ''; highlighter = ''; showHidden = false; duplicatesOnly = false; issueDuplicatesOnly = false; sort = [{ key: 'releaseDate', direction: 'asc' }];
     render();
     notify('L’organizzazione aperta è stata eliminata in un’altra finestra. Ora stai vedendo un’altra organizzazione.', true);
     return;
@@ -399,7 +415,7 @@ async function organizationAction(operation, payload) {
   $('#organization-select').disabled = true;
   try {
     adoptSnapshot(await workspaceApi.organization(operation, payload, activeOrganizationId));
-    search = ''; statusFilter = ''; highlightFilter = ''; highlighter = ''; showHidden = false; sort = [{ key: 'releaseDate', direction: 'asc' }];
+    search = ''; statusFilter = ''; highlightFilter = ''; highlighter = ''; showHidden = false; duplicatesOnly = false; issueDuplicatesOnly = false; sort = [{ key: 'releaseDate', direction: 'asc' }];
     render();
   } finally { organizationBusy = false; $('#organization-select').disabled = false; flushPendingChange(); }
 }
@@ -498,7 +514,8 @@ function sortedRows(tasks) {
   return sortTasks(ranked, sort.map(s => ({ ...s, key: keys[s.key] || s.key })));
 }
 function renderTasks() {
-  const hidden = data.tasks.filter(t => t.hidden).length, highlights = highlightsOf(), columns = shownColumns();
+  const hidden = data.tasks.filter(t => t.hidden).length, highlights = highlightsOf(), columns = shownColumns(), duplicateCount = duplicatesOf().tasks.size;
+  if (duplicatesOnly && !duplicateCount) duplicatesOnly = false;
   if (highlightFilter && !['__any', '__none'].includes(highlightFilter) && !highlights.some(h => h.id === highlightFilter)) highlightFilter = '';
   if (highlighter && highlighter !== 'erase' && !highlights.some(h => h.id === highlighter)) highlighter = '';
   if (highlighter === 'erase' && !highlights.length) highlighter = '';
@@ -514,7 +531,7 @@ function renderTasks() {
   }).join('');
   $('#content').innerHTML = heading(data.settings.tabNames[0], 'Tutte le attività, una direzione. Pianifica il lavoro e tieni a fuoco le prossime release.',
     ui`<button class="button primary" id="new-task">＋ Nuova attività</button>`) + stats() +
-    ui`<section class="panel"><div class="table-toolbar"><div class="search-wrap"><span>⌕</span><input id="search" aria-label="Cerca attività" placeholder="Cerca codice, descrizione, incident…" value="${esc(search)}"></div><div class="filters"><select id="status-filter" aria-label="Filtra stato">${optionList(data.settings.statuses, statusFilter, 'Tutti gli stati')}</select><select id="highlight-filter" aria-label="Filtra evidenziazione">${highlightOptions}</select><label class="toggle-label"><input id="show-hidden" type="checkbox" ${showHidden ? 'checked' : ''}> Nascoste <span class="tiny-count">${hidden}</span></label><button class="button subtle" id="columns-button" aria-haspopup="dialog" title="Scegli quali colonne mostrare e in che ordine">▥ Colonne</button><button class="button subtle" id="reset-sort" title="Ripristina ordinamento release crescente">↕ Release</button></div></div><div class="highlighter-bar"></div><div class="table-scroll"><table class="activity-table"><thead><tr>${headers}<th><span class="sr-only">Azioni</span></th></tr></thead><tbody id="task-rows"></tbody></table></div><div class="table-footer"><span id="row-count"></span><span>Maiusc + clic su una colonna per ordinare su più livelli</span></div></section><div class="hint"><span>✧</span> Un unico archivio, quattro prospettive. Issue, milestone e kanban si aggiornano automaticamente.</div>`;
+    ui`<section class="panel"><div class="table-toolbar"><div class="search-wrap"><span>⌕</span><input id="search" aria-label="Cerca attività" placeholder="Cerca codice, descrizione, incident…" value="${esc(search)}"></div><div class="filters"><select id="status-filter" aria-label="Filtra stato">${optionList(data.settings.statuses, statusFilter, 'Tutti gli stati')}</select><select id="highlight-filter" aria-label="Filtra evidenziazione">${highlightOptions}</select><label class="toggle-label"><input id="show-hidden" type="checkbox" ${showHidden ? 'checked' : ''}> Nascoste <span class="tiny-count">${hidden}</span></label><label class="toggle-label duplicate-toggle ${duplicateCount ? 'has-duplicates' : ''}" title="Mostra solo le attività con un incident collegato anche ad altre attività, comprese quelle nascoste"><input id="duplicates-only" type="checkbox" ${duplicatesOnly ? 'checked' : ''} ${duplicateCount ? '' : 'disabled'}> Duplicati <span class="tiny-count">${duplicateCount}</span></label><button class="button subtle" id="columns-button" aria-haspopup="dialog" title="Scegli quali colonne mostrare e in che ordine">▥ Colonne</button><button class="button subtle" id="reset-sort" title="Ripristina ordinamento release crescente">↕ Release</button></div></div><div class="highlighter-bar"></div><div class="table-scroll"><table class="activity-table"><thead><tr>${headers}<th><span class="sr-only">Azioni</span></th></tr></thead><tbody id="task-rows"></tbody></table></div><div class="table-footer"><span id="row-count"></span><span>Maiusc + clic su una colonna per ordinare su più livelli</span></div></section><div class="hint"><span>✧</span> Un unico archivio, quattro prospettive. Issue, milestone e kanban si aggiornano automaticamente.</div>`;
   drawHighlighter();
   drawTaskRows();
   $('#new-task').onclick = () => taskDialog();
@@ -522,6 +539,7 @@ function renderTasks() {
   $('#status-filter').onchange = event => { statusFilter = event.target.value; drawTaskRows(); };
   $('#highlight-filter').onchange = event => { highlightFilter = event.target.value; drawTaskRows(); };
   $('#show-hidden').onchange = event => { showHidden = event.target.checked; drawTaskRows(); };
+  $('#duplicates-only').onchange = event => { duplicatesOnly = event.target.checked; drawTaskRows(); };
   $('#columns-button').onclick = () => columnsDialog();
   $('#reset-sort').onclick = () => { sort = [{ key: 'releaseDate', direction: 'asc' }]; renderTasks(); };
   document.querySelectorAll('[data-sort]').forEach(button => button.onclick = event => {
@@ -539,7 +557,7 @@ function renderTasks() {
     paintRow(row);
   }, true);
 }
-function taskCell(column, task, status, urgency, links) {
+function taskCell(column, task, status, urgency, links, duplicateGroups = []) {
   const none = '<span class="muted">—</span>';
   switch (column) {
     case 'sequence': return `<td class="sequence">${task.sequence}</td>`;
@@ -554,7 +572,13 @@ function taskCell(column, task, status, urgency, links) {
     case 'highlight': { const mark = highlightOf(task); return `<td>${mark ? pill(mark.name, mark.color, 'mark-pill') : none}</td>`; }
     case 'tags': return `<td class="tags-cell"><button type="button" class="task-tags-button" data-edit-task="${esc(task.id)}" aria-label="${esc(t('Modifica tag'))}" title="${esc(t('Modifica tag'))}">${tagsOf(task).length ? tagChips(task) : `<span class="muted">+ ${esc(t('Tags'))}</span>`}</button></td>`;
     case 'effort': return `<td class="effort-cell">${effort(task.effortHours)}</td>`;
-    case 'incident': return `<td class="references">${links.incidents.map(esc).join('<br>') || none}</td>`;
+    case 'incident': {
+      const groups = new Map(duplicateGroups.map(group => [group.key, group]));
+      return `<td class="references">${links.incidents.map(incident => {
+        const group = groups.get(incident.trim().toUpperCase());
+        return group ? `<button type="button" class="dup-ref" data-dup-incident="${esc(group.incident)}" title="${esc(taskDuplicateLines(task.id, [group])[0] + '\n' + t('Clic per vedere solo le attività coinvolte.'))}">⧉ ${esc(incident)}</button>` : esc(incident);
+      }).join('<br>') || none}</td>`;
+    }
     case 'problem': return `<td class="references">${links.problems.map(esc).join('<br>') || none}</td>`;
     case 'releaseDate': return `<td><span class="date-pill" style="--date:${task.releaseDate ? dateColor(task.releaseDate) : '#929bb2'}">◷ ${formatDate(task.releaseDate)}</span></td>`;
     case 'notes': return `<td><button class="notes-button ${plain(task.notes) ? 'has-notes' : ''}" data-edit-task="${task.id}" title="${esc(plain(task.notes) || t('Aggiungi note'))}">☰</button></td>`;
@@ -562,13 +586,15 @@ function taskCell(column, task, status, urgency, links) {
   }
 }
 function drawTaskRows() {
-  const tasks = sortedRows(filteredTasks()), columns = shownColumns();
+  const duplicates = duplicatesOf(), tasks = sortedRows(filteredTasks(duplicates)), columns = shownColumns();
   $('#task-rows').innerHTML = tasks.map(task => {
     const status = data.settings.statuses.find(s => s.id === task.statusId), urgency = data.settings.urgencies.find(s => s.id === task.urgencyId);
-    const links = matchIssues(task, data.issues), mark = highlightOf(task);
-    const classes = [status.highlight ? 'highlighted' : '', mark ? 'marked' : '', task.hidden ? 'hidden-row' : ''].filter(Boolean).join(' ');
+    const links = matchIssues(task, data.issues), mark = highlightOf(task), duplicateGroups = duplicates.tasks.get(task.id) || [];
+    const classes = [status.highlight ? 'highlighted' : '', mark ? 'marked' : '', task.hidden ? 'hidden-row' : '', duplicateGroups.length ? 'duplicate-row' : ''].filter(Boolean).join(' ');
     const markLabel = mark ? fillText('Evidenziazione: {0}', mark.name) : t('Evidenzia riga');
-    return `<tr data-task-row="${esc(task.id)}" title="${esc(t('Doppio clic sulla riga per modificare.'))}" class="${classes}" style="--row-color:${status.color}${mark ? `;--mark:${mark.color}` : ''}">${columns.map(column => taskCell(column, task, status, urgency, links)).join('')}<td class="row-actions"><button type="button" class="icon-button mark-button ${mark ? 'is-marked' : ''}" data-mark-task="${esc(task.id)}" title="${esc(markLabel)}" aria-label="${esc(markLabel)}" aria-haspopup="menu" aria-expanded="false"><i class="mark-dot"></i></button><button class="icon-button" data-toggle-task="${task.id}" title="${esc(t(task.hidden ? 'Mostra attività' : 'Nascondi attività'))}">${task.hidden ? '◉' : '◌'}</button><button class="icon-button" data-edit-task="${task.id}" title="${esc(t('Modifica attività'))}">⋯</button></td></tr>`;
+    const duplicateLabel = duplicateGroups.length ? [t('Possibile duplicato'), ...taskDuplicateLines(task.id, duplicateGroups)].join('\n') : '';
+    const duplicateFlag = duplicateGroups.length ? `<button type="button" class="icon-button dup-flag" data-dup-incident="${esc(duplicateGroups[0].incident)}" title="${esc(duplicateLabel + '\n' + t('Clic per vedere solo le attività coinvolte.'))}" aria-label="${esc(duplicateLabel.replaceAll('\n', '. '))}">⧉</button>` : '';
+    return `<tr data-task-row="${esc(task.id)}" title="${esc(t('Doppio clic sulla riga per modificare.'))}" class="${classes}" style="--row-color:${status.color}${mark ? `;--mark:${mark.color}` : ''}">${columns.map(column => taskCell(column, task, status, urgency, links, duplicateGroups)).join('')}<td class="row-actions">${duplicateFlag}<button type="button" class="icon-button mark-button ${mark ? 'is-marked' : ''}" data-mark-task="${esc(task.id)}" title="${esc(markLabel)}" aria-label="${esc(markLabel)}" aria-haspopup="menu" aria-expanded="false"><i class="mark-dot"></i></button><button class="icon-button" data-toggle-task="${task.id}" title="${esc(t(task.hidden ? 'Mostra attività' : 'Nascondi attività'))}">${task.hidden ? '◉' : '◌'}</button><button class="icon-button" data-edit-task="${task.id}" title="${esc(t('Modifica attività'))}">⋯</button></td></tr>`;
   }).join('') || `<tr><td colspan="${columns.length + 1}" class="empty">${esc(t('Nessuna attività trovata. Crea una nuova attività o modifica i filtri.'))}</td></tr>`;
   $('#row-count').textContent = ui`${tasks.length} attività mostrate · ${data.tasks.length} totali`;
   document.querySelectorAll('[data-edit-task]').forEach(b => b.onclick = () => {
@@ -583,6 +609,14 @@ function drawTaskRows() {
     await commit(next => { const task = next.tasks.find(t => t.id === id); if (task) task.hidden = hidden; }); render();
   }));
   document.querySelectorAll('[data-mark-task]').forEach(b => b.onclick = () => openMarkMenu(b));
+  document.querySelectorAll('#task-rows [data-dup-incident]').forEach(b => b.onclick = () => showTaskDuplicates(b.dataset.dupIncident));
+}
+// Lists every task sharing the incident, hidden ones included, so duplicates can be compared side by side.
+function showTaskDuplicates(incident) {
+  search = incident;
+  duplicatesOnly = true;
+  renderTasks();
+  notify(fillText('Attività che condividono l’incident {0}.', incident));
 }
 function openSettingsTab(id) {
   view = 4;
@@ -910,8 +944,11 @@ function taskDialog(existing) {
     </div><div class="modal-actions">${existing ? ui`<button type="button" class="button danger" id="delete-task">Elimina</button>` : ''}<span class="spacer"></span><button type="button" class="button" data-close>Annulla</button><button type="submit" class="button primary">Salva attività</button></div></form>`);
   const form = $('#task-form');
   const updateMatches = () => {
-    const links = matchIssues({ code: form.elements.code.value }, data.issues);
-    $('#match-preview').innerHTML = ui`<span>⌘ Collegamento automatico dal codice portale</span><div>Incident: <strong>${esc(links.incidents.join(', ') || '—')}</strong> &nbsp; Problem: <strong>${esc(links.problems.join(', ') || '—')}</strong></div>`;
+    const code = form.elements.code.value, links = matchIssues({ code }, data.issues);
+    const groups = findDuplicates([...data.tasks.filter(task => task.id !== t.id), { ...t, code }], data.issues).tasks.get(t.id) || [];
+    $('#match-preview').classList.toggle('has-duplicates', groups.length > 0);
+    $('#match-preview').innerHTML = ui`<span>⌘ Collegamento automatico dal codice portale</span><div>Incident: <strong>${esc(links.incidents.join(', ') || '—')}</strong> &nbsp; Problem: <strong>${esc(links.problems.join(', ') || '—')}</strong></div>` +
+      (groups.length ? `<p class="duplicate-warning"><strong>⧉ ${esc(tr('Possibile duplicato'))}</strong>${taskDuplicateLines(t.id, groups).map(line => `<span>${esc(line)}</span>`).join('')}</p>` : '');
   };
   form.elements.code.oninput = updateMatches; updateMatches(); wireEditors();
   const generatedLink = () => portalUrl({ code: form.elements.code.value, url: '' }, data.settings);
@@ -956,25 +993,55 @@ function confirmDialog(title, message, callback) {
   $('#confirm-action').onclick = action(async () => { await callback(); $('#modal').close(); });
 }
 function renderIssues() {
+  const duplicates = duplicatesOf(), duplicateCount = duplicates.issues.size, identicalIds = new Set(duplicates.identical);
+  if (issueDuplicatesOnly && !duplicateCount) issueDuplicatesOnly = false;
   $('#content').innerHTML = heading(data.settings.tabNames[1], 'Collega il lavoro alla sua origine. Più incident possono condividere lo stesso problem.', ui`<button class="button primary" id="new-issue">＋ Nuova associazione</button>`) +
-    ui`<div class="info-banner">⌘ &nbsp; Incident e problem vengono riportati automaticamente sulle attività con lo stesso codice portale, senza distinzione tra maiuscole e minuscole.</div><section class="panel"><div class="table-toolbar"><strong>${data.issues.length} associazioni</strong><input id="issue-search" class="issue-search" placeholder="Cerca codice, incident o problem…" aria-label="Cerca associazioni"></div><div class="table-scroll"><table><thead><tr><th>Codice portale</th><th>Incident</th><th>Problem</th><th>Collegamento</th><th>Azioni</th></tr></thead><tbody id="issue-rows"></tbody></table></div></section>`;
-  function rows(query = '') {
-    const issues = data.issues.filter(i => [i.code, i.incident, i.problem].some(v => v.toLowerCase().includes(query.toLowerCase())));
+    ui`<div class="info-banner">⌘ &nbsp; Incident e problem vengono riportati automaticamente sulle attività con lo stesso codice portale, senza distinzione tra maiuscole e minuscole.</div><section class="panel"><div class="table-toolbar"><strong>${data.issues.length} associazioni</strong><div class="filters"><input id="issue-search" class="issue-search" placeholder="Cerca codice, incident o problem…" aria-label="Cerca associazioni"><label class="toggle-label duplicate-toggle ${duplicateCount ? 'has-duplicates' : ''}" title="Mostra solo le associazioni il cui incident compare in più righe"><input id="issue-duplicates-only" type="checkbox" ${issueDuplicatesOnly ? 'checked' : ''} ${duplicateCount ? '' : 'disabled'}> Duplicati <span class="tiny-count">${duplicateCount}</span></label>${identicalIds.size ? ui`<button class="button subtle" id="remove-identical" title="Elimina le associazioni con stesso codice portale, incident e problem di un’altra, lasciando la prima">Rimuovi identiche <span class="tiny-count">${identicalIds.size}</span></button>` : ''}</div></div><div class="table-scroll"><table><thead><tr><th>Codice portale</th><th>Incident</th><th>Problem</th><th>Collegamento</th><th>Azioni</th></tr></thead><tbody id="issue-rows"></tbody></table></div></section>`;
+  function rows(query = $('#issue-search').value) {
+    const issues = data.issues.filter(i => (!issueDuplicatesOnly || duplicates.issues.has(i.id)) && [i.code, i.incident, i.problem].some(v => v.toLowerCase().includes(query.toLowerCase())));
     $('#issue-rows').innerHTML = issues.map(i => {
-      const count = data.tasks.filter(t => t.code.trim().toUpperCase() === i.code.trim().toUpperCase()).length;
-      return ui`<tr data-issue-row="${esc(i.id)}" title="Doppio clic sulla riga per modificare."><td><button class="code-link" data-issue="${i.id}">${esc(i.code)}</button></td><td>${esc(i.incident) || '—'}</td><td>${pill(i.problem || '—', '#9d8de8')}</td><td><span class="${count ? 'linked' : 'muted'}">${count ? ui`↗ ${count} attività collegate` : t('In attesa di attività')}</span></td><td><button class="button small" data-issue="${i.id}">Modifica</button></td></tr>`;
+      const count = data.tasks.filter(t => t.code.trim().toUpperCase() === i.code.trim().toUpperCase()).length, group = duplicates.issues.get(i.id);
+      const identical = identicalIds.has(i.id) ? `<span class="dup-note" title="${esc(t('Stesso codice portale, incident e problem di un’altra associazione.'))}">${esc(t('identica'))}</span>` : '';
+      const incident = group ? `<button type="button" class="dup-ref" data-dup-issue="${esc(group.incident)}" title="${esc(issueDuplicateLine(i.id, group) + '\n' + t('Clic per vedere solo le associazioni coinvolte.'))}">⧉ ${esc(i.incident)}</button>${identical}` : esc(i.incident) || '—';
+      return ui`<tr data-issue-row="${esc(i.id)}" class="${group ? 'duplicate-row' : ''}" title="Doppio clic sulla riga per modificare."><td><button class="code-link" data-issue="${i.id}">${esc(i.code)}</button></td><td>${incident}</td><td>${pill(i.problem || '—', '#9d8de8')}</td><td><span class="${count ? 'linked' : 'muted'}">${count ? ui`↗ ${count} attività collegate` : t('In attesa di attività')}</span></td><td><button class="button small" data-issue="${i.id}">Modifica</button></td></tr>`;
     }).join('') || ui`<tr><td colspan="5" class="empty">Nessuna associazione. Aggiungi un codice portale con incident e/o problem.</td></tr>`;
     document.querySelectorAll('[data-issue]').forEach(b => b.onclick = () => issueDialog(data.issues.find(i => i.id === b.dataset.issue)));
+    document.querySelectorAll('#issue-rows [data-dup-issue]').forEach(b => b.onclick = () => {
+      $('#issue-search').value = b.dataset.dupIssue;
+      issueDuplicatesOnly = $('#issue-duplicates-only').checked = true;
+      rows();
+    });
   }
   rows(); $('#issue-search').oninput = e => rows(e.target.value);
+  $('#issue-duplicates-only').onchange = event => { issueDuplicatesOnly = event.target.checked; rows(); };
   $('#new-issue').onclick = () => issueDialog();
+  if (identicalIds.size) $('#remove-identical').onclick = () => confirmDialog('Rimuovere le associazioni identiche?', 'Le associazioni con stesso codice portale, incident e problem di un’altra vengono eliminate, lasciando la prima di ciascun gruppo. Incident e problem delle attività non cambiano.', async () => {
+    let removed = 0;
+    await commit(next => {
+      const ids = new Set(findDuplicates(next.tasks, next.issues).identical);
+      removed = ids.size;
+      next.issues = next.issues.filter(issue => !ids.has(issue.id));
+    });
+    render(); notify(fillText('Associazioni identiche rimosse: {0}.', removed));
+  });
 }
 function issueDialog(existing) {
   const issue = existing || { id: uid(), code: '', incident: '', problem: '' };
   openModal(ui`<form id="issue-form"><div class="modal-heading"><h2>${t(existing ? 'Modifica associazione' : 'Nuova associazione')}</h2><button class="icon-button" type="button" data-close aria-label="Chiudi">✕</button></div><div class="form-grid">
     <label class="field full">Codice portale *<input name="code" required value="${esc(issue.code)}" list="task-codes"><datalist id="task-codes">${[...new Set(data.tasks.map(t => t.code))].map(code => `<option value="${esc(code)}">`).join('')}</datalist></label>
     <label class="field">Incident<input name="incident" value="${esc(issue.incident)}" placeholder="INC-00001"></label><label class="field">Problem<input name="problem" value="${esc(issue.problem)}" placeholder="PRB-00001"></label>
+    <p class="duplicate-warning full" id="issue-duplicate" hidden></p>
     <p class="muted full">Specificare almeno un incident o un problem. Puoi riutilizzare i codici in più associazioni.</p></div><div class="modal-actions">${existing ? ui`<button type="button" class="button danger" id="delete-issue">Elimina</button>` : ''}<span class="spacer"></span><button type="button" class="button" data-close>Annulla</button><button class="button primary" type="submit">Salva associazione</button></div></form>`);
+  const form = $('#issue-form');
+  // Warns while typing when the incident is already in another association; saving stays possible.
+  const updateDuplicate = () => {
+    const draft = { id: issue.id, code: form.elements.code.value, incident: form.elements.incident.value, problem: form.elements.problem.value };
+    const issues = [...data.issues.filter(i => i.id !== issue.id), draft], result = findDuplicates(data.tasks, issues), group = result.issues.get(issue.id);
+    $('#issue-duplicate').hidden = !group;
+    $('#issue-duplicate').innerHTML = group ? `<strong>⧉ ${esc(t(result.identical.includes(issue.id) ? 'Esiste già un’associazione identica' : 'Incident già presente'))}</strong><span>${esc(issueDuplicateLine(issue.id, group, issues))}</span><span>${esc(t('Puoi salvare comunque: l’associazione sarà segnalata come duplicato.'))}</span>` : '';
+  };
+  for (const name of ['code', 'incident', 'problem']) form.elements[name].addEventListener('input', updateDuplicate);
+  updateDuplicate();
   $('#issue-form').onsubmit = action(async e => {
     e.preventDefault();
     const fields = new FormData(e.target);
@@ -1288,7 +1355,7 @@ function renderSettings() {
   $('#export-data').onclick = action(async () => { if (await workspaceApi.exportData()) notify('Backup esportato.'); });
   $('#import-data').onclick = action(async () => {
     const imported = await workspaceApi.importData();
-    if (imported) { adoptSnapshot(imported); search = ''; statusFilter = ''; highlightFilter = ''; highlighter = ''; showHidden = false; render(); notify('Archivio importato.'); }
+    if (imported) { adoptSnapshot(imported); search = ''; statusFilter = ''; highlightFilter = ''; highlighter = ''; showHidden = false; duplicatesOnly = false; issueDuplicatesOnly = false; render(); notify('Archivio importato.'); }
   });
   $('#open-folder').onclick = action(() => workspaceApi.openDataFolder());
   wireTransfer();
@@ -1757,6 +1824,64 @@ window.runSmokeTests = async () => {
   $('#issue-search').dispatchEvent(new Event('input'));
   doubleClick($('#issue-rows .empty'));
   check(!$('#modal').open, 'Doppio clic sulla lista vuota non crea associazioni');
+  render();
+  check(!duplicatesOf().groups.length && !document.querySelector('.nav-alert, #issue-rows .dup-ref') && $('#issue-duplicates-only').disabled && !$('#remove-identical'), 'Nessun duplicato segnalato senza incident ripetuti');
+  issueDialog();
+  const duplicateIssueForm = $('#issue-form');
+  check($('#issue-duplicate').hidden, 'Nessun avviso duplicato su una nuova associazione vuota');
+  duplicateIssueForm.elements.code.value = 'SMOKE-DUP';
+  duplicateIssueForm.elements.incident.value = ' inc-smoke ';
+  duplicateIssueForm.elements.incident.dispatchEvent(new Event('input'));
+  check(!$('#issue-duplicate').hidden && $('#issue-duplicate').textContent.includes('INC-SMOKE') && $('#issue-duplicate').textContent.includes('smoke-1 · PRB-SMOKE'), 'Avviso immediato per incident già presente, senza distinzione di maiuscole e spazi');
+  duplicateIssueForm.requestSubmit();
+  await waitFor(() => !saving && !$('#modal').open);
+  const smokeIssue = data.issues.find(issue => issue.incident === 'INC-SMOKE'), duplicateIssue = data.issues.find(issue => issue.code === 'SMOKE-DUP');
+  check(duplicateIssue?.incident === 'inc-smoke' && (await workspaceApi.load()).data.issues.some(issue => issue.id === duplicateIssue.id), 'Associazione con incident duplicato salvabile comunque');
+  const flaggedIssues = () => [...document.querySelectorAll('#issue-rows tr.duplicate-row')].map(row => row.dataset.issueRow).sort().join();
+  check(flaggedIssues() === [smokeIssue.id, duplicateIssue.id].sort().join() && document.querySelectorAll('#issue-rows .dup-ref').length === 2, 'Entrambe le associazioni con lo stesso incident segnalate');
+  check($('[data-view="1"] .nav-alert [aria-hidden]')?.textContent === '2' && !$('[data-view="0"] .nav-alert'), 'Navigazione segnala le associazioni duplicate, non le attività con un solo collegamento');
+  $('#issue-duplicates-only').click();
+  check(issueDuplicatesOnly && document.querySelectorAll('#issue-rows tr[data-issue-row]').length === 2, 'Filtro Duplicati mostra solo le associazioni coinvolte');
+  const identicalId = uid();
+  await commit(next => { next.issues.push({ id: identicalId, code: 'smoke-dup', incident: 'INC-SMOKE', problem: '' }); });
+  render();
+  check(document.querySelectorAll('#issue-rows tr[data-issue-row]').length === 3 && document.querySelectorAll('#issue-rows .dup-note').length === 1 && $(`#issue-rows tr[data-issue-row="${identicalId}"] .dup-note`) && $('#remove-identical .tiny-count').textContent === '1', 'Associazione identica a un’altra riconosciuta e marcata');
+  $('#remove-identical').click();
+  check($('#modal').open && $('#confirm-action'), 'Rimozione delle identiche chiede conferma');
+  $('#confirm-action').click();
+  await waitFor(() => !saving && !$('#modal').open);
+  const issuesOnDisk = (await workspaceApi.load()).data.issues;
+  check(!data.issues.some(issue => issue.id === identicalId) && !issuesOnDisk.some(issue => issue.id === identicalId) && issuesOnDisk.some(issue => issue.id === duplicateIssue.id) && issuesOnDisk.some(issue => issue.id === smokeIssue.id) && !$('#remove-identical'), 'Rimuovi identiche elimina solo le copie, lasciando la prima');
+  $('#issue-duplicates-only').click();
+  $(`#issue-rows tr[data-issue-row="${duplicateIssue.id}"] .dup-ref`).click();
+  check($('#issue-search').value === 'INC-SMOKE' && issueDuplicatesOnly && document.querySelectorAll('#issue-rows tr[data-issue-row]').length === 2, 'Clic sull’incident duplicato filtra le associazioni coinvolte');
+  view = 0; render();
+  taskDialog();
+  const duplicateTaskForm = $('#task-form');
+  duplicateTaskForm.elements.code.value = 'smoke-dup';
+  duplicateTaskForm.elements.code.dispatchEvent(new Event('input'));
+  check($('#match-preview .duplicate-warning')?.textContent.includes('INC-SMOKE') && $('#match-preview .duplicate-warning').textContent.includes(`#${smokeTask().sequence} SMOKE-1`), 'Avviso di possibile duplicato già durante l’inserimento dell’attività');
+  duplicateTaskForm.requestSubmit();
+  await waitFor(() => !saving && !$('#modal').open && data.tasks.some(task => task.code === 'smoke-dup'));
+  const duplicateTask = data.tasks.find(task => task.code === 'smoke-dup'), taskRowOf = id => document.querySelector(`#task-rows tr[data-task-row="${CSS.escape(id)}"]`);
+  check(duplicatesOf().tasks.size === 2 && $('[data-view="0"] .nav-alert [aria-hidden]')?.textContent === '2' && $('#duplicates-only').closest('label').classList.contains('has-duplicates'), 'Attività collegate allo stesso incident segnalate in navigazione e nel filtro');
+  check([smokeTask().id, duplicateTask.id].every(id => taskRowOf(id)?.classList.contains('duplicate-row') && taskRowOf(id).querySelector('.dup-flag') && (!shownColumns().includes('incident') || taskRowOf(id).querySelector('.dup-ref'))) && document.querySelectorAll('#task-rows .dup-flag').length === 2, 'Righe, incident e azioni segnalano i possibili duplicati');
+  check(taskRowOf(duplicateTask.id).querySelector('.dup-flag').title.includes(`#${smokeTask().sequence} SMOKE-1`), 'Il segnale indica con quali attività è condiviso l’incident');
+  showHidden = false; render();
+  check(smokeTask().hidden && !taskRowOf(smokeTask().id), 'Attività duplicata nascosta esclusa dalla lista normale');
+  $('#duplicates-only').click();
+  check(duplicatesOnly && document.querySelectorAll('#task-rows tr[data-task-row]').length === 2 && taskRowOf(smokeTask().id), 'Filtro Duplicati include anche le attività nascoste');
+  $('#duplicates-only').click();
+  taskRowOf(duplicateTask.id).querySelector('.dup-flag').click();
+  check(search === 'INC-SMOKE' && $('#search').value === 'INC-SMOKE' && duplicatesOnly && document.querySelectorAll('#task-rows tr[data-task-row]').length === 2 && !$('#modal').open, 'Clic sul segnale mostra le attività che condividono l’incident');
+  doubleClick(taskRowOf(duplicateTask.id).querySelector('.dup-flag'));
+  check(!$('#modal').open, 'Doppio clic sul segnale duplicato non apre la modifica');
+  await commit(next => {
+    next.tasks = next.tasks.filter(task => task.id !== duplicateTask.id);
+    next.issues = next.issues.filter(issue => issue.id !== duplicateIssue.id);
+  });
+  search = ''; duplicatesOnly = false; issueDuplicatesOnly = false; showHidden = true; render();
+  check(!duplicatesOf().groups.length && !document.querySelector('.nav-alert, .dup-flag, .dup-ref') && $('#duplicates-only').disabled && data.tasks.length === initialTaskCount + 1, 'Risolto il duplicato spariscono segnalazioni e filtro');
   view = 0; render();
   const paint = highlightsOf()[1];
   $(`.highlighter-bar [data-highlighter="${paint.id}"]`).click();

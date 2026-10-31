@@ -1771,3 +1771,100 @@ main > footer {
     clip-path: inset(50%);
   }
 }
+
+/* Duplicate detection (incident key) */
+:root {
+  --duplicate: #f2b94a;
+}
+.nav-icon {
+  position: relative;
+}
+.nav-alert {
+  position: absolute;
+  top: calc(-7px * var(--fs));
+  right: calc(-11px * var(--fs));
+  min-width: calc(16px * var(--fs));
+  height: calc(16px * var(--fs));
+  padding: 0 4px;
+  border-radius: 999px;
+  font-size: calc(10px * var(--fs));
+  line-height: calc(16px * var(--fs));
+  font-weight: 700;
+  text-align: center;
+  color: #2a1d00;
+  background: var(--duplicate);
+  box-shadow: 0 0 0 2px var(--background);
+}
+.duplicate-toggle.has-duplicates {
+  color: color-mix(in srgb, var(--duplicate) 80%, var(--text));
+}
+.duplicate-toggle.has-duplicates .tiny-count {
+  background: color-mix(in srgb, var(--duplicate) 18%, var(--background));
+}
+.duplicate-toggle input:disabled,
+.duplicate-toggle:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+.dup-ref {
+  font: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin: 1px 0;
+  padding: 1px 6px;
+  border-radius: 5px;
+  cursor: pointer;
+  color: color-mix(in srgb, var(--duplicate) 78%, var(--text));
+  background: color-mix(in srgb, var(--duplicate) 12%, transparent);
+  border: 1px dashed color-mix(in srgb, var(--duplicate) 55%, transparent);
+}
+.dup-ref:hover {
+  background: color-mix(in srgb, var(--duplicate) 22%, transparent);
+}
+.dup-ref:focus-visible,
+.dup-flag:focus-visible {
+  outline: 2px solid var(--duplicate);
+  outline-offset: 1px;
+}
+.dup-flag {
+  color: var(--duplicate);
+  font-weight: 700;
+}
+.dup-note {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: calc(11px * var(--fs));
+  color: color-mix(in srgb, var(--duplicate) 70%, var(--muted));
+  border-bottom: 1px dotted currentColor;
+}
+tr.duplicate-row td:last-child {
+  box-shadow: inset -3px 0 color-mix(in srgb, var(--duplicate) 70%, transparent);
+}
+.activity-table tr.duplicate-row td.row-actions {
+  box-shadow: inset 1px 0 var(--border), inset -3px 0 color-mix(in srgb, var(--duplicate) 70%, transparent);
+}
+.duplicate-warning {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 8px 0 0;
+  padding: 8px 11px;
+  border-radius: 7px;
+  font-size: calc(12px * var(--fs));
+  line-height: 1.5;
+  color: var(--text);
+  background: color-mix(in srgb, var(--duplicate) 10%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--duplicate) 40%, transparent);
+}
+.duplicate-warning[hidden] {
+  display: none;
+}
+.duplicate-warning strong,
+.auto-match .duplicate-warning strong {
+  font-weight: 600;
+  color: color-mix(in srgb, var(--duplicate) 80%, var(--text));
+}
+.auto-match.has-duplicates {
+  border-color: color-mix(in srgb, var(--duplicate) 45%, transparent);
+}
