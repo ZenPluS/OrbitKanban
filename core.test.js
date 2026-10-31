@@ -1,7 +1,7 @@
 'use strict';
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { APP_NAME, initialData, baseData, demoData, demoReleaseDates, validateData, migrateArchive, validateArchive, createOrganization, matchIssues, findDuplicates, sortTasks, dateColor, extractThemePalette, themeFromLogo, normalizeUrl, isWebUrl, validPortalTemplate, portalUrl, ORGANIZATION_FILE_KINDS, organizationExport, organizationFileName, parseOrganizationFile, applyOrganizationImport, importedOrganizationData, uniqueOrganizationName, FONT_SIZE_PARTS, FONT_SIZE_STEP, defaultFontSizes, clampFontSize, HIGHLIGHT_LIMIT, defaultHighlights, TASK_COLUMN_IDS, defaultTaskColumns, normalizeTaskColumns, nextReleaseDate, today } = require('./core');
+const { APP_NAME, initialData, baseData, demoData, demoReleaseDates, validateData, migrateArchive, validateArchive, createOrganization, matchIssues, findDuplicates, sortTasks, dateColor, extractThemePalette, themeFromLogo, normalizeUrl, isWebUrl, validPortalTemplate, portalUrl, ORGANIZATION_FILE_KINDS, organizationExport, organizationFileName, situationFileName, parseOrganizationFile, applyOrganizationImport, importedOrganizationData, uniqueOrganizationName, FONT_SIZE_PARTS, FONT_SIZE_STEP, defaultFontSizes, clampFontSize, HIGHLIGHT_LIMIT, defaultHighlights, TASK_COLUMN_IDS, defaultTaskColumns, normalizeTaskColumns, nextReleaseDate, today } = require('./core');
 
 test('default archive is valid and independent between invocations', () => {
   const first = initialData(), second = initialData();
@@ -363,6 +363,10 @@ test('organization file names are portable slugs with the localized part and dat
   assert.equal(organizationFileName('***', 'data', 'it', '2026-05-20'), 'OrbitKanban-organizzazione-dati-2026-05-20.json');
   assert.match(organizationFileName('x'.repeat(200), 'themes', 'en'), /^OrbitKanban-x{60}-themes-\d{4}-\d{2}-\d{2}\.json$/);
   assert.throws(() => organizationFileName('Acme', 'backup'), /non supportato/);
+  assert.equal(situationFileName('Àcme Srl / Team #1', 'it', '2026-05-20'), 'OrbitKanban-acme-srl-team-1-situazione-2026-05-20.xlsx');
+  assert.equal(situationFileName('Acme', 'en', '2026-05-20'), 'OrbitKanban-acme-situation-2026-05-20.xlsx');
+  assert.equal(situationFileName('***', 'it', '2026-05-20'), 'OrbitKanban-organizzazione-situazione-2026-05-20.xlsx');
+  assert.match(situationFileName('Acme'), /^OrbitKanban-acme-situazione-\d{4}-\d{2}-\d{2}\.xlsx$/);
 });
 test('organization files are validated, stripped of unknown fields and never confused with backups', () => {
   const organization = sampleOrganization();

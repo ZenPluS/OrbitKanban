@@ -76,6 +76,10 @@
       download(await response.blob(), fileName);
       return { fileName };
     },
+    async exportSpreadsheet(fileName, bytes) {
+      download(new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fileName);
+      return { fileName };
+    },
     async importData() {
       const file = await chooseFile();
       if (!file) return null;

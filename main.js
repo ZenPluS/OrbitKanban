@@ -93,6 +93,21 @@ handle('export-organization', async (organizationId, kind) => {
   await fs.writeFile(filePath, text, 'utf8');
   return { fileName: path.basename(filePath) };
 });
+const SPREADSHEET_LIMIT = 256 * 1024 * 1024;
+handle('export-spreadsheet', async (fileName, bytes) => {
+  const name = path.basename(String(fileName ?? '')).replace(/[<>:"/\\|?*\u0000-\u001f]/g, '-');
+  const valid = /^[^.].*\.xlsx$/i.test(name) && name.length <= 200 && bytes instanceof Uint8Array && bytes.length > 22 && bytes.length <= SPREADSHEET_LIMIT && bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 3 && bytes[3] === 4;
+  if (!valid) throw new Error(message('File Excel non valido.'));
+  let filePath = path.join(root, 'exports', name);
+  if (smoke) await fs.mkdir(path.dirname(filePath), { recursive: true });
+  else {
+    const result = await dialog.showSaveDialog(win, { defaultPath: path.join(root, name), filters: [{ name: message('Cartella di lavoro Excel'), extensions: ['xlsx'] }] });
+    if (result.canceled || !result.filePath) return false;
+    filePath = result.filePath;
+  }
+  await fs.writeFile(filePath, bytes);
+  return { fileName: path.basename(filePath) };
+});
 handle('import', async () => {
   const result = await dialog.showOpenDialog(win, { properties: ['openFile'], filters: [{ name: message('Archivio JSON'), extensions: ['json'] }] });
   if (result.canceled) return null;
@@ -188,11 +203,15 @@ else {
         if (!result.ok) throw new Error('Smoke test UI fallito');
         result.checks.unshift(...splashChecks);
         result.checks.push(...await require('./smoke-web').run({ server: webServer, win }));
-        const exportsFolder = path.join(root, 'exports');
-        const exportedFiles = await Promise.all((await fs.readdir(exportsFolder)).map(async name => ({ name, file: parseOrganizationFile(await fs.readFile(path.join(exportsFolder, name), 'utf8')) })));
+        const exportsFolder = path.join(root, 'exports'), exportNames = await fs.readdir(exportsFolder);
+        const exportedFiles = await Promise.all(exportNames.filter(name => name.endsWith('.json')).map(async name => ({ name, file: parseOrganizationFile(await fs.readFile(path.join(exportsFolder, name), 'utf8')) })));
         const fullExport = exportedFiles.find(entry => entry.file.kind === 'organization');
         if (!ORGANIZATION_FILE_KINDS.every(kind => exportedFiles.some(entry => entry.file.kind === kind)) || !exportedFiles.every(entry => /^OrbitKanban-[a-z0-9-]+-(temi|configurazione|dati|organizzazione|themes|settings|data|organization)-\d{4}-\d{2}-\d{2}\.json$/.test(entry.name)) || !fullExport.file.data.tasks.some(task => task.code === 'SMOKE-1') || !fullExport.file.settings.logo.startsWith('data:image/png;base64,')) throw new Error('Esportazioni per organizzazione non valide.');
         result.checks.push('File esportati per organizzazione scritti su disco e reimportabili');
+        const spreadsheets = exportNames.filter(name => name.endsWith('.xlsx'));
+        const workbook = spreadsheets.length ? await fs.readFile(path.join(exportsFolder, spreadsheets[0])) : Buffer.alloc(0);
+        if (spreadsheets.length !== 1 || !/^OrbitKanban-[a-z0-9-]+-(situazione|situation)-\d{4}-\d{2}-\d{2}\.xlsx$/.test(spreadsheets[0]) || workbook.readUInt32LE(0) !== 0x04034b50 || !workbook.includes('xl/workbook.xml') || workbook.readUInt32LE(workbook.length - 22) !== 0x06054b50) throw new Error(`Esportazione Excel non valida: ${spreadsheets.join(', ')}`);
+        result.checks.push('Esportazione Excel scritta su disco come cartella di lavoro .xlsx');
         console.log(JSON.stringify(result, null, 2));
         await store.idle();
         const stored = validateArchive(JSON.parse(await fs.readFile(store.dataFile, 'utf8')));

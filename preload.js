@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('workspace', {
   organization: (operation, payload, organizationId) => ipcRenderer.invoke('organization', operation, payload, organizationId),
   exportData: () => ipcRenderer.invoke('export'),
   exportOrganization: (organizationId, kind) => ipcRenderer.invoke('export-organization', organizationId, kind),
+  exportSpreadsheet: (fileName, bytes) => ipcRenderer.invoke('export-spreadsheet', fileName, bytes),
   importData: () => ipcRenderer.invoke('import'),
   openLink: url => ipcRenderer.invoke('open-link', url),
   openDataFolder: () => ipcRenderer.invoke('open-data-folder'),

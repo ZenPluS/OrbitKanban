@@ -1,5 +1,5 @@
 'use strict';
-const { APP_NAME, validateData, matchIssues, findDuplicates, sortTasks, dateColor, extractThemePalette, themeFromLogo, normalizeUrl, isWebUrl, validPortalTemplate, portalUrl, parseOrganizationFile, applyOrganizationImport, importedOrganizationData, uniqueOrganizationName, FONT_SIZE_PARTS, FONT_SIZE_STEP, defaultFontSizes, clampFontSize, HIGHLIGHT_LIMIT, defaultTaskColumns, normalizeTaskColumns, TAG_LIMIT, TAG_NAME_MAX, today, nextReleaseDate } = window.OrbitaCore;
+const { APP_NAME, validateData, matchIssues, findDuplicates, sortTasks, dateColor, extractThemePalette, themeFromLogo, normalizeUrl, isWebUrl, validPortalTemplate, portalUrl, parseOrganizationFile, applyOrganizationImport, importedOrganizationData, uniqueOrganizationName, FONT_SIZE_PARTS, FONT_SIZE_STEP, defaultFontSizes, clampFontSize, HIGHLIGHT_LIMIT, defaultTaskColumns, normalizeTaskColumns, TAG_LIMIT, TAG_NAME_MAX, today, nextReleaseDate, situationFileName } = window.OrbitaCore;
 const $ = selector => document.querySelector(selector);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const uid = () => crypto.randomUUID();
@@ -8,6 +8,9 @@ let settingsDraft, saving = false, organizationBusy = false, organizations = [],
 let revision = '', appVersion = '', browserUrl = '', online = true, refreshing = false, pendingChange = null, renderAfterModal = false, adoptions = 0, subscribed = false;
 let languageInfo = { folder: '', template: '', languages: [], errors: [] };
 let milestoneDay = '';
+// Tasks ticked in the list for bulk edit or export; kept across filters and dropped when they no longer exist.
+const selectedTasks = new Set();
+let selectionAnchor = '';
 let settingsTab = (() => { try { return sessionStorage.getItem('orbitkanban.settingsTab') || ''; } catch { return ''; } })(), themeQuery = '';
 function unwrap(value) {
   if (value && value.__error) { const error = new Error(value.message); error.code = value.code; throw error; }
@@ -238,7 +241,7 @@ function applyRemoteSnapshot(snapshot, previousId) {
     renderAfterModal = false;
     if ($('#modal').open) $('#modal').close();
     adoptSnapshot(snapshot);
-    search = ''; statusFilter = ''; highlightFilter = ''; highlighter = ''; showHidden = false; duplicatesOnly = false; issueDuplicatesOnly = false; sort = [{ key: 'releaseDate', direction: 'asc' }];
+    search = ''; statusFilter = ''; highlightFilter = ''; highlighter = ''; selectedTasks.clear(); showHidden = false; duplicatesOnly = false; issueDuplicatesOnly = false; sort = [{ key: 'releaseDate', direction: 'asc' }];
     render();
     notify('L’organizzazione aperta è stata eliminata in un’altra finestra. Ora stai vedendo un’altra organizzazione.', true);
     return;
@@ -415,7 +418,7 @@ async function organizationAction(operation, payload) {
   $('#organization-select').disabled = true;
   try {
     adoptSnapshot(await workspaceApi.organization(operation, payload, activeOrganizationId));
-    search = ''; statusFilter = ''; highlightFilter = ''; highlighter = ''; showHidden = false; duplicatesOnly = false; issueDuplicatesOnly = false; sort = [{ key: 'releaseDate', direction: 'asc' }];
+    search = ''; statusFilter = ''; highlightFilter = ''; highlighter = ''; selectedTasks.clear(); showHidden = false; duplicatesOnly = false; issueDuplicatesOnly = false; sort = [{ key: 'releaseDate', direction: 'asc' }];
     render();
   } finally { organizationBusy = false; $('#organization-select').disabled = false; flushPendingChange(); }
 }
@@ -463,7 +466,7 @@ $('#organization-select').onchange = action(async event => {
 });
 $('#manage-organizations').onclick = action(() => withSavedSettings(openOrganizationSettings));
 $('#content').addEventListener('dblclick', event => {
-  if (event.button !== 0 || $('#modal').open || event.target.closest('button, a, input, select, textarea, [contenteditable]')) return;
+  if (event.button !== 0 || $('#modal').open || event.target.closest('button, a, input, select, textarea, [contenteditable], .select-cell')) return;
   const row = event.target.closest('tr[data-task-row], tr[data-issue-row]');
   if (!row) return;
   if (view === 0 && !highlighter && row.dataset.taskRow) {
@@ -530,8 +533,8 @@ function renderTasks() {
     return `<th data-column="${id}"${title}>${def.sort ? ui`<button data-sort="${def.sort}" title="Clic per ordinare; Maiusc+clic per ordinamento multiplo">${label} <span>${current ? (current.direction === 'asc' ? '↑' : '↓') + (sort.length > 1 ? sort.indexOf(current) + 1 : '') : '↕'}</span></button>` : label}</th>`;
   }).join('');
   $('#content').innerHTML = heading(data.settings.tabNames[0], 'Tutte le attività, una direzione. Pianifica il lavoro e tieni a fuoco le prossime release.',
-    ui`<button class="button primary" id="new-task">＋ Nuova attività</button>`) + stats() +
-    ui`<section class="panel"><div class="table-toolbar"><div class="search-wrap"><span>⌕</span><input id="search" aria-label="Cerca attività" placeholder="Cerca codice, descrizione, incident…" value="${esc(search)}"></div><div class="filters"><select id="status-filter" aria-label="Filtra stato">${optionList(data.settings.statuses, statusFilter, 'Tutti gli stati')}</select><select id="highlight-filter" aria-label="Filtra evidenziazione">${highlightOptions}</select><label class="toggle-label"><input id="show-hidden" type="checkbox" ${showHidden ? 'checked' : ''}> Nascoste <span class="tiny-count">${hidden}</span></label><label class="toggle-label duplicate-toggle ${duplicateCount ? 'has-duplicates' : ''}" title="Mostra solo le attività con un incident collegato anche ad altre attività, comprese quelle nascoste"><input id="duplicates-only" type="checkbox" ${duplicatesOnly ? 'checked' : ''} ${duplicateCount ? '' : 'disabled'}> Duplicati <span class="tiny-count">${duplicateCount}</span></label><button class="button subtle" id="columns-button" aria-haspopup="dialog" title="Scegli quali colonne mostrare e in che ordine">▥ Colonne</button><button class="button subtle" id="reset-sort" title="Ripristina ordinamento release crescente">↕ Release</button></div></div><div class="highlighter-bar"></div><div class="table-scroll"><table class="activity-table"><thead><tr>${headers}<th><span class="sr-only">Azioni</span></th></tr></thead><tbody id="task-rows"></tbody></table></div><div class="table-footer"><span id="row-count"></span><span>Maiusc + clic su una colonna per ordinare su più livelli</span></div></section><div class="hint"><span>✧</span> Un unico archivio, quattro prospettive. Issue, milestone e kanban si aggiornano automaticamente.</div>`;
+    excelButton() + ui`<button class="button primary" id="new-task">＋ Nuova attività</button>`) + stats() +
+    ui`<section class="panel"><div class="table-toolbar"><div class="search-wrap"><span>⌕</span><input id="search" aria-label="Cerca attività" placeholder="Cerca codice, descrizione, incident…" value="${esc(search)}"></div><div class="filters"><select id="status-filter" aria-label="Filtra stato">${optionList(data.settings.statuses, statusFilter, 'Tutti gli stati')}</select><select id="highlight-filter" aria-label="Filtra evidenziazione">${highlightOptions}</select><label class="toggle-label"><input id="show-hidden" type="checkbox" ${showHidden ? 'checked' : ''}> Nascoste <span class="tiny-count">${hidden}</span></label><label class="toggle-label duplicate-toggle ${duplicateCount ? 'has-duplicates' : ''}" title="Mostra solo le attività con un incident collegato anche ad altre attività, comprese quelle nascoste"><input id="duplicates-only" type="checkbox" ${duplicatesOnly ? 'checked' : ''} ${duplicateCount ? '' : 'disabled'}> Duplicati <span class="tiny-count">${duplicateCount}</span></label><button class="button subtle" id="columns-button" aria-haspopup="dialog" title="Scegli quali colonne mostrare e in che ordine">▥ Colonne</button><button class="button subtle" id="reset-sort" title="Ripristina ordinamento release crescente">↕ Release</button></div></div><div class="highlighter-bar"></div><div class="table-scroll"><table class="activity-table"><thead><tr><th class="select-col"><input type="checkbox" id="select-all" aria-label="Seleziona tutte le attività mostrate" title="Seleziona tutte le attività mostrate"></th>${headers}<th><span class="sr-only">Azioni</span></th></tr></thead><tbody id="task-rows"></tbody></table></div><div class="table-footer"><span id="row-count"></span><span id="footer-hint">Maiusc + clic su una colonna per ordinare su più livelli</span><div class="bulk-bar" id="bulk-bar" role="toolbar" aria-label="Azioni sulle attività selezionate" hidden><strong id="bulk-count"></strong><button type="button" class="button small primary" id="bulk-edit">✎ Modifica multipla…</button><button type="button" class="button small" id="bulk-excel">⤓ Esporta in Excel</button><button type="button" class="button small subtle" id="bulk-clear">Deseleziona</button></div></div></section><div class="hint"><span>✧</span> Un unico archivio, quattro prospettive. Issue, milestone e kanban si aggiornano automaticamente.</div>`;
   drawHighlighter();
   drawTaskRows();
   $('#new-task').onclick = () => taskDialog();
@@ -551,11 +554,25 @@ function renderTasks() {
   // While a highlighter is active, a click anywhere on a row colors it instead of opening links or the task.
   $('#task-rows').addEventListener('click', event => {
     const row = highlighter && event.target.closest('tr[data-task-row]');
-    if (!row) return;
+    if (!row || event.target.closest('.select-cell')) return;
     event.preventDefault();
     event.stopPropagation();
     paintRow(row);
   }, true);
+  $('#task-rows').addEventListener('click', event => {
+    const box = event.target.closest('input[data-select-task]');
+    if (box) selectTaskRows(box, event.shiftKey);
+  });
+  $('#select-all').onchange = event => {
+    for (const box of document.querySelectorAll('#task-rows input[data-select-task]')) {
+      if (event.target.checked) selectedTasks.add(box.dataset.selectTask); else selectedTasks.delete(box.dataset.selectTask);
+    }
+    selectionAnchor = '';
+    drawSelection();
+  };
+  $('#bulk-edit').onclick = () => bulkDialog([...selectedTasks]);
+  $('#bulk-excel').onclick = () => excelDialog({ scope: 'selected' });
+  $('#bulk-clear').onclick = () => clearSelection();
 }
 function taskCell(column, task, status, urgency, links, duplicateGroups = []) {
   const none = '<span class="muted">—</span>';
@@ -590,13 +607,15 @@ function drawTaskRows() {
   $('#task-rows').innerHTML = tasks.map(task => {
     const status = data.settings.statuses.find(s => s.id === task.statusId), urgency = data.settings.urgencies.find(s => s.id === task.urgencyId);
     const links = matchIssues(task, data.issues), mark = highlightOf(task), duplicateGroups = duplicates.tasks.get(task.id) || [];
-    const classes = [status.highlight ? 'highlighted' : '', mark ? 'marked' : '', task.hidden ? 'hidden-row' : '', duplicateGroups.length ? 'duplicate-row' : ''].filter(Boolean).join(' ');
+    const classes = [status.highlight ? 'highlighted' : '', mark ? 'marked' : '', task.hidden ? 'hidden-row' : '', duplicateGroups.length ? 'duplicate-row' : '', selectedTasks.has(task.id) ? 'selected' : ''].filter(Boolean).join(' ');
     const markLabel = mark ? fillText('Evidenziazione: {0}', mark.name) : t('Evidenzia riga');
     const duplicateLabel = duplicateGroups.length ? [t('Possibile duplicato'), ...taskDuplicateLines(task.id, duplicateGroups)].join('\n') : '';
     const duplicateFlag = duplicateGroups.length ? `<button type="button" class="icon-button dup-flag" data-dup-incident="${esc(duplicateGroups[0].incident)}" title="${esc(duplicateLabel + '\n' + t('Clic per vedere solo le attività coinvolte.'))}" aria-label="${esc(duplicateLabel.replaceAll('\n', '. '))}">⧉</button>` : '';
-    return `<tr data-task-row="${esc(task.id)}" title="${esc(t('Doppio clic sulla riga per modificare.'))}" class="${classes}" style="--row-color:${status.color}${mark ? `;--mark:${mark.color}` : ''}">${columns.map(column => taskCell(column, task, status, urgency, links, duplicateGroups)).join('')}<td class="row-actions">${duplicateFlag}<button type="button" class="icon-button mark-button ${mark ? 'is-marked' : ''}" data-mark-task="${esc(task.id)}" title="${esc(markLabel)}" aria-label="${esc(markLabel)}" aria-haspopup="menu" aria-expanded="false"><i class="mark-dot"></i></button><button class="icon-button" data-toggle-task="${task.id}" title="${esc(t(task.hidden ? 'Mostra attività' : 'Nascondi attività'))}">${task.hidden ? '◉' : '◌'}</button><button class="icon-button" data-edit-task="${task.id}" title="${esc(t('Modifica attività'))}">⋯</button></td></tr>`;
-  }).join('') || `<tr><td colspan="${columns.length + 1}" class="empty">${esc(t('Nessuna attività trovata. Crea una nuova attività o modifica i filtri.'))}</td></tr>`;
+    const selectLabel = fillText('Seleziona {0}', task.code);
+    return `<tr data-task-row="${esc(task.id)}" title="${esc(t('Doppio clic sulla riga per modificare.'))}" class="${classes}" style="--row-color:${status.color}${mark ? `;--mark:${mark.color}` : ''}"><td class="select-cell"><label class="select-hit" title="${esc(selectLabel + '\n' + t('Maiusc + clic per selezionare un intervallo.'))}"><input type="checkbox" data-select-task="${esc(task.id)}" ${selectedTasks.has(task.id) ? 'checked' : ''} aria-label="${esc(selectLabel)}"></label></td>${columns.map(column => taskCell(column, task, status, urgency, links, duplicateGroups)).join('')}<td class="row-actions">${duplicateFlag}<button type="button" class="icon-button mark-button ${mark ? 'is-marked' : ''}" data-mark-task="${esc(task.id)}" title="${esc(markLabel)}" aria-label="${esc(markLabel)}" aria-haspopup="menu" aria-expanded="false"><i class="mark-dot"></i></button><button class="icon-button" data-toggle-task="${task.id}" title="${esc(t(task.hidden ? 'Mostra attività' : 'Nascondi attività'))}">${task.hidden ? '◉' : '◌'}</button><button class="icon-button" data-edit-task="${task.id}" title="${esc(t('Modifica attività'))}">⋯</button></td></tr>`;
+  }).join('') || `<tr><td colspan="${columns.length + 2}" class="empty">${esc(t('Nessuna attività trovata. Crea una nuova attività o modifica i filtri.'))}</td></tr>`;
   $('#row-count').textContent = ui`${tasks.length} attività mostrate · ${data.tasks.length} totali`;
+  drawSelection();
   document.querySelectorAll('[data-edit-task]').forEach(b => b.onclick = () => {
     taskDialog(data.tasks.find(t => t.id === b.dataset.editTask));
     if (b.classList.contains('task-tags-button')) {
@@ -617,6 +636,146 @@ function showTaskDuplicates(incident) {
   duplicatesOnly = true;
   renderTasks();
   notify(fillText('Attività che condividono l’incident {0}.', incident));
+}
+// Selection for bulk edit and export. Shift+click extends from the last ticked row over the rows as currently shown.
+function selectTaskRows(box, extend) {
+  const boxes = [...document.querySelectorAll('#task-rows input[data-select-task]')];
+  const from = boxes.findIndex(input => input.dataset.selectTask === selectionAnchor), to = boxes.indexOf(box);
+  const range = extend && from >= 0 && to >= 0 ? boxes.slice(Math.min(from, to), Math.max(from, to) + 1) : [box];
+  for (const input of range) {
+    if (box.checked) selectedTasks.add(input.dataset.selectTask); else selectedTasks.delete(input.dataset.selectTask);
+  }
+  selectionAnchor = box.dataset.selectTask;
+  drawSelection();
+}
+function clearSelection() {
+  selectedTasks.clear();
+  selectionAnchor = '';
+  drawSelection();
+}
+function drawSelection() {
+  for (const id of selectedTasks) if (!data.tasks.some(task => task.id === id)) selectedTasks.delete(id);
+  const boxes = [...document.querySelectorAll('#task-rows input[data-select-task]')], all = $('#select-all');
+  if (!all) return;
+  let shown = 0;
+  for (const box of boxes) {
+    const selected = selectedTasks.has(box.dataset.selectTask);
+    box.checked = selected;
+    box.closest('tr').classList.toggle('selected', selected);
+    if (selected) shown++;
+  }
+  all.disabled = !boxes.length;
+  all.checked = boxes.length > 0 && shown === boxes.length;
+  all.indeterminate = shown > 0 && shown < boxes.length;
+  const count = selectedTasks.size, outside = count - shown;
+  $('.table-footer').classList.toggle('has-selection', count > 0);
+  $('#bulk-bar').hidden = !count;
+  $('#footer-hint').hidden = count > 0;
+  $('#bulk-count').textContent = count ? fillText('{0} selezionate', count) + (outside ? ` · ${fillText('{0} non visibili con i filtri attuali', outside)}` : '') : '';
+}
+const shiftDate = (date, days) => {
+  const [year, month, day] = date.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
+};
+// Turns the bulk form into a list of edits; fields left on "do not change" are skipped.
+function bulkPlan(fields) {
+  const steps = [], status = fields.get('statusId'), urgency = fields.get('urgencyId'), mode = fields.get('releaseMode'), mark = fields.get('highlightId'), hidden = fields.get('hidden');
+  if (status) steps.push(task => { task.statusId = status; });
+  if (urgency) steps.push(task => { task.urgencyId = urgency; });
+  if (mode === 'set') {
+    const date = fields.get('releaseDate');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('Scegli la nuova release date.');
+    steps.push(task => { task.releaseDate = date; });
+  } else if (mode === 'shift') {
+    const days = Number(fields.get('shiftDays'));
+    if (!Number.isInteger(days) || !days || Math.abs(days) > 3650) throw new Error('Indica di quanti giorni spostare la release: un numero intero diverso da zero.');
+    steps.push(task => { if (task.releaseDate) task.releaseDate = shiftDate(task.releaseDate, days); });
+  } else if (mode === 'clear') steps.push(task => { task.releaseDate = ''; });
+  if (mark) steps.push(task => { task.highlightId = mark === '__none' ? '' : mark; });
+  if (hidden) steps.push(task => { task.hidden = hidden === 'hide'; });
+  const tags = data.settings.tags || [], add = tags.filter(tag => fields.get(`tag:${tag.id}`) === 'add').map(tag => tag.id), remove = tags.filter(tag => fields.get(`tag:${tag.id}`) === 'remove').map(tag => tag.id);
+  if (add.length || remove.length) steps.push(task => {
+    const current = task.tagIds || [];
+    task.tagIds = [...current.filter(id => !remove.includes(id)), ...add.filter(id => !current.includes(id))];
+  });
+  return { steps, highlight: Boolean(mark) };
+}
+function bulkDialog(ids, context = '') {
+  const settings = data.settings, wanted = new Set(ids), tasks = sortedRows(data.tasks.filter(task => wanted.has(task.id))), tags = settings.tags || [];
+  if (!tasks.length) { notify('Seleziona almeno un’attività.', true); return; }
+  const keep = `<option value="">${esc(t('— Non modificare —'))}</option>`;
+  const statuses = settings.statuses.filter(status => tasks.some(task => task.statusId === status.id));
+  const items = tasks.map(task => {
+    const status = settings.statuses.find(s => s.id === task.statusId);
+    return `<label class="bulk-item ${task.hidden ? 'is-hidden' : ''}"><input type="checkbox" name="taskIds" value="${esc(task.id)}" data-status="${esc(task.statusId)}" checked><strong>${esc(task.code)}</strong><span class="bulk-desc">${esc(plain(task.description) || t('Senza descrizione'))}</span>${pill(status.name, status.color)}<span class="bulk-date" style="--date:${task.releaseDate ? dateColor(task.releaseDate) : '#929bb2'}">◷ ${formatDate(task.releaseDate)}</span></label>`;
+  }).join('');
+  const tagRows = tags.map(tag => `<label class="bulk-tag">${pill(tag.name, tag.color, 'tag-pill')}<select name="tag:${esc(tag.id)}" aria-label="${esc(fillText('Tag {0}', tag.name))}"><option value="">—</option><option value="add">${esc(t('＋ Aggiungi'))}</option><option value="remove">${esc(t('− Togli'))}</option></select></label>`).join('');
+  openModal(ui`<form id="bulk-form" novalidate><div class="modal-heading"><div><div class="eyebrow">${esc(data.settings.tabNames[0])}</div><h2>${esc(t('Modifica multipla'))}</h2></div><button type="button" class="icon-button" data-close aria-label="Chiudi">✕</button></div>${context ? `<p class="section-description">${esc(context)}</p>` : ''}
+    <section class="bulk-targets" aria-labelledby="bulk-targets-title"><div class="bulk-targets-head"><strong id="bulk-targets-title">Attività coinvolte</strong><span class="bulk-quick">${statuses.length > 1 ? statuses.map(status => `<button type="button" class="bulk-status-chip" data-bulk-status="${esc(status.id)}" style="--pill:${esc(status.color)}" title="${esc(fillText('Seleziona solo: {0}', status.name))}">${esc(status.name)}</button>`).join('') : ''}<button type="button" class="unsaved-link" data-bulk-all="1">Seleziona tutte</button><button type="button" class="unsaved-link" data-bulk-all="0">Deseleziona tutte</button></span></div><div class="bulk-list">${items}</div></section>
+    <div class="form-grid bulk-fields">
+      <label class="field">Stato<select name="statusId">${keep}${optionList(settings.statuses, '')}</select></label>
+      <label class="field">Urgenza<select name="urgencyId">${keep}${optionList(settings.urgencies, '')}</select></label>
+      <div class="field"><label for="bulk-release-mode">Release date</label><div class="bulk-inline"><select id="bulk-release-mode" name="releaseMode">${keep}<option value="set">Imposta una data</option><option value="shift">Sposta di N giorni</option><option value="clear">Togli la data (da pianificare)</option></select><input type="date" name="releaseDate" aria-label="Nuova release date" hidden><input type="number" name="shiftDays" step="1" value="7" aria-label="Giorni di spostamento (negativi per anticipare)" title="Giorni di spostamento (negativi per anticipare)" hidden></div><small id="bulk-release-hint"></small></div>
+      <label class="field">Evidenziazione<select name="highlightId">${keep}<option value="__none">Nessuna evidenziazione</option>${optionList(highlightsOf(), '')}</select></label>
+      <label class="field">Visibilità nella lista<select name="hidden">${keep}<option value="hide">Nascondi dalla lista</option><option value="show">Mostra nella lista</option></select></label>
+      ${tags.length ? ui`<fieldset class="field full bulk-tags"><legend>Tags</legend><div class="bulk-tag-grid">${tagRows}</div></fieldset>` : ''}
+    </div><p class="bulk-summary" id="bulk-summary" aria-live="polite"></p>
+    <div class="modal-actions"><button type="button" class="button danger" id="bulk-delete">Elimina…</button><span class="spacer"></span><button type="button" class="button" data-close>Annulla</button><button type="submit" class="button primary" id="bulk-apply">Applica</button></div></form>`);
+  const form = $('#bulk-form'), boxes = [...form.querySelectorAll('input[name="taskIds"]')];
+  const chosen = () => new Set(boxes.filter(box => box.checked).map(box => box.value));
+  const summarize = () => {
+    const ids = chosen(), mode = form.elements.releaseMode.value;
+    let pending = 0;
+    try { pending = bulkPlan(new FormData(form)).steps.length; } catch { pending = 1; }
+    form.elements.releaseDate.hidden = mode !== 'set';
+    form.elements.shiftDays.hidden = mode !== 'shift';
+    const dated = tasks.filter(task => ids.has(task.id) && task.releaseDate).length;
+    $('#bulk-release-hint').textContent = mode === 'shift' ? fillText('Solo le attività con una data: {0} su {1}.', dated, ids.size) : '';
+    $('#bulk-summary').textContent = !ids.size ? t('Seleziona almeno un’attività.') : pending ? fillText('Le modifiche verranno applicate a {0}.', plural(ids.size, 'attività')) : fillText('{0} pronte: scegli cosa modificare.', plural(ids.size, 'attività'));
+    $('#bulk-apply').disabled = !ids.size || !pending;
+    $('#bulk-delete').disabled = !ids.size;
+    form.querySelectorAll('[data-bulk-status]').forEach(chip => chip.setAttribute('aria-pressed', String(boxes.every(box => box.checked === (box.dataset.status === chip.dataset.bulkStatus)))));
+  };
+  form.addEventListener('input', summarize);
+  form.addEventListener('change', summarize);
+  form.querySelectorAll('[data-bulk-all]').forEach(button => button.onclick = () => { boxes.forEach(box => { box.checked = button.dataset.bulkAll === '1'; }); summarize(); });
+  form.querySelectorAll('[data-bulk-status]').forEach(chip => chip.onclick = () => { boxes.forEach(box => { box.checked = box.dataset.status === chip.dataset.bulkStatus; }); summarize(); });
+  summarize();
+  form.onsubmit = action(async event => {
+    event.preventDefault();
+    const ids = chosen(), plan = bulkPlan(new FormData(form));
+    if (!ids.size) throw new Error('Seleziona almeno un’attività.');
+    if (!plan.steps.length) throw new Error('Scegli almeno un campo da modificare.');
+    let changed = 0;
+    await commit(next => {
+      changed = 0;
+      for (const task of next.tasks) {
+        if (!ids.has(task.id)) continue;
+        const before = JSON.stringify(task);
+        plan.steps.forEach(step => step(task));
+        if (JSON.stringify(task) !== before) changed++;
+      }
+    });
+    if (plan.highlight) ids.forEach(id => pendingMarks.delete(id));
+    $('#modal').close();
+    rerenderPreservingView();
+    notify(fillText('Modifica multipla applicata: {0} aggiornate.', plural(changed, 'attività')));
+  });
+  $('#bulk-delete').onclick = () => {
+    const ids = chosen(), codes = tasks.filter(task => ids.has(task.id)).map(task => task.code);
+    if (!ids.size) return;
+    confirmDialog('Eliminare le attività scelte?', fillText('{0} saranno eliminate definitivamente: {1}. Le associazioni issue resteranno disponibili.', plural(ids.size, 'attività'), codes.slice(0, 10).join(', ') + (codes.length > 10 ? '…' : '')), async () => {
+      let removed = 0;
+      await commit(next => {
+        const before = next.tasks.length;
+        next.tasks = next.tasks.filter(task => !ids.has(task.id));
+        removed = before - next.tasks.length;
+      });
+      ids.forEach(id => { selectedTasks.delete(id); pendingMarks.delete(id); });
+      render();
+      notify(fillText('Attività eliminate: {0}.', removed));
+    });
+  };
 }
 function openSettingsTab(id) {
   view = 4;
@@ -995,7 +1154,7 @@ function confirmDialog(title, message, callback) {
 function renderIssues() {
   const duplicates = duplicatesOf(), duplicateCount = duplicates.issues.size, identicalIds = new Set(duplicates.identical);
   if (issueDuplicatesOnly && !duplicateCount) issueDuplicatesOnly = false;
-  $('#content').innerHTML = heading(data.settings.tabNames[1], 'Collega il lavoro alla sua origine. Più incident possono condividere lo stesso problem.', ui`<button class="button primary" id="new-issue">＋ Nuova associazione</button>`) +
+  $('#content').innerHTML = heading(data.settings.tabNames[1], 'Collega il lavoro alla sua origine. Più incident possono condividere lo stesso problem.', excelButton() + ui`<button class="button primary" id="new-issue">＋ Nuova associazione</button>`) +
     ui`<div class="info-banner">⌘ &nbsp; Incident e problem vengono riportati automaticamente sulle attività con lo stesso codice portale, senza distinzione tra maiuscole e minuscole.</div><section class="panel"><div class="table-toolbar"><strong>${data.issues.length} associazioni</strong><div class="filters"><input id="issue-search" class="issue-search" placeholder="Cerca codice, incident o problem…" aria-label="Cerca associazioni"><label class="toggle-label duplicate-toggle ${duplicateCount ? 'has-duplicates' : ''}" title="Mostra solo le associazioni il cui incident compare in più righe"><input id="issue-duplicates-only" type="checkbox" ${issueDuplicatesOnly ? 'checked' : ''} ${duplicateCount ? '' : 'disabled'}> Duplicati <span class="tiny-count">${duplicateCount}</span></label>${identicalIds.size ? ui`<button class="button subtle" id="remove-identical" title="Elimina le associazioni con stesso codice portale, incident e problem di un’altra, lasciando la prima">Rimuovi identiche <span class="tiny-count">${identicalIds.size}</span></button>` : ''}</div></div><div class="table-scroll"><table><thead><tr><th>Codice portale</th><th>Incident</th><th>Problem</th><th>Collegamento</th><th>Azioni</th></tr></thead><tbody id="issue-rows"></tbody></table></div></section>`;
   function rows(query = $('#issue-search').value) {
     const issues = data.issues.filter(i => (!issueDuplicatesOnly || duplicates.issues.has(i.id)) && [i.code, i.incident, i.problem].some(v => v.toLowerCase().includes(query.toLowerCase())));
@@ -1066,12 +1225,16 @@ function renderMilestones() {
   const nextDate = nextReleaseDate(tasks, milestoneDay), nextLabel = nextDate === milestoneDay ? 'Release di oggi' : 'Prossima release';
   if (tasks.some(t => !t.releaseDate)) dates.push('');
   const shortcut = nextDate ? `<button type="button" class="button next-release-link" id="next-release-button" aria-controls="next-release-milestone" title="${esc(t('Vai alla prossima release'))}">${esc(t(nextLabel))} · ${esc(formatDate(nextDate))}</button>` : `<span class="view-label next-release-empty">${esc(t('Nessuna release in programma'))}</span>`;
-  $('#content').innerHTML = heading(data.settings.tabNames[2], 'Ogni release è una tappa. Le date e le attività si allineano automaticamente.', ui`<span class="view-label">${dates.filter(Boolean).length} milestone · ${tasks.length} attività</span>` + shortcut) +
+  $('#content').innerHTML = heading(data.settings.tabNames[2], 'Ogni release è una tappa. Le date e le attività si allineano automaticamente.', ui`<span class="view-label">${dates.filter(Boolean).length} milestone · ${tasks.length} attività</span>` + shortcut + excelButton()) +
     ui`<div class="milestone-shell"><div class="milestone-scroll"><div class="milestone-track">${dates.map((date, index) => {
       const group = tasks.filter(t => t.releaseDate === date), color = date ? dateColor(date) : '#929bb2', isNext = Boolean(nextDate && date === nextDate);
-      return ui`<section class="milestone-column ${isNext ? 'is-next-release' : ''}" data-release-date="${esc(date)}" ${isNext ? 'id="next-release-milestone" aria-current="step"' : ''} style="--milestone:${color}"><div class="timeline-label"><span>${date ? ui`TAPPA ${String(index + 1).padStart(2, '0')}` : 'BACKLOG'}</span>${isNext ? `<span class="next-release-badge">${esc(t(nextLabel))}</span>` : ''}</div><div class="timeline-line"><span>◆</span></div><div class="milestone-heading"><h2>${formatDate(date)}</h2><span>${group.length} attività · ${effort(group.reduce((sum, t) => sum + t.effortHours, 0))}</span></div><div class="milestone-cards">${sortedRows(group).map(t => miniTask(t)).join('')}</div></section>`;
+      return ui`<section class="milestone-column ${isNext ? 'is-next-release' : ''}" data-release-date="${esc(date)}" ${isNext ? 'id="next-release-milestone" aria-current="step"' : ''} style="--milestone:${color}"><div class="timeline-label"><span>${date ? ui`TAPPA ${String(index + 1).padStart(2, '0')}` : 'BACKLOG'}</span>${isNext ? `<span class="next-release-badge">${esc(t(nextLabel))}</span>` : ''}</div><div class="timeline-line"><span>◆</span></div><div class="milestone-heading"><h2>${formatDate(date)}</h2><span>${group.length} attività · ${effort(group.reduce((sum, t) => sum + t.effortHours, 0))}</span><button type="button" class="icon-button milestone-bulk" data-bulk-release="${esc(date)}" title="${esc(t('Modifica multipla delle attività di questa tappa'))}" aria-label="${esc(t('Modifica multipla delle attività di questa tappa'))}">✎</button></div><div class="milestone-cards">${sortedRows(group).map(t => miniTask(t)).join('')}</div></section>`;
     }).join('') || ui`<div class="empty">Aggiungi attività e release date per costruire la tua roadmap.</div>`}</div></div></div><div class="hint">↔ Scorri in orizzontale per esplorare le release e in verticale per tutte le attività. La stessa data mantiene lo stesso colore in ogni vista.</div>`;
   document.querySelectorAll('[data-card]').forEach(b => b.onclick = () => taskDialog(data.tasks.find(t => t.id === b.dataset.card)));
+  document.querySelectorAll('[data-bulk-release]').forEach(button => button.onclick = () => {
+    const date = button.dataset.bulkRelease;
+    bulkDialog(data.tasks.filter(task => task.releaseDate === date).map(task => task.id), date ? fillText('Attività della release del {0}, comprese quelle nascoste.', formatDate(date)) : t('Attività da pianificare, comprese quelle nascoste.'));
+  });
   if ($('#next-release-button')) $('#next-release-button').onclick = revealNextMilestone;
   revealNextMilestone();
 }
@@ -1090,11 +1253,198 @@ setInterval(refreshMilestoneDate, 60000);
 document.addEventListener('visibilitychange', refreshMilestoneDate);
 function renderKanban() {
   const tasks = data.tasks;
-  $('#content').innerHTML = heading(data.settings.tabNames[3], 'Una vista di sola lettura, sempre allineata alle attività. Ogni stato trova il suo spazio.', ui`<span class="readonly-badge">◈ Sola lettura</span>`) +
+  $('#content').innerHTML = heading(data.settings.tabNames[3], 'Una vista di sola lettura, sempre allineata alle attività. Ogni stato trova il suo spazio.', ui`<span class="readonly-badge">◈ Sola lettura</span>` + excelButton()) +
     ui`<div class="kanban-scroll"><div class="kanban-board">${data.settings.statuses.map(status => {
       const items = sortTasks(tasks.filter(t => t.statusId === status.id));
       return `<section class="kanban-column" style="--column:${status.color}"><div class="kanban-heading"><span><i></i>${esc(status.name)}</span><b>${items.length}</b></div><div class="kanban-cards">${items.map(t => miniTask(t, true)).join('') || ui`<div class="kanban-empty">Spazio alle prossime attività</div>`}</div></section>`;
     }).join('')}</div></div><div class="hint">◈ Per modificare uno stato usa la lista attività. L’ordine delle colonne si configura nelle impostazioni.</div>`;
+}
+// ---- Excel export of the current situation ----
+const excelButton = () => `<button type="button" class="button excel-button" data-excel-export title="${esc(t('Esporta la situazione attuale in un file Excel'))}">⤓ Excel</button>`;
+document.addEventListener('click', event => { if (data && event.target.closest('[data-excel-export]')) excelDialog(); });
+let colorProbe;
+// Any CSS color (including the hsl() used for release dates) as #rrggbb, which is what Excel needs.
+function hexColor(color, fallback = '#929bb2') {
+  colorProbe ||= document.createElement('canvas').getContext('2d');
+  colorProbe.fillStyle = fallback;
+  colorProbe.fillStyle = String(color || fallback);
+  return /^#[0-9a-f]{6}$/i.test(colorProbe.fillStyle) ? colorProbe.fillStyle : fallback;
+}
+// Mixes a color with white: amount 1 keeps the color, 0 gives white. Keeps cell text readable on any palette.
+function tint(color, amount) {
+  const hex = hexColor(color);
+  return '#' + [1, 3, 5].map(i => Math.round(255 - (255 - parseInt(hex.slice(i, i + 2), 16)) * amount).toString(16).padStart(2, '0')).join('');
+}
+// Rich text as plain text with real line breaks and list markers, for spreadsheet cells.
+function richText(html) {
+  const el = document.createElement('div');
+  el.innerHTML = sanitize(html);
+  el.querySelectorAll('ol').forEach(list => [...list.children].forEach((item, i) => item.prepend(`${i + 1}. `)));
+  el.querySelectorAll('ul > li').forEach(item => item.prepend('• '));
+  el.querySelectorAll('br').forEach(node => node.replaceWith('\n'));
+  el.querySelectorAll('p,div,li,blockquote').forEach(node => node.append('\n'));
+  return el.textContent.replace(/[ \t\u00a0]+/g, ' ').replace(/ *\n */g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+const EXCEL_SHEETS = [['summary', 'Riepilogo', 'Totali, filtri attivi e distribuzione per stato e urgenza'], ['tasks', 0, 'Una riga per attività con colori, link, date e incident'], ['issues', 1, 'Tutte le associazioni con i duplicati segnalati'], ['milestones', 2, 'Una riga per release con effort e stati'], ['kanban', 3, 'Le attività in colonne, una per stato']];
+let excelChoices = { scope: 'view', columns: 'visible', sheets: EXCEL_SHEETS.map(([id]) => id) };
+function excelTasks(scope) {
+  if (scope === 'selected') return sortedRows(data.tasks.filter(task => selectedTasks.has(task.id)));
+  return sortedRows(scope === 'all' ? data.tasks : filteredTasks());
+}
+function activeFilterText() {
+  const status = data.settings.statuses.find(s => s.id === statusFilter);
+  const highlight = { __any: t('Solo evidenziate'), __none: t('Senza evidenziazione') }[highlightFilter] || highlightsOf().find(h => h.id === highlightFilter)?.name;
+  const parts = [search && `${t('Ricerca')}: “${search}”`, status && `${t('Stato')}: ${status.name}`, highlight && `${t('Evidenziazione')}: ${highlight}`, showHidden && t('Nascoste incluse'), duplicatesOnly && t('Solo duplicati')].filter(Boolean);
+  return parts.join(' · ') || t('Nessuno');
+}
+function sortText() {
+  return sort.map(entry => {
+    const def = Object.values(taskColumnDefs).find(column => column.sort === entry.key);
+    return `${t(def?.name || entry.key)} ${entry.direction === 'asc' ? '↑' : '↓'}`;
+  }).join(', ');
+}
+async function situationWorkbook(options, now = new Date()) {
+  const settings = data.settings, tasks = excelTasks(options.scope), duplicates = duplicatesOf(), wanted = new Set(options.sheets);
+  const organization = organizations.find(o => o.id === activeOrganizationId)?.name || '';
+  const header = { bold: true, color: '#ffffff', fill: '#2d3142', vertical: 'center', border: '#2d3142' }, grid = '#d9dce6', muted = '#7a8099';
+  const section = text => [{ v: text, style: { bold: true, size: 12, color: '#2d3142', border: { color: '#2d3142', style: 'medium', sides: ['bottom'] } } }];
+  const hours = list => list.reduce((sum, task) => sum + task.effortHours, 0);
+  const statusOf = task => settings.statuses.find(s => s.id === task.statusId), urgencyOf = task => settings.urgencies.find(s => s.id === task.urgencyId);
+  const nextDate = nextReleaseDate(tasks, today());
+  const sheets = [];
+  if (wanted.has('summary')) {
+    const scopeLabel = { view: t('Come mostrate nella lista'), all: t('Tutte le attività'), selected: t('Solo le selezionate') }[options.scope];
+    const label = text => ({ v: t(text), style: { color: muted } });
+    const dated = tasks.filter(task => task.releaseDate), hidden = tasks.filter(task => task.hidden).length, total = hours(tasks);
+    const highlighted = tasks.filter(task => highlightOf(task) || statusOf(task).highlight).length, duplicated = tasks.filter(task => duplicates.tasks.has(task.id)).length;
+    const breakdown = (title, items, of) => [section(t(title)), [title, 'Attività', 'Ore', 'Effort', '%'].map(text => ({ v: t(text), style: header })),
+      ...items.map(item => {
+        const group = tasks.filter(task => of(task) === item.id), cell = { border: grid };
+        return [{ v: item.name, style: { ...cell, bold: true, fill: tint(item.color, 0.35) } }, { v: group.length, style: cell }, { v: hours(group), style: cell }, { v: hours(group) ? effort(hours(group)) : '', style: cell }, { v: tasks.length ? group.length / tasks.length : 0, type: 'number', style: { ...cell, numFmt: '0%' } }];
+      })];
+    const rows = [
+      [{ v: `${APP_NAME} · ${t('Situazione attuale')}`, style: { bold: true, size: 16, color: '#2d3142' } }], [],
+      [label('Organizzazione'), { v: organization, style: { bold: true } }],
+      [label('Esportato il'), { v: now, type: 'datetime', style: { horizontal: 'left' } }],
+      [label('Versione app'), appVersion || '—'],
+      [label('Attività esportate'), scopeLabel],
+      ...(options.scope === 'view' ? [[label('Filtri attivi'), activeFilterText()]] : []),
+      [label('Ordinamento'), sortText()],
+      [label('Colonne'), t(options.columns === 'all' ? 'Tutte le colonne' : 'Colonne visibili nella lista')],
+      [], section(t('Totali')),
+      [label('Attività'), tasks.length], [label('Di cui nascoste'), hidden],
+      [label('Effort complessivo'), total ? effort(total) : '—'], [label('Effort (ore)'), total],
+      [label('Release pianificate'), new Set(dated.map(task => task.releaseDate)).size], [label('Da pianificare'), tasks.length - dated.length],
+      [label('Prossima release'), nextDate ? { v: nextDate, type: 'date', style: { horizontal: 'left', bold: true } } : '—', nextDate ? plural(tasks.filter(task => task.releaseDate === nextDate).length, 'attività') : ''],
+      [label('In evidenza'), highlighted], [label('Con incident duplicato'), duplicated],
+      [], ...breakdown('Stato', settings.statuses, task => task.statusId),
+      [], ...breakdown('Urgenza', settings.urgencies, task => task.urgencyId)
+    ];
+    sheets.push({ name: t('Riepilogo'), columns: [{ width: 26 }, { width: 30 }, { width: 14 }, { width: 14 }, { width: 9 }], rows, gridLines: false, tabColor: '#2d3142', merges: [{ row: 0, col: 0, cols: 5 }] });
+  }
+  if (wanted.has('tasks')) {
+    const ids = options.columns === 'all' ? normalizeTaskColumns(settings.taskColumns).map(column => column.id) : shownColumns();
+    const widths = { sequence: 7, code: 16, link: 40, description: 56, urgency: 14, status: 18, highlight: 18, tags: 22, effort: 11, incident: 18, problem: 18, releaseDate: 14, notes: 48 };
+    const defs = ids.flatMap(id => id === 'effort' ? [{ id, name: t('Effort'), width: 11 }, { id: 'effortHours', name: t('Effort (ore)'), width: 11 }] : [{ id, name: t(taskColumnDefs[id].name), width: widths[id] }]);
+    if (tasks.some(task => task.hidden)) defs.push({ id: 'hidden', name: t('Nascosta'), width: 11 });
+    const rows = [defs.map(def => ({ v: def.name, style: { ...header, wrap: true } }))];
+    for (const task of tasks) {
+      const status = statusOf(task), urgency = urgencyOf(task), mark = highlightOf(task), links = matchIssues(task, data.issues), url = portalUrl(task, settings);
+      const fill = mark ? tint(mark.color, 0.22) : status.highlight ? tint(status.color, 0.14) : '';
+      const base = { border: grid, vertical: 'top', ...(fill && { fill }), ...(task.hidden && { italic: true, color: muted }) };
+      const cell = (v, style = {}, extra = {}) => ({ v, ...extra, style: { ...base, ...style } });
+      rows.push(defs.map(def => {
+        switch (def.id) {
+          case 'sequence': return cell(task.sequence, { horizontal: 'right' });
+          case 'code': return cell(task.code, { bold: true }, url ? { link: url } : {});
+          case 'link': return cell(url, {}, url ? { link: url } : {});
+          case 'description': return cell(richText(task.description), { wrap: true });
+          case 'notes': return cell(richText(task.notes), { wrap: true });
+          case 'urgency': return cell(urgency.name, { fill: tint(urgency.color, 0.35) });
+          case 'status': return cell(status.name, { fill: tint(status.color, 0.35), bold: Boolean(status.highlight) });
+          case 'highlight': return cell(mark?.name || '', mark ? { fill: tint(mark.color, 0.45) } : {});
+          case 'tags': return cell(tagsOf(task).map(tag => tag.name).join(', '), { wrap: true });
+          case 'effort': return cell(task.effortHours ? effort(task.effortHours) : '');
+          case 'effortHours': return cell(task.effortHours);
+          case 'incident': return cell(links.incidents.join('\n'), { wrap: true, ...(duplicates.tasks.has(task.id) && { fill: tint('#f2b94a', 0.45) }) });
+          case 'problem': return cell(links.problems.join('\n'), { wrap: true });
+          case 'releaseDate': return task.releaseDate ? cell(task.releaseDate, { fill: tint(dateColor(task.releaseDate), 0.5), horizontal: 'center' }, { type: 'date' }) : cell(t('Da pianificare'), { italic: true, color: muted, horizontal: 'center' });
+          case 'hidden': return cell(task.hidden ? t('Sì') : '', { horizontal: 'center' });
+          default: return cell('');
+        }
+      }));
+    }
+    const code = defs.findIndex(def => def.id === 'code');
+    sheets.push({ name: settings.tabNames[0], columns: defs.map(def => ({ width: def.width })), rows, freeze: { row: 1, col: code >= 0 && code < 3 ? code + 1 : 0 }, autoFilter: true, tabColor: settings.themes.find(theme => theme.id === settings.themeId)?.accent, print: { landscape: true, fitWidth: true } });
+  }
+  if (wanted.has('issues')) {
+    const identical = new Set(duplicates.identical), cell = { border: grid, vertical: 'top' };
+    const rows = [['Codice portale', 'Incident', 'Problem', 'Attività collegate', 'Duplicato'].map(text => ({ v: t(text), style: header })),
+      ...data.issues.map(issue => {
+        const linked = data.tasks.filter(task => task.code.trim().toUpperCase() === issue.code.trim().toUpperCase()), task = linked[0], url = task ? portalUrl(task, settings) : '', group = duplicates.issues.get(issue.id);
+        return [{ v: issue.code, link: url, style: { ...cell, bold: true } }, { v: issue.incident, style: { ...cell, ...(group && { fill: tint('#f2b94a', 0.45) }) } }, { v: issue.problem, style: cell }, { v: linked.length, style: cell }, { v: group ? t(identical.has(issue.id) ? 'identica' : 'Sì') : '', style: { ...cell, horizontal: 'center' } }];
+      })];
+    sheets.push({ name: settings.tabNames[1], columns: [{ width: 18 }, { width: 18 }, { width: 18 }, { width: 18 }, { width: 12 }], rows, freeze: { row: 1 }, autoFilter: true });
+  }
+  if (wanted.has('milestones')) {
+    const dates = [...new Set(tasks.map(task => task.releaseDate).filter(Boolean))].sort(), day = today();
+    if (tasks.some(task => !task.releaseDate)) dates.push('');
+    const rows = [['Tappa', 'Release date', 'Release', 'Attività', 'Ore', 'Effort'].map(text => ({ v: t(text), style: header })).concat(settings.statuses.map(status => ({ v: status.name, style: { ...header, fill: tint(status.color, 0.55), color: '#1d2030', wrap: true } })), { v: t('Codici'), style: header })];
+    dates.forEach((date, index) => {
+      const group = tasks.filter(task => task.releaseDate === date), next = Boolean(date && date === nextDate), fill = next ? '#fff1c2' : '';
+      const state = !date ? t('Da pianificare') : next ? t(date === day ? 'Release di oggi' : 'Prossima release') : t(date < day ? 'Passata' : 'Futura');
+      const cell = { border: grid, vertical: 'top', ...(fill && { fill }), ...(next && { bold: true }) };
+      rows.push([{ v: date ? index + 1 : '—', style: { ...cell, horizontal: 'center' } }, date ? { v: date, type: 'date', style: { ...cell, fill: fill || tint(dateColor(date), 0.5), horizontal: 'center' } } : { v: t('Da pianificare'), style: { ...cell, italic: true } }, { v: state, style: cell }, { v: group.length, style: cell }, { v: hours(group), style: cell }, { v: hours(group) ? effort(hours(group)) : '', style: cell },
+        ...settings.statuses.map(status => ({ v: group.filter(task => task.statusId === status.id).length || '', style: { ...cell, horizontal: 'center' } })), { v: sortedRows(group).map(task => task.code).join(', '), style: { ...cell, wrap: true } }]);
+    });
+    sheets.push({ name: settings.tabNames[2], columns: [{ width: 8 }, { width: 14 }, { width: 17 }, { width: 10 }, { width: 9 }, { width: 11 }, ...settings.statuses.map(() => ({ width: 12 })), { width: 60 }], rows, freeze: { row: 1, col: 2 } });
+  }
+  if (wanted.has('kanban')) {
+    const columns = settings.statuses.map(status => sortTasks(tasks.filter(task => task.statusId === status.id)));
+    const rows = [settings.statuses.map((status, i) => ({ v: `${status.name} (${columns[i].length})`, style: { bold: true, fill: tint(status.color, 0.45), border: { color: hexColor(status.color), style: 'medium', sides: ['bottom'] }, horizontal: 'center' } }))];
+    for (let r = 0; r < Math.max(0, ...columns.map(list => list.length)); r++) {
+      rows.push(columns.map((list, i) => {
+        const task = list[r];
+        if (!task) return '';
+        const text = plain(task.description), url = portalUrl(task, settings);
+        return { v: `${task.code}${text ? ` · ${text.length > 90 ? text.slice(0, 89) + '…' : text}` : ''}`, link: url, style: { wrap: true, vertical: 'top', border: grid, fill: tint(settings.statuses[i].color, 0.12), ...(task.hidden ? { italic: true, color: muted } : url ? {} : { color: '#1d2030' }) } };
+      }));
+    }
+    sheets.push({ name: settings.tabNames[3], columns: settings.statuses.map(() => ({ width: 34 })), rows, freeze: { row: 1 } });
+  }
+  return window.OrbitaXlsx.buildWorkbook({ title: `${APP_NAME} · ${organization}`, creator: APP_NAME, application: APP_NAME, created: now, sheets });
+}
+async function exportExcel(options) {
+  const organization = organizations.find(o => o.id === activeOrganizationId)?.name || '';
+  const bytes = await situationWorkbook(options);
+  const result = await workspaceApi.exportSpreadsheet(situationFileName(organization, currentLanguage()), bytes);
+  if (result) notify('Excel esportato:', false, result.fileName);
+  return result;
+}
+function excelDialog(preset = {}) {
+  const selected = data.tasks.filter(task => selectedTasks.has(task.id)).length, choices = { ...excelChoices, ...preset };
+  if (choices.scope === 'selected' && !selected) choices.scope = 'view';
+  const columns = normalizeTaskColumns(data.settings.taskColumns);
+  const radio = (name, value, title, detail, disabled = false) => `<label class="choice-card ${disabled ? 'is-disabled' : ''}"><input type="radio" name="${name}" value="${value}" ${choices[name] === value ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span><strong>${esc(t(title))}</strong><small>${esc(detail)}</small></span></label>`;
+  const sheetCards = EXCEL_SHEETS.map(([id, name, detail]) => `<label class="choice-card"><input type="checkbox" name="sheets" value="${id}" ${choices.sheets.includes(id) ? 'checked' : ''}><span><strong>${esc(typeof name === 'number' ? data.settings.tabNames[name] : t(name))}</strong><small>${esc(t(detail))}</small></span></label>`).join('');
+  openModal(ui`<form id="excel-form" novalidate><div class="modal-heading"><div><div class="eyebrow">EXCEL</div><h2>Esporta in Excel</h2></div><button type="button" class="icon-button" data-close aria-label="Chiudi">✕</button></div>
+    <p class="section-description">Crea una cartella di lavoro .xlsx con la situazione attuale, pronta per Excel, LibreOffice o Google Fogli. Riepilogo, milestone e kanban seguono le attività scelte; le issue sono sempre tutte.</p>
+    <fieldset class="excel-group"><legend>Attività da esportare</legend><div class="choice-grid">${radio('scope', 'view', 'Come mostrate nella lista', fillText('{0} · filtri e ordinamento attuali', plural(filteredTasks().length, 'attività')))}${radio('scope', 'all', 'Tutte le attività', fillText('{0}, comprese le nascoste', plural(data.tasks.length, 'attività')))}${radio('scope', 'selected', 'Solo le selezionate', selected ? fillText('{0} selezionate', selected) : t('Nessuna attività selezionata'), !selected)}</div></fieldset>
+    <fieldset class="excel-group"><legend>Colonne del foglio attività</legend><div class="choice-grid">${radio('columns', 'visible', 'Colonne visibili nella lista', fillText('{0} colonne, nello stesso ordine', shownColumns().length))}${radio('columns', 'all', 'Tutte le colonne', fillText('{0} colonne, comprese quelle nascoste', columns.length))}</div></fieldset>
+    <fieldset class="excel-group"><legend>Fogli</legend><div class="choice-grid sheets">${sheetCards}</div></fieldset>
+    <div class="modal-actions"><span class="spacer"></span><button type="button" class="button" data-close>Annulla</button><button type="submit" class="button primary" id="excel-save">⤓ Esporta</button></div></form>`);
+  const form = $('#excel-form');
+  form.onsubmit = action(async event => {
+    event.preventDefault();
+    const fields = new FormData(form), options = { scope: fields.get('scope') || 'view', columns: fields.get('columns') || 'visible', sheets: fields.getAll('sheets') };
+    if (!options.sheets.length) throw new Error('Scegli almeno un foglio da esportare.');
+    if (options.scope === 'selected' && !selectedTasks.size) throw new Error('Seleziona almeno un’attività.');
+    excelChoices = options;
+    $('#excel-save').disabled = true;
+    try {
+      if (await exportExcel(options) && $('#modal').open && $('#excel-form') === form) $('#modal').close();
+    } finally { if (form.isConnected) $('#excel-save').disabled = false; }
+  });
 }
 const exportKinds = [['themes', '◐', 'Esporta temi'], ['settings', '⚙', 'Esporta configurazione'], ['data', '▤', 'Esporta dati'], ['organization', '◈', 'Esporta tutto']];
 const exportedMessages = { themes: 'Temi esportati:', settings: 'Configurazione esportata:', data: 'Dati esportati:', organization: 'Organizzazione esportata:' };
@@ -1355,7 +1705,7 @@ function renderSettings() {
   $('#export-data').onclick = action(async () => { if (await workspaceApi.exportData()) notify('Backup esportato.'); });
   $('#import-data').onclick = action(async () => {
     const imported = await workspaceApi.importData();
-    if (imported) { adoptSnapshot(imported); search = ''; statusFilter = ''; highlightFilter = ''; highlighter = ''; showHidden = false; duplicatesOnly = false; issueDuplicatesOnly = false; render(); notify('Archivio importato.'); }
+    if (imported) { adoptSnapshot(imported); search = ''; statusFilter = ''; highlightFilter = ''; highlighter = ''; selectedTasks.clear(); showHidden = false; duplicatesOnly = false; issueDuplicatesOnly = false; render(); notify('Archivio importato.'); }
   });
   $('#open-folder').onclick = action(() => workspaceApi.openDataFolder());
   wireTransfer();
@@ -1599,6 +1949,7 @@ $('#modal').addEventListener('close', () => {
 document.addEventListener('keydown', e => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'n' && !$('#modal').open && data && view === 0) { e.preventDefault(); taskDialog(); }
   if (e.key === 'Escape' && highlighter && !$('#modal').open && !document.getElementById('mark-menu')) { highlighter = ''; drawHighlighter(); }
+  else if (e.key === 'Escape' && view === 0 && selectedTasks.size && !$('#modal').open && !document.getElementById('mark-menu') && !e.target.closest?.('input:not([type="checkbox"]), select, textarea, [contenteditable]')) clearSelection();
 });
 window.runSmokeTests = async () => {
   const checks = [];
@@ -1890,9 +2241,9 @@ window.runSmokeTests = async () => {
   check(!$('#modal').open && smokeRow().classList.contains('marked'), 'Clic su una riga con l’evidenziatore la colora senza aprire la scheda');
   await waitFor(() => !saving && !markFlush);
   check(smokeTask().highlightId === paint.id && (await workspaceApi.load()).data.tasks.find(task => task.code === 'SMOKE-1').highlightId === paint.id && smokeRow().classList.contains('marked') && smokeRow().style.getPropertyValue('--mark').trim() === paint.color && highlighter === paint.id, 'Evidenziazione della riga salvata nell’archivio portatile');
-  doubleClick(smokeRow().cells[0]);
+  doubleClick(smokeRow().cells[1]);
   check(!$('#modal').open && highlighter === paint.id, 'Doppio clic con evidenziatore attivo non apre la modifica');
-  smokeRow().cells[0].click();
+  smokeRow().cells[1].click();
   await waitFor(() => !saving && !markFlush);
   check(smokeTask().highlightId === '' && !smokeRow().classList.contains('marked'), 'Secondo clic con lo stesso colore toglie l’evidenziazione');
   document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
@@ -1941,7 +2292,7 @@ window.runSmokeTests = async () => {
   check(dialogOrder().join() === columnsBeforeDrag.join() && document.activeElement === codeRow().querySelector('[data-drag-handle]') && codeRow() === document.querySelectorAll('#columns-dialog-editor .column-row')[1], 'Colonne riordinabili con le frecce sulla maniglia');
   $('#columns-apply').click();
   await waitFor(() => !saving && !$('#modal').open);
-  check(headerIds().join() === 'sequence,code,description,urgency,highlight,status,tags,effort,incident,problem,releaseDate' && smokeRow().cells.length === headerIds().length + 1 && smokeRow().querySelector('.mark-pill') && !data.settings.taskColumns.find(column => column.id === 'notes').visible && (await workspaceApi.load()).data.settings.taskColumns.find(column => column.id === 'highlight').visible, 'Colonne mostrate, nascoste e riordinate e salvate');
+  check(headerIds().join() === 'sequence,code,description,urgency,highlight,status,tags,effort,incident,problem,releaseDate' && smokeRow().cells.length === headerIds().length + 2 && smokeRow().querySelector('.mark-pill') && !data.settings.taskColumns.find(column => column.id === 'notes').visible && (await workspaceApi.load()).data.settings.taskColumns.find(column => column.id === 'highlight').visible, 'Colonne mostrate, nascoste e riordinate e salvate');
   $('[data-sort="highlightId"]').click();
   check(sort.length === 1 && sort[0].key === 'highlightId' && listedRows()[0].classList.contains('marked') && !listedRows().at(-1).classList.contains('marked'), 'Ordinamento per evidenziazione');
   await commit(next => { next.settings.taskColumns = defaultTaskColumns(); });
@@ -1951,6 +2302,124 @@ window.runSmokeTests = async () => {
   check(document.querySelector('.milestone-column .task-card.is-marked .mark-chip'), 'Evidenziazione visibile nelle milestone');
   view = 3; render();
   check(document.querySelector('.kanban-column .task-card.is-marked .mark-chip'), 'Evidenziazione visibile nel kanban');
+  // Bulk selection and edit.
+  const bulkTasks = () => ['BULK-1', 'BULK-2', 'BULK-3'].map(code => data.tasks.find(task => task.code === code));
+  await commit(next => {
+    ['2031-03-14', '2031-03-14', ''].forEach((releaseDate, i) => next.tasks.push({ ...structuredClone(next.tasks[0]), id: uid(), code: `BULK-${i + 1}`, sequence: 990001 + i, description: `<p>Bulk ${i + 1}</p>`, notes: '', url: '', releaseDate, hidden: false, highlightId: '', tagIds: [], statusId: next.settings.statuses[0].id, urgencyId: next.settings.urgencies[0].id }));
+  });
+  view = 0; search = 'BULK-'; statusFilter = ''; highlightFilter = ''; duplicatesOnly = false; showHidden = false; sort = [{ key: 'code', direction: 'asc' }]; selectedTasks.clear(); render();
+  const selectBoxes = () => [...document.querySelectorAll('#task-rows input[data-select-task]')];
+  check(selectBoxes().length === 3 && $('.activity-table thead th.select-col #select-all') && $('#bulk-bar').hidden && !$('#footer-hint').hidden && !$('#select-all').checked && !$('#select-all').indeterminate, 'Colonna di selezione delle attività, barra azioni nascosta senza selezione');
+  selectBoxes()[0].click();
+  check(selectedTasks.size === 1 && selectBoxes()[0].closest('tr').classList.contains('selected') && !$('#bulk-bar').hidden && $('#footer-hint').hidden && $('#select-all').indeterminate && $('#bulk-count').textContent === fillText('{0} selezionate', 1), 'Selezione di una riga mostra la barra della modifica multipla');
+  selectBoxes()[2].dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, shiftKey: true }));
+  check(selectedTasks.size === 3 && selectBoxes().every(box => box.checked) && $('#select-all').checked && !$('#select-all').indeterminate, 'Maiusc + clic seleziona un intervallo di righe');
+  $('#select-all').click();
+  check(!selectedTasks.size && $('#bulk-bar').hidden && selectBoxes().every(box => !box.checked), 'Casella di intestazione deseleziona tutte le righe mostrate');
+  $('#select-all').click();
+  $('#search').value = 'BULK-1'; $('#search').dispatchEvent(new Event('input'));
+  check(selectedTasks.size === 3 && $('#bulk-count').textContent === `${fillText('{0} selezionate', 3)} · ${fillText('{0} non visibili con i filtri attuali', 2)}`, 'Selezione conservata cambiando i filtri, con conteggio delle righe non visibili');
+  $('#search').value = 'BULK-'; $('#search').dispatchEvent(new Event('input'));
+  doubleClick(selectBoxes()[0].closest('td'));
+  check(!$('#modal').open, 'Doppio clic sulla casella di selezione non apre la modifica');
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  check(!selectedTasks.size && $('#bulk-bar').hidden, 'Esc azzera la selezione');
+  $('#select-all').click();
+  $('#bulk-edit').click();
+  const bulkForm = () => $('#bulk-form'), bulkBox = code => bulkForm().querySelector(`input[name="taskIds"][value="${CSS.escape(data.tasks.find(task => task.code === code).id)}"]`);
+  check($('#modal').open && bulkForm() && bulkForm().querySelectorAll('input[name="taskIds"]:checked').length === 3 && $('#bulk-apply').disabled && $('#bulk-summary').textContent === fillText('{0} pronte: scegli cosa modificare.', plural(3, 'attività')), 'Modifica multipla con elenco delle attività coinvolte');
+  const bulkTag = (data.settings.tags || [])[0], bulkStatus = data.settings.statuses[1], bulkMark = highlightsOf()[0];
+  bulkBox('BULK-2').click();
+  bulkForm().elements.statusId.value = bulkStatus.id;
+  bulkForm().elements.releaseMode.value = 'shift';
+  bulkForm().elements.highlightId.value = bulkMark.id;
+  bulkForm().elements[`tag:${bulkTag.id}`].value = 'add';
+  bulkForm().dispatchEvent(new Event('change'));
+  check(!bulkForm().elements.shiftDays.hidden && bulkForm().elements.releaseDate.hidden && !$('#bulk-apply').disabled && $('#bulk-summary').textContent === fillText('Le modifiche verranno applicate a {0}.', plural(2, 'attività')) && $('#bulk-release-hint').textContent === fillText('Solo le attività con una data: {0} su {1}.', 1, 2), 'Riepilogo dal vivo della modifica multipla');
+  bulkForm().requestSubmit();
+  await waitFor(() => !saving && !$('#modal').open);
+  const [bulkOne, bulkTwo, bulkThree] = bulkTasks(), savedBulk = (await workspaceApi.load()).data.tasks.filter(task => task.code.startsWith('BULK-'));
+  check([bulkOne, bulkThree].every(task => task.statusId === bulkStatus.id && task.highlightId === bulkMark.id && task.tagIds.includes(bulkTag.id)) && bulkOne.releaseDate === '2031-03-21' && bulkThree.releaseDate === '' && bulkTwo.statusId === data.settings.statuses[0].id && bulkTwo.releaseDate === '2031-03-14' && !bulkTwo.tagIds.length && savedBulk.filter(task => task.statusId === bulkStatus.id).length === 2, 'Modifica multipla applica stato, release, evidenziazione e tag solo alle attività spuntate');
+  check($('#toast').textContent === fillText('Modifica multipla applicata: {0} aggiornate.', plural(2, 'attività')) && selectedTasks.size === 3 && document.querySelectorAll('#task-rows tr.selected').length === 3, 'Esito della modifica multipla e selezione conservata');
+  $('#bulk-edit').click();
+  bulkForm().requestSubmit();
+  await tick();
+  check($('#modal').open && $('#toast').textContent === t('Scegli almeno un campo da modificare.'), 'Modifica multipla senza campi scelti viene bloccata');
+  bulkForm().elements.releaseMode.value = 'set';
+  bulkForm().dispatchEvent(new Event('change'));
+  bulkForm().requestSubmit();
+  await tick();
+  check($('#modal').open && !bulkForm().elements.releaseDate.hidden && $('#toast').textContent === t('Scegli la nuova release date.'), 'Nuova release date obbligatoria nella modifica multipla');
+  bulkForm().elements.releaseMode.value = '';
+  bulkForm().elements.hidden.value = 'hide';
+  bulkForm().requestSubmit();
+  await waitFor(() => !saving && !$('#modal').open);
+  check(bulkTasks().every(task => task.hidden) && !selectBoxes().length && selectedTasks.size === 3 && $('#bulk-count').textContent.includes(fillText('{0} non visibili con i filtri attuali', 3)), 'Modifica multipla nasconde le attività senza perdere la selezione');
+  view = 2; render();
+  check(document.querySelectorAll('.page-heading [data-excel-export]').length === 1 && document.querySelectorAll('.milestone-heading [data-bulk-release]').length === document.querySelectorAll('.milestone-column').length, 'Modifica multipla ed Excel disponibili dalle milestone');
+  document.querySelector('[data-bulk-release="2031-03-21"]').click();
+  check(bulkForm() && [...bulkForm().querySelectorAll('input[name="taskIds"]')].map(box => box.value).join() === bulkOne.id && bulkForm().querySelector('.bulk-item.is-hidden') && $('#bulk-form .section-description').textContent === fillText('Attività della release del {0}, comprese quelle nascoste.', formatDate('2031-03-21')), 'Modifica della tappa con le sue attività, comprese le nascoste');
+  bulkForm().elements.releaseMode.value = 'set';
+  bulkForm().elements.releaseDate.value = '2031-04-01';
+  bulkForm().requestSubmit();
+  await waitFor(() => !saving && !$('#modal').open);
+  check(bulkTasks()[0].releaseDate === '2031-04-01' && view === 2 && $('.milestone-column[data-release-date="2031-04-01"]') && !$('.milestone-column[data-release-date="2031-03-21"]'), 'Tappa spostata con la modifica multipla dalle milestone');
+  view = 3; render();
+  check(document.querySelectorAll('.page-heading [data-excel-export]').length === 1, 'Esportazione Excel disponibile dal kanban');
+  view = 1; render();
+  check(document.querySelectorAll('.page-heading [data-excel-export]').length === 1, 'Esportazione Excel disponibile dalle issue');
+  // Excel workbook content.
+  check(richText('<ol><li>Uno</li><li>Due</li></ol><ul><li>Tre</li></ul><p>A<br>B</p>') === '1. Uno\n2. Due\n• Tre\nA\nB' && hexColor('hsl(0 100% 50%)') === '#ff0000' && tint('#000000', 0.5) === '#808080' && hexColor('nonsense') === '#929bb2', 'Testo ricco e colori convertiti per Excel');
+  async function unzipParts(bytes) {
+    const reader = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength), parts = new Map(), decoder = new TextDecoder();
+    let end = bytes.length - 22;
+    while (end > 0 && reader.getUint32(end, true) !== 0x06054b50) end--;
+    for (let i = 0, offset = reader.getUint32(end + 16, true); i < reader.getUint16(end + 10, true); i++) {
+      const nameLength = reader.getUint16(offset + 28, true), local = reader.getUint32(offset + 42, true), size = reader.getUint32(offset + 20, true);
+      const start = local + 30 + reader.getUint16(local + 26, true) + reader.getUint16(local + 28, true), body = bytes.subarray(start, start + size);
+      const raw = reader.getUint16(offset + 10, true) === 8 ? new Uint8Array(await new Response(new Blob([body]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer()) : body;
+      parts.set(decoder.decode(bytes.subarray(offset + 46, offset + 46 + nameLength)), decoder.decode(raw));
+      offset += 46 + nameLength + reader.getUint16(offset + 30, true) + reader.getUint16(offset + 32, true);
+    }
+    return parts;
+  }
+  const allSheets = EXCEL_SHEETS.map(([id]) => id), xmlDoc = text => new DOMParser().parseFromString(text, 'application/xml');
+  const fullBook = await unzipParts(await situationWorkbook({ scope: 'all', columns: 'all', sheets: allSheets }));
+  const bookSheets = [...xmlDoc(fullBook.get('xl/workbook.xml')).getElementsByTagName('sheet')].map(sheet => sheet.getAttribute('name'));
+  check([...fullBook].every(([name, text]) => !/\.(xml|rels)$/.test(name) || !xmlDoc(text).querySelector('parsererror')) && bookSheets.join('|') === window.OrbitaXlsx.sheetNames([t('Riepilogo'), ...data.settings.tabNames.slice(0, 4)]).join('|'), 'Cartella Excel ben formata con riepilogo e un foglio per tab');
+  const taskSheetXml = fullBook.get('xl/worksheets/sheet2.xml'), sharedXml = fullBook.get('xl/sharedStrings.xml');
+  check(xmlDoc(taskSheetXml).getElementsByTagName('row').length === data.tasks.length + 1 && sharedXml.includes('SMOKE-1') && sharedXml.includes('BULK-3') && taskSheetXml.includes(`<v>${window.OrbitaXlsx.excelDate('2031-04-01')}</v>`) && taskSheetXml.includes('<autoFilter ') && taskSheetXml.includes('state="frozen"') && fullBook.has('xl/worksheets/_rels/sheet2.xml.rels'), 'Foglio attività con tutte le righe, date reali, filtri, riquadri bloccati e link');
+  check(fullBook.get('xl/styles.xml').includes(window.OrbitaXlsx.argb(tint(bulkStatus.color, 0.35))) && fullBook.get('xl/styles.xml').includes(window.OrbitaXlsx.argb(tint(dateColor('2031-04-01'), 0.5))) && fullBook.get('xl/worksheets/sheet3.xml').includes('<autoFilter ') && fullBook.get('xl/styles.xml').includes('FFFFF1C2') && [t('Prossima release'), t('Release di oggi')].some(text => sharedXml.includes(text)), 'Colori di stato, date e prossima release riportati nel file Excel');
+  const pickedBook = await unzipParts(await situationWorkbook({ scope: 'selected', columns: 'visible', sheets: ['summary', 'tasks'] }));
+  const pickedSheet = pickedBook.get('xl/worksheets/sheet2.xml'), pickedShared = pickedBook.get('xl/sharedStrings.xml');
+  check(!pickedBook.has('xl/worksheets/sheet3.xml') && xmlDoc(pickedSheet).getElementsByTagName('row').length === 4 && pickedShared.includes(t('Solo le selezionate')) && pickedShared.includes(t('Nascosta')) && !pickedShared.includes('SMOKE-1'), 'Excel delle sole attività selezionate con i fogli scelti');
+  view = 0; render();
+  $('#bulk-excel').click();
+  const excelForm = () => $('#excel-form');
+  check($('#modal').open && excelForm().elements.scope.value === 'selected' && excelForm().querySelectorAll('input[name="sheets"]:checked').length === allSheets.length && excelForm().querySelectorAll('input[name="sheets"]').length === 5, 'Excel delle attività selezionate dalla barra della selezione');
+  excelForm().querySelectorAll('input[name="sheets"]').forEach(box => { box.checked = false; });
+  excelForm().requestSubmit();
+  await tick();
+  check($('#modal').open && $('#toast').textContent === t('Scegli almeno un foglio da esportare.'), 'Esportazione Excel richiede almeno un foglio');
+  excelForm().querySelectorAll('input[name="sheets"]').forEach(box => { box.checked = true; });
+  excelForm().requestSubmit();
+  await waitFor(() => !$('#modal').open);
+  const excelName = situationFileName(organizations.find(o => o.id === activeOrganizationId).name, currentLanguage());
+  check($('#toast').textContent === `${t('Excel esportato:')} ${excelName}` && excelChoices.scope === 'selected', 'Esportazione Excel salvata su file con nome dell’organizzazione e data');
+  clearSelection();
+  $('[data-excel-export]').click();
+  check(excelForm().elements.scope.value === 'view' && excelForm().querySelector('input[value="selected"]').disabled, 'Senza selezione l’Excel parte dalla vista attuale');
+  $('#modal').close();
+  $('#select-all').click();
+  check(!selectedTasks.size, 'Nessuna riga mostrata da selezionare con le attività nascoste');
+  showHidden = true; render(); $('#select-all').click();
+  $('#bulk-edit').click();
+  $('#bulk-delete').click();
+  check($('#confirm-action') && $('.confirm-message').textContent.includes('BULK-1'), 'Eliminazione multipla chiede conferma');
+  $('#confirm-action').click();
+  await waitFor(() => !saving && !$('#modal').open);
+  check(!bulkTasks().some(Boolean) && data.tasks.length === initialTaskCount + 1 && !selectedTasks.size && $('#bulk-bar').hidden && !(await workspaceApi.load()).data.tasks.some(task => task.code.startsWith('BULK-')), 'Eliminazione multipla delle attività selezionate');
+  search = ''; showHidden = false; sort = [{ key: 'releaseDate', direction: 'asc' }];
   view = 0; render();
   $('.highlighter-bar [data-manage-highlights]').click();
   check(view === 4 && settingsTab === 'highlights' && !$('#highlights-panel').hidden, 'Gestisci colori apre la scheda Evidenziatori');

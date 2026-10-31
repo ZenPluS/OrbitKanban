@@ -76,6 +76,8 @@ async function run({ server, win }) {
 
   const bridge = await request(port, '/web-bridge.js', { headers: { Cookie: cookie } });
   check(bridge.status === 200 && /javascript/.test(bridge.headers['content-type']) && bridge.text.includes("mode: 'browser'"), 'Bridge browser servito');
+  const spreadsheetWriter = await request(port, '/xlsx.js', { headers: { Cookie: cookie } });
+  check(spreadsheetWriter.status === 200 && /javascript/.test(spreadsheetWriter.headers['content-type']) && spreadsheetWriter.text.includes('window.OrbitaXlsx') && page.text.includes('<script defer src="xlsx.js"></script>') && bridge.text.includes('exportSpreadsheet'), 'Esportazione Excel disponibile anche da browser');
   const blocked = await Promise.all(['/main.js', '/web-server.js', '/data/workspace.json', '/..%2fmain.js', '/%2e%2e/package.json'].map(path => request(port, path, { headers: { Cookie: cookie } })));
   check(blocked.every(response => response.status === 404), 'Solo i file dell’interfaccia sono esposti');
 

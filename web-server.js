@@ -12,6 +12,7 @@ const STATIC_FILES = new Map([
   ['/styles.css', 'text/css; charset=utf-8'],
   ['/core.js', 'text/javascript; charset=utf-8'],
   ['/i18n.js', 'text/javascript; charset=utf-8'],
+  ['/xlsx.js', 'text/javascript; charset=utf-8'],
   ['/renderer.js', 'text/javascript; charset=utf-8'],
   ['/web-bridge.js', 'text/javascript; charset=utf-8'],
   ['/app-logo.svg', 'image/svg+xml']

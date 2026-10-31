@@ -65,6 +65,15 @@ test('duplicate detection texts are translated, placeholders and markup included
   assert.equal(translate('Attività che condividono l’incident {0}.', 'en'), 'Tasks sharing incident {0}.');
   assert.equal(translate('Possibile duplicato', 'it'), 'Possibile duplicato');
 });
+test('Excel export and bulk edit texts are translated, placeholders and markup included', () => {
+  assert.equal(translate('<button type="button" class="button small primary" id="bulk-edit">✎ Modifica multipla…</button><button type="button" class="button small" id="bulk-excel">⤓ Esporta in Excel</button>', 'en'), '<button type="button" class="button small primary" id="bulk-edit">✎ Bulk edit…</button><button type="button" class="button small" id="bulk-excel">⤓ Export to Excel</button>');
+  assert.deepEqual(['{0} selezionate', '{0} non visibili con i filtri attuali', 'Le modifiche verranno applicate a {0}.', 'Modifica multipla applicata: {0} aggiornate.', 'Solo le attività con una data: {0} su {1}.'].map(text => translate(text, 'en')), ['{0} selected', '{0} not visible with the current filters', 'Changes will be applied to {0}.', 'Bulk edit applied: {0} updated.', 'Only tasks with a date: {0} of {1}.']);
+  assert.deepEqual(['— Non modificare —', 'Sposta di N giorni', 'Togli la data (da pianificare)', 'Scegli almeno un campo da modificare.', 'Scegli la nuova release date.'].map(text => translate(text, 'en')), ['— Keep unchanged —', 'Move by N days', 'Remove the date (unscheduled)', 'Choose at least one field to change.', 'Choose the new release date.']);
+  assert.deepEqual(['Esporta in Excel', 'Riepilogo', 'Situazione attuale', 'Effort (ore)', 'Come mostrate nella lista', 'Solo le selezionate', 'Scegli almeno un foglio da esportare.', 'Excel esportato:'].map(text => translate(text, 'en')), ['Export to Excel', 'Summary', 'Current situation', 'Effort (hours)', 'As shown in the list', 'Selected only', 'Choose at least one sheet to export.', 'Excel exported:']);
+  assert.deepEqual(['File Excel non valido.', 'Cartella di lavoro Excel', 'Nessun foglio da esportare.', 'Il foglio Excel supera il numero massimo di righe.'].map(text => translate(text, 'en')), ['Invalid Excel file.', 'Excel workbook', 'No sheet to export.', 'The Excel sheet exceeds the maximum number of rows.']);
+  assert.equal(i18n.term('situazione', 'en'), 'situation');
+  assert.equal(translate('Modifica multipla', 'it'), 'Modifica multipla');
+});
 
 test('built-in language files are valid and every Italian key used for counts and defaults is covered', () => {
   const en = builtIn('en'), it = builtIn('it');

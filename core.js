@@ -357,12 +357,15 @@ function organizationExport(organization, kind, { appVersion = '', exportedAt = 
   }
   return file;
 }
+const slugify = value => String(value ?? '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60).replace(/-+$/, '');
 function organizationFileName(name, kind, language = 'it', date = today()) {
   assert(ORGANIZATION_FILE_KINDS.includes(kind), 'Tipo di esportazione non supportato.');
-  const slugify = value => String(value ?? '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60).replace(/-+$/, '');
   const labels = { themes: 'temi', settings: 'configurazione', data: 'dati', organization: 'organizzazione' };
   const label = key => slugify(term(labels[key], language)) || key;
   return `${APP_NAME}-${slugify(name) || label('organization')}-${label(kind)}-${date}.json`;
+}
+function situationFileName(name, language = 'it', date = today()) {
+  return `${APP_NAME}-${slugify(name) || slugify(term('organizzazione', language)) || 'organization'}-${slugify(term('situazione', language)) || 'situation'}-${date}.xlsx`;
 }
 function fileRecords(list, keys, message) {
   assert(Array.isArray(list) && list.every(item => item && typeof item === 'object' && !Array.isArray(item)), message);
@@ -690,7 +693,7 @@ function themeFromLogo(pixels) {
 const core = {
   APP_NAME, initialData, baseData, demoData, demoReleaseDates, validateData, migrateArchive, validateArchive, createOrganization, matchIssues, findDuplicates, sortTasks, dateColor, today, validLanguage,
   extractThemePalette, themeFromLogo, normalizeUrl, isWebUrl, validPortalTemplate, portalUrl,
-  ORGANIZATION_FILE_KINDS, organizationExport, organizationFileName, parseOrganizationFile, applyOrganizationImport, importedOrganizationData, uniqueOrganizationName,
+  ORGANIZATION_FILE_KINDS, organizationExport, organizationFileName, situationFileName, parseOrganizationFile, applyOrganizationImport, importedOrganizationData, uniqueOrganizationName,
   FONT_SIZE_PARTS, FONT_SIZE_STEP, defaultFontSizes, clampFontSize,
   HIGHLIGHT_LIMIT, defaultHighlights, TASK_COLUMN_IDS, defaultTaskColumns, normalizeTaskColumns, TAG_LIMIT, TAG_NAME_MAX, nextReleaseDate
 };
