@@ -38,6 +38,7 @@ test('settings tabs and theme gallery are translated', () => {
 });
 
 test('row highlighters and list columns are translated', () => {
+  assert.equal(translate('Doppio clic sulla riga per modificare.', 'en'), 'Double-click the row to edit.');
   assert.deepEqual(['Evidenziatori', 'Colonne della lista', 'Nessuna evidenziazione', 'Tutte le evidenziazioni', 'Gomma', 'Link portale'].map(label => translate(label, 'en')), ['Highlighters', 'List columns', 'No highlight', 'All highlights', 'Eraser', 'Portal link']);
   assert.equal(translate('Evidenziatori', 'it'), 'Evidenziatori');
   assert.equal(i18n.plural(2, 'evidenziatore', 'en'), '2 highlighters');

@@ -1,15 +1,18 @@
 {
   "name": "orbitkanban-portable",
-  "version": "2.6.0",
+  "version": "2.6.3",
   "description": "Workspace attività, issue, milestone e kanban completamente locale",
   "main": "main.js",
   "author": "OrbitKanban",
   "license": "UNLICENSED",
   "private": true,
   "scripts": {
+    "icon": "electron make-splash.js --icon-only",
+    "prestart": "npm run icon",
     "start": "electron .",
     "test": "node --test",
     "check": "node --check main.js && node --check preload.js && node --check core.js && node --check i18n.js && node --check languages.js && node --check renderer.js && node --check workspace-store.js && node --check web-server.js && node --check web-bridge.js && node --check smoke-web.js && node --check splash.js && node --check splash-preload.js && node --check splash-image.js && node --check make-splash.js && node --check build.js",
+    "presmoke": "npm run icon",
     "smoke": "node smoke.js",
     "splash": "electron make-splash.js",
     "predist": "npm run splash",
@@ -40,7 +43,8 @@
       "splash.html",
       "index.html",
       "styles.css",
-      "app-logo.svg"
+      "app-logo.svg",
+      "app-logo.png"
     ],
     "electronLanguages": [
       "it",
@@ -52,7 +56,9 @@
     },
     "win": {
       "target": "portable",
-      "signAndEditExecutable": false
+      "icon": "app-logo.png",
+      "signAndEditExecutable": true,
+      "signExecutable": false
     },
     "portable": {
       "artifactName": "OrbitKanban-Portable.exe",

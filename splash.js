@@ -16,12 +16,12 @@ function windowBackground(settings) {
   return /^#[0-9a-f]{6}$/i.test(color || '') ? color : SPLASH_BACKGROUND;
 }
 
-function createSplash({ BrowserWindow, screen, appRoot, title, version = '', show = true }) {
+function createSplash({ BrowserWindow, screen, appRoot, title, icon, version = '', show = true }) {
   let closed = false, shownAt = null;
   const { width, height } = SPLASH_SIZE, area = screen.getPrimaryDisplay().bounds;
   // Centered on the whole primary screen, exactly like the launcher bitmap, so the two screens overlap.
   const window = new BrowserWindow({
-    width, height, useContentSize: true, title,
+    width, height, useContentSize: true, title, icon,
     x: Math.round(area.x + (area.width - width) / 2), y: Math.round(area.y + (area.height - height) / 2),
     show: false, frame: false, resizable: false, maximizable: false, fullscreenable: false, closable: false,
     backgroundColor: SPLASH_BACKGROUND,

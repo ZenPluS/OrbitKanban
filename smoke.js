@@ -23,7 +23,7 @@ try {
   exitCode = result.status ?? 1;
   if (exitCode === 0) {
     const report = JSON.parse(fs.readFileSync(path.join(folder, 'smoke-result.json'), 'utf8'));
-    if (!report.ok || report.checks.length < 232) throw new Error('Rapporto smoke test incompleto.');
+    if (!report.ok || report.checks.length < 247) throw new Error('Rapporto smoke test incompleto.');
     const stored = validateArchive(JSON.parse(fs.readFileSync(path.join(folder, 'data', 'workspace.json'), 'utf8')));
     if (stored.organizations.length !== 2 || !stored.organizations.every(o => o.data.settings.logo.startsWith('data:image/png;base64,'))) throw new Error('Archivio multi-organizzazione incompleto.');
     const template = fs.readFileSync(path.join(folder, 'data', 'languages', 'en.template.json'));

@@ -139,10 +139,13 @@ function applyTheme() {
 }
 function render() {
   closeMarkMenu();
+  const content = $('#content'), nextView = ['tasks', 'issues', 'milestones', 'kanban', 'settings'][view];
+  if (content.dataset.workspaceView !== nextView) content.scrollTop = 0;
+  content.dataset.workspaceView = nextView;
   applyTheme();
   renderChrome();
   $('#navigation').innerHTML = data.settings.tabNames.map((name, i) => `<button class="nav-button ${view === i ? 'active' : ''}" data-view="${i}"><span class="nav-icon">${icons[i]}</span><span>${esc(name)}</span>${i === 0 ? `<span class="nav-count">${visibleTasks().length}</span>` : ''}</button>`).join('');
-  document.querySelectorAll('[data-view]').forEach(button => button.onclick = () => { view = Number(button.dataset.view); render(); });
+  document.querySelectorAll('#navigation [data-view]').forEach(button => button.onclick = () => { view = Number(button.dataset.view); render(); });
   $('#settings-button').classList.toggle('active', view === 4);
   $('#current-tab').textContent = view === 4 ? t('Impostazioni') : data.settings.tabNames[view];
   if (view === 0) renderTasks();
@@ -192,7 +195,7 @@ function settingsDraftPending() {
 }
 function rerenderPreservingView() {
   const page = document.scrollingElement, pageScroll = [page.scrollLeft, page.scrollTop];
-  const selectors = ['.table-scroll', '.milestone-scroll', '.kanban-scroll', '.theme-gallery', '.settings-nav'];
+  const selectors = ['#content', '.table-scroll', '.milestone-scroll', '.kanban-scroll', '.theme-gallery', '.settings-nav'];
   const scrolls = selectors.map(selector => [...document.querySelectorAll(selector)].map(el => [el.scrollLeft, el.scrollTop]));
   const focused = document.activeElement, focusId = focused?.id || '';
   const selection = focusId && typeof focused.selectionStart === 'number' ? [focused.selectionStart, focused.selectionEnd] : null;
@@ -433,15 +436,27 @@ $('#organization-select').onchange = action(async event => {
   await withSavedSettings(() => organizationAction('switch', { id }));
 });
 $('#manage-organizations').onclick = action(() => withSavedSettings(openOrganizationSettings));
-function heading(kicker, title, subtitle, buttons = '') {
-  return `<section class="page-heading"><div><div class="eyebrow">${t(kicker)}</div><h1>${esc(title)}<span class="title-dot">.</span></h1><p>${esc(t(subtitle))}</p></div><div class="heading-actions">${buttons}</div></section>`;
+$('#content').addEventListener('dblclick', event => {
+  if (event.button !== 0 || $('#modal').open || event.target.closest('button, a, input, select, textarea, [contenteditable]')) return;
+  const row = event.target.closest('tr[data-task-row], tr[data-issue-row]');
+  if (!row) return;
+  if (view === 0 && !highlighter && row.dataset.taskRow) {
+    const task = data.tasks.find(item => item.id === row.dataset.taskRow);
+    if (task) { event.preventDefault(); taskDialog(task); }
+  } else if (view === 1 && row.dataset.issueRow) {
+    const issue = data.issues.find(item => item.id === row.dataset.issueRow);
+    if (issue) { event.preventDefault(); issueDialog(issue); }
+  }
+});
+function heading(title, subtitle, buttons = '') {
+  return `<section class="page-heading"><div><h1>${esc(title)}<span class="title-dot">.</span></h1><p>${esc(t(subtitle))}</p></div><div class="heading-actions">${buttons}</div></section>`;
 }
 function stats() {
   const tasks = visibleTasks();
   const releases = new Set(tasks.map(t => t.releaseDate).filter(Boolean));
   const hours = tasks.reduce((sum, t) => sum + t.effortHours, 0);
   const highlighted = tasks.filter(t => highlightOf(t) || data.settings.statuses.find(s => s.id === t.statusId)?.highlight).length;
-  return ui`<div class="stats"><div class="stat"><span>Attività visibili <span class="stat-icon">▤</span></span><strong>${tasks.length}<small>nel tuo workspace</small></strong></div><div class="stat"><span>Release pianificate <span class="stat-icon mint">◈</span></span><strong>${releases.size}<small>prossime destinazioni</small></strong></div><div class="stat"><span>Effort complessivo <span class="stat-icon peach">◷</span></span><strong>${effort(hours)}<small>${hours.toLocaleString(locale())} ore totali</small></strong></div><div class="stat"><span>In evidenza <span class="stat-icon pink">⚑</span></span><strong>${highlighted}<small>da tenere d'occhio</small></strong></div></div>`;
+  return ui`<div class="stats"><div class="stat"><span>Attività visibili <span class="stat-icon">▤</span></span><strong>${tasks.length}<small>nel tuo workspace</small></strong></div><div class="stat"><span>Release pianificate <span class="stat-icon mint">◈</span></span><strong>${releases.size}<small>prossime destinazioni</small></strong></div><div class="stat"><span>Effort complessivo <span class="stat-icon peach">◷</span></span><strong title="${hours.toLocaleString(locale())} ore totali">${effort(hours)}<small>${hours.toLocaleString(locale())} ore totali</small></strong></div><div class="stat"><span>In evidenza <span class="stat-icon pink">⚑</span></span><strong>${highlighted}<small>da tenere d'occhio</small></strong></div></div>`;
 }
 const taskColumnDefs = {
   sequence: { name: 'Progressivo', header: '#', sort: 'sequence' },
@@ -486,7 +501,7 @@ function renderTasks() {
     const title = def.header ? ` title="${esc(t(def.name))}"` : '';
     return `<th data-column="${id}"${title}>${def.sort ? ui`<button data-sort="${def.sort}" title="Clic per ordinare; Maiusc+clic per ordinamento multiplo">${label} <span>${current ? (current.direction === 'asc' ? '↑' : '↓') + (sort.length > 1 ? sort.indexOf(current) + 1 : '') : '↕'}</span></button>` : label}</th>`;
   }).join('');
-  $('#content').innerHTML = heading('IL QUADRO COMPLETO', data.settings.tabNames[0], 'Tutte le attività, una direzione. Pianifica il lavoro e tieni a fuoco le prossime release.',
+  $('#content').innerHTML = heading(data.settings.tabNames[0], 'Tutte le attività, una direzione. Pianifica il lavoro e tieni a fuoco le prossime release.',
     ui`<button class="button primary" id="new-task">＋ Nuova attività</button>`) + stats() +
     ui`<section class="panel"><div class="table-toolbar"><div class="search-wrap"><span>⌕</span><input id="search" aria-label="Cerca attività" placeholder="Cerca codice, descrizione, incident…" value="${esc(search)}"></div><div class="filters"><select id="status-filter" aria-label="Filtra stato">${optionList(data.settings.statuses, statusFilter, 'Tutti gli stati')}</select><select id="highlight-filter" aria-label="Filtra evidenziazione">${highlightOptions}</select><label class="toggle-label"><input id="show-hidden" type="checkbox" ${showHidden ? 'checked' : ''}> Nascoste <span class="tiny-count">${hidden}</span></label><button class="button subtle" id="columns-button" aria-haspopup="dialog" title="Scegli quali colonne mostrare e in che ordine">▥ Colonne</button><button class="button subtle" id="reset-sort" title="Ripristina ordinamento release crescente">↕ Release</button></div></div><div class="highlighter-bar"></div><div class="table-scroll"><table class="activity-table"><thead><tr>${headers}<th><span class="sr-only">Azioni</span></th></tr></thead><tbody id="task-rows"></tbody></table></div><div class="table-footer"><span id="row-count"></span><span>Maiusc + clic su una colonna per ordinare su più livelli</span></div></section><div class="hint"><span>✧</span> Un unico archivio, quattro prospettive. Issue, milestone e kanban si aggiornano automaticamente.</div>`;
   drawHighlighter();
@@ -541,7 +556,7 @@ function drawTaskRows() {
     const links = matchIssues(task, data.issues), mark = highlightOf(task);
     const classes = [status.highlight ? 'highlighted' : '', mark ? 'marked' : '', task.hidden ? 'hidden-row' : ''].filter(Boolean).join(' ');
     const markLabel = mark ? fillText('Evidenziazione: {0}', mark.name) : t('Evidenzia riga');
-    return `<tr data-task-row="${esc(task.id)}" class="${classes}" style="--row-color:${status.color}${mark ? `;--mark:${mark.color}` : ''}">${columns.map(column => taskCell(column, task, status, urgency, links)).join('')}<td class="row-actions"><button type="button" class="icon-button mark-button ${mark ? 'is-marked' : ''}" data-mark-task="${esc(task.id)}" title="${esc(markLabel)}" aria-label="${esc(markLabel)}" aria-haspopup="menu" aria-expanded="false"><i class="mark-dot"></i></button><button class="icon-button" data-toggle-task="${task.id}" title="${esc(t(task.hidden ? 'Mostra attività' : 'Nascondi attività'))}">${task.hidden ? '◉' : '◌'}</button><button class="icon-button" data-edit-task="${task.id}" title="${esc(t('Modifica attività'))}">⋯</button></td></tr>`;
+    return `<tr data-task-row="${esc(task.id)}" title="${esc(t('Doppio clic sulla riga per modificare.'))}" class="${classes}" style="--row-color:${status.color}${mark ? `;--mark:${mark.color}` : ''}">${columns.map(column => taskCell(column, task, status, urgency, links)).join('')}<td class="row-actions"><button type="button" class="icon-button mark-button ${mark ? 'is-marked' : ''}" data-mark-task="${esc(task.id)}" title="${esc(markLabel)}" aria-label="${esc(markLabel)}" aria-haspopup="menu" aria-expanded="false"><i class="mark-dot"></i></button><button class="icon-button" data-toggle-task="${task.id}" title="${esc(t(task.hidden ? 'Mostra attività' : 'Nascondi attività'))}">${task.hidden ? '◉' : '◌'}</button><button class="icon-button" data-edit-task="${task.id}" title="${esc(t('Modifica attività'))}">⋯</button></td></tr>`;
   }).join('') || `<tr><td colspan="${columns.length + 1}" class="empty">${esc(t('Nessuna attività trovata. Crea una nuova attività o modifica i filtri.'))}</td></tr>`;
   $('#row-count').textContent = ui`${tasks.length} attività mostrate · ${data.tasks.length} totali`;
   document.querySelectorAll('[data-edit-task]').forEach(b => b.onclick = () => taskDialog(data.tasks.find(t => t.id === b.dataset.editTask)));
@@ -566,6 +581,7 @@ function drawHighlighter() {
   bar.classList.toggle('active', Boolean(highlighter));
   bar.setAttribute('role', 'toolbar');
   bar.setAttribute('aria-label', t('Evidenziatore'));
+  bar.title = hint;
   bar.innerHTML = `<span class="highlighter-label"><span aria-hidden="true">✎</span> ${esc(t('Evidenziatore'))}</span><div class="highlighter-swatches">${highlights.map(h => `<button type="button" class="highlighter-swatch" data-highlighter="${esc(h.id)}" style="--mark:${h.color}" aria-pressed="${h.id === highlighter}" title="${esc(h.name)}"><i aria-hidden="true"></i><span>${esc(h.name)}</span></button>`).join('')}${highlights.length ? `<button type="button" class="highlighter-swatch eraser" data-highlighter="erase" aria-pressed="${highlighter === 'erase'}" title="${esc(t('Togli l’evidenziazione dalle righe'))}"><span aria-hidden="true">⌫</span><span>${esc(t('Gomma'))}</span></button>` : ''}</div><span class="highlighter-hint" aria-live="polite">${esc(hint)}</span><button type="button" class="unsaved-link highlighter-manage" data-manage-highlights>${esc(t('Gestisci colori'))}</button>`;
   const table = $('.activity-table');
   table?.classList.toggle('painting', Boolean(highlighter));
@@ -804,13 +820,13 @@ function confirmDialog(title, message, callback) {
   $('#confirm-action').onclick = action(async () => { await callback(); $('#modal').close(); });
 }
 function renderIssues() {
-  $('#content').innerHTML = heading('CONNESSIONI CHE CONTANO', data.settings.tabNames[1], 'Collega il lavoro alla sua origine. Più incident possono condividere lo stesso problem.', ui`<button class="button primary" id="new-issue">＋ Nuova associazione</button>`) +
+  $('#content').innerHTML = heading(data.settings.tabNames[1], 'Collega il lavoro alla sua origine. Più incident possono condividere lo stesso problem.', ui`<button class="button primary" id="new-issue">＋ Nuova associazione</button>`) +
     ui`<div class="info-banner">⌘ &nbsp; Incident e problem vengono riportati automaticamente sulle attività con lo stesso codice portale, senza distinzione tra maiuscole e minuscole.</div><section class="panel"><div class="table-toolbar"><strong>${data.issues.length} associazioni</strong><input id="issue-search" class="issue-search" placeholder="Cerca codice, incident o problem…" aria-label="Cerca associazioni"></div><div class="table-scroll"><table><thead><tr><th>Codice portale</th><th>Incident</th><th>Problem</th><th>Collegamento</th><th>Azioni</th></tr></thead><tbody id="issue-rows"></tbody></table></div></section>`;
   function rows(query = '') {
     const issues = data.issues.filter(i => [i.code, i.incident, i.problem].some(v => v.toLowerCase().includes(query.toLowerCase())));
     $('#issue-rows').innerHTML = issues.map(i => {
       const count = data.tasks.filter(t => t.code.trim().toUpperCase() === i.code.trim().toUpperCase()).length;
-      return ui`<tr><td><button class="code-link" data-issue="${i.id}">${esc(i.code)}</button></td><td>${esc(i.incident) || '—'}</td><td>${pill(i.problem || '—', '#9d8de8')}</td><td><span class="${count ? 'linked' : 'muted'}">${count ? ui`↗ ${count} attività collegate` : t('In attesa di attività')}</span></td><td><button class="button small" data-issue="${i.id}">Modifica</button></td></tr>`;
+      return ui`<tr data-issue-row="${esc(i.id)}" title="Doppio clic sulla riga per modificare."><td><button class="code-link" data-issue="${i.id}">${esc(i.code)}</button></td><td>${esc(i.incident) || '—'}</td><td>${pill(i.problem || '—', '#9d8de8')}</td><td><span class="${count ? 'linked' : 'muted'}">${count ? ui`↗ ${count} attività collegate` : t('In attesa di attività')}</span></td><td><button class="button small" data-issue="${i.id}">Modifica</button></td></tr>`;
     }).join('') || ui`<tr><td colspan="5" class="empty">Nessuna associazione. Aggiungi un codice portale con incident e/o problem.</td></tr>`;
     document.querySelectorAll('[data-issue]').forEach(b => b.onclick = () => issueDialog(data.issues.find(i => i.id === b.dataset.issue)));
   }
@@ -844,7 +860,7 @@ function miniTask(t, readOnly = false) {
 function renderMilestones() {
   const tasks = data.tasks, dates = [...new Set(tasks.map(t => t.releaseDate).filter(Boolean))].sort();
   if (tasks.some(t => !t.releaseDate)) dates.push('');
-  $('#content').innerHTML = heading('IL PERCORSO, A COLPO D’OCCHIO', data.settings.tabNames[2], 'Ogni release è una tappa. Le date e le attività si allineano automaticamente.', ui`<span class="view-label">${dates.filter(Boolean).length} milestone · ${tasks.length} attività</span>`) +
+  $('#content').innerHTML = heading(data.settings.tabNames[2], 'Ogni release è una tappa. Le date e le attività si allineano automaticamente.', ui`<span class="view-label">${dates.filter(Boolean).length} milestone · ${tasks.length} attività</span>`) +
     ui`<div class="milestone-shell"><div class="milestone-scroll"><div class="milestone-track">${dates.map((date, index) => {
       const group = tasks.filter(t => t.releaseDate === date), color = date ? dateColor(date) : '#929bb2';
       return ui`<section class="milestone-column" style="--milestone:${color}"><div class="timeline-label">${date ? ui`TAPPA ${String(index + 1).padStart(2, '0')}` : 'BACKLOG'}</div><div class="timeline-line"><span>◆</span></div><div class="milestone-heading"><h2>${formatDate(date)}</h2><span>${group.length} attività · ${effort(group.reduce((sum, t) => sum + t.effortHours, 0))}</span></div><div class="milestone-cards">${sortedRows(group).map(t => miniTask(t)).join('')}</div></section>`;
@@ -853,7 +869,7 @@ function renderMilestones() {
 }
 function renderKanban() {
   const tasks = data.tasks;
-  $('#content').innerHTML = heading('IL FLUSSO DEL LAVORO', data.settings.tabNames[3], 'Una vista di sola lettura, sempre allineata alle attività. Ogni stato trova il suo spazio.', ui`<span class="readonly-badge">◈ Sola lettura</span>`) +
+  $('#content').innerHTML = heading(data.settings.tabNames[3], 'Una vista di sola lettura, sempre allineata alle attività. Ogni stato trova il suo spazio.', ui`<span class="readonly-badge">◈ Sola lettura</span>`) +
     ui`<div class="kanban-scroll"><div class="kanban-board">${data.settings.statuses.map(status => {
       const items = sortTasks(tasks.filter(t => t.statusId === status.id));
       return `<section class="kanban-column" style="--column:${status.color}"><div class="kanban-heading"><span><i></i>${esc(status.name)}</span><b>${items.length}</b></div><div class="kanban-cards">${items.map(t => miniTask(t, true)).join('') || ui`<div class="kanban-empty">Spazio alle prossime attività</div>`}</div></section>`;
@@ -986,7 +1002,7 @@ function fontSample(id, task) {
   const samples = {
     base: () => ui`<div class="sample-stack"><div class="stat"><span>Attività visibili <span class="stat-icon">▤</span></span><strong>${visibleTasks().length}<small>nel tuo workspace</small></strong></div><div class="sample-actions"><span class="button primary">＋ Nuova attività</span><span class="button">Salva impostazioni</span></div></div>`,
     sidebar: () => [0, 1, 2].map(i => `<div class="nav-button ${i ? '' : 'active'}"><span class="nav-icon">${icons[i]}</span><span>${esc(settings.tabNames[i])}</span>${i ? '' : `<span class="nav-count">${visibleTasks().length}</span>`}</div>`).join(''),
-    headings: () => heading('IL QUADRO COMPLETO', settings.tabNames[0], 'Tutte le attività, una direzione. Pianifica il lavoro e tieni a fuoco le prossime release.'),
+    headings: () => heading(settings.tabNames[0], 'Tutte le attività, una direzione. Pianifica il lavoro e tieni a fuoco le prossime release.'),
     tables: () => ui`<table><thead><tr><th>Codice portale</th><th>Descrizione</th><th>Release date</th></tr></thead><tbody><tr><td><span class="code-link">${esc(task.code)}</span></td><td><span class="description-cell">${esc(plain(task.description) || tr('Senza descrizione'))}</span></td><td><span class="date-pill" style="--date:${color}">◷ ${formatDate(task.releaseDate)}</span></td></tr></tbody></table>`,
     milestones: () => ui`<div style="--milestone:${color}"><div class="timeline-label">TAPPA ${'01'}</div><div class="timeline-line"><span>◆</span></div><div class="milestone-heading"><h2>${formatDate(task.releaseDate)}</h2><span>${group.length} attività · ${effort(group.reduce((sum, item) => sum + item.effortHours, 0))}</span></div><div class="milestone-cards">${miniTask(task)}</div></div>`,
     kanban: () => `<div class="kanban-column" style="--column:${status.color}"><div class="kanban-heading"><span><i></i>${esc(status.name)}</span><b>${data.tasks.filter(item => item.statusId === status.id).length}</b></div><div class="kanban-cards">${miniTask(task, true)}</div></div>`,
@@ -1040,7 +1056,7 @@ function renderSettings() {
   settingsDraft.highlights ??= [];
   settingsDraft.taskColumns = normalizeTaskColumns(settingsDraft.taskColumns);
   const organization = organizations.find(o => o.id === activeOrganizationId);
-  $('#content').innerHTML = '<div id="settings-page">' + heading('UNO SPAZIO CHE TI SOMIGLIA', t('Impostazioni'), 'Nomi, flussi e colori. Configura il tuo workspace, portalo ovunque.', ui`<button class="button primary" id="save-settings">Salva impostazioni</button>`) +
+  $('#content').innerHTML = '<div id="settings-page">' + heading(t('Impostazioni'), 'Nomi, flussi e colori. Configura il tuo workspace, portalo ovunque.', ui`<button class="button primary" id="save-settings">Salva impostazioni</button>`) +
     ui`<div class="unsaved-banner" id="unsaved-banner" role="status" aria-live="polite" hidden><span class="unsaved-icon" aria-hidden="true">⚠</span><div class="unsaved-text"><strong>Hai impostazioni non salvate.</strong> Le modifiche, inclusi tema e dimensioni del testo in anteprima, diventano effettive solo con “Salva”. Se esci senza salvare resta la configurazione precedente.<span class="unsaved-where" id="unsaved-where"></span></div><div class="unsaved-actions"><button type="button" class="button small" id="discard-settings">Annulla modifiche</button><button type="button" class="button primary small" id="save-settings-inline">Salva</button></div></div><div class="info-banner"><strong>${APP_NAME}</strong> · Configurazione dell’organizzazione: <strong>${esc(organization.name)}</strong><br>Tutte le impostazioni qui sotto si applicano solo all’organizzazione selezionata.</div>
     <div class="settings-layout">${settingsNav()}<div class="settings-panels"><section class="panel settings-section full" id="organizations-panel"><h2>Organizzazioni</h2><p class="section-description">Dati e impostazioni sono separati per organizzazione. Il cambio salva automaticamente la selezione.</p>
     <details id="create-organization-section"><summary>Nuova organizzazione</summary><form id="create-organization"><div class="form-grid"><label class="field">Nome organizzazione<input name="name" required maxlength="100"></label><label class="field">Lingua dell’interfaccia<select name="language">${languageOptions(data.settings.language)}</select></label><label class="field full checkbox-field demo-field"><input type="checkbox" name="demo"><span>Includi dati dimostrativi<small>Milestone ogni due settimane da gennaio 2025 con attività, issue, note e righe nascoste di esempio.</small></span></label><div class="field full"><label for="create-logo-file">Logo della nuova organizzazione</label><input id="create-logo-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp"><small>Scegli il logo durante la creazione: verrà salvato con l’organizzazione e genererà automaticamente il suo tema.</small><div id="create-logo-preview"></div><output id="create-logo-result" aria-live="polite"></output><button type="button" class="button small" id="clear-create-logo">Rimuovi logo</button></div></div><div class="organization-actions"><button class="button primary" type="submit">Crea organizzazione</button></div></form></details>
@@ -1350,6 +1366,7 @@ document.addEventListener('keydown', e => {
 window.runSmokeTests = async () => {
   const checks = [];
   function check(condition, name) { if (!condition) throw new Error(name); checks.push(name); }
+  const doubleClick = element => element.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true, button: 0 }));
   async function waitFor(predicate) {
     const deadline = Date.now() + 5000;
     while (!predicate()) {
@@ -1358,6 +1375,9 @@ window.runSmokeTests = async () => {
     }
   }
   const initialTaskCount = data.tasks.length;
+  const tableArea = $('.table-scroll').getBoundingClientRect();
+  check($('.page-heading').offsetHeight <= 75 && tableArea.top < 330 && tableArea.height >= innerHeight * 0.5 && tableArea.bottom <= $('footer').getBoundingClientRect().top, 'Intestazione compatta e almeno metà finestra disponibile per la tabella');
+  check(getComputedStyle($('.page-heading h1')).userSelect === 'none' && getComputedStyle($('#task-rows td')).userSelect === 'none' && getComputedStyle($('#search')).userSelect === 'text', 'Testo dell’interfaccia non selezionabile, ricerca selezionabile');
   check(initialTaskCount > 200 && visibleTasks().length < initialTaskCount && document.querySelectorAll('#task-rows tr').length === visibleTasks().length, 'Caricamento dati dimostrativi con righe già rilasciate nascoste');
   const demoReleases = [...new Set(data.tasks.map(t => t.releaseDate).filter(Boolean))].sort();
   check(demoReleases[0] === '2025-01-01' && demoReleases.length > 40 && demoReleases.every((date, i) => new Date(`${date}T12:00:00Z`).getUTCDay() === 3 && (!i || Date.parse(date) - Date.parse(demoReleases[i - 1]) === 14 * 86400000)), 'Milestone dimostrative ogni due settimane di mercoledì da gennaio 2025');
@@ -1391,9 +1411,12 @@ window.runSmokeTests = async () => {
   for (let i = 1; i < 4; i++) {
     view = i; render();
     check($('#content').textContent.includes(data.settings.tabNames[i]), `Rendering tab ${i + 1}`);
+    check($('.page-heading').offsetHeight <= 75 && document.documentElement.scrollHeight <= innerHeight + 1, `Intestazione compatta e scorrimento interno nel tab ${i + 1}`);
   }
   check(document.querySelectorAll('.kanban-column').length === data.settings.statuses.length, 'Colonne kanban e ordine stati');
   check(!document.querySelector('.kanban-board button'), 'Kanban effettivamente readonly');
+  doubleClick($('.kanban-board .task-card'));
+  check(!$('#modal').open, 'Doppio clic nel kanban mantiene la sola lettura');
   view = 2; render();
   check($('#content').textContent.includes('SMOKE-1'), 'Milestone aggiornata dopo inserimento');
   const next = structuredClone(data); next.tasks.find(t => t.code === 'SMOKE-1').hidden = true; await commit(next); render();
@@ -1411,6 +1434,29 @@ window.runSmokeTests = async () => {
   check(markedRows().length > 0 && markedRows().every(row => highlightOf(data.tasks.find(task => task.id === row.dataset.taskRow))) && document.querySelectorAll('.highlighter-bar [data-highlighter]').length === highlightsOf().length + 1, 'Righe evidenziate con colori personalizzati e barra evidenziatore');
   const smokeTask = () => data.tasks.find(task => task.code === 'SMOKE-1');
   const smokeRow = () => document.querySelector(`tr[data-task-row="${CSS.escape(smokeTask().id)}"]`);
+  doubleClick(smokeRow().querySelector('.sequence'));
+  check($('#modal').open && $('#task-form').elements.code.value === 'SMOKE-1', 'Doppio clic su una cella apre la modifica della relativa attività');
+  check(getComputedStyle($('#task-form').elements.code).userSelect === 'text' && getComputedStyle($('#description-editor strong')).userSelect === 'text', 'Campi e contenuti rich text restano selezionabili');
+  $('#notes-editor').innerHTML += '<p>Doppio clic verificato</p>';
+  $('#task-form').requestSubmit();
+  await waitFor(() => !saving && !$('#modal').open);
+  check((await workspaceApi.load()).data.tasks.find(task => task.code === 'SMOKE-1').notes.includes('Doppio clic verificato'), 'Modifica aperta con doppio clic salvata nell’archivio');
+  doubleClick(smokeRow().querySelector('[data-mark-task]'));
+  doubleClick(smokeRow().querySelector('a'));
+  check(!$('#modal').open, 'Doppio clic su pulsanti e link non apre un secondo editor');
+  view = 1; render();
+  $('#issue-search').value = 'INC-SMOKE';
+  $('#issue-search').dispatchEvent(new Event('input'));
+  doubleClick($('#issue-rows tr[data-issue-row]').cells[1]);
+  check($('#modal').open && $('#issue-form').elements.incident.value === 'INC-SMOKE', 'Doppio clic modifica l’issue corretta anche dopo un filtro');
+  $('#issue-form').requestSubmit();
+  await waitFor(() => !saving && !$('#modal').open);
+  check(data.issues.some(issue => issue.incident === 'INC-SMOKE' && issue.problem === 'PRB-SMOKE'), 'Associazione salvabile dalla modifica aperta con doppio clic');
+  $('#issue-search').value = 'nessun-risultato-doppio-clic';
+  $('#issue-search').dispatchEvent(new Event('input'));
+  doubleClick($('#issue-rows .empty'));
+  check(!$('#modal').open, 'Doppio clic sulla lista vuota non crea associazioni');
+  view = 0; render();
   const paint = highlightsOf()[1];
   $(`.highlighter-bar [data-highlighter="${paint.id}"]`).click();
   check(highlighter === paint.id && $('.activity-table').classList.contains('painting') && $('.highlighter-bar').classList.contains('active') && $(`.highlighter-bar [data-highlighter="${paint.id}"]`).getAttribute('aria-pressed') === 'true', 'Evidenziatore attivabile dalla barra sopra la tabella');
@@ -1418,6 +1464,8 @@ window.runSmokeTests = async () => {
   check(!$('#modal').open && smokeRow().classList.contains('marked'), 'Clic su una riga con l’evidenziatore la colora senza aprire la scheda');
   await waitFor(() => !saving && !markFlush);
   check(smokeTask().highlightId === paint.id && (await workspaceApi.load()).data.tasks.find(task => task.code === 'SMOKE-1').highlightId === paint.id && smokeRow().classList.contains('marked') && smokeRow().style.getPropertyValue('--mark').trim() === paint.color && highlighter === paint.id, 'Evidenziazione della riga salvata nell’archivio portatile');
+  doubleClick(smokeRow().cells[0]);
+  check(!$('#modal').open && highlighter === paint.id, 'Doppio clic con evidenziatore attivo non apre la modifica');
   smokeRow().cells[0].click();
   await waitFor(() => !saving && !markFlush);
   check(smokeTask().highlightId === '' && !smokeRow().classList.contains('marked'), 'Secondo clic con lo stesso colore toglie l’evidenziazione');
@@ -1761,10 +1809,10 @@ window.runSmokeTests = async () => {
   check(data.settings.portalUrlTemplate === '' && !document.querySelector('#task-rows a[data-open-url]'), 'Modello link separato per organizzazione');
   check($('#task-rows').textContent.includes('Attività personalizzate') && effort(data.tasks[0].effortHours) === '1d', 'Contenuti utente preservati e effort localizzato');
   view = 1; render(); issueDialog();
-  check($('#issue-form').textContent.includes('Save association') && $('#content').textContent.includes('CONNECTIONS THAT MATTER'), 'Vista issue e dialog tradotti in inglese');
+  check($('#issue-form').textContent.includes('Save association') && $('.page-heading p').textContent.startsWith('Connect work to its origin.'), 'Vista issue e dialog tradotti in inglese');
   $('#modal').close();
   view = 2; render();
-  check($('#content').textContent.includes('Unscheduled') && $('#content').textContent.includes('YOUR ROADMAP'), 'Milestone e data mancante tradotte');
+  check($('#content').textContent.includes('Unscheduled') && $('.page-heading p').textContent.startsWith('Every release is a milestone.'), 'Milestone e data mancante tradotte');
   view = 3; render();
   check($('#content').textContent.includes('Read only') && !document.querySelector('.kanban-board button'), 'Kanban inglese resta readonly');
   view = 4; render();

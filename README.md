@@ -1,6 +1,6 @@
 # OrbitKanban — workspace portable
 
-App desktop locale per Windows 10/11 a 64 bit, **versione 2.6.0**. Nessun account, server esterno o collegamento a Internet necessario per l'uso. **Il nome dell'app è sempre OrbitKanban e non è configurabile.** Tutte le impostazioni del workspace appartengono alla singola organizzazione. Mentre l'app è aperta puoi usarla anche **dal browser dello stesso PC**, con più organizzazioni aperte contemporaneamente in schede diverse.
+App desktop locale per Windows 10/11 a 64 bit, **versione 2.6.3**. Nessun account, server esterno o collegamento a Internet necessario per l'uso. **Il nome dell'app è sempre OrbitKanban e non è configurabile.** Tutte le impostazioni del workspace appartengono alla singola organizzazione. Mentre l'app è aperta puoi usarla anche **dal browser dello stesso PC**, con più organizzazioni aperte contemporaneamente in schede diverse.
 
 ## Avvio e condivisione
 
@@ -11,6 +11,8 @@ App desktop locale per Windows 10/11 a 64 bit, **versione 2.6.0**. Nessun accoun
 Windows potrebbe mostrare un avviso SmartScreen perché l'eseguibile non è firmato digitalmente. L'app non richiede privilegi di amministratore. Il file eseguibile è `OrbitKanban-Portable.exe`. Per aggiornare una versione precedente, chiudi l'app e affianca il nuovo eseguibile alla cartella `data` esistente: non è necessario rinominare o ricreare l'archivio.
 
 ### Schermata di caricamento
+
+L'icona dell'eseguibile portable, della finestra e della barra delle applicazioni usa lo **stesso logo OrbitKanban** mostrato nella schermata di caricamento e nell'app. I loghi personalizzati delle organizzazioni continuano a comparire nella sidebar e nella scheda del browser; non sostituiscono l'icona Windows dell'app.
 
 L'eseguibile portable estrae i file dell'app in una cartella temporanea a ogni avvio: è la parte che richiede qualche secondo. Appena fai doppio clic compare la **schermata di caricamento**, sempre in inglese, con logo, versione e una **barra di caricamento infinita** che scorre senza fermarsi fin dal primo istante, già durante l'estrazione. Quando l'app parte, la stessa schermata, nella stessa posizione, prosegue con la stessa animazione finché l'organizzazione non è pronta; non ci sono fasi numerate, perché la durata di ogni passaggio dipende dal PC. Tra la schermata del launcher e quella dell'app può esserci un passaggio di qualche decimo di secondo. La finestra principale compare solo quando l'organizzazione è già disegnata, con lo sfondo del suo tema. Se il sistema chiede di ridurre le animazioni, la barra non scorre ma pulsa lentamente. Il pacchetto include soltanto le risorse di Chromium per italiano e inglese, così l'estrazione è più leggera.
 
@@ -98,6 +100,12 @@ Il simbolo **↗** accanto al codice nella lista attività, nelle card delle mil
 
 ## Le quattro viste
 
+Le intestazioni e i riepiloghi sono compatti in tutte le schede. Tabelle, milestone e kanban occupano lo spazio rimanente della finestra e scorrono al proprio interno; le dimensioni del testo configurate restano rispettate. Su finestre basse o con caratteri grandi, anche l'area contenuti può scorrere per mantenere accessibili tutti i comandi.
+
+Il testo dell'interfaccia non viene selezionato trascinando il mouse, come in un'app desktop. La selezione e il copia/incolla restano disponibili nei campi di testo, nella ricerca e negli editor rich text.
+
+Nelle liste **Attività** e **Issue collegate**, fai **doppio clic su una cella della riga** per aprire la relativa finestra di modifica. Restano disponibili i pulsanti di modifica e il clic sul codice; link e pulsanti mantengono le proprie azioni. Con un evidenziatore attivo, i clic continuano a colorare le righe senza aprire l'editor. Il Kanban resta in sola lettura.
+
 - **Attività**: creazione e modifica tramite “Nuova attività”, codice o descrizione. Progressivo automatico ma modificabile; codice portale con link facoltativo (vedi **Link al portale**); descrizione e note rich text; urgenza, stato, effort in giorni e ore, release date e associazioni incident/problem automatiche. I numeri progressivi possono essere duplicati intenzionalmente. Scorciatoia: `Ctrl+N`.
 - **Issue collegate**: ogni riga associa un codice portale a un incident e/o problem. Sono consentiti più incident per problem e più righe per codice. Il confronto del codice ignora spazi esterni e maiuscole/minuscole. Nelle attività le associazioni vengono aggregate senza duplicati; non è necessaria alcuna connessione a JIRA.
 - **Milestone**: timeline orizzontale per data di release, con tutte le attività della tappa. Scorre sia in larghezza sia in altezza; il codice apre la modifica. Le attività senza data compaiono in “Da pianificare”. Include anche le attività nascoste dalla lista, contrassegnate dall'etichetta “Nascosta in lista” e da un bordo tratteggiato.
@@ -158,9 +166,14 @@ npm start
 npm test
 npm run check
 npm run smoke
+npm run icon
 npm run splash
 npm run dist
 ```
+
+Il logo sorgente unico è `app-logo.svg`, usato dall'interfaccia, dalla favicon predefinita e dalla schermata di caricamento. `npm run icon` ne genera la versione PNG trasparente a 512 pixel (`app-logo.png`, non versionata); `npm start` e `npm run smoke` la rigenerano automaticamente. Anche `npm run splash`, eseguito prima della build, rigenera l'icona. Electron usa quel PNG per entrambe le finestre ed electron-builder lo converte nell'icona Windows multirisoluzione per il launcher portable e l'eseguibile interno. La modifica delle risorse dell'eseguibile resta attiva (icona, nome e versione), anche senza firma digitale.
+
+Se l'eseguibile precedente è ancora aperto, puoi costruire senza sovrascriverlo con `npm run dist -- --out dist-staging`. Chiudi l'app prima di sostituire l'eseguibile accanto alla cartella `data`.
 
 Il pacchetto condivisibile viene generato in `dist/OrbitKanban-Portable.exe`. `npm run dist` esegue prima `npm run splash`, che genera da `splash.html` l'immagine `build/splash.bmp` e l'animazione della barra `build/splash-bar.avi` (con `build/splash-bar.nsh`) mostrate dal launcher durante l'estrazione: modificando la schermata di caricamento, launcher e app restano allineati. Le traduzioni sono in `languages/<codice>.json`, con l'italiano come lingua sorgente del codice; `i18n.js` le carica, `languages.js` aggiunge quelle di `data/languages`. La build passa da `build.js`, che usa electron-builder come `electron-builder --win portable --x64` e aggiunge al launcher `build/portable-launcher.nsh`: senza, la finestra di installazione di NSIS lampeggerebbe per un istante sopra la schermata di caricamento. Se una versione futura di electron-builder non permettesse più l'aggancio, la build si interrompe con un errore invece di produrre un launcher diverso. In sviluppo l'archivio è nella cartella `data` del progetto. Lo smoke test usa un workspace temporaneo separato, verifica la schermata di caricamento con la barra animata, le lingue aggiunte da file, le quattro viste, la creazione di organizzazioni con logo, le dimensioni del testo, gli evidenziatori e le colonne della lista, la sincronizzazione tra finestre, l'esportazione e l'importazione per organizzazione, il server browser con i suoi controlli di sicurezza e la persistenza reale senza modificare i dati dell'utente.
 

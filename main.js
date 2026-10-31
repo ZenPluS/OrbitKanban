@@ -1,5 +1,5 @@
 'use strict';
-const { app, BrowserWindow, ipcMain, dialog, shell, clipboard, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, clipboard, screen, nativeImage } = require('electron');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const os = require('node:os');
@@ -10,6 +10,11 @@ const { createSplash, splashHoldTime, windowBackground, SPLASH_STATUS } = requir
 const { createLanguageStore } = require('./languages');
 app.setName(APP_NAME);
 const smoke = process.argv.includes('--smoke-test');
+if (smoke) {
+  // Match the build's rasterizer and scale for the SVG/icon pixel comparison.
+  app.commandLine.appendSwitch('force-device-scale-factor', '1');
+  app.disableHardwareAcceleration();
+}
 const root = smoke ? (process.env.ORBITA_SMOKE_DIR || path.join(os.tmpdir(), `orbita-smoke-${process.pid}`)) :
   (process.env.PORTABLE_EXECUTABLE_DIR || (app.isPackaged ? path.dirname(app.getPath('exe')) : __dirname));
 const dataFolder = path.join(root, 'data');
@@ -121,7 +126,10 @@ else {
     target.focus();
   });
   app.whenReady().then(async () => {
-    splash = createSplash({ BrowserWindow, screen, appRoot: __dirname, title: APP_NAME, version: app.getVersion(), show: !smoke });
+    const icon = nativeImage.createFromPath(path.join(__dirname, 'app-logo.png'));
+    if (icon.isEmpty()) throw new Error('Icona applicativa non trovata o non valida. In sviluppo esegui npm run icon.');
+    if (process.platform === 'win32') app.setAppUserModelId('local.orbita.workspace');
+    splash = createSplash({ BrowserWindow, screen, appRoot: __dirname, title: APP_NAME, icon, version: app.getVersion(), show: !smoke });
     try { await languages.reload(); }
     catch (error) { console.error('Lingue aggiuntive non caricate:', error); }
     let settings;
@@ -131,7 +139,7 @@ else {
     catch (error) { console.error('Accesso da browser non avviato:', error); }
     win = new BrowserWindow({
       width: 1500, height: 960, minWidth: 1050, minHeight: 700, show: false,
-      backgroundColor: windowBackground(settings), autoHideMenuBar: true, title: APP_NAME,
+      backgroundColor: windowBackground(settings), autoHideMenuBar: true, title: APP_NAME, icon,
       webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true }
     });
     win.on('closed', () => splash?.close());
@@ -156,9 +164,21 @@ else {
         }
         if (screenState.lang !== 'en' || screenState.status !== SPLASH_STATUS || screenState.version !== `Portable · v${app.getVersion()}` || screenState.busy !== 'true' || !screenState.logo) throw new Error(`Schermata di caricamento non valida: ${JSON.stringify(screenState)}`);
         if (!screenState.indeterminate || !screenState.animated) throw new Error(`Barra di caricamento non animata: ${JSON.stringify(screenState)}`);
+        const logoData = await win.webContents.executeJavaScript(`(async () => {
+          const image = new Image();
+          image.src = 'app-logo.svg';
+          await image.decode();
+          const canvas = document.createElement('canvas');
+          canvas.width = canvas.height = 512;
+          canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
+          return canvas.toDataURL('image/png');
+        })()`);
+        const iconPixels = icon.toBitmap(), logoPixels = nativeImage.createFromDataURL(logoData).toBitmap();
+        if (!iconPixels.equals(logoPixels)) throw new Error('Il logo applicativo e l’icona della finestra non coincidono.');
         splash.close();
         if (!splash.closed || !win || win.isDestroyed()) throw new Error('Schermata di caricamento non chiusa.');
         const splashChecks = [
+          'Logo applicativo e icona della finestra identici, generati dalla stessa immagine',
           'Schermata di caricamento in inglese con logo e versione',
           'Schermata di caricamento con barra infinita animata',
           'Schermata di caricamento chiusa quando l’interfaccia è pronta'

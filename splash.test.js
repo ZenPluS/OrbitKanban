@@ -3,7 +3,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { SPLASH_STATUS, SPLASH_MIN_VISIBLE, splashHoldTime, windowBackground } = require('./splash');
+const { SPLASH_STATUS, SPLASH_MIN_VISIBLE, splashHoldTime, windowBackground, createSplash } = require('./splash');
 const { encodeBmp, quantize, encodeAvi } = require('./splash-image');
 
 test('loading screen is English only with an indeterminate bar and no step counter', () => {
@@ -21,6 +21,41 @@ test('loading screen stays just long enough not to flicker', () => {
   assert.equal(splashHoldTime(1000, 1000 + SPLASH_MIN_VISIBLE + 50), 0);
   assert.equal(splashHoldTime(1000, 900), SPLASH_MIN_VISIBLE, 'clock going backwards');
   assert.ok(SPLASH_MIN_VISIBLE <= 500);
+});
+test('Windows build embeds the application logo without requiring code signing', () => {
+  const { build, scripts } = require('./package.json');
+  assert.equal(build.win.icon, 'app-logo.png');
+  assert.ok(build.files.includes(build.win.icon));
+  assert.ok(build.files.includes('app-logo.svg'));
+  assert.equal(build.win.signAndEditExecutable, true);
+  assert.equal(build.win.signExecutable, false);
+  assert.equal(scripts.prestart, 'npm run icon');
+  assert.equal(scripts.presmoke, 'npm run icon');
+  assert.equal(scripts.predist, 'npm run splash');
+  for (const file of ['index.html', 'splash.html']) {
+    assert.match(fs.readFileSync(path.join(__dirname, file), 'utf8'), /<img src="app-logo\.svg"/);
+  }
+});
+test('loading window uses the same native icon as the application', async () => {
+  const { EventEmitter } = require('node:events');
+  const icon = { name: 'application-icon' };
+  class Window extends EventEmitter {
+    constructor(options) {
+      super();
+      this.options = options;
+      this.webContents = new EventEmitter();
+      this.webContents.setWindowOpenHandler = () => {};
+    }
+    async loadFile(file) { this.file = file; }
+    isDestroyed() { return false; }
+  }
+  const splash = createSplash({
+    BrowserWindow: Window, screen: { getPrimaryDisplay: () => ({ bounds: { x: 0, y: 0, width: 1920, height: 1080 } }) },
+    appRoot: __dirname, title: 'OrbitKanban', version: '2.6.2', icon, show: false
+  });
+  assert.equal(splash.window.options.icon, icon);
+  assert.equal(splash.window.options.show, false);
+  assert.equal(splash.window.file, path.join(__dirname, 'splash.html'));
 });
 test('main window starts with the organization theme background', () => {
   const themes = [{ id: 'midnight', background: '#10131c' }, { id: 'daylight', background: '#EEF0F7' }];

@@ -10,6 +10,7 @@ const { SPLASH_SIZE, SPLASH_BACKGROUND } = require('./splash');
 const { encodeBmp, toRgb, quantize, encodeAvi } = require('./splash-image');
 
 const FPS = 30;
+const ICON_SIZE = 512;
 const buildFolder = path.join(__dirname, 'build');
 const outputs = { bitmap: path.join(buildFolder, 'splash.bmp'), clip: path.join(buildFolder, 'splash-bar.avi'), geometry: path.join(buildFolder, 'splash-bar.nsh') };
 const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'orbitkanban-splash-'));
@@ -25,10 +26,28 @@ app.whenReady().then(async () => {
     webPreferences: { offscreen: true, preload: path.join(__dirname, 'splash-preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true }
   });
   await win.loadFile(path.join(__dirname, 'splash.html'), { query: { version } });
+  const iconData = await win.webContents.executeJavaScript(`(async () => {
+    const image = new Image();
+    image.src = 'app-logo.svg';
+    await image.decode();
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = ${ICON_SIZE};
+    canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/png');
+  })()`);
+  const icon = nativeImage.createFromDataURL(iconData);
+  if (icon.isEmpty() || icon.getSize().width !== ICON_SIZE || icon.getSize().height !== ICON_SIZE) throw new Error('Icona applicativa non valida.');
+  fs.writeFileSync(path.join(__dirname, 'app-logo.png'), icon.toPNG());
+  console.log(`Icona: app-logo.svg -> app-logo.png (${ICON_SIZE}x${ICON_SIZE})`);
+  if (process.argv.includes('--icon-only')) {
+    win.destroy();
+    finish(0);
+    return;
+  }
   // The launcher animates regardless of the build machine's motion settings, so render the full animation.
   win.webContents.debugger.attach('1.3');
   await win.webContents.debugger.sendCommand('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }] });
-  await win.webContents.executeJavaScript(`Promise.all([document.fonts.ready, ...[...document.images].map(image => image.decode().catch(() => {}))])`);
+  await win.webContents.executeJavaScript(`Promise.all([document.fonts.ready, ...[...document.images].map(image => image.decode())]).then(() => true)`);
   const layout = await win.webContents.executeJavaScript(`(() => {
     const box = document.getElementById('splash-progress').getBoundingClientRect();
     return { rect: { x: box.x, y: box.y, width: box.width, height: box.height }, durations: document.getAnimations().map(animation => animation.effect.getComputedTiming().duration) };
