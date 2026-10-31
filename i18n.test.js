@@ -1,0 +1,103 @@
+'use strict';
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const i18n = require('./i18n');
+const { translate } = i18n;
+const builtIn = code => JSON.parse(fs.readFileSync(path.join(__dirname, 'languages', `${code}.json`), 'utf8'));
+const withRegistry = run => { try { run(); } finally { i18n.reset(); i18n.loadBuiltIn(); } };
+
+test('Italian source strings stay unchanged and English strings translate', () => {
+  assert.equal(translate('Salva impostazioni', 'it'), 'Salva impostazioni');
+  assert.equal(translate('Salva impostazioni', 'en'), 'Save settings');
+  assert.equal(translate('Gestisci organizzazioni', 'en'), 'Manage organizations');
+  assert.equal(translate('Logo dell’organizzazione', 'en'), 'Organization logo');
+});
+test('longer UI phrases take precedence and labels retain HTML structure', () => {
+  assert.equal(translate('<button class="button">Salva attività</button>', 'en'), '<button class="button">Save task</button>');
+  assert.equal(translate('Codice portale', 'en'), 'Portal code');
+  assert.equal(translate('La lingua è salvata per questa organizzazione. Nomi personalizzati e contenuti non vengono tradotti.', 'en'), 'Language is saved per organization. Custom names and content are not translated.');
+});
+test('text size settings are translated, including phrases that contain shorter keys', () => {
+  assert.equal(translate('<h2>Dimensione del testo</h2>', 'en'), '<h2>Text size</h2>');
+  assert.equal(translate('<label>Tabelle</label><small>Righe e colonne della lista attività e delle issue collegate.</small>', 'en'), '<label>Tables</label><small>Rows and columns of the task list and linked issues.</small>');
+  assert.equal(translate('Testo generale', 'en'), 'General text');
+  assert.equal(translate('Testo', 'en'), 'Text');
+  assert.deepEqual(['Compatta', 'Ampia', 'Molto ampia'].map(name => translate(name, 'en')), ['Compact', 'Large', 'Extra large']);
+  assert.equal(translate('Ripristina 100%: Vista kanban', 'en'), 'Reset to 100%: Kanban view');
+  assert.equal(translate('Dimensioni del testo non valide.', 'en'), 'Invalid text sizes.');
+  assert.equal(translate('Dimensione del testo', 'it'), 'Dimensione del testo');
+});
+test('settings tabs and theme gallery are translated', () => {
+  assert.deepEqual(['Organizzazione', 'Aspetto', 'Flusso di lavoro', 'Dati e accesso'].map(group => translate(group, 'en')), ['Organization', 'Appearance', 'Workflow', 'Data & access']);
+  assert.equal(translate('<input placeholder="Cerca tema…" aria-label="Cerca tema">', 'en'), '<input placeholder="Search themes…" aria-label="Search themes">');
+  assert.equal(translate('Sezioni modificate: Temi & atmosfera', 'en'), 'Changed sections: Themes & atmosphere');
+  assert.equal(translate('Nessun tema corrisponde alla ricerca.', 'en'), 'No theme matches your search.');
+  assert.equal(translate('Questo file è un’esportazione di organizzazione (temi, configurazione o dati): usa “Importa da file…” nella sezione “Esporta e importa organizzazione”.', 'en'), 'This file is an organization export (themes, settings or data): use “Import from file…” in the “Export and import organization” section.');
+});
+
+test('row highlighters and list columns are translated', () => {
+  assert.deepEqual(['Evidenziatori', 'Colonne della lista', 'Nessuna evidenziazione', 'Tutte le evidenziazioni', 'Gomma', 'Link portale'].map(label => translate(label, 'en')), ['Highlighters', 'List columns', 'No highlight', 'All highlights', 'Eraser', 'Portal link']);
+  assert.equal(translate('Evidenziatori', 'it'), 'Evidenziatori');
+  assert.equal(i18n.plural(2, 'evidenziatore', 'en'), '2 highlighters');
+  assert.equal(i18n.plural(3, 'evidenziatore', 'it'), '3 evidenziatori');
+});
+
+test('built-in language files are valid and every Italian key used for counts and defaults is covered', () => {
+  const en = builtIn('en'), it = builtIn('it');
+  assert.deepEqual([en.code, en.name, it.code, it.name], ['en', 'English', 'it', 'Italiano']);
+  for (const pack of [en, it]) assert.doesNotThrow(() => i18n.validatePack(pack));
+  assert.deepEqual(Object.keys(it.plurals).sort(), Object.keys(en.plurals).sort());
+  assert.ok(Object.keys(en.messages).length > 400 && Object.values(en.messages).every(text => typeof text === 'string' && text.trim()));
+  assert.deepEqual(i18n.languages().map(language => language.code), ['en', 'it']);
+  assert.equal(i18n.term('Da fare', 'en'), 'To do');
+  assert.equal(i18n.term('Da fare', 'it'), 'Da fare');
+  assert.equal(i18n.term('{0}g', 'en'), '{0}d');
+});
+test('plural forms follow the language rules', () => {
+  assert.equal(i18n.plural(1, 'tema', 'en'), '1 theme');
+  assert.equal(i18n.plural(3, 'tema', 'en'), '3 themes');
+  assert.equal(i18n.plural(1, 'tema', 'it'), '1 tema');
+  assert.equal(i18n.plural(0, 'tema', 'it'), '0 temi');
+  assert.equal(i18n.plural(12000, 'attività', 'it'), '12.000 attività');
+  assert.equal(i18n.plural(2, 'sconosciuto', 'en'), '2 sconosciuto');
+});
+test('an added language falls back to English for missing texts and unknown codes show English', () => {
+  withRegistry(() => {
+    i18n.register({ format: i18n.FORMAT, version: 1, code: 'de', name: 'Deutsch', messages: { 'Salva impostazioni': 'Einstellungen speichern', Impostazioni: 'Einstellungen' }, plurals: { tema: { one: '{0} Thema', other: '{0} Themen' } } });
+    assert.equal(translate('Salva impostazioni', 'de'), 'Einstellungen speichern');
+    assert.equal(translate('Gestisci organizzazioni', 'de'), 'Manage organizations');
+    assert.equal(i18n.plural(2, 'tema', 'de'), '2 Themen');
+    assert.equal(i18n.plural(2, 'stato', 'de'), '2 statuses');
+    assert.equal(i18n.locale('de'), 'de');
+    assert.equal(translate('Salva impostazioni', 'fr'), 'Save settings');
+    assert.equal(i18n.locale('fr'), 'en-GB');
+    assert.equal(translate('Salva impostazioni', 'NOT A CODE'), 'Salva impostazioni');
+    assert.deepEqual(i18n.languages().map(language => language.name), ['Deutsch', 'English', 'Italiano']);
+  });
+  assert.equal(i18n.has('de'), false);
+});
+test('a file for an existing language customises only the texts it contains', () => {
+  withRegistry(() => {
+    i18n.register({ format: i18n.FORMAT, version: 1, code: 'en', name: 'English (team)', messages: { 'Salva impostazioni': 'Store settings', Annulla: '' } });
+    assert.equal(translate('Salva impostazioni', 'en'), 'Store settings');
+    assert.equal(translate('Annulla', 'en'), 'Cancel');
+    assert.equal(translate('Gestisci organizzazioni', 'en'), 'Manage organizations');
+    assert.equal(i18n.languages().find(language => language.code === 'en').name, 'English (team)');
+    i18n.register({ format: i18n.FORMAT, version: 1, code: 'it', name: 'Italiano', messages: { Impostazioni: 'Configurazione' } });
+    assert.equal(translate('Impostazioni', 'it'), 'Configurazione');
+  });
+  assert.equal(translate('Salva impostazioni', 'en'), 'Save settings');
+});
+test('invalid language packs are rejected with a clear reason', () => {
+  const valid = { format: i18n.FORMAT, version: 1, code: 'de', name: 'Deutsch' };
+  const cases = [
+    [null, /non è una lingua/], [{ ...valid, format: 'other' }, /non è una lingua/], [{ ...valid, version: 2 }, /Versione/],
+    [{ ...valid, code: 'Deutsch' }, /Codice lingua/], [{ ...valid, code: '../en' }, /Codice lingua/], [{ ...valid, name: ' ' }, /Nome della lingua/],
+    [{ ...valid, locale: 'not a locale!' }, /locale/], [{ ...valid, messages: { Salva: 3 } }, /testi/], [{ ...valid, messages: ['x'] }, /testi/],
+    [{ ...valid, plurals: { tema: { one: '{0} Thema' } } }, /plurali/], [{ ...valid, plurals: { tema: { lots: '{0}', other: '{0}' } } }, /plurali/]
+  ];
+  for (const [pack, error] of cases) assert.throws(() => i18n.validatePack(pack), error);
+  assert.equal(i18n.has('de'), false);
+});

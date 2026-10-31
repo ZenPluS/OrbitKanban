@@ -1,0 +1,36 @@
+{
+  "format": "orbitkanban-language",
+  "version": 1,
+  "code": "it",
+  "name": "Italiano",
+  "locale": "it-IT",
+  "notes": "Italian is the source language of OrbitKanban: texts are written in Italian in the code, so only plural forms are needed here.",
+  "messages": {},
+  "terms": {},
+  "plurals": {
+    "tema": {
+      "one": "{0} tema",
+      "other": "{0} temi"
+    },
+    "stato": {
+      "one": "{0} stato",
+      "other": "{0} stati"
+    },
+    "urgenza": {
+      "one": "{0} urgenza",
+      "other": "{0} urgenze"
+    },
+    "attività": {
+      "one": "{0} attività",
+      "other": "{0} attività"
+    },
+    "issue": {
+      "one": "{0} issue",
+      "other": "{0} issue"
+    },
+    "evidenziatore": {
+      "one": "{0} evidenziatore",
+      "other": "{0} evidenziatori"
+    }
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "name": "orbitkanban-portable",
+  "version": "2.6.0",
+  "description": "Workspace attività, issue, milestone e kanban completamente locale",
+  "main": "main.js",
+  "author": "OrbitKanban",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test",
+    "check": "node --check main.js && node --check preload.js && node --check core.js && node --check i18n.js && node --check languages.js && node --check renderer.js && node --check workspace-store.js && node --check web-server.js && node --check web-bridge.js && node --check smoke-web.js && node --check splash.js && node --check splash-preload.js && node --check splash-image.js && node --check make-splash.js && node --check build.js",
+    "smoke": "node smoke.js",
+    "splash": "electron make-splash.js",
+    "predist": "npm run splash",
+    "dist": "node build.js"
+  },
+  "devDependencies": {
+    "electron": "43.8.4",
+    "electron-builder": "26.18.0"
+  },
+  "build": {
+    "appId": "local.orbita.workspace",
+    "productName": "OrbitKanban",
+    "asar": true,
+    "files": [
+      "main.js",
+      "preload.js",
+      "core.js",
+      "i18n.js",
+      "languages.js",
+      "languages/*.json",
+      "renderer.js",
+      "workspace-store.js",
+      "web-server.js",
+      "web-bridge.js",
+      "smoke-web.js",
+      "splash.js",
+      "splash-preload.js",
+      "splash.html",
+      "index.html",
+      "styles.css",
+      "app-logo.svg"
+    ],
+    "electronLanguages": [
+      "it",
+      "en-US",
+      "en-GB"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": "portable",
+      "signAndEditExecutable": false
+    },
+    "portable": {
+      "artifactName": "OrbitKanban-Portable.exe",
+      "splashImage": "build/splash.bmp"
+    }
+  }
+}

@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+  <title>OrbitKanban</title>
+  <style>
+    :root { color-scheme: dark; --background: #10131c; --text: #edf0fa; --muted: #8e94a9; --accent: #a392ff; --green: #67c9a7; }
+    * { box-sizing: border-box; margin: 0; }
+    html, body { width: 100%; height: 100%; overflow: hidden; }
+    body {
+      font-family: "Segoe UI", sans-serif; color: var(--text); cursor: default; user-select: none; -webkit-app-region: drag;
+      background: radial-gradient(130% 100% at 0% 0%, #1f2337 0%, var(--background) 60%);
+      border: 1px solid rgba(237, 240, 250, .09);
+    }
+    .splash { position: relative; display: flex; flex-direction: column; justify-content: space-between; height: 100%; padding: 36px 38px 40px; overflow: hidden; }
+    .halo { position: absolute; top: -78px; right: -104px; width: 380px; height: 220px; border: 2px solid rgba(163, 146, 255, .13); border-radius: 50%; transform: rotate(-35deg); pointer-events: none; }
+    .halo::after { content: ""; position: absolute; left: 34px; bottom: 34px; width: 10px; height: 10px; border-radius: 50%; background: rgba(103, 201, 167, .55); box-shadow: 0 0 18px rgba(103, 201, 167, .6); }
+    .brand { position: relative; display: flex; align-items: center; gap: 18px; }
+    .logo { flex: none; width: 60px; height: 60px; }
+    .logo img { display: block; width: 100%; height: 100%; filter: drop-shadow(0 10px 22px rgba(0, 0, 0, .38)); }
+    .name { font-size: 27px; font-weight: 700; letter-spacing: -.015em; line-height: 1.15; }
+    .meta { margin-top: 3px; font-size: 12.5px; color: var(--muted); letter-spacing: .02em; }
+    .status { margin-bottom: 14px; font-size: 15px; font-weight: 600; }
+    /* Indeterminate bar: a glowing segment sweeps across the track. The launcher plays the same frames while it unpacks the app. */
+    .track { position: relative; height: 6px; overflow: hidden; border-radius: 99px; background: #1b1f2b; }
+    .sweep { position: absolute; top: 0; bottom: 0; left: 0; width: 40%; border-radius: inherit; background: linear-gradient(90deg, rgba(163, 146, 255, 0), var(--accent) 35%, var(--green) 75%, rgba(103, 201, 167, 0)); transform: translateX(-100%); animation: sweep 1.6s cubic-bezier(.45, 0, .25, 1) infinite; }
+    @media (prefers-reduced-motion: reduce) {
+      .sweep { width: 100%; transform: none; animation: pulse 2.4s ease-in-out infinite; }
+    }
+    @keyframes sweep { to { transform: translateX(250%); } }
+    @keyframes pulse { 0%, 100% { opacity: .25; } 50% { opacity: .8; } }
+  </style>
+</head>
+<body>
+  <main class="splash" aria-busy="true">
+    <div class="halo" aria-hidden="true"></div>
+    <div class="brand">
+      <div class="logo"><img src="app-logo.svg" alt="" width="60" height="60"></div>
+      <div><h1 class="name">OrbitKanban</h1><p class="meta" id="splash-version">Portable</p></div>
+    </div>
+    <div>
+      <p class="status" id="splash-status">Loading your workspace…</p>
+      <div class="track" id="splash-progress" role="progressbar" aria-labelledby="splash-status"><div class="sweep"></div></div>
+    </div>
+  </main>
+</body>
+</html>

@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>OrbitKanban</title>
+  <link rel="icon" href="app-logo.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+  <script defer src="core.js"></script>
+  <script defer src="i18n.js"></script>
+  <script defer src="renderer.js"></script>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand"><div class="brand-icon has-logo"><img src="app-logo.svg" alt="OrbitKanban"></div><div><strong id="brand-name">OrbitKanban</strong><small>IL TUO SPAZIO DI LAVORO</small></div></div>
+    <div class="organization-switcher"><label for="organization-select">Organizzazione</label><select id="organization-select"></select><button id="manage-organizations" class="button small">Gestisci organizzazioni</button><button id="open-browser" class="button small">Apri nel browser ↗</button></div>
+    <div class="workspace-label">WORKSPACE <span>LOCALE</span></div>
+    <nav id="navigation" aria-label="Viste principali"></nav>
+    <div class="sidebar-bottom">
+      <button id="settings-button" class="nav-button"><span class="nav-icon">⚙</span> Impostazioni</button>
+      <div class="local-card"><span class="connection-dot"></span><div><strong>Solo sul tuo dispositivo</strong><small>I tuoi dati. Sempre con te.</small></div></div>
+      <div class="version">PORTABLE EDITION <span id="app-version"></span></div>
+    </div>
+  </aside>
+  <main>
+    <header class="topbar"><div><span class="breadcrumb">Workspace</span><span class="separator">/</span><span id="current-tab">Attività</span></div><div class="topbar-right"><span id="save-status"><i class="connection-dot"></i> Archivio locale</span><span class="avatar">ME</span></div></header>
+    <div id="content"></div>
+    <footer><span><i class="connection-dot"></i> Nessun cloud. Nessun account. Tutto sotto controllo.</span><button id="folder-button">Apri cartella dati ↗</button></footer>
+  </main>
+  <dialog id="modal"><div id="modal-content"></div></dialog>
+  <div id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
