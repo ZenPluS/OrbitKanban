@@ -181,7 +181,7 @@ La versione dell'app è definita in `package.json` ed è mostrata nella barra la
 
 ### Build, test e push su GitHub
 
-`build-and-push.ps1` chiude una build e, **solo se tutti i test passano**, fa commit e push su GitHub:
+`build-and-push.ps1` chiude una build e, **solo se tutti i test passano**, fa sempre commit e push su GitHub, anche senza modifiche ai sorgenti (con un commit vuoto che registra la build verificata):
 
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\build-and-push.ps1 -Message "Descrizione della modifica"
@@ -192,8 +192,10 @@ Funziona anche con Windows PowerShell 5.1 (`powershell -File …`). Lo script:
 1. controlla il repository: ramo attivo, nessun merge o rebase in corso, ramo non indietro rispetto a `origin` e nessun file da non versionare tra le modifiche (cartelle `data`, `dist`, `node_modules`, eseguibili, archivi, file oltre 5 MB);
 2. esegue `npm run check`, `npm test` e lo smoke test dai sorgenti;
 3. costruisce il portable in `dist-staging\<versione>`, senza toccare l'eseguibile eventualmente aperto, e ne verifica la versione;
-4. esegue lo smoke test dell'app impacchettata (`win-unpacked`). Il launcher portable estrae sempre nella stessa cartella di `%TEMP%` e la cancella all'avvio e alla chiusura, quindi viene testato solo se nessuna istanza di OrbitKanban è aperta; altrimenti lo script lo segnala;
+4. esegue sempre lo smoke test dell'app impacchettata (`win-unpacked`) e del launcher portable. Ogni test usa dati e cartella temporanea propri: anche l'estrazione del launcher è isolata, senza cancellare i file di eventuali istanze aperte;
 5. copia l'eseguibile testato in `dist\OrbitKanban-Portable.exe`, oppure in `dist\OrbitKanban-Portable-<versione>.exe` se quello è in esecuzione;
-6. verifica che i file non siano cambiati durante build e test, poi fa commit di tutte le modifiche (con l'elenco dei test superati nel messaggio), crea il tag `v<versione>` se la versione è nuova, esegue un push atomico di ramo e tag e controlla il risultato sul remoto.
+6. verifica che i file non siano cambiati durante build e test, poi crea sempre un nuovo commit (anche vuoto, con l'elenco dei test superati nel messaggio), crea il tag `v<versione>` se la versione è nuova, esegue sempre un push atomico del ramo e dell'eventuale nuovo tag e controlla il risultato sul remoto.
 
-Al primo errore lo script si ferma con codice di uscita 1, prima del commit. Senza `-Message` l'oggetto è `OrbitKanban <versione>`. `-NoDeliver` non copia l'eseguibile in `dist`, `-NoCoAuthor` omette il trailer `Co-authored-by` di Copilot e `-Remote` sceglie un remoto diverso da `origin`. Il tag non viene mai spostato: per pubblicare una nuova versione incrementa prima `version` con `npm version patch --no-git-tag-version --ignore-scripts` (oppure `minor`/`major`). Lo script non crea la release GitHub con l'eseguibile allegato.
+Al primo errore lo script si ferma con codice di uscita 1; se falliscono build o test, non esegue commit né push. Se fallisce il push, il commit rimane in locale e l'errore viene segnalato. Senza `-Message` l'oggetto è `OrbitKanban <versione>`. `-NoDeliver` non copia l'eseguibile in `dist`, `-NoCoAuthor` omette il trailer `Co-authored-by` di Copilot e `-Remote` sceglie un remoto diverso da `origin`. Il tag non viene mai spostato: per pubblicare una nuova versione incrementa prima `version` con `npm version patch --no-git-tag-version --ignore-scripts` (oppure `minor`/`major`). Lo script non crea la release GitHub con l'eseguibile allegato.
+
+Usa questo comando al posto di `npm run dist` per chiudere ogni build con test, commit e push automatici; `npm run dist` da solo continua a generare soltanto il pacchetto.

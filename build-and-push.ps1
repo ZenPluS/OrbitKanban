@@ -3,17 +3,17 @@
     Costruisce e testa OrbitKanban e, solo se tutto passa, fa commit e push su GitHub.
 
 .DESCRIPTION
-    Sequenza (qualsiasi errore interrompe lo script prima del commit):
+    Sequenza (qualsiasi errore di build o test interrompe lo script prima del commit):
       1. Controlli Git: ramo attivo, remoto raggiungibile, nessuna operazione in corso, ramo non indietro rispetto
          al remoto, nessun file da non versionare tra le modifiche (dati, build, dipendenze, eseguibili, file oltre 5 MB).
       2. npm run check e npm test.
       3. Smoke test dai sorgenti (npm run smoke).
       4. Build portable in dist-staging\<versione>, senza toccare l'eseguibile eventualmente aperto in dist.
-      5. Smoke test dell'app impacchettata (win-unpacked). Il launcher portable estrae sempre nella stessa cartella
-         di %TEMP% e la cancella all'avvio e alla chiusura: viene testato solo se nessuna istanza di OrbitKanban è aperta.
+      5. Smoke test dell'app impacchettata (win-unpacked) e del launcher portable, con file temporanei isolati
+         per non interferire con eventuali istanze aperte.
       6. Copia dell'eseguibile testato in dist\OrbitKanban-Portable.exe, oppure in
          dist\OrbitKanban-Portable-<versione>.exe se quello è in esecuzione.
-      7. Controllo che i file non siano cambiati durante build e test, commit di tutte le modifiche,
+      7. Controllo che i file non siano cambiati durante build e test, commit di tutte le modifiche (vuoto se non ce ne sono),
          tag v<versione> se la versione è nuova, push atomico e verifica sul remoto.
 
 .PARAMETER Message
@@ -131,14 +131,6 @@ function Get-RemoteTagCommit([string]$Tag) {
     return $direct
 }
 
-# The portable launcher always unpacks into the same %TEMP% folder and deletes it on start and exit.
-function Get-OrbitKanbanInstances {
-    @(Get-Process -ErrorAction SilentlyContinue | Where-Object {
-        $_.ProcessName -like 'OrbitKanban-Portable*' -or
-        ($_.ProcessName -eq 'OrbitKanban' -and (-not $_.Path -or -not $_.Path.StartsWith($root + '\', [StringComparison]::OrdinalIgnoreCase)))
-    })
-}
-
 function Assert-ExecutableVersion([string]$Path, [string]$Version) {
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { throw "La build non ha prodotto $Path." }
     $actual = (Get-Item -LiteralPath $Path).VersionInfo.ProductVersion
@@ -239,13 +231,7 @@ try {
     Write-Step 'Smoke test dell''eseguibile impacchettato'
     $smokeScript = Join-Path $root 'smoke.js'
     Invoke-Native 'node' @($smokeScript, $internal)
-    $instances = @(Get-OrbitKanbanInstances)
-    $launcherTested = $instances.Count -eq 0
-    if ($launcherTested) {
-        Invoke-Native 'node' @($smokeScript, $launcher)
-    } else {
-        Write-Warning ('Launcher portable non testato: OrbitKanban è aperto (PID {0}) e il launcher ne cancellerebbe i file in %TEMP%. Chiudi l''app e rilancia lo script per testare anche il launcher.' -f (($instances | ForEach-Object { $_.Id }) -join ', '))
-    }
+    Invoke-Native 'node' @($smokeScript, $launcher)
 
     $delivered = $null
     if (-not $NoDeliver) {
@@ -256,20 +242,18 @@ try {
     Write-Step 'Commit'
     if ((Get-WorktreeTree) -ne $testedTree) { throw 'I file del progetto sono cambiati durante build e test: rilancia lo script per testare la versione attuale.' }
     if ($testedTree -eq (Get-HeadTree)) {
-        Write-Host 'Nessuna modifica da committare.'
-    } else {
-        $null = Invoke-Git 'add', '-A'
-        if ((Invoke-Git 'write-tree') -ne $testedTree) { throw 'L''indice Git non corrisponde ai file testati.' }
-        $subject = if ($Message -and $Message.Trim()) { $Message.Trim() } else { "OrbitKanban $version" }
-        $lines = @($subject, '', "Build $version verified before commit:", '- npm run check and npm test', '- source smoke test', '- packaged app smoke test (win-unpacked)')
-        $lines += if ($launcherTested) { '- portable launcher smoke test' } else { '- portable launcher not tested: OrbitKanban was running' }
-        if (-not $NoCoAuthor) { $lines += @('', $coAuthorTrailer) }
-        $messageFile = Join-Path ([IO.Path]::GetTempPath()) ('orbitkanban-commit-{0}.txt' -f [guid]::NewGuid().ToString('N'))
-        [IO.File]::WriteAllText($messageFile, (($lines -join "`n") + "`n"), (New-Object Text.UTF8Encoding $false))
-        try { Invoke-Native 'git' @('commit', '--quiet', '--cleanup=whitespace', '-F', $messageFile) }
-        finally { Remove-Item -LiteralPath $messageFile -Force -ErrorAction SilentlyContinue }
-        $commitCreated = $true
+        Write-Host 'Nessuna modifica ai sorgenti: creo un commit vuoto per registrare la build verificata.'
     }
+    $null = Invoke-Git 'add', '-A'
+    if ((Invoke-Git 'write-tree') -ne $testedTree) { throw 'L''indice Git non corrisponde ai file testati.' }
+    $subject = if ($Message -and $Message.Trim()) { $Message.Trim() } else { "OrbitKanban $version" }
+    $lines = @($subject, '', "Build $version verified before commit:", '- npm run check and npm test', '- source smoke test', '- packaged app smoke test (win-unpacked)', '- portable launcher smoke test')
+    if (-not $NoCoAuthor) { $lines += @('', $coAuthorTrailer) }
+    $messageFile = Join-Path ([IO.Path]::GetTempPath()) ('orbitkanban-commit-{0}.txt' -f [guid]::NewGuid().ToString('N'))
+    [IO.File]::WriteAllText($messageFile, (($lines -join "`n") + "`n"), (New-Object Text.UTF8Encoding $false))
+    try { Invoke-Native 'git' @('commit', '--allow-empty', '--quiet', '--cleanup=whitespace', '-F', $messageFile) }
+    finally { Remove-Item -LiteralPath $messageFile -Force -ErrorAction SilentlyContinue }
+    $commitCreated = $true
     $head = Invoke-Git 'rev-parse', 'HEAD'
     Write-Host ('Commit {0}: {1}' -f $head.Substring(0, 7), (Invoke-Git 'log', '-1', '--format=%s'))
 
@@ -286,14 +270,9 @@ try {
     } elseif (($localTag -and $localTag -ne $head) -or ($remoteTag -and $remoteTag -ne $head)) {
         Write-Warning "Il tag $tag esiste già su un altro commit: la versione in package.json non è cambiata, quindi il tag non viene spostato."
     }
-    $ahead = if ($hasUpstream) { [int](Invoke-Git 'rev-list', '--count', "$upstream..HEAD") } else { 1 }
-    if ($ahead -eq 0 -and -not $pushTag) {
-        Write-Host "Il ramo $branch è già allineato con $Remote."
-    } else {
-        $refs = @($branch)
-        if ($pushTag) { $refs += "refs/tags/$tag" }
-        Invoke-Native 'git' (@('push', '--atomic', '--set-upstream', $Remote) + $refs)
-    }
+    $refs = @($branch)
+    if ($pushTag) { $refs += "refs/tags/$tag" }
+    Invoke-Native 'git' (@('push', '--atomic', '--set-upstream', $Remote) + $refs)
     $remoteHead = ([string](Invoke-Git 'ls-remote', $Remote, "refs/heads/$branch") -split "`t")[0]
     if ($remoteHead -ne $head) { throw ('Verifica non riuscita: {0}/{1} punta a {2} invece di {3}.' -f $Remote, $branch, $remoteHead, $head) }
     if ($pushTag -and (Get-RemoteTagCommit $tag) -ne $head) { throw "Verifica non riuscita: il tag $tag non risulta pubblicato su $Remote." }
@@ -303,7 +282,7 @@ try {
     Write-Host ('  Versione:   {0}' -f $version)
     Write-Host ('  Commit:     {0} su {1}/{2} ({3})' -f $head, $Remote, $branch, $remoteUrl)
     Write-Host ('  Tag:        {0}' -f $(if ($pushTag) { "$tag pubblicato" } elseif ($remoteTag -eq $head) { "$tag già pubblicato" } else { "$tag non spostato (versione invariata)" }))
-    Write-Host ('  Launcher:   {0}' -f $(if ($launcherTested) { 'testato' } else { 'non testato (app aperta)' }))
+    Write-Host '  Launcher:   testato'
     if ($delivered) { Write-Host ('  Eseguibile: {0} (SHA-256 {1})' -f $delivered.Path, $delivered.Sha256) }
     else { Write-Host ('  Eseguibile: {0} (non copiato in dist)' -f $launcher) }
 } catch {

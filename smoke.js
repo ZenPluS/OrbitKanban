@@ -16,7 +16,8 @@ try {
   fs.writeFileSync(path.join(folder, 'data', 'languages', 'broken.json'), '{ broken');
   const result = spawnSync(executable, args, {
     stdio: 'inherit',
-    env: { ...process.env, ORBITA_SMOKE_DIR: folder },
+    // NSIS deletes its fixed extraction directory: isolate TEMP as well as application data.
+    env: { ...process.env, ORBITA_SMOKE_DIR: folder, TEMP: folder, TMP: folder, TMPDIR: folder },
     timeout: 120000
   });
   if (result.error) throw result.error;
