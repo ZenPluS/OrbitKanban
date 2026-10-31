@@ -50,6 +50,9 @@ test('tag settings, task selection and validation messages are translated', () =
   assert.equal(translate('I nomi dei tag devono essere univoci.', 'en'), 'Tag names must be unique.');
   assert.equal(translate('Nessun tag disponibile. Aggiungili in Impostazioni › Tags.', 'en'), 'No tags available. Add them in Settings › Tags.');
 });
+test('upcoming milestone indicators are translated', () => {
+  assert.deepEqual(['Prossima release', 'Release di oggi', 'Vai alla prossima release', 'Nessuna release in programma'].map(text => translate(text, 'en')), ['Next release', "Today's release", 'Go to next release', 'No upcoming release']);
+});
 
 test('built-in language files are valid and every Italian key used for counts and defaults is covered', () => {
   const en = builtIn('en'), it = builtIn('it');

@@ -572,6 +572,12 @@ function dateColor(date) {
   for (const c of date) hash = ((hash << 5) - hash + c.charCodeAt(0)) | 0;
   return `hsl(${Math.abs(hash) % 360} 65% 68%)`;
 }
+function nextReleaseDate(tasks, referenceDate = today()) {
+  return tasks.reduce((next, task) => {
+    const date = task.releaseDate;
+    return date && date >= referenceDate && (!next || date < next) ? date : next;
+  }, '');
+}
 function extractThemePalette(pixels) {
   assert(pixels && pixels.length > 0 && pixels.length % 4 === 0, 'Immagine priva di pixel validi.');
   const bins = new Map();
@@ -648,7 +654,7 @@ const core = {
   extractThemePalette, themeFromLogo, normalizeUrl, isWebUrl, validPortalTemplate, portalUrl,
   ORGANIZATION_FILE_KINDS, organizationExport, organizationFileName, parseOrganizationFile, applyOrganizationImport, importedOrganizationData, uniqueOrganizationName,
   FONT_SIZE_PARTS, FONT_SIZE_STEP, defaultFontSizes, clampFontSize,
-  HIGHLIGHT_LIMIT, defaultHighlights, TASK_COLUMN_IDS, defaultTaskColumns, normalizeTaskColumns, TAG_LIMIT, TAG_NAME_MAX
+  HIGHLIGHT_LIMIT, defaultHighlights, TASK_COLUMN_IDS, defaultTaskColumns, normalizeTaskColumns, TAG_LIMIT, TAG_NAME_MAX, nextReleaseDate
 };
 if (typeof module !== 'undefined') module.exports = core;
 else window.OrbitaCore = core;

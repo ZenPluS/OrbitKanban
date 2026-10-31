@@ -1,7 +1,7 @@
 'use strict';
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { APP_NAME, initialData, baseData, demoData, demoReleaseDates, validateData, migrateArchive, validateArchive, createOrganization, matchIssues, sortTasks, dateColor, extractThemePalette, themeFromLogo, normalizeUrl, isWebUrl, validPortalTemplate, portalUrl, ORGANIZATION_FILE_KINDS, organizationExport, organizationFileName, parseOrganizationFile, applyOrganizationImport, importedOrganizationData, uniqueOrganizationName, FONT_SIZE_PARTS, FONT_SIZE_STEP, defaultFontSizes, clampFontSize, HIGHLIGHT_LIMIT, defaultHighlights, TASK_COLUMN_IDS, defaultTaskColumns, normalizeTaskColumns } = require('./core');
+const { APP_NAME, initialData, baseData, demoData, demoReleaseDates, validateData, migrateArchive, validateArchive, createOrganization, matchIssues, sortTasks, dateColor, extractThemePalette, themeFromLogo, normalizeUrl, isWebUrl, validPortalTemplate, portalUrl, ORGANIZATION_FILE_KINDS, organizationExport, organizationFileName, parseOrganizationFile, applyOrganizationImport, importedOrganizationData, uniqueOrganizationName, FONT_SIZE_PARTS, FONT_SIZE_STEP, defaultFontSizes, clampFontSize, HIGHLIGHT_LIMIT, defaultHighlights, TASK_COLUMN_IDS, defaultTaskColumns, normalizeTaskColumns, nextReleaseDate, today } = require('./core');
 
 test('default archive is valid and independent between invocations', () => {
   const first = initialData(), second = initialData();
@@ -79,6 +79,40 @@ test('unplanned release stays last even with descending sort', () => {
 test('date colors are stable across views and archive reloads', () => {
   assert.equal(dateColor('2027-01-01'), dateColor('2027-01-01'));
   assert.notEqual(dateColor('2027-01-01'), dateColor('2027-01-02'));
+});
+test('next release is the nearest scheduled date on or after today, independently of order', () => {
+  const tasks = [{ releaseDate: '2026-11-18' }, { releaseDate: '' }, { releaseDate: '2026-10-28' }, { releaseDate: '2026-11-04', hidden: true }, { releaseDate: '2026-11-04' }];
+  const before = structuredClone(tasks);
+  assert.equal(nextReleaseDate(tasks, '2026-10-31'), '2026-11-04');
+  assert.deepEqual(tasks, before);
+  assert.equal(nextReleaseDate([...tasks].reverse(), '2026-10-31'), '2026-11-04');
+});
+test('a release today takes precedence even if all of its activities are hidden or completed', () => {
+  assert.equal(nextReleaseDate([{ releaseDate: '2026-11-01' }, { releaseDate: '2026-10-31', hidden: true, statusId: 'done' }], '2026-10-31'), '2026-10-31');
+  assert.equal(nextReleaseDate([{ releaseDate: today() }]), today());
+});
+test('past-only, empty and unscheduled milestones never become the next release', () => {
+  for (const tasks of [[], [{ releaseDate: '' }], [{ releaseDate: '2026-10-30' }, { releaseDate: '' }]]) assert.equal(nextReleaseDate(tasks, '2026-10-31'), '');
+});
+test('next release rolls forward across day, month, year and leap-day boundaries', () => {
+  const tasks = ['2027-12-31', '2028-01-01', '2028-02-29', '2028-03-01'].map(releaseDate => ({ releaseDate }));
+  for (const date of tasks.map(task => task.releaseDate)) assert.equal(nextReleaseDate(tasks, date), date);
+  assert.equal(nextReleaseDate(tasks, '2028-01-02'), '2028-02-29');
+  assert.equal(nextReleaseDate(tasks, '2028-03-02'), '');
+});
+test('default next-release cutoff follows the local calendar rather than the UTC date', () => {
+  const { execFileSync } = require('node:child_process');
+  const script = `
+    const NativeDate = Date;
+    globalThis.Date = class extends NativeDate {
+      constructor(...args) { super(...(args.length ? args : ['2026-10-31T00:30:00Z'])); }
+    };
+    const { nextReleaseDate } = require(${JSON.stringify(require.resolve('./core'))});
+    process.stdout.write(nextReleaseDate([{ releaseDate: '2026-10-30' }, { releaseDate: '2026-10-31' }]));
+  `;
+  for (const [zone, expected] of [['America/Los_Angeles', '2026-10-30'], ['Asia/Tokyo', '2026-10-31']]) {
+    assert.equal(execFileSync(process.execPath, ['-e', script], { env: { ...process.env, TZ: zone }, encoding: 'utf8', timeout: 10000 }), expected);
+  }
 });
 test('invalid archives cannot overwrite portable data', () => {
   for (const mutate of [

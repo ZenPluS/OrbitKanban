@@ -1,6 +1,6 @@
 # OrbitKanban — workspace portable
 
-App desktop locale per Windows 10/11 a 64 bit, **versione 2.7.0**. Nessun account, server esterno o collegamento a Internet necessario per l'uso. **Il nome dell'app è sempre OrbitKanban e non è configurabile.** Tutte le impostazioni del workspace appartengono alla singola organizzazione. Mentre l'app è aperta puoi usarla anche **dal browser dello stesso PC**, con più organizzazioni aperte contemporaneamente in schede diverse.
+App desktop locale per Windows 10/11 a 64 bit, **versione 2.7.1**. Nessun account, server esterno o collegamento a Internet necessario per l'uso. **Il nome dell'app è sempre OrbitKanban e non è configurabile.** Tutte le impostazioni del workspace appartengono alla singola organizzazione. Mentre l'app è aperta puoi usarla anche **dal browser dello stesso PC**, con più organizzazioni aperte contemporaneamente in schede diverse.
 
 ## Avvio e condivisione
 
@@ -110,6 +110,8 @@ Nelle liste **Attività** e **Issue collegate**, fai **doppio clic su una cella 
 - **Issue collegate**: ogni riga associa un codice portale a un incident e/o problem. Sono consentiti più incident per problem e più righe per codice. Il confronto del codice ignora spazi esterni e maiuscole/minuscole. Nelle attività le associazioni vengono aggregate senza duplicati; non è necessaria alcuna connessione a JIRA.
 - **Milestone**: timeline orizzontale per data di release, con tutte le attività della tappa. Scorre sia in larghezza sia in altezza; il codice apre la modifica. Le attività senza data compaiono in “Da pianificare”. Include anche le attività nascoste dalla lista, contrassegnate dall'etichetta “Nascosta in lista” e da un bordo tratteggiato.
 - **Kanban**: sola lettura, una colonna per ogni stato e nello stesso ordine configurato nelle impostazioni. Si modifica lo stato dalla lista attività. Mostra anche le attività nascoste dalla lista, con la stessa etichetta.
+
+Nelle **Milestone**, la prima data di release **da oggi in avanti** è avvolta da una colonna evidenziata con bordo, sfondo ed etichetta **Prossima release**; se la data è oggi compare **Release di oggi**. La selezione dipende dalla data locale del PC, non dallo stato o dalla visibilità delle attività, e mantiene i colori originali delle date e delle righe. All'apertura della vista la colonna viene portata in vista; il pulsante con la prossima data nell'intestazione permette di ritrovarla dopo aver scorso lo storico. Le sincronizzazioni mantengono lo scorrimento scelto dall'utente. L'indicatore si aggiorna con i dati e al cambio di giorno (entro un minuto, senza interrompere un editor aperto). Se restano solo release passate o attività senza data, nessuna colonna viene evidenziata e compare **Nessuna release in programma**.
 
 L'ordinamento iniziale delle attività è per release crescente, con date mancanti in fondo. Clic sulle intestazioni per cambiare verso; `Maiusc+clic` per ordinamenti a più livelli. Descrizione e note non sono ordinabili. Urgenza e stato vengono ordinati in base all'ordine delle rispettive opzioni, non alfabeticamente. Il pulsante “Release” ripristina l'ordinamento iniziale. Ricerca e filtri della lista non limitano le altre viste.
 

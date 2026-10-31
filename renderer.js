@@ -1,5 +1,5 @@
 'use strict';
-const { APP_NAME, validateData, matchIssues, sortTasks, dateColor, extractThemePalette, themeFromLogo, normalizeUrl, isWebUrl, validPortalTemplate, portalUrl, parseOrganizationFile, applyOrganizationImport, importedOrganizationData, uniqueOrganizationName, FONT_SIZE_PARTS, FONT_SIZE_STEP, defaultFontSizes, clampFontSize, HIGHLIGHT_LIMIT, defaultTaskColumns, normalizeTaskColumns, TAG_LIMIT, TAG_NAME_MAX } = window.OrbitaCore;
+const { APP_NAME, validateData, matchIssues, sortTasks, dateColor, extractThemePalette, themeFromLogo, normalizeUrl, isWebUrl, validPortalTemplate, portalUrl, parseOrganizationFile, applyOrganizationImport, importedOrganizationData, uniqueOrganizationName, FONT_SIZE_PARTS, FONT_SIZE_STEP, defaultFontSizes, clampFontSize, HIGHLIGHT_LIMIT, defaultTaskColumns, normalizeTaskColumns, TAG_LIMIT, TAG_NAME_MAX, today, nextReleaseDate } = window.OrbitaCore;
 const $ = selector => document.querySelector(selector);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const uid = () => crypto.randomUUID();
@@ -7,6 +7,7 @@ let data, dataFolder, view = 0, search = '', showHidden = false, statusFilter = 
 let settingsDraft, saving = false, organizationBusy = false, organizations = [], activeOrganizationId, lastOpenedLink = '';
 let revision = '', appVersion = '', browserUrl = '', online = true, refreshing = false, pendingChange = null, renderAfterModal = false, adoptions = 0, subscribed = false;
 let languageInfo = { folder: '', template: '', languages: [], errors: [] };
+let milestoneDay = '';
 let settingsTab = (() => { try { return sessionStorage.getItem('orbitkanban.settingsTab') || ''; } catch { return ''; } })(), themeQuery = '';
 function unwrap(value) {
   if (value && value.__error) { const error = new Error(value.message); error.code = value.code; throw error; }
@@ -877,14 +878,32 @@ function miniTask(t, readOnly = false) {
 }
 function renderMilestones() {
   const tasks = data.tasks, dates = [...new Set(tasks.map(t => t.releaseDate).filter(Boolean))].sort();
+  milestoneDay = today();
+  const nextDate = nextReleaseDate(tasks, milestoneDay), nextLabel = nextDate === milestoneDay ? 'Release di oggi' : 'Prossima release';
   if (tasks.some(t => !t.releaseDate)) dates.push('');
-  $('#content').innerHTML = heading(data.settings.tabNames[2], 'Ogni release è una tappa. Le date e le attività si allineano automaticamente.', ui`<span class="view-label">${dates.filter(Boolean).length} milestone · ${tasks.length} attività</span>`) +
+  const shortcut = nextDate ? `<button type="button" class="button next-release-link" id="next-release-button" aria-controls="next-release-milestone" title="${esc(t('Vai alla prossima release'))}">${esc(t(nextLabel))} · ${esc(formatDate(nextDate))}</button>` : `<span class="view-label next-release-empty">${esc(t('Nessuna release in programma'))}</span>`;
+  $('#content').innerHTML = heading(data.settings.tabNames[2], 'Ogni release è una tappa. Le date e le attività si allineano automaticamente.', ui`<span class="view-label">${dates.filter(Boolean).length} milestone · ${tasks.length} attività</span>` + shortcut) +
     ui`<div class="milestone-shell"><div class="milestone-scroll"><div class="milestone-track">${dates.map((date, index) => {
-      const group = tasks.filter(t => t.releaseDate === date), color = date ? dateColor(date) : '#929bb2';
-      return ui`<section class="milestone-column" style="--milestone:${color}"><div class="timeline-label">${date ? ui`TAPPA ${String(index + 1).padStart(2, '0')}` : 'BACKLOG'}</div><div class="timeline-line"><span>◆</span></div><div class="milestone-heading"><h2>${formatDate(date)}</h2><span>${group.length} attività · ${effort(group.reduce((sum, t) => sum + t.effortHours, 0))}</span></div><div class="milestone-cards">${sortedRows(group).map(t => miniTask(t)).join('')}</div></section>`;
+      const group = tasks.filter(t => t.releaseDate === date), color = date ? dateColor(date) : '#929bb2', isNext = Boolean(nextDate && date === nextDate);
+      return ui`<section class="milestone-column ${isNext ? 'is-next-release' : ''}" data-release-date="${esc(date)}" ${isNext ? 'id="next-release-milestone" aria-current="step"' : ''} style="--milestone:${color}"><div class="timeline-label"><span>${date ? ui`TAPPA ${String(index + 1).padStart(2, '0')}` : 'BACKLOG'}</span>${isNext ? `<span class="next-release-badge">${esc(t(nextLabel))}</span>` : ''}</div><div class="timeline-line"><span>◆</span></div><div class="milestone-heading"><h2>${formatDate(date)}</h2><span>${group.length} attività · ${effort(group.reduce((sum, t) => sum + t.effortHours, 0))}</span></div><div class="milestone-cards">${sortedRows(group).map(t => miniTask(t)).join('')}</div></section>`;
     }).join('') || ui`<div class="empty">Aggiungi attività e release date per costruire la tua roadmap.</div>`}</div></div></div><div class="hint">↔ Scorri in orizzontale per esplorare le release e in verticale per tutte le attività. La stessa data mantiene lo stesso colore in ogni vista.</div>`;
   document.querySelectorAll('[data-card]').forEach(b => b.onclick = () => taskDialog(data.tasks.find(t => t.id === b.dataset.card)));
+  if ($('#next-release-button')) $('#next-release-button').onclick = revealNextMilestone;
+  revealNextMilestone();
 }
+function revealNextMilestone() {
+  const scroll = $('.milestone-scroll'), column = $('#next-release-milestone');
+  if (!scroll || !column) return;
+  const target = column.getBoundingClientRect(), viewport = scroll.getBoundingClientRect();
+  scroll.scrollLeft += target.left - viewport.left - Math.max(0, (scroll.clientWidth - target.width) / 2);
+  scroll.scrollTop = 0;
+}
+function refreshMilestoneDate() {
+  if (view !== 2 || !data || saving || organizationBusy || $('#modal').open || milestoneDay === today()) return;
+  rerenderPreservingView();
+}
+setInterval(refreshMilestoneDate, 60000);
+document.addEventListener('visibilitychange', refreshMilestoneDate);
 function renderKanban() {
   const tasks = data.tasks;
   $('#content').innerHTML = heading(data.settings.tabNames[3], 'Una vista di sola lettura, sempre allineata alle attività. Ogni stato trova il suo spazio.', ui`<span class="readonly-badge">◈ Sola lettura</span>`) +
@@ -1452,6 +1471,54 @@ window.runSmokeTests = async () => {
   check(!$('#modal').open, 'Doppio clic nel kanban mantiene la sola lettura');
   view = 2; render();
   check($('#content').textContent.includes('SMOKE-1'), 'Milestone aggiornata dopo inserimento');
+  const upcoming = () => $('#next-release-milestone');
+  const upcomingVisible = () => {
+    const column = upcoming().getBoundingClientRect(), scroll = $('.milestone-scroll').getBoundingClientRect();
+    return column.left >= scroll.left - 1 && column.right <= scroll.right + 1;
+  };
+  check(document.querySelectorAll('.milestone-column.is-next-release').length === 1 && upcoming().dataset.releaseDate === nextReleaseDate(data.tasks) && upcoming().getAttribute('aria-current') === 'step' && upcoming().querySelector('.next-release-badge'), 'Una sola colonna identifica la prossima release in ordine cronologico');
+  const frame = upcoming().getBoundingClientRect(), cards = upcoming().querySelectorAll('.task-card');
+  check(parseFloat(getComputedStyle(upcoming()).borderTopWidth) >= 2 && frame.top < cards[0].getBoundingClientRect().top && frame.bottom >= cards[cards.length - 1].getBoundingClientRect().bottom && upcoming().style.getPropertyValue('--milestone') === dateColor(upcoming().dataset.releaseDate), 'Evidenziazione avvolge tutte le attività senza cambiare il colore della data');
+  check(upcomingVisible() && $('.milestone-scroll').scrollLeft > 0, 'Apertura milestone porta la prossima release in vista anche con molto storico');
+  $('.milestone-scroll').scrollLeft = 0;
+  $('.milestone-scroll').scrollTop = 42;
+  const milestoneScrollTop = $('.milestone-scroll').scrollTop;
+  rerenderPreservingView();
+  check($('.milestone-scroll').scrollLeft === 0 && $('.milestone-scroll').scrollTop === milestoneScrollTop, 'Aggiornamenti milestone conservano lo scorrimento manuale');
+  $('#next-release-button').click();
+  check(upcomingVisible() && $('.milestone-scroll').scrollTop === 0, 'Pulsante prossima release ritrova la colonna e la sua intestazione');
+  const previousMilestoneElement = upcoming();
+  milestoneDay = '1900-01-01';
+  refreshMilestoneDate();
+  check(milestoneDay === today() && upcoming() !== previousMilestoneElement && upcomingVisible(), 'Indicatore ricalcolato al cambio di giorno senza perdere lo scorrimento');
+  taskDialog(data.tasks[0]);
+  const milestoneEditor = $('#description-editor');
+  milestoneEditor.innerHTML = '<p>Draft across midnight</p>';
+  milestoneDay = '1900-01-01';
+  refreshMilestoneDate();
+  check($('#modal').open && $('#description-editor') === milestoneEditor && milestoneEditor.textContent === 'Draft across midnight' && milestoneDay === '1900-01-01', 'Aggiornamento della data non interrompe un editor aperto');
+  $('#modal').close();
+  refreshMilestoneDate();
+  check(milestoneDay === today(), 'Indicatore aggiornabile dopo la chiusura dell’editor');
+  const scheduledTasks = data.tasks, milestoneLanguage = data.settings.language, localDay = today();
+  const followingDay = new Date(Date.parse(`${localDay}T00:00:00Z`) + 86400000).toISOString().slice(0, 10);
+  try {
+    data.tasks = ['2000-01-01', localDay, followingDay, '', localDay].map((releaseDate, index) => ({
+      ...scheduledTasks[0], id: `milestone-check-${index}`, releaseDate, hidden: index === 1
+    }));
+    render();
+    check(upcoming().dataset.releaseDate === localDay && $('.next-release-badge').textContent === 'Release di oggi' && upcoming().querySelectorAll('.task-card').length === 2 && upcoming().querySelector('.task-card.is-hidden'), 'Release di oggi prioritaria, raggruppata e completa delle righe nascoste');
+    data.tasks = data.tasks.filter(task => task.releaseDate !== localDay);
+    render();
+    check(upcoming().dataset.releaseDate === followingDay && $('.next-release-badge').textContent === 'Prossima release', 'Rimuovendo una milestone l’indicatore passa alla successiva');
+    data.settings.language = 'en'; render();
+    check($('.next-release-badge').textContent === 'Next release' && $('#next-release-button').title === 'Go to next release', 'Etichette della prossima release tradotte in inglese');
+    data.tasks = data.tasks.map(task => ({ ...task, releaseDate: task.releaseDate ? '2000-01-01' : '' }));
+    render();
+    check(!upcoming() && !$('#next-release-button') && $('.next-release-empty').textContent === 'No upcoming release' && !document.querySelector('.milestone-column[data-release-date=""].is-next-release'), 'Nessuna prossima release con sole date passate o backlog');
+    data.tasks = []; render();
+    check(!upcoming() && !document.querySelector('.milestone-column') && $('.milestone-track .empty'), 'Workspace senza attività non evidenzia milestone inesistenti');
+  } finally { data.tasks = scheduledTasks; data.settings.language = milestoneLanguage; render(); }
   const next = structuredClone(data); next.tasks.find(t => t.code === 'SMOKE-1').hidden = true; await commit(next); render();
   check($('#content').textContent.includes('SMOKE-1') && document.querySelector('.milestone-column .task-card.is-hidden .hidden-badge'), 'Attività nascoste dalla lista restano visibili e segnalate nelle milestone');
   view = 3; render();
