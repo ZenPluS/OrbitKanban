@@ -24,9 +24,12 @@ test('loading screen stays just long enough not to flicker', () => {
 });
 test('Windows build embeds the application logo without requiring code signing', () => {
   const { build, scripts } = require('./package.json');
-  assert.equal(build.win.icon, 'app-logo.png');
-  assert.ok(build.files.includes(build.win.icon));
+  assert.equal(build.win.icon, 'build/icon.ico', 'executables use the ICO generated from app-logo.svg');
+  assert.ok(build.files.includes('app-logo.png'), 'window icon');
   assert.ok(build.files.includes('app-logo.svg'));
+  assert.match(fs.readFileSync(path.join(__dirname, '.gitignore'), 'utf8'), /^build\/icon\.ico$/m);
+  assert.match(fs.readFileSync(path.join(__dirname, 'make-splash.js'), 'utf8'), /encodeIco\(/);
+  assert.match(fs.readFileSync(path.join(__dirname, 'build-and-push.ps1'), 'utf8'), /'app-icon\.js'\), '--verify'/);
   assert.equal(build.win.signAndEditExecutable, true);
   assert.equal(build.win.signExecutable, false);
   assert.equal(scripts.prestart, 'npm run icon');

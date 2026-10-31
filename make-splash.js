@@ -8,11 +8,12 @@ const path = require('node:path');
 const { version } = require('./package.json');
 const { SPLASH_SIZE, SPLASH_BACKGROUND } = require('./splash');
 const { encodeBmp, toRgb, quantize, encodeAvi } = require('./splash-image');
+const { ICON_SIZES, encodeIco } = require('./app-icon');
 
 const FPS = 30;
 const ICON_SIZE = 512;
 const buildFolder = path.join(__dirname, 'build');
-const outputs = { bitmap: path.join(buildFolder, 'splash.bmp'), clip: path.join(buildFolder, 'splash-bar.avi'), geometry: path.join(buildFolder, 'splash-bar.nsh') };
+const outputs = { bitmap: path.join(buildFolder, 'splash.bmp'), clip: path.join(buildFolder, 'splash-bar.avi'), geometry: path.join(buildFolder, 'splash-bar.nsh'), icon: path.join(buildFolder, 'icon.ico') };
 const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'orbitkanban-splash-'));
 app.setPath('userData', profile);
 app.setPath('sessionData', profile);
@@ -25,6 +26,32 @@ app.whenReady().then(async () => {
     width, height, useContentSize: true, show: false, frame: false, backgroundColor: SPLASH_BACKGROUND,
     webPreferences: { offscreen: true, preload: path.join(__dirname, 'splash-preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true }
   });
+  // Executable icon: each size is drawn with the logo's own viewport set to that size, so the SVG's
+  // small-size rules (thicker orbits, no electrons) apply exactly as they do on screen.
+  await win.loadURL('about:blank');
+  const logo = fs.readFileSync(path.join(__dirname, 'app-logo.svg'), 'utf8');
+  const rendered = await win.webContents.executeJavaScript(`(async (source, sizes) => {
+    const encode = bytes => { let text = ''; for (let at = 0; at < bytes.length; at += 32768) text += String.fromCharCode(...bytes.subarray(at, at + 32768)); return btoa(text); };
+    const result = [];
+    for (const size of sizes) {
+      const svg = new DOMParser().parseFromString(source, 'image/svg+xml').documentElement;
+      svg.setAttribute('width', size);
+      svg.setAttribute('height', size);
+      const image = new Image();
+      image.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(svg));
+      await image.decode();
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = size;
+      const context = canvas.getContext('2d');
+      context.drawImage(image, 0, 0, size, size);
+      result.push({ size, rgba: encode(context.getImageData(0, 0, size, size).data), png: size === 256 ? canvas.toDataURL('image/png').split(',')[1] : null });
+    }
+    return result;
+  })(${JSON.stringify(logo)}, ${JSON.stringify(ICON_SIZES)})`);
+  const ico = encodeIco(rendered.map(({ size, rgba, png }) => ({ size, rgba: Buffer.from(rgba, 'base64'), png: png && Buffer.from(png, 'base64') })));
+  fs.mkdirSync(buildFolder, { recursive: true });
+  fs.writeFileSync(outputs.icon, ico);
+  console.log(`Icona eseguibile: app-logo.svg -> ${path.relative(__dirname, outputs.icon)} (${ICON_SIZES.join(', ')} px)`);
   await win.loadFile(path.join(__dirname, 'splash.html'), { query: { version } });
   const iconData = await win.webContents.executeJavaScript(`(async () => {
     const image = new Image();

@@ -705,11 +705,127 @@ document.addEventListener('pointerdown', event => {
 }, true);
 window.addEventListener('scroll', event => { if (!document.getElementById('mark-menu')?.contains(event.target)) closeMarkMenu(); }, true);
 window.addEventListener('resize', () => closeMarkMenu());
+// Drag and drop ordering for the settings lists and the column editors. Rows follow the pointer live, the list
+// scrolls near its edges, Esc restores the original order; the ↑ ↓ buttons and the arrow keys on the grip still work.
+const dragHandle = name => `<button type="button" class="drag-handle" data-drag-handle title="${esc(t('Trascina per riordinare, oppure usa i tasti ↑ ↓'))}" aria-label="${esc(fillText('Riordina «{0}»', name))}"></button>`;
+function announceOrder(container, message) {
+  const host = container.closest('dialog') || document.body;
+  let region = [...host.children].find(child => child.classList.contains('sort-status'));
+  if (!region) {
+    region = document.createElement('div');
+    region.className = 'sr-only sort-status';
+    region.setAttribute('role', 'status');
+    host.append(region);
+  }
+  region.textContent = message;
+}
+function sortable(container, rowSelector, move) {
+  const rowsOf = () => [...container.querySelectorAll(rowSelector)];
+  const place = (from, to) => {
+    const count = rowsOf().length;
+    if (from !== to) move(from, to);
+    rowsOf()[to]?.querySelector('[data-drag-handle]')?.focus();
+    if (from !== to) announceOrder(container, fillText('Spostato in posizione {0} di {1}', to + 1, count));
+    refreshSettingsState();
+  };
+  container.onkeydown = event => {
+    const handle = event.target.closest?.('[data-drag-handle]');
+    if (!handle || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+    event.preventDefault();
+    const rows = rowsOf(), from = rows.indexOf(handle.closest(rowSelector)), to = from + (event.key === 'ArrowUp' ? -1 : 1);
+    if (from >= 0 && to >= 0 && to < rows.length) place(from, to);
+  };
+  container.onpointerdown = event => {
+    const row = event.target.closest(rowSelector);
+    if (event.button !== 0 || !event.isPrimary || !row || !container.contains(row) || document.body.classList.contains('is-sorting')) return;
+    if (!event.target.closest('[data-drag-handle]') && event.target.closest('input,select,textarea,button,a,[contenteditable]')) return;
+    const from = rowsOf().indexOf(row), startX = event.clientX, startY = event.clientY, pointerId = event.pointerId;
+    let dragging = false, pointerY = startY, grab = 0, frame = 0, scrollers = [];
+    const listeners = { pointermove: onMove, pointerup: onUp, pointercancel: () => stop(true), keydown: onKey };
+    for (const [type, listener] of Object.entries(listeners)) window.addEventListener(type, listener, true);
+    function layout() {
+      const others = rowsOf().filter(item => item !== row);
+      const next = others.find(item => { const box = item.getBoundingClientRect(); return pointerY < box.top + box.height / 2; });
+      if (next && row.nextElementSibling !== next) next.before(row);
+      else if (!next && others.length && others.at(-1).nextElementSibling !== row) others.at(-1).after(row);
+      row.style.transform = '';
+      const rows = rowsOf(), natural = row.getBoundingClientRect(), first = rows[0].getBoundingClientRect(), last = rows.at(-1).getBoundingClientRect();
+      const top = Math.min(Math.max(pointerY - grab, first.top), last.bottom - natural.height);
+      row.style.transform = `translateY(${Math.round(top - natural.top)}px)`;
+    }
+    function autoScroll() {
+      frame = 0;
+      if (!dragging) return;
+      for (const element of scrollers) {
+        const box = element.getBoundingClientRect(), edge = Math.min(48, box.height / 4);
+        const speed = pointerY < box.top + edge ? -(box.top + edge - pointerY) : pointerY > box.bottom - edge ? pointerY - box.bottom + edge : 0;
+        const room = speed < 0 ? element.scrollTop > 0 : element.scrollTop + element.clientHeight < element.scrollHeight - 1;
+        if (speed && room) {
+          element.scrollTop += Math.sign(speed) * Math.min(18, Math.ceil(Math.abs(speed) / 3));
+          layout();
+          frame = requestAnimationFrame(autoScroll);
+          return;
+        }
+      }
+    }
+    function onMove(move) {
+      if (move.pointerId !== pointerId) return;
+      if (!row.isConnected) { stop(true); return; }
+      pointerY = move.clientY;
+      if (!dragging) {
+        if (Math.hypot(move.clientX - startX, move.clientY - startY) < 4) return;
+        dragging = true;
+        grab = startY - row.getBoundingClientRect().top;
+        for (let element = container; element && element !== document.documentElement; element = element.parentElement) {
+          if (/(auto|scroll)/.test(getComputedStyle(element).overflowY) && element.scrollHeight > element.clientHeight) scrollers.push(element);
+        }
+        try { container.setPointerCapture(pointerId); } catch {}
+        row.classList.add('is-dragging');
+        document.body.classList.add('is-sorting');
+      }
+      move.preventDefault();
+      layout();
+      if (!frame) frame = requestAnimationFrame(autoScroll);
+    }
+    function onUp(up) {
+      if (up.pointerId !== pointerId) return;
+      const moved = dragging && row.isConnected;
+      const to = moved ? rowsOf().indexOf(row) : from;
+      stop(false);
+      if (!moved) return;
+      // The release would otherwise click whatever ended up under the pointer, e.g. a checkbox label.
+      const swallow = click => { click.preventDefault(); click.stopImmediatePropagation(); };
+      window.addEventListener('click', swallow, { capture: true, once: true });
+      setTimeout(() => window.removeEventListener('click', swallow, true));
+      place(from, to);
+    }
+    function onKey(key) {
+      if (key.key !== 'Escape') return;
+      key.preventDefault();
+      key.stopImmediatePropagation();
+      stop(true);
+    }
+    function stop(cancel) {
+      for (const [type, listener] of Object.entries(listeners)) window.removeEventListener(type, listener, true);
+      cancelAnimationFrame(frame);
+      try { container.releasePointerCapture(pointerId); } catch {}
+      row.classList.remove('is-dragging');
+      row.style.transform = '';
+      document.body.classList.remove('is-sorting');
+      if (cancel && dragging && row.isConnected) {
+        const others = rowsOf().filter(item => item !== row);
+        if (others[from]) others[from].before(row); else others.at(-1)?.after(row);
+        announceOrder(container, t('Spostamento annullato'));
+      }
+      dragging = false;
+    }
+  };
+}
 function columnEditor(container, columns) {
   const draw = focus => {
     container.innerHTML = `<ol class="column-editor">${columns.map((column, index) => {
       const def = taskColumnDefs[column.id], name = t(def.name);
-      return `<li class="column-row ${column.visible ? '' : 'is-off'}"><span class="order-number">${String(index + 1).padStart(2, '0')}</span><label class="column-toggle"><input type="checkbox" data-column-visible="${column.id}" ${column.visible ? 'checked' : ''}><span>${esc(name)}</span></label>${def.sort ? `<span class="column-tag" title="${esc(t('Clic sull’intestazione per ordinare'))}">↕ ${esc(t('Ordinabile'))}</span>` : ''}<button type="button" class="icon-button" data-column-move="${column.id}:-1" ${index === 0 ? 'disabled' : ''} title="${esc(t('Sposta su'))}" aria-label="${esc(`${t('Sposta su')}: ${name}`)}">↑</button><button type="button" class="icon-button" data-column-move="${column.id}:1" ${index === columns.length - 1 ? 'disabled' : ''} title="${esc(t('Sposta giù'))}" aria-label="${esc(`${t('Sposta giù')}: ${name}`)}">↓</button></li>`;
+      return `<li class="column-row ${column.visible ? '' : 'is-off'}">${dragHandle(name)}<span class="order-number">${String(index + 1).padStart(2, '0')}</span><label class="column-toggle"><input type="checkbox" data-column-visible="${column.id}" ${column.visible ? 'checked' : ''}><span>${esc(name)}</span></label>${def.sort ? `<span class="column-tag" title="${esc(t('Clic sull’intestazione per ordinare'))}">↕ ${esc(t('Ordinabile'))}</span>` : ''}<button type="button" class="icon-button" data-column-move="${column.id}:-1" ${index === 0 ? 'disabled' : ''} title="${esc(t('Sposta su'))}" aria-label="${esc(`${t('Sposta su')}: ${name}`)}">↑</button><button type="button" class="icon-button" data-column-move="${column.id}:1" ${index === columns.length - 1 ? 'disabled' : ''} title="${esc(t('Sposta giù'))}" aria-label="${esc(`${t('Sposta giù')}: ${name}`)}">↓</button></li>`;
     }).join('')}</ol>`;
     container.querySelectorAll('[data-column-visible]').forEach(input => input.onchange = () => {
       const column = columns.find(item => item.id === input.dataset.columnVisible);
@@ -727,11 +843,12 @@ function columnEditor(container, columns) {
     if (element?.disabled) element.closest('li').querySelector('[data-column-move]:not([disabled])')?.focus();
     else element?.focus();
   };
+  sortable(container, '.column-row', (from, to) => { columns.splice(to, 0, ...columns.splice(from, 1)); draw(); });
   draw();
 }
 function columnsDialog() {
   const columns = normalizeTaskColumns(data.settings.taskColumns);
-  openModal(`<div class="modal-heading"><div><div class="eyebrow">${esc(t('ATTIVITÀ'))}</div><h2>${esc(t('Colonne della lista'))}</h2></div><button type="button" class="icon-button" data-close aria-label="${esc(t('Chiudi'))}">✕</button></div><p class="section-description">${esc(t('Spunta le colonne da mostrare e usa le frecce per cambiarne l’ordine. Nascondere una colonna non cancella i dati.'))}</p><div id="columns-dialog-editor"></div><div class="modal-actions"><button type="button" class="button" id="columns-default">${esc(t('Ripristina predefinite'))}</button><span class="spacer"></span><button type="button" class="button" data-close>${esc(t('Annulla'))}</button><button type="button" class="button primary" id="columns-apply">${esc(t('Applica'))}</button></div>`);
+  openModal(`<div class="modal-heading"><div><div class="eyebrow">${esc(t('ATTIVITÀ'))}</div><h2>${esc(t('Colonne della lista'))}</h2></div><button type="button" class="icon-button" data-close aria-label="${esc(t('Chiudi'))}">✕</button></div><p class="section-description">${esc(t('Spunta le colonne da mostrare e trascinale (o usa le frecce) per cambiarne l’ordine. Nascondere una colonna non cancella i dati.'))}</p><div id="columns-dialog-editor"></div><div class="modal-actions"><button type="button" class="button" id="columns-default">${esc(t('Ripristina predefinite'))}</button><span class="spacer"></span><button type="button" class="button" data-close>${esc(t('Annulla'))}</button><button type="button" class="button primary" id="columns-apply">${esc(t('Applica'))}</button></div>`);
   const container = $('#columns-dialog-editor');
   columnEditor(container, columns);
   $('#columns-default').onclick = () => { columns.splice(0, columns.length, ...defaultTaskColumns()); columnEditor(container, columns); };
@@ -1284,9 +1401,10 @@ function drawOptionLists() {
   for (const key of ['statuses', 'urgencies', 'highlights', 'tags']) {
     const optional = key === 'highlights' || key === 'tags';
     const usage = id => `<span class="option-usage" title="${esc(t(key === 'tags' ? 'Attività con questo tag' : 'Righe con questo colore'))}">${esc(plural(data.tasks.filter(task => key === 'tags' ? task.tagIds?.includes(id) : task.highlightId === id).length, 'attività'))}</span>`;
-    document.getElementById(`${key}-list`).innerHTML = settingsDraft[key].map((item, index) => ui`<div class="option-row"><span class="order-number">${String(index + 1).padStart(2, '0')}</span><input type="color" aria-label="Colore ${esc(item.name)}" data-color="${key}:${esc(item.id)}" value="${item.color}"><input class="option-name" aria-label="Nome opzione" ${optional ? 'maxlength="60"' : ''} data-option-name="${key}:${esc(item.id)}" value="${esc(item.name)}">${optional ? usage(item.id) : ''}${key === 'statuses' ? ui`<button class="icon-button star ${item.highlight ? 'selected' : ''}" data-highlight="${esc(item.id)}" title="Evidenzia le attività con questo stato" aria-pressed="${item.highlight}">★</button>` : ''}<button class="icon-button" data-move="${key}:${esc(item.id)}:-1" ${index === 0 ? 'disabled' : ''} title="Sposta su">↑</button><button class="icon-button" data-move="${key}:${esc(item.id)}:1" ${index === settingsDraft[key].length - 1 ? 'disabled' : ''} title="Sposta giù">↓</button><button class="icon-button delete-option" data-remove="${key}:${esc(item.id)}" title="Elimina opzione">×</button></div>`).join('') || (optional ? `<p class="muted option-empty">${esc(t(key === 'tags' ? 'Nessun tag: aggiungine uno per classificare le attività.' : 'Nessun colore: aggiungine uno per usare l’evidenziatore.'))}</p>` : '');
+    document.getElementById(`${key}-list`).innerHTML = settingsDraft[key].map((item, index) => ui`<div class="option-row">${dragHandle(item.name)}<span class="order-number">${String(index + 1).padStart(2, '0')}</span><input type="color" aria-label="Colore ${esc(item.name)}" data-color="${key}:${esc(item.id)}" value="${item.color}"><input class="option-name" aria-label="Nome opzione" ${optional ? 'maxlength="60"' : ''} data-option-name="${key}:${esc(item.id)}" value="${esc(item.name)}">${optional ? usage(item.id) : ''}${key === 'statuses' ? ui`<button class="icon-button star ${item.highlight ? 'selected' : ''}" data-highlight="${esc(item.id)}" title="Evidenzia le attività con questo stato" aria-pressed="${item.highlight}">★</button>` : ''}<button class="icon-button" data-move="${key}:${esc(item.id)}:-1" ${index === 0 ? 'disabled' : ''} title="Sposta su">↑</button><button class="icon-button" data-move="${key}:${esc(item.id)}:1" ${index === settingsDraft[key].length - 1 ? 'disabled' : ''} title="Sposta giù">↓</button><button class="icon-button delete-option" data-remove="${key}:${esc(item.id)}" title="Elimina opzione">×</button></div>`).join('') || (optional ? `<p class="muted option-empty">${esc(t(key === 'tags' ? 'Nessun tag: aggiungine uno per classificare le attività.' : 'Nessun colore: aggiungine uno per usare l’evidenziatore.'))}</p>` : '');
     const add = document.querySelector(`[data-add-option="${key}"]`);
     if (optional && add) add.disabled = settingsDraft[key].length >= (key === 'tags' ? TAG_LIMIT : HIGHLIGHT_LIMIT);
+    sortable(document.getElementById(`${key}-list`), '.option-row', (from, to) => { const list = settingsDraft[key]; list.splice(to, 0, ...list.splice(from, 1)); drawOptionLists(); });
   }
   function optionId(value) { const [key, ...parts] = value.split(':'); return [key, parts.join(':')]; }
   function itemAt(value) { const [key, id] = optionId(value); return settingsDraft[key].find(x => x.id === id); }
@@ -1419,6 +1537,20 @@ window.runSmokeTests = async () => {
   const checks = [];
   function check(condition, name) { if (!condition) throw new Error(name); checks.push(name); }
   const doubleClick = element => element.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true, button: 0 }));
+  const tick = () => new Promise(resolve => setTimeout(resolve));
+  const pointer = (target, type, x, y) => target.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, composed: true, clientX: x, clientY: y, pointerId: 7, isPrimary: true, pointerType: 'mouse', button: 0, buttons: type === 'pointerup' ? 0 : 1 }));
+  // Presses on grip, drags it over the upper or lower half of target (depending on the direction) and drops it, or presses Esc.
+  function dragTo(grip, target, finish = 'drop') {
+    const row = grip.closest('.option-row, .column-row'), start = grip.getBoundingClientRect(), goal = target.getBoundingClientRect();
+    const x = start.left + start.width / 2, y = start.top + start.height / 2, endY = goal.top + goal.height * (goal.top > start.top ? 0.75 : 0.25);
+    pointer(grip, 'pointerdown', x, y);
+    pointer(grip, 'pointermove', x, y + 6);
+    pointer(grip, 'pointermove', x, endY);
+    const lifted = row.classList.contains('is-dragging') && document.body.classList.contains('is-sorting') && row.style.transform.startsWith('translateY(');
+    if (finish === 'escape') (document.activeElement || document.body).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    pointer(grip, 'pointerup', x, endY);
+    return lifted;
+  }
   async function waitFor(predicate) {
     const deadline = Date.now() + 5000;
     while (!predicate()) {
@@ -1671,6 +1803,17 @@ window.runSmokeTests = async () => {
   columnToggle('notes').click();
   $('#columns-dialog-editor [data-column-move="highlight:-1"]').click();
   check(document.activeElement?.dataset.columnMove === 'highlight:-1', 'Spostamento colonne utilizzabile da tastiera');
+  const dialogOrder = () => [...document.querySelectorAll('#columns-dialog-editor [data-column-visible]')].map(input => input.dataset.columnVisible);
+  const columnsBeforeDrag = dialogOrder();
+  check(document.querySelectorAll('#columns-dialog-editor .column-row [data-drag-handle]').length === columnsBeforeDrag.length && $('#modal .section-description').textContent === t('Spunta le colonne da mostrare e trascinale (o usa le frecce) per cambiarne l’ordine. Nascondere una colonna non cancella i dati.'), 'Maniglia di trascinamento su ogni colonna');
+  const codeRow = () => columnToggle('code').closest('.column-row');
+  const columnLifted = dragTo(codeRow().querySelector('.column-toggle span'), columnToggle('sequence').closest('.column-row'));
+  columnToggle('code').closest('label').click();
+  await tick();
+  check(columnLifted && dialogOrder().join() === ['code', 'sequence', ...columnsBeforeDrag.slice(2)].join() && columnToggle('code').checked && $('#modal').open && !document.querySelector('.is-dragging') && $('#modal > .sort-status')?.textContent === fillText('Spostato in posizione {0} di {1}', 1, columnsBeforeDrag.length), 'Colonne trascinabili anche dal nome, senza cambiarne la visibilità');
+  codeRow().querySelector('[data-drag-handle]').focus();
+  document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+  check(dialogOrder().join() === columnsBeforeDrag.join() && document.activeElement === codeRow().querySelector('[data-drag-handle]') && codeRow() === document.querySelectorAll('#columns-dialog-editor .column-row')[1], 'Colonne riordinabili con le frecce sulla maniglia');
   $('#columns-apply').click();
   await waitFor(() => !saving && !$('#modal').open);
   check(headerIds().join() === 'sequence,code,description,urgency,highlight,status,tags,effort,incident,problem,releaseDate' && smokeRow().cells.length === headerIds().length + 1 && smokeRow().querySelector('.mark-pill') && !data.settings.taskColumns.find(column => column.id === 'notes').visible && (await workspaceApi.load()).data.settings.taskColumns.find(column => column.id === 'highlight').visible, 'Colonne mostrate, nascoste e riordinate e salvate');
@@ -1760,6 +1903,28 @@ window.runSmokeTests = async () => {
   check(!data.tasks.some(task => task.highlightId === removedHighlight.id) && smokeTask().highlightId === '', 'Eliminando un colore le righe tornano senza evidenziazione');
   await commit(next => { next.settings.highlights = savedHighlights; });
   render();
+  showSettingsTab('statuses');
+  const savedStatuses = structuredClone(data.settings.statuses), statusIds = list => list.map(status => status.id).join();
+  const statusRow = index => document.querySelectorAll('#statuses-list .option-row')[index], statusHandle = index => statusRow(index).querySelector('[data-drag-handle]');
+  check(savedStatuses.length >= 3 && document.querySelectorAll('#statuses-list [data-drag-handle]').length === savedStatuses.length && getComputedStyle(statusHandle(0)).cursor === 'grab' && $('#unsaved-banner').hidden, 'Maniglia di trascinamento su ogni stato');
+  const statusLifted = dragTo(statusHandle(0), statusRow(2));
+  await tick();
+  const draggedStatuses = [savedStatuses[1], savedStatuses[2], savedStatuses[0], ...savedStatuses.slice(3)];
+  check(statusLifted && statusIds(settingsDraft.statuses) === statusIds(draggedStatuses) && document.activeElement === statusHandle(2) && !document.querySelector('.is-dragging') && !document.body.classList.contains('is-sorting') && !$('#settings-tab-statuses .settings-tab-dot').hidden && !$('#unsaved-banner').hidden && $('body > .sort-status')?.textContent === fillText('Spostato in posizione {0} di {1}', 3, savedStatuses.length), 'Stati riordinati trascinandoli, con modifica segnalata e annunciata');
+  const statusCancelled = dragTo(statusHandle(0), statusRow(2), 'escape');
+  await tick();
+  const listedStatusIds = () => [...document.querySelectorAll('#statuses-list [data-option-name]')].map(input => input.dataset.optionName.slice('statuses:'.length)).join();
+  check(statusCancelled && statusIds(settingsDraft.statuses) === statusIds(draggedStatuses) && listedStatusIds() === statusIds(draggedStatuses) && !document.querySelector('.is-dragging') && !statusRow(0).style.transform && !$('#modal').open, 'Esc annulla il trascinamento e ripristina l’ordine');
+  statusHandle(2).focus();
+  document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }));
+  const keyedStatuses = [savedStatuses[1], savedStatuses[0], savedStatuses[2], ...savedStatuses.slice(3)];
+  check(statusIds(settingsDraft.statuses) === statusIds(keyedStatuses) && listedStatusIds() === statusIds(keyedStatuses) && document.activeElement === statusHandle(1), 'Stati riordinabili con le frecce sulla maniglia');
+  $('#save-settings-inline').click();
+  await waitFor(() => !saving && statusIds(data.settings.statuses) === statusIds(keyedStatuses));
+  view = 3; render();
+  check(statusIds((await workspaceApi.load()).data.settings.statuses) === statusIds(keyedStatuses) && [...document.querySelectorAll('.kanban-column .kanban-heading span')].map(span => span.textContent).join() === keyedStatuses.map(status => status.name).join(), 'Nuovo ordine degli stati salvato e applicato al kanban');
+  await commit(next => { next.settings.statuses = savedStatuses; });
+  view = 4; render();
   showSettingsTab('columns');
   $('#columns-editor [data-column-visible="link"]').click();
   await new Promise(resolve => setTimeout(resolve));

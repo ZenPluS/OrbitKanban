@@ -1393,6 +1393,55 @@ input[type=radio] {
   white-space: nowrap;
   padding: 0 4px;
 }
+.drag-handle {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  cursor: grab;
+  touch-action: none;
+}
+.drag-handle::before {
+  content: "";
+  width: 10px;
+  height: 15px;
+  background: radial-gradient(circle, currentColor 1.4px, transparent 1.9px) 0 0 / 5px 5px;
+}
+.drag-handle:hover,
+.drag-handle:focus-visible {
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+  color: var(--text);
+}
+.option-row,
+.column-row {
+  touch-action: pan-y;
+}
+.option-row {
+  border-radius: 8px;
+}
+.option-row.is-dragging,
+.column-row.is-dragging {
+  position: relative;
+  z-index: 5;
+  background: var(--surface);
+  box-shadow: 0 12px 28px rgb(0 0 0 / 0.35), 0 0 0 1px color-mix(in srgb, var(--accent) 65%, transparent);
+  opacity: 1;
+}
+.is-dragging .drag-handle {
+  color: var(--accent);
+}
+body.is-sorting,
+body.is-sorting * {
+  cursor: grabbing !important;
+  user-select: none !important;
+}
 .option-empty {
   margin: 4px 0 12px;
 }

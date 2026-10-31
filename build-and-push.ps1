@@ -8,7 +8,8 @@
          al remoto, nessun file da non versionare tra le modifiche (dati, build, dipendenze, eseguibili, file oltre 5 MB).
       2. npm run check e npm test.
       3. Smoke test dai sorgenti (npm run smoke).
-      4. Build portable in dist-staging\<versione>, senza toccare l'eseguibile eventualmente aperto in dist.
+      4. Build portable in dist-staging\<versione>, senza toccare l'eseguibile eventualmente aperto in dist,
+         con verifica di versione e icona (identica a build\icon.ico, generata da app-logo.svg) di launcher e app.
       5. Smoke test dell'app impacchettata (win-unpacked) e del launcher portable, con file temporanei isolati
          per non interferire con eventuali istanze aperte.
       6. Copia dell'eseguibile testato in dist\OrbitKanban-Portable.exe, oppure in
@@ -241,6 +242,7 @@ try {
     Invoke-Native 'npm.cmd' @('run', 'dist', '--', '--out', $outDir)
     Assert-ExecutableVersion $launcher $version
     Assert-ExecutableVersion $internal $version
+    Invoke-Native 'node' @((Join-Path $root 'app-icon.js'), '--verify', (Join-Path $root 'build\icon.ico'), $launcher, $internal)
     if ((Get-Item -LiteralPath $launcher).LastWriteTime -lt $buildStartedAt.AddSeconds(-5)) { throw "$launcher non è stato rigenerato dalla build." }
     $testedLauncherHash = (Get-FileHash -LiteralPath $launcher -Algorithm SHA256).Hash
 
