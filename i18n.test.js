@@ -30,6 +30,7 @@ test('text size settings are translated, including phrases that contain shorter 
   assert.equal(translate('Dimensione del testo', 'it'), 'Dimensione del testo');
 });
 test('settings tabs and theme gallery are translated', () => {
+  assert.deepEqual(['Predefinito', 'Predefinito modificato', 'Personalizzato', 'Ripristina tema predefinito'].map(text => translate(text, 'en')), ['Built-in', 'Modified built-in', 'Custom', 'Restore built-in theme']);
   assert.deepEqual(['Organizzazione', 'Aspetto', 'Flusso di lavoro', 'Dati e accesso'].map(group => translate(group, 'en')), ['Organization', 'Appearance', 'Workflow', 'Data & access']);
   assert.equal(translate('<input placeholder="Cerca tema…" aria-label="Cerca tema">', 'en'), '<input placeholder="Search themes…" aria-label="Search themes">');
   assert.equal(translate('Sezioni modificate: Temi & atmosfera', 'en'), 'Changed sections: Themes & atmosphere');

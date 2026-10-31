@@ -2,12 +2,68 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { APP_NAME, initialData, baseData, demoData, demoReleaseDates, validateData, migrateArchive, validateArchive, createOrganization, matchIssues, findDuplicates, sortTasks, dateColor, extractThemePalette, themeFromLogo, normalizeUrl, isWebUrl, validPortalTemplate, portalUrl, ORGANIZATION_FILE_KINDS, organizationExport, organizationFileName, situationFileName, parseOrganizationFile, applyOrganizationImport, importedOrganizationData, uniqueOrganizationName, FONT_SIZE_PARTS, FONT_SIZE_STEP, defaultFontSizes, clampFontSize, HIGHLIGHT_LIMIT, defaultHighlights, TASK_COLUMN_IDS, defaultTaskColumns, normalizeTaskColumns, nextReleaseDate, today } = require('./core');
+const { defaultThemes } = require('./core');
+const luminance = color => color.slice(1).match(/.{2}/g).map(channel => {
+  const value = parseInt(channel, 16) / 255;
+  return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+}).reduce((sum, value, i) => sum + value * [0.2126, 0.7152, 0.0722][i], 0);
+const contrast = (a, b) => (Math.max(luminance(a), luminance(b)) + 0.05) / (Math.min(luminance(a), luminance(b)) + 0.05);
 
 test('default archive is valid and independent between invocations', () => {
   const first = initialData(), second = initialData();
   assert.equal(validateData(first), first);
   assert.ok(first.tasks.length > 200);
   assert.notEqual(first.tasks[0].id, second.tasks[0].id);
+});
+test('40 distinct built-in themes have four colors with readable text and accents', () => {
+  const themes = defaultThemes();
+  assert.equal(themes.length, 40);
+  for (const key of ['id', 'name']) assert.equal(new Set(themes.map(theme => theme[key])).size, 40);
+  assert.equal(new Set(themes.map(({ background, surface, text, accent }) => [background, surface, text, accent].join())).size, 40);
+  assert.ok(!themes.some(theme => theme.id === 'organization-logo'));
+  assert.equal(themes.filter(theme => luminance(theme.background) > 0.5).length, 13);
+  for (const theme of themes) {
+    assert.equal(new Set([theme.background, theme.surface, theme.text, theme.accent]).size, 4, theme.name);
+    for (const background of [theme.background, theme.surface]) {
+      assert.ok(contrast(theme.text, background) >= 4.5, `${theme.name}: text`);
+      assert.ok(contrast(theme.accent, background) >= 3, `${theme.name}: accent`);
+    }
+  }
+  for (const data of [baseData(), demoData(), createOrganization('Fresh').data]) assert.deepEqual(data.settings.themes, themes);
+  themes[0].accent = '#000000';
+  assert.notEqual(defaultThemes()[0].accent, themes[0].accent);
+});
+test('older archives gain missing presets without overwriting active, custom or modified themes', () => {
+  const legacy = initialData();
+  legacy.settings.themes = legacy.settings.themes.slice(0, 4);
+  legacy.settings.themes[0].accent = '#a392ff';
+  legacy.settings.themes.push({ id: 'organization-logo', name: 'My palette', background: '#111111', surface: '#222222', text: '#ffffff', accent: '#aabbcc' });
+  legacy.settings.themeId = 'organization-logo';
+  const original = structuredClone(legacy), migrated = migrateArchive(legacy), settings = migrated.organizations[0].data.settings;
+  assert.deepEqual(legacy, original);
+  assert.deepEqual(settings.themes.slice(0, 5), original.settings.themes);
+  assert.equal(settings.themes.length, 41);
+  assert.equal(settings.themeId, 'organization-logo');
+  assert.deepEqual(migrated.organizations[0].data.tasks, original.tasks);
+  assert.deepEqual(migrated.organizations[0].data.issues, original.issues);
+  assert.deepEqual(migrateArchive(migrated), migrated);
+  const oldV2 = structuredClone(migrated);
+  oldV2.organizations[0].data.settings.themes = original.settings.themes;
+  const second = createOrganization('Other');
+  second.data.settings.themes = defaultThemes().filter(theme => theme.id === 'everforest');
+  second.data.settings.themeId = 'everforest';
+  oldV2.organizations.push(second);
+  const upgraded = migrateArchive(oldV2);
+  assert.deepEqual(upgraded.organizations[0], migrated.organizations[0]);
+  assert.equal(upgraded.organizations[1].data.settings.themes.length, 40);
+  assert.equal(upgraded.organizations[1].data.settings.themeId, 'everforest');
+  const roundtrip = migrateArchive(JSON.parse(JSON.stringify(upgraded)));
+  assert.deepEqual(roundtrip, upgraded);
+  const bad = structuredClone(legacy);
+  bad.settings.themes[0].accent = 'invalid';
+  assert.throws(() => migrateArchive(bad), /Temi non validi/);
+  bad.settings.themes = [];
+  assert.throws(() => migrateArchive(bad), /Temi non validi/);
 });
 test('demo releases are on Wednesdays every two weeks from January 2025 up to the next release', () => {
   const { past, next } = demoReleaseDates(new Date(2026, 4, 20, 10));
@@ -188,11 +244,6 @@ test('empty or incomplete image data is explicitly rejected', () => {
   assert.throws(() => extractThemePalette(new Uint8ClampedArray([1, 2, 3])));
 });
 test('monochrome logo themes retain visible text and accent instead of hiding the interface', () => {
-  const luminance = color => color.slice(1).match(/.{2}/g).map(channel => {
-    const value = parseInt(channel, 16) / 255;
-    return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
-  }).reduce((sum, value, i) => sum + value * [0.2126, 0.7152, 0.0722][i], 0);
-  const contrast = (a, b) => (Math.max(luminance(a), luminance(b)) + 0.05) / (Math.min(luminance(a), luminance(b)) + 0.05);
   for (const color of ['#000000', '#ffffff', '#888888', '#767676', '#0066aa']) {
     const palette = themeFromLogo(imagePixels([color]));
     assert.equal(palette.background, color);
@@ -431,7 +482,7 @@ test('importing themes merges by identifier and activates the file theme only on
   const file = parseOrganizationFile(organizationExport({ name: 'Source', data: source }, 'themes'));
   const kept = applyOrganizationImport(current, file, { themes: true });
   assert.equal(kept.settings.themeId, current.settings.themeId);
-  assert.deepEqual(kept.settings.themes.map(theme => theme.id), ['midnight', 'ocean', 'daylight', 'brand']);
+  assert.deepEqual(kept.settings.themes.map(theme => theme.id), [...defaultThemes().map(theme => theme.id), 'brand']);
   assert.deepEqual([kept.settings.themes[0].name, kept.settings.themes[0].accent], ['Midnight 2', '#ff0000']);
   const activated = applyOrganizationImport(current, file, { themes: true, activateTheme: true });
   assert.equal(activated.settings.themeId, 'brand');

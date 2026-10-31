@@ -1,5 +1,5 @@
 'use strict';
-const { APP_NAME, validateData, matchIssues, findDuplicates, sortTasks, dateColor, extractThemePalette, themeFromLogo, normalizeUrl, isWebUrl, validPortalTemplate, portalUrl, parseOrganizationFile, applyOrganizationImport, importedOrganizationData, uniqueOrganizationName, FONT_SIZE_PARTS, FONT_SIZE_STEP, defaultFontSizes, clampFontSize, HIGHLIGHT_LIMIT, defaultTaskColumns, normalizeTaskColumns, TAG_LIMIT, TAG_NAME_MAX, today, nextReleaseDate, situationFileName } = window.OrbitaCore;
+const { APP_NAME, validateData, matchIssues, findDuplicates, sortTasks, dateColor, extractThemePalette, themeFromLogo, defaultThemes, normalizeUrl, isWebUrl, validPortalTemplate, portalUrl, parseOrganizationFile, applyOrganizationImport, importedOrganizationData, uniqueOrganizationName, FONT_SIZE_PARTS, FONT_SIZE_STEP, defaultFontSizes, clampFontSize, HIGHLIGHT_LIMIT, defaultTaskColumns, normalizeTaskColumns, TAG_LIMIT, TAG_NAME_MAX, today, nextReleaseDate, situationFileName } = window.OrbitaCore;
 const $ = selector => document.querySelector(selector);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const uid = () => crypto.randomUUID();
@@ -1844,6 +1844,12 @@ function drawOptionLists() {
   });
 }
 const themeFields = [['background', 'Sfondo'], ['surface', 'Superfici'], ['text', 'Testo'], ['accent', 'Accento']];
+const themePresets = new Map(defaultThemes().map(theme => [theme.id, theme]));
+function themeKind(theme) {
+  const preset = themePresets.get(theme.id);
+  if (!preset) return 'Personalizzato';
+  return theme.name === preset.name && themeFields.every(([key]) => theme[key].toLowerCase() === preset[key]) ? 'Predefinito' : 'Predefinito modificato';
+}
 function drawThemeChoices() {
   const query = themeQuery.trim().toLocaleLowerCase(), total = settingsDraft.themes.length;
   const themes = settingsDraft.themes.filter(theme => !query || theme.name.toLocaleLowerCase().includes(query));
@@ -1851,7 +1857,7 @@ function drawThemeChoices() {
   $('#theme-count').textContent = query ? `${themes.length} / ${themeCount}` : themeCount;
   $('#theme-list').innerHTML = themes.length ? themes.map(theme => {
     const chosen = theme.id === settingsDraft.themeId, mock = themeFields.map(([key]) => `--mock-${key}:${theme[key]}`).join(';');
-    return `<button type="button" class="theme-choice ${chosen ? 'chosen' : ''}" data-theme="${esc(theme.id)}" aria-pressed="${chosen}" title="${esc(theme.name)}"><span class="theme-mock" style="${mock}" aria-hidden="true"><span class="theme-mock-card"><span class="theme-mock-line"></span><span class="theme-mock-pill"></span></span></span><span class="theme-choice-info"><span class="theme-choice-name">${esc(theme.name)}</span><span class="theme-swatches">${themeFields.map(([key, label]) => `<i style="background:${theme[key]}" title="${t(label)}: ${theme[key]}" role="img" aria-label="${t(label)}: ${theme[key]}"></i>`).join('')}</span></span>${chosen ? '<span class="theme-check" aria-hidden="true">✓</span>' : ''}</button>`;
+    return `<button type="button" class="theme-choice ${chosen ? 'chosen' : ''}" data-theme="${esc(theme.id)}" aria-pressed="${chosen}" title="${esc(theme.name)}"><span class="theme-mock" style="${mock}" aria-hidden="true"><span class="theme-mock-card"><span class="theme-mock-line"></span><span class="theme-mock-pill"></span></span></span><span class="theme-choice-info"><span class="theme-choice-name">${esc(theme.name)}</span><span class="theme-kind">${esc(t(themeKind(theme)))}</span><span class="theme-swatches">${themeFields.map(([key, label]) => `<i style="background:${theme[key]}" title="${t(label)}: ${theme[key]}" role="img" aria-label="${t(label)}: ${theme[key]}"></i>`).join('')}</span></span>${chosen ? '<span class="theme-check" aria-hidden="true">✓</span>' : ''}</button>`;
   }).join('') : `<p class="theme-empty">${esc(t('Nessun tema corrisponde alla ricerca.'))}</p>`;
   document.querySelectorAll('#theme-list [data-theme]').forEach(b => b.onclick = () => {
     settingsDraft.themeId = b.dataset.theme; drawThemes();
@@ -1888,7 +1894,7 @@ function drawThemes() {
   paintTheme(theme);
   $('#theme-editor').innerHTML = ui`<div class="theme-edit"><h3 class="theme-edit-title">Modifica tema</h3><label class="field">Nome tema<input id="theme-name" value="${esc(theme.name)}"></label><div class="theme-colors">${themeFields.map(([key, label]) => `<label><input type="color" value="${theme[key]}" data-theme-color="${key}">${t(label)}</label>`).join('')}</div>
     <div class="image-picker"><label class="field">Genera i 4 colori da un’immagine<input id="theme-image-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp"></label><p class="muted">Carica un’immagine: sfondo, superfici, testo e accento vengono estratti e assegnati automaticamente. Puoi poi ritoccarli con i selettori. Le trasparenze sono visualizzate su bianco.</p><canvas id="theme-image-canvas" hidden role="img" aria-label="Immagine usata per generare automaticamente i quattro colori del tema"></canvas><label class="field">Ritocco facoltativo: colore da prelevare con un clic<select id="theme-image-target">${themeFields.map(([key, label]) => `<option value="${key}">${t(label)}</option>`).join('')}</select></label><output id="theme-image-result" aria-live="polite">L’immagine resta locale e non viene salvata: nel tema sono conservati solo i colori.</output></div>
-    <small class="muted">Anteprima dal vivo: il tema viene applicato subito all’app. Salva le impostazioni per mantenerlo, altrimenti resta quello precedente.</small><button class="button small" id="delete-theme">Elimina tema</button></div>`;
+    <small class="muted">Anteprima dal vivo: il tema viene applicato subito all’app. Salva le impostazioni per mantenerlo, altrimenti resta quello precedente.</small>${themePresets.has(theme.id) ? ui`<button class="button small" id="reset-theme">Ripristina tema predefinito</button>` : ui`<button class="button small" id="delete-theme">Elimina tema</button>`}</div>`;
   $('#theme-name').oninput = e => { theme.name = e.target.value; drawThemeChoices(); };
   document.querySelectorAll('[data-theme-color]').forEach(input => input.oninput = () => { theme[input.dataset.themeColor] = input.value; drawThemeChoices(); paintTheme(theme); });
   const canvas = $('#theme-image-canvas'), fileInput = $('#theme-image-file'), result = $('#theme-image-result');
@@ -1928,7 +1934,11 @@ function drawThemes() {
     input.dispatchEvent(new Event('input'));
     result.textContent = `${t(themeFields.find(([field]) => field === key)[1])}: ${color}`;
   });
-  $('#delete-theme').onclick = () => {
+  if ($('#reset-theme')) $('#reset-theme').onclick = () => {
+    Object.assign(theme, themePresets.get(theme.id));
+    drawThemes();
+  };
+  if ($('#delete-theme')) $('#delete-theme').onclick = () => {
     if (settingsDraft.themes.length === 1) { notify('Deve restare almeno un tema.', true); return; }
     settingsDraft.themes = settingsDraft.themes.filter(t => t.id !== theme.id); settingsDraft.themeId = settingsDraft.themes[0].id; drawThemes();
   };
@@ -2437,6 +2447,7 @@ window.runSmokeTests = async () => {
   const accent = () => document.documentElement.style.getPropertyValue('--accent');
   const savedAccent = data.settings.themes.find(theme => theme.id === data.settings.themeId).accent;
   check($('#unsaved-banner').hidden && !settingsChanged() && accent() === savedAccent, 'Nessun avviso senza modifiche alle impostazioni');
+  check(defaultThemes().length === 40 && defaultThemes().every(theme => data.settings.themes.some(saved => saved.id === theme.id)) && $('#reset-theme') && !$('#delete-theme') && [...document.querySelectorAll('#theme-list .theme-kind')].filter(label => label.textContent === t('Predefinito')).length === 40, 'Catalogo di 40 temi predefiniti disponibile senza importazione');
   const previewTheme = data.settings.themes.find(theme => theme.id !== data.settings.themeId && theme.accent !== savedAccent);
   document.querySelector(`[data-theme="${previewTheme.id}"]`).click();
   await new Promise(resolve => setTimeout(resolve));
@@ -2458,6 +2469,11 @@ window.runSmokeTests = async () => {
   document.querySelector('[data-theme-color="accent"]').value = '#12ab34';
   document.querySelector('[data-theme-color="accent"]').dispatchEvent(new Event('input', { bubbles: true }));
   check(accent() === '#12ab34', 'Modifica colore tema applicata in tempo reale');
+  check($('.theme-choice.chosen .theme-kind').textContent === t('Predefinito modificato') && !$('#delete-theme'), 'Tema predefinito modificabile senza eliminare il modello incorporato');
+  $('#reset-theme').click();
+  check(accent() === previewTheme.accent && $('#theme-name').value === previewTheme.name && $('.theme-choice.chosen .theme-kind').textContent === t('Predefinito'), 'Ripristino tema recupera nome e quattro colori originali');
+  document.querySelector('[data-theme-color="accent"]').value = '#12ab34';
+  document.querySelector('[data-theme-color="accent"]').dispatchEvent(new Event('input', { bubbles: true }));
   $('#discard-settings').click();
   check(accent() === savedAccent && $('#unsaved-banner').hidden && !settingsDraft.themes.some(theme => theme.accent === '#12ab34'), 'Annulla modifiche ripristina il tema salvato');
   document.querySelector(`[data-theme="${previewTheme.id}"]`).click();
@@ -2477,6 +2493,12 @@ window.runSmokeTests = async () => {
   showSettingsTab('themes');
   const galleryThemes = Array.from({ length: 30 }, (_, index) => ({ id: uid(), name: `Galleria ${index + 1}`, background: '#101820', surface: '#203040', text: '#f0f4fc', accent: '#40a0e0' }));
   settingsDraft.themes.push(...galleryThemes);
+  settingsDraft.themeId = galleryThemes.at(-1).id;
+  drawThemes();
+  check($('.theme-choice.chosen .theme-kind').textContent === t('Personalizzato') && $('#delete-theme') && !$('#reset-theme'), 'Tema personale distinto dai predefiniti e ancora eliminabile');
+  $('#delete-theme').click();
+  check(!settingsDraft.themes.some(theme => theme.id === galleryThemes.at(-1).id) && defaultThemes().every(theme => settingsDraft.themes.some(saved => saved.id === theme.id)), 'Eliminazione tema personale non rimuove i predefiniti');
+  settingsDraft.themes.push(galleryThemes.at(-1));
   settingsDraft.themeId = galleryThemes.at(-1).id;
   drawThemes();
   const gallery = $('#theme-list'), lastGalleryTile = gallery.querySelector('.theme-choice.chosen');

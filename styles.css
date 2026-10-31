@@ -1035,6 +1035,10 @@ input[type=radio] {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.theme-kind {
+  color: var(--muted);
+  font-size: calc(11px * var(--fs));
+}
 .theme-choice .theme-swatches i {
   width: 12px;
   height: 12px;

@@ -27,6 +27,30 @@ test('first load seeds a portable archive and exposes revision and client metada
   } finally { await cleanup(); }
 });
 
+test('theme catalog upgrade is persisted once with backup and preserves personal palettes', async () => {
+  const { store, dataFolder, cleanup } = await tempStore();
+  try {
+    const data = baseData();
+    data.settings.themes = data.settings.themes.filter(theme => theme.id === 'everforest');
+    data.settings.themes.push({ id: 'organization-logo', name: 'Personal', background: '#111111', surface: '#222222', text: '#ffffff', accent: '#aabbcc' });
+    data.settings.themeId = 'everforest';
+    const original = JSON.stringify({ version: 2, activeOrganizationId: 'one', organizations: [{ id: 'one', name: 'Main', data }] });
+    await fs.writeFile(store.dataFile, original);
+    const loaded = await store.load();
+    assert.equal(loaded.data.settings.themes.length, 41);
+    assert.equal(loaded.data.settings.themeId, 'everforest');
+    assert.deepEqual(loaded.data.settings.themes.slice(0, 2), data.settings.themes);
+    assert.equal(await fs.readFile(`${store.dataFile}.bak`, 'utf8'), original);
+    const persisted = await fs.readFile(store.dataFile, 'utf8');
+    const reopened = createWorkspaceStore({ dataFolder });
+    assert.deepEqual(await reopened.load(), loaded);
+    assert.equal(await fs.readFile(store.dataFile, 'utf8'), persisted);
+    assert.equal(await fs.readFile(`${store.dataFile}.bak`, 'utf8'), original);
+    const saved = await reopened.save(loaded.data, loaded.activeOrganizationId, undefined, loaded.revision);
+    assert.deepEqual(saved.data.settings.themes, loaded.data.settings.themes);
+  } finally { await cleanup(); }
+});
+
 test('saves need the current revision so stale clients cannot overwrite newer data', async () => {
   const { store, dataFolder, cleanup } = await tempStore();
   try {
