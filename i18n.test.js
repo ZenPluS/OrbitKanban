@@ -44,6 +44,12 @@ test('row highlighters and list columns are translated', () => {
   assert.equal(i18n.plural(2, 'evidenziatore', 'en'), '2 highlighters');
   assert.equal(i18n.plural(3, 'evidenziatore', 'it'), '3 evidenziatori');
 });
+test('tag settings, task selection and validation messages are translated', () => {
+  assert.equal(translate('Modifica tag', 'en'), 'Edit tags');
+  assert.equal(translate('Tags attività non validi.', 'en'), 'Invalid task tags.');
+  assert.equal(translate('I nomi dei tag devono essere univoci.', 'en'), 'Tag names must be unique.');
+  assert.equal(translate('Nessun tag disponibile. Aggiungili in Impostazioni › Tags.', 'en'), 'No tags available. Add them in Settings › Tags.');
+});
 
 test('built-in language files are valid and every Italian key used for counts and defaults is covered', () => {
   const en = builtIn('en'), it = builtIn('it');

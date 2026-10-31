@@ -1,6 +1,6 @@
 ﻿<#
 .SYNOPSIS
-    Costruisce e testa OrbitKanban e, solo se tutto passa, fa commit e push su GitHub.
+    Costruisce e testa OrbitKanban e, solo se tutto passa, fa commit, push e release su GitHub.
 
 .DESCRIPTION
     Sequenza (qualsiasi errore di build o test interrompe lo script prima del commit):
@@ -15,6 +15,8 @@
          dist\OrbitKanban-Portable-<versione>.exe se quello è in esecuzione.
       7. Controllo che i file non siano cambiati durante build e test, commit di tutte le modifiche (vuoto se non ce ne sono),
          tag v<versione> se la versione è nuova, push atomico e verifica sul remoto.
+      8. Pubblicazione della release GitHub con l'eseguibile portable e verifica SHA-256 dell'asset.
+         Servono credenziali GitHub con accesso Contents in scrittura, da Git Credential Manager o GH_TOKEN/GITHUB_TOKEN.
 
 .PARAMETER Message
     Oggetto del commit. Predefinito: "OrbitKanban <versione>".
@@ -175,6 +177,7 @@ function Copy-TestedExecutable([string]$Source, [string]$Version) {
 $startedAt = Get-Date
 $commitCreated = $false
 $tagCreated = $false
+$pushed = $false
 Push-Location -LiteralPath $root
 try {
     Write-Step 'Controlli preliminari'
@@ -186,6 +189,8 @@ try {
     $branch = Invoke-Git 'symbolic-ref', '--short', '-q', 'HEAD' -AllowFailure
     if (-not $branch) { throw 'HEAD non è su un ramo (detached HEAD): passa a un ramo prima di pubblicare.' }
     $remoteUrl = Invoke-Git 'remote', 'get-url', $Remote
+    $releaseHelper = Join-Path $root 'github-release.js'
+    Invoke-Native 'node' @($releaseHelper, '--remote', $remoteUrl, '--check')
     foreach ($marker in 'MERGE_HEAD', 'CHERRY_PICK_HEAD', 'REVERT_HEAD', 'rebase-merge', 'rebase-apply') {
         if (Test-Path -LiteralPath ([IO.Path]::Combine($root, (Invoke-Git 'rev-parse', '--git-path', $marker)))) {
             throw "Operazione Git in corso ($marker): completala o annullala prima di pubblicare."
@@ -208,6 +213,16 @@ try {
     $testedTree = Get-WorktreeTree
     $changes = @(Get-ChangedEntries $testedTree)
     Assert-PublishableChanges $changes
+    $localTag = Invoke-Git 'rev-parse', '-q', '--verify', "refs/tags/$tag^{commit}" -AllowFailure
+    $remoteTag = Get-RemoteTagCommit $tag
+    if ($localTag -and $remoteTag -and $localTag -ne $remoteTag) { throw "Il tag locale $tag non corrisponde al remoto: risolvi il conflitto senza sovrascrivere il tag pubblicato." }
+    if ($remoteTag) {
+        $null = Invoke-Git 'fetch', '--quiet', '--no-tags', $Remote, "refs/tags/$tag"
+        $tagTree = Invoke-Git 'rev-parse', 'FETCH_HEAD^{tree}'
+    } elseif ($localTag) {
+        $tagTree = Invoke-Git 'rev-parse', "$localTag^{tree}"
+    } else { $tagTree = $null }
+    if ($tagTree -and $tagTree -ne $testedTree) { throw "Il tag $tag contiene sorgenti diversi: incrementa la versione (npm version patch --no-git-tag-version --ignore-scripts) prima di pubblicare una nuova release." }
     Write-Host ('Ramo {0}, versione {1}, {2} file modificati.' -f $branch, $version, $changes.Count)
     foreach ($entry in $changes) { Write-Host ('  {0} {1}' -f $entry.Status, $entry.Path) }
 
@@ -227,11 +242,13 @@ try {
     Assert-ExecutableVersion $launcher $version
     Assert-ExecutableVersion $internal $version
     if ((Get-Item -LiteralPath $launcher).LastWriteTime -lt $buildStartedAt.AddSeconds(-5)) { throw "$launcher non è stato rigenerato dalla build." }
+    $testedLauncherHash = (Get-FileHash -LiteralPath $launcher -Algorithm SHA256).Hash
 
     Write-Step 'Smoke test dell''eseguibile impacchettato'
     $smokeScript = Join-Path $root 'smoke.js'
     Invoke-Native 'node' @($smokeScript, $internal)
     Invoke-Native 'node' @($smokeScript, $launcher)
+    if ((Get-FileHash -LiteralPath $launcher -Algorithm SHA256).Hash -ne $testedLauncherHash) { throw 'L''eseguibile è cambiato durante i test: build non pubblicata.' }
 
     $delivered = $null
     if (-not $NoDeliver) {
@@ -255,6 +272,7 @@ try {
     finally { Remove-Item -LiteralPath $messageFile -Force -ErrorAction SilentlyContinue }
     $commitCreated = $true
     $head = Invoke-Git 'rev-parse', 'HEAD'
+    if ((Invoke-Git 'rev-parse', 'HEAD^{tree}') -ne $testedTree) { throw 'Il commit non contiene esattamente i sorgenti testati: push annullato.' }
     Write-Host ('Commit {0}: {1}' -f $head.Substring(0, 7), (Invoke-Git 'log', '-1', '--format=%s'))
 
     Write-Step 'Tag e push'
@@ -265,30 +283,40 @@ try {
         Invoke-Native 'git' @('tag', '-a', $tag, '-m', "OrbitKanban $version")
         $tagCreated = $true
         $pushTag = $true
-    } elseif ($localTag -eq $head -and -not $remoteTag) {
+    } elseif ($localTag -and -not $remoteTag) {
         $pushTag = $true
-    } elseif (($localTag -and $localTag -ne $head) -or ($remoteTag -and $remoteTag -ne $head)) {
-        Write-Warning "Il tag $tag esiste già su un altro commit: la versione in package.json non è cambiata, quindi il tag non viene spostato."
+    } else {
+        Write-Host "Il tag $tag esiste già sui sorgenti verificati e non viene spostato."
     }
+    $expectedTag = if ($localTag) { $localTag } elseif ($remoteTag) { $remoteTag } else { $head }
     $refs = @($branch)
     if ($pushTag) { $refs += "refs/tags/$tag" }
     Invoke-Native 'git' (@('push', '--atomic', '--set-upstream', $Remote) + $refs)
+    $pushed = $true
     $remoteHead = ([string](Invoke-Git 'ls-remote', $Remote, "refs/heads/$branch") -split "`t")[0]
     if ($remoteHead -ne $head) { throw ('Verifica non riuscita: {0}/{1} punta a {2} invece di {3}.' -f $Remote, $branch, $remoteHead, $head) }
-    if ($pushTag -and (Get-RemoteTagCommit $tag) -ne $head) { throw "Verifica non riuscita: il tag $tag non risulta pubblicato su $Remote." }
+    if ((Get-RemoteTagCommit $tag) -ne $expectedTag) { throw "Verifica non riuscita: il tag $tag non risulta pubblicato correttamente su $Remote." }
+
+    Write-Step 'Release GitHub'
+    if ((Get-FileHash -LiteralPath $launcher -Algorithm SHA256).Hash -ne $testedLauncherHash) { throw 'L''eseguibile è cambiato dopo i test: release annullata.' }
+    $release = (Invoke-Native 'node' @($releaseHelper, '--remote', $remoteUrl, '--tag', $tag, '--commit', $head, '--tree', $testedTree, '--asset', $launcher) -Capture) | ConvertFrom-Json
+    if ($release.sha256 -ne $testedLauncherHash) { throw 'Il checksum della release non corrisponde all''eseguibile testato.' }
 
     Write-Host ''
-    Write-Host ('Completato in {0:hh\:mm\:ss}: build, test, commit e push riusciti.' -f ((Get-Date) - $startedAt)) -ForegroundColor Green
+    Write-Host ('Completato in {0:hh\:mm\:ss}: build, test, commit, push e release riusciti.' -f ((Get-Date) - $startedAt)) -ForegroundColor Green
     Write-Host ('  Versione:   {0}' -f $version)
     Write-Host ('  Commit:     {0} su {1}/{2} ({3})' -f $head, $Remote, $branch, $remoteUrl)
     Write-Host ('  Tag:        {0}' -f $(if ($pushTag) { "$tag pubblicato" } elseif ($remoteTag -eq $head) { "$tag già pubblicato" } else { "$tag non spostato (versione invariata)" }))
     Write-Host '  Launcher:   testato'
+    Write-Host ('  Release:    {0}' -f $release.url)
     if ($delivered) { Write-Host ('  Eseguibile: {0} (SHA-256 {1})' -f $delivered.Path, $delivered.Sha256) }
     else { Write-Host ('  Eseguibile: {0} (non copiato in dist)' -f $launcher) }
 } catch {
     Write-Host ''
     Write-Host ('ERRORE: {0}' -f $_.Exception.Message) -ForegroundColor Red
-    if ($commitCreated -or $tagCreated) {
+    if ($pushed) {
+        Write-Host 'Il push è stato eseguito, ma la pubblicazione non è completa. Risolvi l''errore e rilancia lo script per verificare il remoto e completare la release.' -ForegroundColor Yellow
+    } elseif ($commitCreated -or $tagCreated) {
         Write-Host 'Commit e/o tag creati in locale ma non pubblicati: risolvi il problema e rilancia lo script per completare il push.' -ForegroundColor Yellow
     } else {
         Write-Host 'Nessun commit né push eseguito.' -ForegroundColor Yellow

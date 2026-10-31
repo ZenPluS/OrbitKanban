@@ -91,7 +91,7 @@ async function run({ server, win }) {
   const shared = JSON.parse((await request(port, `/api/load?org=${encodeURIComponent(electronOrganization)}`, { headers: api })).text);
   const stale = await post('/api/save', { data: shared.data, organizationId: electronOrganization, revision: 'revisione-superata' });
   check(stale.status === 409 && JSON.parse(stale.text).code === 'conflict', 'Salvataggio browser con dati superati segnalato come conflitto');
-  const task = { ...shared.data.tasks[0], id: 'web-smoke-task', code: 'WEB-1', sequence: 9100, hidden: false };
+  const task = { ...shared.data.tasks[0], id: 'web-smoke-task', code: 'WEB-1', sequence: 9100, hidden: false, tagIds: shared.data.settings.tags.slice(0, 2).map(tag => tag.id) };
   shared.data.tasks.push(task);
   const saved = await post('/api/save', { data: shared.data, organizationId: electronOrganization, revision: shared.revision });
   check(saved.status === 200 && JSON.parse(saved.text).revision !== shared.revision, 'Salvataggio dal browser accettato');
@@ -99,12 +99,14 @@ async function run({ server, win }) {
   check(events.events.filter(event => event.type === 'change').every(event => !JSON.stringify(event.data).includes('WEB-1')), 'Altre schede ricevono la notifica di modifica senza dati sensibili nel canale');
   await waitFor(() => renderer("data.tasks.some(t => t.code === 'WEB-1') && !refreshing"), 'sincronizzazione Electron');
   check(await renderer("revision") === JSON.parse(saved.text).revision, 'Modifica dal browser visibile subito nell’app desktop');
+  check(JSON.stringify(await renderer("data.tasks.find(t => t.id === 'web-smoke-task').tagIds")) === JSON.stringify(task.tagIds) && task.tagIds.length === 2, 'Tag multipli sincronizzati dal browser all’app desktop');
 
   const exported = await request(port, '/api/export', { headers: api });
   check(exported.status === 200 && /attachment/.test(exported.headers['content-disposition']) && JSON.parse(exported.text).version === 2, 'Esportazione backup dal browser');
   const organizationFile = await request(port, `/api/export-organization?org=${encodeURIComponent(electronOrganization)}&kind=data`, { headers: api });
   const organizationData = organizationFile.status === 200 ? JSON.parse(organizationFile.text) : {};
   check(organizationFile.status === 200 && /^attachment; filename="OrbitKanban-[a-z0-9-]+-(dati|data)-\d{4}-\d{2}-\d{2}\.json"$/.test(organizationFile.headers['content-disposition']) && organizationData.format === 'orbitkanban-organization' && organizationData.data.tasks.some(t => t.code === 'WEB-1') && !organizationData.settings && !organizationData.themes, 'Esportazione dati per organizzazione dal browser in un file dedicato');
+  check(organizationData.data.tags.length === shared.data.settings.tags.length && JSON.stringify(organizationData.data.tasks.find(t => t.id === task.id).tagIds) === JSON.stringify(task.tagIds), 'Esportazione browser include catalogo tag e assegnazioni');
   const wrongKind = await request(port, `/api/export-organization?org=${encodeURIComponent(electronOrganization)}&kind=altro`, { headers: api });
   const wrongOrganization = await request(port, '/api/export-organization?org=inesistente&kind=themes', { headers: api });
   check(wrongKind.status === 400 && wrongOrganization.status === 404 && JSON.parse(wrongOrganization.text).code === 'missing-organization', 'Esportazione per organizzazione rifiuta tipi o organizzazioni non validi');

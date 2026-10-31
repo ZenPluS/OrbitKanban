@@ -28,10 +28,12 @@ function clampFontSize(partId, value) {
 }
 const HIGHLIGHT_LIMIT = 16;
 const HIGHLIGHT_NAME_MAX = 60;
+const TAG_LIMIT = 100;
+const TAG_NAME_MAX = 60;
 // Order and default visibility of the task list columns: hidden ones can be enabled from the column chooser.
 const TASK_COLUMNS = [
   ['sequence', true], ['code', true], ['link', false], ['description', true], ['urgency', true], ['status', true], ['highlight', false],
-  ['effort', true], ['incident', true], ['problem', true], ['releaseDate', true], ['notes', true]
+  ['tags', true], ['effort', true], ['incident', true], ['problem', true], ['releaseDate', true], ['notes', true]
 ];
 const TASK_COLUMN_IDS = TASK_COLUMNS.map(([columnId]) => columnId);
 const defaultTaskColumns = () => TASK_COLUMNS.map(([columnId, visible]) => ({ id: columnId, visible }));
@@ -80,7 +82,7 @@ function baseData(language = 'it') {
     version: 1,
     settings: {
       language, logo: '', portalUrlTemplate: '', tabNames: ['Attività', 'Issue collegate', 'Milestone', 'Kanban'].map(name => T(name)),
-      hoursPerDay: 8, fontSizes: defaultFontSizes(), statuses, urgencies, highlights: defaultHighlights(language), taskColumns: defaultTaskColumns(), themeId: 'midnight',
+      hoursPerDay: 8, fontSizes: defaultFontSizes(), statuses, urgencies, highlights: defaultHighlights(language), tags: [], taskColumns: defaultTaskColumns(), themeId: 'midnight',
       themes: [
         { id: 'midnight', name: 'Midnight', background: '#10131c', surface: '#191d2a', text: '#edf0fa', accent: '#a392ff' },
         { id: 'ocean', name: 'Oceano', background: '#0d1d25', surface: '#142c36', text: '#e3f5f5', accent: '#5bd7c3' },
@@ -109,6 +111,12 @@ function demoData(language = 'it', now = new Date()) {
   const [todo, doing, review, done] = data.settings.statuses.map(status => status.id);
   const [critical, high, medium, low] = data.settings.urgencies.map(urgency => urgency.id);
   data.settings.portalUrlTemplate = 'https://jira.example.com/browse/{codice}';
+  data.settings.tags = [
+    { id: 'tag-frontend', name: 'Frontend', color: '#5aa9f6' },
+    { id: 'tag-backend', name: 'Backend', color: '#b18cff' },
+    { id: 'tag-bug', name: 'Bug', color: '#f0647a' },
+    { id: 'tag-security', name: 'Security', color: '#f2c94c' }
+  ];
   data.settings.themes.push({ id: 'aurora', name: 'Aurora', background: '#0e1a1f', surface: '#16262d', text: '#e6f4f1', accent: '#62d6a6' });
   let seed = 0x20250101;
   const random = () => {
@@ -169,7 +177,8 @@ function demoData(language = 'it', now = new Date()) {
       urgencyId: urgencyId || (action[1] ? critical : pick([critical, high, high, high, medium, medium, medium, medium, low, low])),
       statusId, effortHours: pick([2, 4, 6, 8, 12, 16, 20, 24, 32, 40]) + pick([0, 0, 0, 2, 4]),
       releaseDate, notes: random() < 0.45 || statusId === review ? pick(notesByStatus[statusId]) : '',
-      hidden: statusId === done && Boolean(releaseDate) && releaseDate < hideBefore, highlightId: ''
+      hidden: statusId === done && Boolean(releaseDate) && releaseDate < hideBefore, highlightId: '',
+      tagIds: n % 5 === 0 ? [] : [n % 2 ? 'tag-frontend' : 'tag-backend', ...(action[1] ? ['tag-bug', 'tag-security'] : [])]
     });
     if (action[1] || random() < 0.2) linkIssues(code, action[1] && random() < 0.6);
   }
@@ -234,6 +243,8 @@ function validateData(data) {
   }
   assert(s.statuses.every(x => typeof x.highlight === 'boolean'), 'Evidenziazione stati non valida.');
   assert(s.highlights === undefined || (Array.isArray(s.highlights) && s.highlights.length <= HIGHLIGHT_LIMIT && s.highlights.every(x => x && text(x.id) && x.id && text(x.name) && x.name.trim() && x.name.length <= HIGHLIGHT_NAME_MAX && color(x.color)) && uniqueIds(s.highlights)), 'Evidenziatori non validi.');
+  assert(s.tags === undefined || (Array.isArray(s.tags) && s.tags.length <= TAG_LIMIT && s.tags.every(x => x && text(x.id) && x.id && x.id.length <= 200 && text(x.name) && x.name.trim() && x.name.length <= TAG_NAME_MAX && color(x.color)) && uniqueIds(s.tags)), 'Tags non validi.');
+  assert(s.tags === undefined || new Set(s.tags.map(tag => tag.name.trim().toLowerCase())).size === s.tags.length, 'I nomi dei tag devono essere univoci.');
   assert(s.taskColumns === undefined || (Array.isArray(s.taskColumns) && s.taskColumns.every(c => c && text(c.id) && c.id && typeof c.visible === 'boolean') && uniqueIds(s.taskColumns) && s.taskColumns.some(c => c.visible && TASK_COLUMN_IDS.includes(c.id))), 'Colonne della lista non valide.');
   assert(Array.isArray(s.themes) && s.themes.length > 0 && uniqueIds(s.themes) && s.themes.every(t => text(t.id) && t.id && text(t.name) && t.name.trim() && ['background', 'surface', 'text', 'accent'].every(k => color(t[k]))), 'Temi non validi.');
   assert(s.themes.some(t => t.id === s.themeId), 'Tema selezionato inesistente.');
@@ -244,6 +255,7 @@ function validateData(data) {
     assert(Number.isFinite(t.effortHours) && t.effortHours >= 0, 'Effort non valido.');
     assert(typeof t.hidden === 'boolean', 'Visibilità non valida.');
     assert(t.highlightId === undefined || (text(t.highlightId) && t.highlightId.length <= 200), 'Evidenziazione attività non valida.');
+    assert(t.tagIds === undefined || (Array.isArray(t.tagIds) && t.tagIds.length <= TAG_LIMIT && t.tagIds.every(tagId => text(tagId) && tagId && tagId.length <= 200) && new Set(t.tagIds).size === t.tagIds.length), 'Tags attività non validi.');
     assert(!t.url || /^https?:\/\/\S+$/i.test(t.url), 'Il link deve iniziare con http:// o https://.');
     assert(!t.releaseDate || (/^\d{4}-\d{2}-\d{2}$/.test(t.releaseDate) && !Number.isNaN(Date.parse(t.releaseDate)) && new Date(t.releaseDate).toISOString().slice(0, 10) === t.releaseDate), 'Data release non valida.');
     assert(s.statuses.some(x => x.id === t.statusId) && s.urgencies.some(x => x.id === t.urgencyId), 'Stato o urgenza mancanti.');
@@ -278,6 +290,7 @@ function validateArchive(archive) {
     organization.data.settings.portalUrlTemplate ??= '';
     organization.data.settings.fontSizes ??= defaultFontSizes();
     normalizeHighlights(organization.data);
+    normalizeTags(organization.data);
     delete organization.data.settings.appName;
   }
   return archive;
@@ -289,6 +302,12 @@ function normalizeHighlights(data) {
   settings.taskColumns = normalizeTaskColumns(settings.taskColumns);
   const known = new Set(settings.highlights.map(highlight => highlight.id));
   for (const task of data.tasks) if (!known.has(task.highlightId)) task.highlightId = '';
+  return data;
+}
+function normalizeTags(data) {
+  data.settings.tags ??= [];
+  const known = new Set(data.settings.tags.map(tag => tag.id));
+  for (const task of data.tasks) task.tagIds = (task.tagIds || []).filter(tagId => known.has(tagId));
   return data;
 }
 function createOrganization(name, language = 'it', logo = '', palette, demo = false) {
@@ -316,7 +335,7 @@ const RECORD_KEYS = {
   urgency: ['id', 'name', 'color'],
   highlight: ['id', 'name', 'color'],
   column: ['id', 'visible'],
-  task: ['id', 'code', 'sequence', 'url', 'description', 'notes', 'releaseDate', 'statusId', 'urgencyId', 'effortHours', 'hidden', 'highlightId'],
+  task: ['id', 'code', 'sequence', 'url', 'description', 'notes', 'releaseDate', 'statusId', 'urgencyId', 'effortHours', 'hidden', 'highlightId', 'tagIds'],
   issue: ['id', 'code', 'incident', 'problem']
 };
 function organizationExport(organization, kind, { appVersion = '', exportedAt = new Date().toISOString() } = {}) {
@@ -330,11 +349,11 @@ function organizationExport(organization, kind, { appVersion = '', exportedAt = 
       language: settings.language || 'it', logo: settings.logo || '', portalUrlTemplate: settings.portalUrlTemplate || '',
       tabNames: [...settings.tabNames], hoursPerDay: settings.hoursPerDay, fontSizes: { ...(settings.fontSizes || defaultFontSizes()) },
       statuses: structuredClone(settings.statuses), urgencies: structuredClone(settings.urgencies),
-      highlights: structuredClone(highlights), taskColumns: normalizeTaskColumns(settings.taskColumns)
+      highlights: structuredClone(highlights), tags: structuredClone(settings.tags || []), taskColumns: normalizeTaskColumns(settings.taskColumns)
     };
   }
   if (parts.includes('data')) {
-    file.data = { statuses: structuredClone(settings.statuses), urgencies: structuredClone(settings.urgencies), highlights: structuredClone(highlights), tasks: structuredClone(organization.data.tasks), issues: structuredClone(organization.data.issues) };
+    file.data = { statuses: structuredClone(settings.statuses), urgencies: structuredClone(settings.urgencies), highlights: structuredClone(highlights), tags: structuredClone(settings.tags || []), tasks: structuredClone(organization.data.tasks), issues: structuredClone(organization.data.issues) };
   }
   return file;
 }
@@ -392,6 +411,7 @@ function parseOrganizationFile(input) {
       settings.fontSizes = Object.fromEntries(FONT_SIZE_PARTS.map(({ id }) => [id, source.fontSizes[id] ?? 100]));
     }
     if (source.highlights !== undefined) settings.highlights = fileRecords(source.highlights, RECORD_KEYS.highlight, 'Evidenziatori non validi.');
+    if (source.tags !== undefined) settings.tags = fileRecords(source.tags, RECORD_KEYS.highlight, 'Tags non validi.');
     if (source.taskColumns !== undefined) {
       const columns = fileRecords(source.taskColumns, RECORD_KEYS.column, 'Colonne della lista non valide.');
       assert(columns.every(column => typeof column.id === 'string' && typeof column.visible === 'boolean'), 'Colonne della lista non valide.');
@@ -410,7 +430,8 @@ function parseOrganizationFile(input) {
       issues: fileRecords(source.issues, RECORD_KEYS.issue, 'Elenco issue non valido.')
     };
     if (source.highlights !== undefined) content.highlights = fileRecords(source.highlights, RECORD_KEYS.highlight, 'Evidenziatori non validi.');
-    check({ statuses: content.statuses, urgencies: content.urgencies, ...(content.highlights ? { highlights: content.highlights } : {}) }, { tasks: content.tasks, issues: content.issues });
+    if (source.tags !== undefined) content.tags = fileRecords(source.tags, RECORD_KEYS.highlight, 'Tags non validi.');
+    check({ statuses: content.statuses, urgencies: content.urgencies, ...(content.highlights ? { highlights: content.highlights } : {}), tags: content.tags || [] }, { tasks: content.tasks, issues: content.issues });
     result.data = content;
   }
   return result;
@@ -426,21 +447,25 @@ function optionRemapper(source, target) {
     return target[Math.min(Math.max(index, 0), target.length - 1)].id;
   };
 }
-// Highlighters match by id, then by name; when adding data, colors missing here are added so the rows keep their meaning.
-function highlightRemapper(source, target, add = false) {
+// Match shared catalogs by id/name; tags with an id collision must keep their original meaning.
+function colorOptionRemapper(source, target, add = false, { limit = HIGHLIGHT_LIMIT, overflow = '', matchName = false } = {}) {
   const key = name => name.trim().toLowerCase();
   return sourceId => {
     if (!sourceId) return '';
-    if (target.some(highlight => highlight.id === sourceId)) return sourceId;
     const original = source.find(highlight => highlight.id === sourceId);
+    if (target.some(item => item.id === sourceId && (!matchName || !original || key(item.name) === key(original.name)))) return sourceId;
     if (!original) return '';
     const sameName = target.find(highlight => key(highlight.name) === key(original.name));
     if (sameName) return sameName.id;
-    if (!add || target.length >= HIGHLIGHT_LIMIT) return '';
-    target.push(structuredClone(original));
-    return original.id;
+    if (!add) return '';
+    if (target.length >= limit) { if (overflow) throw new Error(overflow); return ''; }
+    const added = structuredClone(original);
+    if (target.some(item => item.id === added.id)) added.id = id();
+    target.push(added);
+    return added.id;
   };
 }
+const tagRemapper = (source, target, add = false) => colorOptionRemapper(source, target, add, { limit: TAG_LIMIT, matchName: true, overflow: 'Troppi tag: riduci il catalogo prima di importare.' });
 function applyOrganizationImport(current, file, options = {}) {
   const next = structuredClone(current), settings = next.settings;
   const wanted = part => Boolean(options[part] && file[part]);
@@ -452,9 +477,14 @@ function applyOrganizationImport(current, file, options = {}) {
     for (const key of ['language', 'portalUrlTemplate', 'tabNames', 'hoursPerDay', 'statuses', 'urgencies']) settings[key] = incoming[key];
     if (incoming.fontSizes) settings.fontSizes = incoming.fontSizes;
     if (incoming.highlights) {
-      const highlight = highlightRemapper(settings.highlights || [], incoming.highlights);
+      const highlight = colorOptionRemapper(settings.highlights || [], incoming.highlights);
       for (const task of next.tasks) task.highlightId = highlight(task.highlightId);
       settings.highlights = incoming.highlights;
+    }
+    if (incoming.tags) {
+      const tag = tagRemapper(settings.tags || [], incoming.tags);
+      for (const task of next.tasks) task.tagIds = [...new Set((task.tagIds || []).map(tag).filter(Boolean))];
+      settings.tags = incoming.tags;
     }
     if (incoming.taskColumns) settings.taskColumns = incoming.taskColumns;
     if (options.logo) settings.logo = incoming.logo;
@@ -469,12 +499,16 @@ function applyOrganizationImport(current, file, options = {}) {
   if (wanted('data')) {
     const status = optionRemapper(file.data.statuses, settings.statuses), urgency = optionRemapper(file.data.urgencies, settings.urgencies);
     settings.highlights ??= defaultHighlights(settings.language || 'it');
-    const highlight = highlightRemapper(file.data.highlights || [], settings.highlights, true);
+    const highlight = colorOptionRemapper(file.data.highlights || [], settings.highlights, true);
+    settings.tags ??= [];
+    const tag = tagRemapper(file.data.tags || [], settings.tags, true);
     // Files from versions without highlighters do not erase the highlight of the tasks they update.
     const existing = new Map(options.dataMode === 'replace' ? [] : next.tasks.map(task => [task.id, task.highlightId]));
+    const existingTags = new Map(options.dataMode === 'replace' ? [] : next.tasks.map(task => [task.id, task.tagIds || []]));
     const tasks = structuredClone(file.data.tasks).map(task => ({
       ...task, statusId: status(task.statusId), urgencyId: urgency(task.urgencyId),
-      highlightId: task.highlightId === undefined ? existing.get(task.id) || '' : highlight(task.highlightId)
+      highlightId: task.highlightId === undefined ? existing.get(task.id) || '' : highlight(task.highlightId),
+      tagIds: task.tagIds === undefined ? existingTags.get(task.id) || [] : [...new Set(task.tagIds.map(tag).filter(Boolean))]
     }));
     const issues = structuredClone(file.data.issues);
     if (options.dataMode === 'replace') { next.tasks = tasks; next.issues = issues; }
@@ -491,7 +525,7 @@ function applyOrganizationImport(current, file, options = {}) {
       }
     }
   }
-  return validateData(next);
+  return normalizeTags(validateData(next));
 }
 function importedOrganizationData(file, options = {}, fallbackLanguage = 'it') {
   const withSettings = Boolean(options.settings && file.settings);
@@ -500,6 +534,7 @@ function importedOrganizationData(file, options = {}, fallbackLanguage = 'it') {
     base.settings.statuses = structuredClone(file.data.statuses);
     base.settings.urgencies = structuredClone(file.data.urgencies);
     if (file.data.highlights) base.settings.highlights = structuredClone(file.data.highlights);
+    if (file.data.tags) base.settings.tags = structuredClone(file.data.tags);
   }
   return applyOrganizationImport(base, file, { ...options, logo: true, dataMode: 'replace' });
 }
@@ -613,7 +648,7 @@ const core = {
   extractThemePalette, themeFromLogo, normalizeUrl, isWebUrl, validPortalTemplate, portalUrl,
   ORGANIZATION_FILE_KINDS, organizationExport, organizationFileName, parseOrganizationFile, applyOrganizationImport, importedOrganizationData, uniqueOrganizationName,
   FONT_SIZE_PARTS, FONT_SIZE_STEP, defaultFontSizes, clampFontSize,
-  HIGHLIGHT_LIMIT, defaultHighlights, TASK_COLUMN_IDS, defaultTaskColumns, normalizeTaskColumns
+  HIGHLIGHT_LIMIT, defaultHighlights, TASK_COLUMN_IDS, defaultTaskColumns, normalizeTaskColumns, TAG_LIMIT, TAG_NAME_MAX
 };
 if (typeof module !== 'undefined') module.exports = core;
 else window.OrbitaCore = core;

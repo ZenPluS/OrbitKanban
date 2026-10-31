@@ -1396,6 +1396,83 @@ input[type=radio] {
 .option-empty {
   margin: 4px 0 12px;
 }
+.tag-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.tag-pill {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.tag-pill i {
+  flex-shrink: 0;
+}
+.task-tags-button {
+  display: block;
+  width: calc(210px * var(--fs));
+  padding: 4px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.task-tags-button:hover {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.task-tags-button .tag-chips {
+  max-height: calc(90px * var(--fs));
+  overflow-y: auto;
+}
+.task-tags {
+  min-width: 0;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.task-tags legend {
+  padding: 0 6px;
+  font-weight: 600;
+}
+.task-tags p {
+  margin: 0 0 10px;
+}
+.tag-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+.tag-choice {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.tag-choice:has(:checked) {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.tag-choice input {
+  width: auto;
+  flex-shrink: 0;
+}
+#tags-list {
+  max-height: min(52vh, 520px);
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  margin-bottom: 12px;
+}
 html,
 body {
   height: 100%;

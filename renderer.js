@@ -1,5 +1,5 @@
 'use strict';
-const { APP_NAME, validateData, matchIssues, sortTasks, dateColor, extractThemePalette, themeFromLogo, normalizeUrl, isWebUrl, validPortalTemplate, portalUrl, parseOrganizationFile, applyOrganizationImport, importedOrganizationData, uniqueOrganizationName, FONT_SIZE_PARTS, FONT_SIZE_STEP, defaultFontSizes, clampFontSize, HIGHLIGHT_LIMIT, defaultTaskColumns, normalizeTaskColumns } = window.OrbitaCore;
+const { APP_NAME, validateData, matchIssues, sortTasks, dateColor, extractThemePalette, themeFromLogo, normalizeUrl, isWebUrl, validPortalTemplate, portalUrl, parseOrganizationFile, applyOrganizationImport, importedOrganizationData, uniqueOrganizationName, FONT_SIZE_PARTS, FONT_SIZE_STEP, defaultFontSizes, clampFontSize, HIGHLIGHT_LIMIT, defaultTaskColumns, normalizeTaskColumns, TAG_LIMIT, TAG_NAME_MAX } = window.OrbitaCore;
 const $ = selector => document.querySelector(selector);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const uid = () => crypto.randomUUID();
@@ -106,6 +106,12 @@ function optionList(items, selected, all = '') {
 function visibleTasks() { return data.tasks.filter(t => !t.hidden); }
 const highlightsOf = () => data.settings.highlights || [];
 const highlightOf = task => task.highlightId ? highlightsOf().find(h => h.id === task.highlightId) : undefined;
+const tagsOf = task => (data.settings.tags || []).filter(tag => task.tagIds?.includes(tag.id));
+function tagChips(task) { return `<span class="tag-chips">${tagsOf(task).map(tag => pill(tag.name, tag.color, 'tag-pill')).join('')}</span>`; }
+function tagPicker(task) {
+  const tags = data.settings.tags || [];
+  return `<fieldset class="field full task-tags" tabindex="-1"><legend>${esc(t('Tags'))}</legend><p class="muted">${esc(t(tags.length ? 'Seleziona uno o più tag. Gestiscili in Impostazioni › Tags.' : 'Nessun tag disponibile. Aggiungili in Impostazioni › Tags.'))}</p><div class="tag-options">${tags.map(tag => `<label class="tag-choice"><input type="checkbox" name="tagIds" value="${esc(tag.id)}" ${task.tagIds?.includes(tag.id) ? 'checked' : ''}>${pill(tag.name, tag.color, 'tag-pill')}</label>`).join('')}</div></fieldset>`;
+}
 function matchesHighlightFilter(task) {
   if (!highlightFilter) return true;
   if (highlightFilter === '__any') return Boolean(highlightOf(task));
@@ -114,7 +120,7 @@ function matchesHighlightFilter(task) {
 }
 function filteredTasks() {
   return data.tasks.filter(t => (showHidden || !t.hidden) && (!statusFilter || t.statusId === statusFilter) && matchesHighlightFilter(t) && (
-    !search || [t.code, String(t.sequence), plain(t.description), plain(t.notes), highlightOf(t)?.name || '', ...Object.values(matchIssues(t, data.issues)).flat()].some(v => v.toLowerCase().includes(search.toLowerCase()))
+    !search || [t.code, String(t.sequence), plain(t.description), plain(t.notes), highlightOf(t)?.name || '', ...tagsOf(t).map(tag => tag.name), ...Object.values(matchIssues(t, data.issues)).flat()].some(v => v.toLowerCase().includes(search.toLowerCase()))
   ));
 }
 function paintTheme(theme) {
@@ -290,13 +296,14 @@ const settingsTabs = [
   { id: 'statuses', group: 'Flusso di lavoro', icon: '☰', label: 'Stati del flusso', panel: 'statuses-panel', keys: ['statuses'] },
   { id: 'urgencies', group: 'Flusso di lavoro', icon: '⚑', label: 'Livelli di urgenza', panel: 'urgencies-panel', keys: ['urgencies'] },
   { id: 'highlights', group: 'Flusso di lavoro', icon: '✎', label: 'Evidenziatori', panel: 'highlights-panel', keys: ['highlights'] },
+  { id: 'tags', group: 'Flusso di lavoro', icon: '#', label: 'Tags', panel: 'tags-panel', keys: ['tags'] },
   { id: 'columns', group: 'Flusso di lavoro', icon: '▥', label: 'Colonne della lista', panel: 'columns-panel', keys: ['taskColumns'] },
   { id: 'transfer', group: 'Dati e accesso', icon: '⇅', label: 'Esporta e importa organizzazione', panel: 'transfer-panel', keys: [] },
   { id: 'storage', group: 'Dati e accesso', icon: '▣', label: 'Dati che viaggiano con te', panel: 'storage-panel', keys: [] },
   { id: 'browser', group: 'Dati e accesso', icon: '◍', label: 'Accesso da browser', panel: 'browser-panel', keys: [] }
 ];
 // Ordered: the first matching pattern decides which settings tab holds the field to fix.
-const settingsErrorTabs = [[/evidenziatori|highlighter/i, 'highlights'], [/colonne della lista|list columns/i, 'columns'], [/link portale|portal link/i, 'portal'], [/dimensioni del testo|text sizes/i, 'fonts'], [/\b(?:temi|tema|themes?)\b/i, 'themes'], [/urgen/i, 'urgencies'], [/\b(?:stati|status|statuses)\b/i, 'statuses'], [/\b(?:lingua|language)\b/i, 'languages'], [/organizzazione|organization|\btab\b|ore per giorno|hours per day|logo/i, 'identity']];
+const settingsErrorTabs = [[/\btags?\b/i, 'tags'], [/evidenziatori|highlighter/i, 'highlights'], [/colonne della lista|list columns/i, 'columns'], [/link portale|portal link/i, 'portal'], [/dimensioni del testo|text sizes/i, 'fonts'], [/\b(?:temi|tema|themes?)\b/i, 'themes'], [/urgen/i, 'urgencies'], [/\b(?:stati|status|statuses)\b/i, 'statuses'], [/\b(?:lingua|language)\b/i, 'languages'], [/organizzazione|organization|\btab\b|ore per giorno|hours per day|logo/i, 'identity']];
 function settingsNav() {
   const groups = [...new Set(settingsTabs.map(tab => tab.group))];
   return `<nav class="settings-nav" aria-label="${esc(t('Sezioni delle impostazioni'))}">${groups.map((group, index) => `<div class="settings-nav-group" role="group" aria-labelledby="settings-group-${index}"><span class="settings-nav-label" id="settings-group-${index}">${esc(t(group))}</span>${settingsTabs.filter(tab => tab.group === group).map(tab => `<button type="button" class="settings-tab" id="settings-tab-${tab.id}" data-settings-tab="${tab.id}" aria-controls="${tab.panel}"><span class="settings-tab-icon" aria-hidden="true">${tab.icon}</span><span class="settings-tab-text">${esc(t(tab.label))}</span><span class="settings-tab-dot" role="img" aria-label="${esc(t('Modifiche non salvate'))}" title="${esc(t('Modifiche non salvate'))}" hidden></span></button>`).join('')}</div>`).join('')}</nav>`;
@@ -362,6 +369,8 @@ async function saveSettings() {
       next.settings = structuredClone(settings);
       const known = new Set((settings.highlights || []).map(h => h.id));
       for (const task of next.tasks) if (task.highlightId && !known.has(task.highlightId)) task.highlightId = '';
+      const tags = new Set((settings.tags || []).map(tag => tag.id));
+      for (const task of next.tasks) task.tagIds = (task.tagIds || []).filter(id => tags.has(id));
     }, organizationName);
     statusFilter = '';
   } catch (error) {
@@ -466,6 +475,7 @@ const taskColumnDefs = {
   urgency: { name: 'Urgenza', sort: 'urgencyId' },
   status: { name: 'Stato', sort: 'statusId' },
   highlight: { name: 'Evidenziazione', sort: 'highlightId' },
+  tags: { name: 'Tags' },
   effort: { name: 'Effort', sort: 'effortHours' },
   incident: { name: 'Incident' },
   problem: { name: 'Problem' },
@@ -541,6 +551,7 @@ function taskCell(column, task, status, urgency, links) {
     case 'urgency': return `<td>${pill(urgency.name, urgency.color)}</td>`;
     case 'status': return `<td>${pill(status.name, status.color, 'status-pill')}</td>`;
     case 'highlight': { const mark = highlightOf(task); return `<td>${mark ? pill(mark.name, mark.color, 'mark-pill') : none}</td>`; }
+    case 'tags': return `<td class="tags-cell"><button type="button" class="task-tags-button" data-edit-task="${esc(task.id)}" aria-label="${esc(t('Modifica tag'))}" title="${esc(t('Modifica tag'))}">${tagsOf(task).length ? tagChips(task) : `<span class="muted">+ ${esc(t('Tags'))}</span>`}</button></td>`;
     case 'effort': return `<td class="effort-cell">${effort(task.effortHours)}</td>`;
     case 'incident': return `<td class="references">${links.incidents.map(esc).join('<br>') || none}</td>`;
     case 'problem': return `<td class="references">${links.problems.map(esc).join('<br>') || none}</td>`;
@@ -559,7 +570,13 @@ function drawTaskRows() {
     return `<tr data-task-row="${esc(task.id)}" title="${esc(t('Doppio clic sulla riga per modificare.'))}" class="${classes}" style="--row-color:${status.color}${mark ? `;--mark:${mark.color}` : ''}">${columns.map(column => taskCell(column, task, status, urgency, links)).join('')}<td class="row-actions"><button type="button" class="icon-button mark-button ${mark ? 'is-marked' : ''}" data-mark-task="${esc(task.id)}" title="${esc(markLabel)}" aria-label="${esc(markLabel)}" aria-haspopup="menu" aria-expanded="false"><i class="mark-dot"></i></button><button class="icon-button" data-toggle-task="${task.id}" title="${esc(t(task.hidden ? 'Mostra attività' : 'Nascondi attività'))}">${task.hidden ? '◉' : '◌'}</button><button class="icon-button" data-edit-task="${task.id}" title="${esc(t('Modifica attività'))}">⋯</button></td></tr>`;
   }).join('') || `<tr><td colspan="${columns.length + 1}" class="empty">${esc(t('Nessuna attività trovata. Crea una nuova attività o modifica i filtri.'))}</td></tr>`;
   $('#row-count').textContent = ui`${tasks.length} attività mostrate · ${data.tasks.length} totali`;
-  document.querySelectorAll('[data-edit-task]').forEach(b => b.onclick = () => taskDialog(data.tasks.find(t => t.id === b.dataset.editTask)));
+  document.querySelectorAll('[data-edit-task]').forEach(b => b.onclick = () => {
+    taskDialog(data.tasks.find(t => t.id === b.dataset.editTask));
+    if (b.classList.contains('task-tags-button')) {
+      $('.task-tags').scrollIntoView({ block: 'center' });
+      ($('.tag-choice input') || $('.task-tags')).focus({ preventScroll: true });
+    }
+  });
   document.querySelectorAll('[data-toggle-task]').forEach(b => b.onclick = action(async () => {
     const id = b.dataset.toggleTask, hidden = !data.tasks.find(t => t.id === id).hidden;
     await commit(next => { const task = next.tasks.find(t => t.id === id); if (task) task.hidden = hidden; }); render();
@@ -754,7 +771,7 @@ function taskDialog(existing) {
   const t = existing || {
     id: uid(), code: '', sequence: Math.max(0, ...data.tasks.map(t => t.sequence)) + 1, url: '', description: '',
     statusId: data.settings.statuses[0].id, urgencyId: data.settings.urgencies[Math.min(2, data.settings.urgencies.length - 1)].id,
-    effortHours: 0, releaseDate: '', notes: '', hidden: false, highlightId: ''
+    effortHours: 0, releaseDate: '', notes: '', hidden: false, highlightId: '', tagIds: []
   };
   const days = Math.floor(t.effortHours / data.settings.hoursPerDay), hours = Math.round((t.effortHours - days * data.settings.hoursPerDay) * 100) / 100;
   openModal(ui`<form id="task-form"><div class="modal-heading"><div><div class="eyebrow">ATTIVITÀ</div><h2>${tr(existing ? 'Modifica attività' : 'Una nuova direzione')}</h2></div><button type="button" class="icon-button" data-close aria-label="Chiudi">✕</button></div><div class="form-grid">
@@ -768,6 +785,7 @@ function taskDialog(existing) {
     <label class="field">Effort in ore aggiuntive<input name="hours" type="number" min="0" step="0.01" value="${hours}"><small>${esc(fillText('1 giorno = {0} ore', data.settings.hoursPerDay))}</small></label>
     <label class="field">Release date<input name="releaseDate" type="date" value="${esc(t.releaseDate)}"></label>
     <label class="field">Evidenziazione<select name="highlightId">${optionList(highlightsOf(), currentMark(t), 'Nessuna evidenziazione')}</select><small>Colora la riga nella lista attività. I colori si gestiscono in Impostazioni › Evidenziatori.</small></label>
+    ${tagPicker(t)}
     <label class="field full checkbox-field"><input type="checkbox" name="hidden" ${t.hidden ? 'checked' : ''}> Nascondi solo dalla lista attività (resta visibile in milestone e kanban)</label>
     <div class="auto-match full" id="match-preview"></div>
     ${editor('notes-editor', 'Note', t.notes)}
@@ -801,7 +819,7 @@ function taskDialog(existing) {
       description: sanitize($('#description-editor').innerHTML), notes: sanitize($('#notes-editor').innerHTML),
       urgencyId: fields.get('urgencyId'), statusId: fields.get('statusId'), releaseDate: fields.get('releaseDate'),
       effortHours: Math.round((Number(fields.get('days')) * data.settings.hoursPerDay + Number(fields.get('hours'))) * 100) / 100,
-      hidden: fields.has('hidden'), highlightId: fields.get('highlightId') || ''
+      hidden: fields.has('hidden'), highlightId: fields.get('highlightId') || '', tagIds: fields.getAll('tagIds')
     };
     pendingMarks.delete(item.id);
     await commit(next => {
@@ -883,7 +901,7 @@ function transferPanel() {
   const settings = data.settings, activeTheme = settings.themes.find(theme => theme.id === settings.themeId);
   const details = {
     themes: `${plural(settings.themes.length, 'tema')} · ${fillText('attivo: {0}', esc(activeTheme.name))}`,
-    settings: `${plural(settings.statuses.length, 'stato')} · ${plural(settings.urgencies.length, 'urgenza')} · ${plural((settings.highlights || []).length, 'evidenziatore')} · ${t(settings.logo ? 'lingua, link, tab, colonne, dimensioni del testo e logo' : 'lingua, link, tab, colonne e dimensioni del testo')}`,
+    settings: `${plural(settings.statuses.length, 'stato')} · ${plural(settings.urgencies.length, 'urgenza')} · ${plural((settings.highlights || []).length, 'evidenziatore')} · ${(settings.tags || []).length} ${t('Tags')} · ${t(settings.logo ? 'lingua, link, tab, colonne, dimensioni del testo e logo' : 'lingua, link, tab, colonne e dimensioni del testo')}`,
     data: `${plural(data.tasks.length, 'attività')} · ${plural(data.issues.length, 'issue')}`,
     organization: t('Temi, configurazione e dati in un unico file')
   };
@@ -921,7 +939,7 @@ function organizationImportDialog(file) {
   const parts = [
     file.themes && part('themes', 'Temi', `${plural(file.themes.themes.length, 'tema')}: ${esc(t('quelli con lo stesso identificativo vengono aggiornati, gli altri aggiunti.'))}`,
       `<label class="import-sub"><input type="checkbox" name="activateTheme" checked><span>${fillText('Attiva il tema «{0}»', esc(fileTheme.name))}</span><span class="theme-swatches">${themeFields.map(([key]) => `<i style="background:${fileTheme[key]}"></i>`).join('')}</span></label>`),
-    file.settings && part('settings', 'Configurazione', esc(t(file.settings.highlights ? 'Lingua, link al portale, nomi delle tab, ore per giorno, dimensioni del testo, stati, urgenze, evidenziatori e colonne della lista. Sostituisce la configurazione attuale.' : file.settings.fontSizes ? 'Lingua, link al portale, nomi delle tab, ore per giorno, dimensioni del testo, stati e urgenze. Sostituisce la configurazione attuale.' : 'Lingua, link al portale, nomi delle tab, ore per giorno, stati e urgenze. Sostituisce la configurazione attuale.')),
+    file.settings && part('settings', 'Configurazione', esc(t(file.settings.tags ? 'Lingua, link al portale, nomi delle tab, ore per giorno, dimensioni del testo, stati, urgenze, evidenziatori, tags e colonne della lista. Sostituisce la configurazione attuale.' : file.settings.highlights ? 'Lingua, link al portale, nomi delle tab, ore per giorno, dimensioni del testo, stati, urgenze, evidenziatori e colonne della lista. Sostituisce la configurazione attuale.' : file.settings.fontSizes ? 'Lingua, link al portale, nomi delle tab, ore per giorno, dimensioni del testo, stati e urgenze. Sostituisce la configurazione attuale.' : 'Lingua, link al portale, nomi delle tab, ore per giorno, stati e urgenze. Sostituisce la configurazione attuale.')),
       file.settings.logo ? `<label class="import-sub"><input type="checkbox" name="logo"><img class="import-logo" src="${file.settings.logo}" alt=""><span>${esc(t('Sostituisci anche il logo'))}</span></label>` : ''),
     file.data && part('data', 'Dati', `${plural(file.data.tasks.length, 'attività')} · ${plural(file.data.issues.length, 'issue')}`,
       `<div class="import-sub import-modes" id="import-data-mode">${radio('dataMode', 'merge', 'Aggiungi e aggiorna', esc(t('Le attività con lo stesso identificativo vengono aggiornate, le issue già presenti non vengono duplicate.')), true)}${radio('dataMode', 'replace', 'Sostituisci tutto', esc(t('Attività e issue attuali vengono sostituite da quelle del file.')), false)}</div>`)
@@ -1054,6 +1072,7 @@ function wireFontSizes() {
 function renderSettings() {
   settingsDraft = structuredClone(data.settings);
   settingsDraft.highlights ??= [];
+  settingsDraft.tags ??= [];
   settingsDraft.taskColumns = normalizeTaskColumns(settingsDraft.taskColumns);
   const organization = organizations.find(o => o.id === activeOrganizationId);
   $('#content').innerHTML = '<div id="settings-page">' + heading(t('Impostazioni'), 'Nomi, flussi e colori. Configura il tuo workspace, portalo ovunque.', ui`<button class="button primary" id="save-settings">Salva impostazioni</button>`) +
@@ -1070,6 +1089,7 @@ function renderSettings() {
     <section class="panel settings-section" id="statuses-panel"><h2>Stati del flusso</h2><p class="section-description">L’ordine qui diventa l’ordine del kanban. Accendi il simbolo ★ per evidenziare automaticamente tutte le righe con quello stato; per colorare singole righe usa gli Evidenziatori.</p><div id="statuses-list"></div><button class="button" data-add-option="statuses">＋ Aggiungi stato</button></section>
     <section class="panel settings-section" id="urgencies-panel"><h2>Livelli di urgenza</h2><p class="section-description">Definisci le priorità e il loro ordinamento.</p><div id="urgencies-list"></div><button class="button" data-add-option="urgencies">＋ Aggiungi urgenza</button></section>
     <section class="panel settings-section" id="highlights-panel"><h2>Evidenziatori</h2><p class="section-description">Colori per evidenziare singole righe della lista attività, indipendentemente dallo stato. Nella lista usa la barra Evidenziatore sopra la tabella, il pallino ● a fine riga oppure il campo Evidenziazione della scheda attività.</p><div id="highlights-list"></div><button class="button" data-add-option="highlights">＋ Aggiungi colore</button><p class="muted">Eliminando un colore, le righe che lo usano tornano senza evidenziazione. L’ordine qui è usato anche per ordinare la colonna Evidenziazione.</p></section>
+    <section class="panel settings-section" id="tags-panel"><h2>Tags</h2><p class="section-description">Crea i tag di questa organizzazione, scegli nome e colore e ordinane la visualizzazione. Ogni attività può avere più tag.</p><div id="tags-list"></div><button class="button" data-add-option="tags">＋ Aggiungi tag</button><p class="muted">${esc(fillText('Massimo {0} tag, con nomi univoci di massimo {1} caratteri.', TAG_LIMIT, TAG_NAME_MAX))}</p><p class="muted">Eliminando un tag e salvando, viene rimosso dalle attività che lo usano, anche nascoste. Le attività e gli altri tag non vengono eliminati.</p></section>
     <section class="panel settings-section" id="columns-panel"><h2>Colonne della lista</h2><p class="section-description">Scegli quali colonne mostrare nella lista attività e in che ordine. Nascondere una colonna non cancella i dati. Puoi farlo anche dal pulsante “Colonne” sopra la tabella.</p><div id="columns-editor"></div><button type="button" class="button" id="reset-columns">↺ Ripristina colonne predefinite</button></section>
     <section class="panel settings-section full" id="browser-panel"><h2>Accesso da browser</h2><p class="section-description">Mentre OrbitKanban è aperto puoi lavorare anche dal browser di questo PC, con più organizzazioni in schede diverse. Le modifiche si sincronizzano in tempo reale tra app e schede.</p><code class="data-path" id="browser-url">${esc(browserUrl || t('Non disponibile'))}</code><div class="storage-actions"><button class="button" id="browser-open" ${browserUrl ? '' : 'disabled'}>${t(browserMode() ? 'Apri in nuova scheda' : 'Apri nel browser')} ↗</button><button class="button" id="browser-copy" ${browserUrl ? '' : 'disabled'}>${t(browserMode() ? 'Copia indirizzo' : 'Copia link di accesso')}</button></div><p class="muted">${t(browserMode() ? 'Stai usando OrbitKanban dal browser: l’app sul PC deve restare aperta. Ogni scheda può mostrare un’organizzazione diversa.' : 'Raggiungibile solo da questo computer (127.0.0.1) e protetto da una chiave personale: il link di accesso contiene la chiave, non condividerlo. Chiudendo l’app le schede del browser si disconnettono.')}</p></section>
     ${transferPanel()}<section class="panel settings-section full" id="storage-panel"><div class="storage-heading"><div><h2>Dati che viaggiano con te</h2><p class="section-description">Archivio JSON locale e copia automatica del salvataggio precedente.</p></div><span class="readonly-badge">100% LOCALE</span></div><code class="data-path">${esc(dataFolder)}</code><div class="storage-actions"><button class="button" id="export-data">↗ Esporta backup</button><button class="button" id="import-data">↙ Importa backup</button><button class="button" id="open-folder">Apri cartella dati</button><span class="spacer"></span><button class="button danger" id="clear-data">Svuota attività e issue</button></div><p class="muted">Per condividere l’app chiudila e copia l’eseguibile insieme alla cartella data.     Non eseguire contemporaneamente copie che condividono la stessa cartella dati.</p></section></div></div></div>`;
@@ -1106,6 +1126,15 @@ function renderSettings() {
   });
   $('#remove-logo').onclick = () => { settingsDraft.logo = ''; drawLogoPreview(); logoResult.textContent = ''; };
   document.querySelectorAll('[data-add-option]').forEach(b => b.onclick = () => {
+    if (b.dataset.addOption === 'tags') {
+      if (settingsDraft.tags.length >= TAG_LIMIT) { notify(fillText('Puoi definire al massimo {0} tag.', TAG_LIMIT), true); return; }
+      const base = t('Nuovo tag'), names = new Set(settingsDraft.tags.map(tag => tag.name.trim().toLowerCase()));
+      let name = base;
+      for (let suffix = 2; names.has(name.toLowerCase()); suffix++) name = `${base} ${suffix}`;
+      settingsDraft.tags.push({ id: uid(), name, color: highlightPalette[settingsDraft.tags.length % highlightPalette.length] });
+      drawOptionLists();
+      return;
+    }
     if (b.dataset.addOption === 'highlights') {
       if (settingsDraft.highlights.length >= HIGHLIGHT_LIMIT) { notify(fillText('Puoi definire al massimo {0} colori.', HIGHLIGHT_LIMIT), true); return; }
       const used = new Set(settingsDraft.highlights.map(h => h.color.toLowerCase()));
@@ -1233,23 +1262,27 @@ async function processLogo(file) {
 }
 const highlightPalette = ['#f2c94c', '#f0647a', '#5aa9f6', '#4fcf8f', '#b18cff', '#ff9f5a', '#3fd0c9', '#ff7ac6', '#9ccc65', '#7986cb', '#e57373', '#4db6ac', '#ffd54f', '#ba68c8', '#90a4ae', '#a1887f'];
 function drawOptionLists() {
-  for (const key of ['statuses', 'urgencies', 'highlights']) {
-    const usage = id => `<span class="option-usage" title="${esc(t('Righe con questo colore'))}">${esc(plural(data.tasks.filter(task => task.highlightId === id).length, 'attività'))}</span>`;
-    document.getElementById(`${key}-list`).innerHTML = settingsDraft[key].map((item, index) => ui`<div class="option-row"><span class="order-number">${String(index + 1).padStart(2, '0')}</span><input type="color" aria-label="Colore ${esc(item.name)}" data-color="${key}:${item.id}" value="${item.color}"><input class="option-name" aria-label="Nome opzione" ${key === 'highlights' ? 'maxlength="60"' : ''} data-option-name="${key}:${item.id}" value="${esc(item.name)}">${key === 'highlights' ? usage(item.id) : ''}${key === 'statuses' ? ui`<button class="icon-button star ${item.highlight ? 'selected' : ''}" data-highlight="${item.id}" title="Evidenzia le attività con questo stato" aria-pressed="${item.highlight}">★</button>` : ''}<button class="icon-button" data-move="${key}:${item.id}:-1" ${index === 0 ? 'disabled' : ''} title="Sposta su">↑</button><button class="icon-button" data-move="${key}:${item.id}:1" ${index === settingsDraft[key].length - 1 ? 'disabled' : ''} title="Sposta giù">↓</button><button class="icon-button delete-option" data-remove="${key}:${item.id}" title="Elimina opzione">×</button></div>`).join('') || (key === 'highlights' ? `<p class="muted option-empty">${esc(t('Nessun colore: aggiungine uno per usare l’evidenziatore.'))}</p>` : '');
+  for (const key of ['statuses', 'urgencies', 'highlights', 'tags']) {
+    const optional = key === 'highlights' || key === 'tags';
+    const usage = id => `<span class="option-usage" title="${esc(t(key === 'tags' ? 'Attività con questo tag' : 'Righe con questo colore'))}">${esc(plural(data.tasks.filter(task => key === 'tags' ? task.tagIds?.includes(id) : task.highlightId === id).length, 'attività'))}</span>`;
+    document.getElementById(`${key}-list`).innerHTML = settingsDraft[key].map((item, index) => ui`<div class="option-row"><span class="order-number">${String(index + 1).padStart(2, '0')}</span><input type="color" aria-label="Colore ${esc(item.name)}" data-color="${key}:${esc(item.id)}" value="${item.color}"><input class="option-name" aria-label="Nome opzione" ${optional ? 'maxlength="60"' : ''} data-option-name="${key}:${esc(item.id)}" value="${esc(item.name)}">${optional ? usage(item.id) : ''}${key === 'statuses' ? ui`<button class="icon-button star ${item.highlight ? 'selected' : ''}" data-highlight="${esc(item.id)}" title="Evidenzia le attività con questo stato" aria-pressed="${item.highlight}">★</button>` : ''}<button class="icon-button" data-move="${key}:${esc(item.id)}:-1" ${index === 0 ? 'disabled' : ''} title="Sposta su">↑</button><button class="icon-button" data-move="${key}:${esc(item.id)}:1" ${index === settingsDraft[key].length - 1 ? 'disabled' : ''} title="Sposta giù">↓</button><button class="icon-button delete-option" data-remove="${key}:${esc(item.id)}" title="Elimina opzione">×</button></div>`).join('') || (optional ? `<p class="muted option-empty">${esc(t(key === 'tags' ? 'Nessun tag: aggiungine uno per classificare le attività.' : 'Nessun colore: aggiungine uno per usare l’evidenziatore.'))}</p>` : '');
+    const add = document.querySelector(`[data-add-option="${key}"]`);
+    if (optional && add) add.disabled = settingsDraft[key].length >= (key === 'tags' ? TAG_LIMIT : HIGHLIGHT_LIMIT);
   }
-  function itemAt(value) { const [key, id] = value.split(':'); return settingsDraft[key].find(x => x.id === id); }
+  function optionId(value) { const [key, ...parts] = value.split(':'); return [key, parts.join(':')]; }
+  function itemAt(value) { const [key, id] = optionId(value); return settingsDraft[key].find(x => x.id === id); }
   document.querySelectorAll('[data-color]').forEach(input => input.oninput = () => { itemAt(input.dataset.color).color = input.value; });
   document.querySelectorAll('[data-option-name]').forEach(input => input.oninput = () => { itemAt(input.dataset.optionName).name = input.value; });
   document.querySelectorAll('[data-highlight]').forEach(b => b.onclick = () => {
     const item = settingsDraft.statuses.find(s => s.id === b.dataset.highlight); item.highlight = !item.highlight; drawOptionLists();
   });
   document.querySelectorAll('[data-move]').forEach(b => b.onclick = () => {
-    const [key, id, offset] = b.dataset.move.split(':'), list = settingsDraft[key], index = list.findIndex(x => x.id === id);
+    const parts = b.dataset.move.split(':'), key = parts.shift(), offset = parts.pop(), id = parts.join(':'), list = settingsDraft[key], index = list.findIndex(x => x.id === id);
     [list[index], list[index + Number(offset)]] = [list[index + Number(offset)], list[index]]; drawOptionLists();
   });
   document.querySelectorAll('[data-remove]').forEach(b => b.onclick = () => {
-    const [key, id] = b.dataset.remove.split(':');
-    if (key === 'highlights') { settingsDraft.highlights = settingsDraft.highlights.filter(x => x.id !== id); drawOptionLists(); return; }
+    const [key, id] = optionId(b.dataset.remove);
+    if (key === 'highlights' || key === 'tags') { settingsDraft[key] = settingsDraft[key].filter(x => x.id !== id); drawOptionLists(); return; }
     const field = key === 'statuses' ? 'statusId' : 'urgencyId';
     if (settingsDraft[key].length === 1) { notify('Deve restare almeno un’opzione.', true); return; }
     if (data.tasks.some(t => t[field] === id)) { notify('Questa opzione è usata da alcune attività, anche nascoste. Riassegnale prima di eliminarla.', true); return; }
@@ -1434,6 +1467,75 @@ window.runSmokeTests = async () => {
   check(markedRows().length > 0 && markedRows().every(row => highlightOf(data.tasks.find(task => task.id === row.dataset.taskRow))) && document.querySelectorAll('.highlighter-bar [data-highlighter]').length === highlightsOf().length + 1, 'Righe evidenziate con colori personalizzati e barra evidenziatore');
   const smokeTask = () => data.tasks.find(task => task.code === 'SMOKE-1');
   const smokeRow = () => document.querySelector(`tr[data-task-row="${CSS.escape(smokeTask().id)}"]`);
+  view = 4; render(); showSettingsTab('tags');
+  check(!$('#tags-panel').hidden && $('#settings-tab-tags').getAttribute('aria-current') === 'true' && document.querySelectorAll('#tags-list .option-row').length === data.settings.tags.length, 'Catalogo Tags in una scheda dedicata per organizzazione');
+  const savedTagCount = data.settings.tags.length;
+  $('[data-add-option="tags"]').click();
+  $('[data-add-option="tags"]').click();
+  const [tagOne, tagTwo] = settingsDraft.tags.slice(-2).map(tag => tag.id);
+  const setTagName = (id, name) => {
+    const input = document.querySelector(`[data-option-name="tags:${id}"]`);
+    input.value = name; input.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+  setTagName(tagOne, 'SMOKE-TAG <b>One</b>');
+  setTagName(tagTwo, 'SMOKE-TAG Two');
+  await new Promise(resolve => setTimeout(resolve));
+  check(!$('#settings-tab-tags .settings-tab-dot').hidden && !$('#unsaved-banner').hidden && data.settings.tags.length === savedTagCount, 'Nuovi tag restano in bozza fino al salvataggio');
+  $('#save-settings-inline').click();
+  await waitFor(() => !saving && data.settings.tags.length === savedTagCount + 2);
+  check((await workspaceApi.load()).data.settings.tags.some(tag => tag.id === tagOne), 'Catalogo tag salvato nell’archivio locale');
+  view = 0; render();
+  check($('.activity-table th[data-column="tags"]').textContent === 'Tags' && !$('.activity-table th[data-column="tags"] button'), 'Colonna Tags visibile e non ordinabile come campo testuale multiplo');
+  smokeRow().querySelector('.task-tags-button').click();
+  check($('#task-form') && document.querySelectorAll('.tag-choice').length === data.settings.tags.length && !$('.tag-choice b') && document.activeElement?.name === 'tagIds', 'Colonna Tags apre direttamente la selezione, con nomi mostrati come testo sicuro');
+  document.querySelector(`.tag-choice input[value="${tagOne}"]`).click();
+  document.querySelector(`.tag-choice input[value="${tagTwo}"]`).click();
+  $('#task-form').requestSubmit();
+  await waitFor(() => !saving && !$('#modal').open);
+  check(smokeTask().tagIds.includes(tagOne) && smokeTask().tagIds.includes(tagTwo) && smokeRow().querySelectorAll('.tag-pill').length === 2, 'Selezione multipla visualizzata come etichette nella riga');
+  check((await workspaceApi.load()).data.tasks.find(task => task.id === smokeTask().id).tagIds.length === 2, 'Selezione multipla persistita sul disco');
+  smokeRow().querySelector('.task-tags-button').click();
+  check(document.querySelectorAll('.tag-choice input:checked').length === 2, 'La modifica ripristina i tag già selezionati');
+  document.querySelector(`.tag-choice input[value="${tagOne}"]`).click();
+  $('#task-form').requestSubmit();
+  await waitFor(() => !saving && !$('#modal').open);
+  check(smokeTask().tagIds.length === 1 && smokeTask().tagIds[0] === tagTwo, 'Un tag si può rimuovere dalla singola attività');
+  smokeRow().querySelector('.task-tags-button').click();
+  document.querySelector(`.tag-choice input[value="${tagOne}"]`).click();
+  $('#task-form').requestSubmit();
+  await waitFor(() => !saving && !$('#modal').open);
+  $('#search').value = 'smoke-tag';
+  $('#search').dispatchEvent(new Event('input'));
+  check(document.querySelectorAll('#task-rows tr[data-task-row]').length === 1 && smokeRow(), 'Ricerca attività estesa ai nomi dei tag');
+  $('#search').value = ''; $('#search').dispatchEvent(new Event('input'));
+  $('#columns-button').click();
+  $('[data-column-visible="tags"]').click();
+  $('#columns-apply').click();
+  await waitFor(() => !saving && !$('#modal').open);
+  check(!$('.activity-table th[data-column="tags"]') && smokeTask().tagIds.length === 2, 'Nascondere Tags non cancella le assegnazioni');
+  $('#columns-button').click();
+  $('[data-column-visible="tags"]').click();
+  $('#columns-apply').click();
+  await waitFor(() => !saving && !$('#modal').open);
+  check(smokeRow().querySelectorAll('.tag-pill').length === 2, 'Colonna Tags ripristinata con i dati salvati');
+  view = 4; render(); showSettingsTab('tags');
+  setTagName(tagTwo, 'SMOKE-TAG Updated');
+  const tagColor = document.querySelector(`[data-color="tags:${tagTwo}"]`);
+  tagColor.value = '#12ab34'; tagColor.dispatchEvent(new Event('input', { bubbles: true }));
+  document.querySelector(`[data-move="tags:${tagTwo}:-1"]`).click();
+  $('#save-settings-inline').click();
+  await waitFor(() => !saving && data.settings.tags.find(tag => tag.id === tagTwo).name === 'SMOKE-TAG Updated');
+  view = 0; render();
+  check(smokeRow().querySelector('.tag-pill').textContent === 'SMOKE-TAG Updated' && smokeRow().querySelector('.tag-pill').style.getPropertyValue('--pill') === '#12ab34', 'Nome, colore e ordine del catalogo si riflettono sulle attività');
+  view = 4; render(); showSettingsTab('tags');
+  document.querySelector(`[data-remove="tags:${tagOne}"]`).click();
+  $('#discard-settings').click();
+  check(settingsDraft.tags.some(tag => tag.id === tagOne) && smokeTask().tagIds.includes(tagOne), 'Annullare una cancellazione conserva catalogo e assegnazioni');
+  document.querySelector(`[data-remove="tags:${tagOne}"]`).click();
+  $('#save-settings-inline').click();
+  await waitFor(() => !saving && !data.settings.tags.some(tag => tag.id === tagOne));
+  check(smokeTask().hidden && !smokeTask().tagIds.includes(tagOne) && smokeTask().tagIds.includes(tagTwo) && data.tasks.length === initialTaskCount + 1, 'Eliminare un tag pulisce anche le righe nascoste senza eliminare attività o altri tag');
+  view = 0; render();
   doubleClick(smokeRow().querySelector('.sequence'));
   check($('#modal').open && $('#task-form').elements.code.value === 'SMOKE-1', 'Doppio clic su una cella apre la modifica della relativa attività');
   check(getComputedStyle($('#task-form').elements.code).userSelect === 'text' && getComputedStyle($('#description-editor strong')).userSelect === 'text', 'Campi e contenuti rich text restano selezionabili');
@@ -1494,7 +1596,7 @@ window.runSmokeTests = async () => {
   await waitFor(() => !saving && !$('#modal').open && smokeTask().highlightId === highlightsOf()[2].id);
   check(smokeRow().classList.contains('marked') && smokeRow().style.getPropertyValue('--mark').trim() === highlightsOf()[2].color, 'Evidenziazione modificabile dalla scheda attività');
   const headerIds = () => [...document.querySelectorAll('.activity-table thead th[data-column]')].map(th => th.dataset.column);
-  check(headerIds().join() === 'sequence,code,description,urgency,status,effort,incident,problem,releaseDate,notes' && document.querySelectorAll('#task-rows td.description-col').length === listedRows().length, 'Colonne predefinite della lista attività');
+  check(headerIds().join() === 'sequence,code,description,urgency,status,tags,effort,incident,problem,releaseDate,notes' && document.querySelectorAll('#task-rows td.description-col').length === listedRows().length, 'Colonne predefinite della lista attività');
   $('#columns-button').click();
   const columnToggle = id => $(`#columns-dialog-editor [data-column-visible="${id}"]`);
   check($('#modal').open && document.querySelectorAll('#columns-dialog-editor [data-column-visible]').length === Object.keys(taskColumnDefs).length && !columnToggle('highlight').checked && columnToggle('notes').checked, 'Scelta delle colonne dal pulsante Colonne');
@@ -1504,7 +1606,7 @@ window.runSmokeTests = async () => {
   check(document.activeElement?.dataset.columnMove === 'highlight:-1', 'Spostamento colonne utilizzabile da tastiera');
   $('#columns-apply').click();
   await waitFor(() => !saving && !$('#modal').open);
-  check(headerIds().join() === 'sequence,code,description,urgency,highlight,status,effort,incident,problem,releaseDate' && smokeRow().cells.length === headerIds().length + 1 && smokeRow().querySelector('.mark-pill') && !data.settings.taskColumns.find(column => column.id === 'notes').visible && (await workspaceApi.load()).data.settings.taskColumns.find(column => column.id === 'highlight').visible, 'Colonne mostrate, nascoste e riordinate e salvate');
+  check(headerIds().join() === 'sequence,code,description,urgency,highlight,status,tags,effort,incident,problem,releaseDate' && smokeRow().cells.length === headerIds().length + 1 && smokeRow().querySelector('.mark-pill') && !data.settings.taskColumns.find(column => column.id === 'notes').visible && (await workspaceApi.load()).data.settings.taskColumns.find(column => column.id === 'highlight').visible, 'Colonne mostrate, nascoste e riordinate e salvate');
   $('[data-sort="highlightId"]').click();
   check(sort.length === 1 && sort[0].key === 'highlightId' && listedRows()[0].classList.contains('marked') && !listedRows().at(-1).classList.contains('marked'), 'Ordinamento per evidenziazione');
   await commit(next => { next.settings.taskColumns = defaultTaskColumns(); });
@@ -1800,6 +1902,7 @@ window.runSmokeTests = async () => {
   check($('.highlighter-label').textContent.includes('Highlighter') && $('#columns-button').textContent.includes('Columns') && $('#highlight-filter').options[0].textContent === 'All highlights' && $('.activity-table th[data-column="description"]').textContent === 'Description', 'Evidenziatore e colonne tradotti in inglese');
   taskDialog();
   check($('#task-form').textContent.includes('Portal code') && $('#task-form').textContent.includes('Effort in days') && $('#task-form').textContent.includes('1 day'), 'Dialog attività, editor e unità in inglese');
+  check(data.settings.tags.length === 0 && !$('.tag-choice') && $('.task-tags').textContent.includes('No tags available. Add them in Settings'), 'Catalogo tag isolato per organizzazione e istruzioni tradotte in inglese');
   $('#task-form').elements.code.value = 'SMOKE-1';
   $('#description-editor').innerHTML = '<p>Attività personalizzate</p>';
   $('#task-form').elements.days.value = '1';
