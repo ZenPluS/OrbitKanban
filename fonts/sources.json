@@ -1,0 +1,569 @@
+{
+  "googleFontsRevision": "2fe1e8c6b137fb13041a7cfca6fdcd8a910ea4dc",
+  "fonts": [
+    {
+      "id": "roboto",
+      "name": "Roboto",
+      "stylesheet": "https://fonts.googleapis.com/css2?family=Roboto:wght@400..700&display=swap",
+      "license": "roboto-OFL.txt",
+      "licenseUrl": "https://raw.githubusercontent.com/google/fonts/2fe1e8c6b137fb13041a7cfca6fdcd8a910ea4dc/ofl/roboto/OFL.txt",
+      "files": [
+        {
+          "file": "roboto-latin-ext-400-700.woff2",
+          "url": "https://fonts.gstatic.com/s/roboto/v51/KFO7CnqEu92Fr1ME7kSn66aGLdTylUAMa3KUBGEe.woff2",
+          "bytes": 29392,
+          "sha256": "cedb374b05a35034cf96db185db4eeb8f8ce49e1a56197673702ff11b5533d6e"
+        },
+        {
+          "file": "roboto-latin-400-700.woff2",
+          "url": "https://fonts.gstatic.com/s/roboto/v51/KFO7CnqEu92Fr1ME7kSn66aGLdTylUAMa3yUBA.woff2",
+          "bytes": 43136,
+          "sha256": "1404ca348bd75ef836f4dd8b6f2cc719458642d1237c368296b2fc652dca47dc"
+        }
+      ]
+    },
+    {
+      "id": "inter",
+      "name": "Inter",
+      "stylesheet": "https://fonts.googleapis.com/css2?family=Inter:wght@400..700&display=swap",
+      "license": "inter-OFL.txt",
+      "licenseUrl": "https://raw.githubusercontent.com/google/fonts/2fe1e8c6b137fb13041a7cfca6fdcd8a910ea4dc/ofl/inter/OFL.txt",
+      "files": [
+        {
+          "file": "inter-latin-ext-400-700.woff2",
+          "url": "https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa25L7SUc.woff2",
+          "bytes": 85068,
+          "sha256": "34b9c504cab7a73e37b746343a449132e56cf7b5481af2cb81dc74dcff25c956"
+        },
+        {
+          "file": "inter-latin-400-700.woff2",
+          "url": "https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa1ZL7.woff2",
+          "bytes": 48256,
+          "sha256": "3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62"
+        }
+      ]
+    },
+    {
+      "id": "opensans",
+      "name": "Open Sans",
+      "stylesheet": "https://fonts.googleapis.com/css2?family=Open%20Sans:wght@400..700&display=swap",
+      "license": "opensans-OFL.txt",
+      "licenseUrl": "https://raw.githubusercontent.com/google/fonts/2fe1e8c6b137fb13041a7cfca6fdcd8a910ea4dc/ofl/opensans/OFL.txt",
+      "files": [
+        {
+          "file": "opensans-latin-ext-400-700.woff2",
+          "url": "https://fonts.gstatic.com/s/opensans/v44/memvYaGs126MiZpBA-UvWbX2vVnXBbObj2OVTSGmu1aB.woff2",
+          "bytes": 35156,
+          "sha256": "d5bab8e28732fe3d10dcef4f77b9c248605bbb2a87d289a2539251ceafab536a"
+        },
+        {
+          "file": "opensans-latin-400-700.woff2",
+          "url": "https://fonts.gstatic.com/s/opensans/v44/memvYaGs126MiZpBA-UvWbX2vVnXBbObj2OVTS-muw.woff2",
+          "bytes": 48320,
+          "sha256": "d8e4fe0452aa2076429a9bb5d8757d00a994dd95986cf950e9a1a371b9a072a0"
+        }
+      ]
+    },
+    {
+      "id": "lato",
+      "name": "Lato",
+      "stylesheet": "https://fonts.googleapis.com/css2?family=Lato:wght@400;700&display=swap",
+      "license": "lato-OFL.txt",
+      "licenseUrl": "https://raw.githubusercontent.com/google/fonts/2fe1e8c6b137fb13041a7cfca6fdcd8a910ea4dc/ofl/lato/OFL.txt",
+      "files": [
+        {
+          "file": "lato-latin-ext-400.woff2",
+          "url": "https://fonts.gstatic.com/s/lato/v25/S6uyw4BMUTPHjxAwXjeu.woff2",
+          "bytes": 5612,
+          "sha256": "8b9fc9737043f88c1a9a7195c27a239bd329cc33d928ffb67736c61ae7a1dbbd"
+        },
+        {
+          "file": "lato-latin-400.woff2",
+          "url": "https://fonts.gstatic.com/s/lato/v25/S6uyw4BMUTPHjx4wXg.woff2",
+          "bytes": 23580,
+          "sha256": "918b7dc3e2e2d015c16ce08b57bcb64d2253bafc1707658f361e72865498e537"
+        },
+        {
+          "file": "lato-latin-ext-700.woff2",
+          "url": "https://fonts.gstatic.com/s/lato/v25/S6u9w4BMUTPHh6UVSwaPGR_p.woff2",
+          "bytes": 5552,
+          "sha256": "3a5797f440bc67b59830cad81e59a71011e35cb45ed7f747b61a69b0a9b0d6ae"
+        },
+        {
+          "file": "lato-latin-700.woff2",
+          "url": "https://fonts.gstatic.com/s/lato/v25/S6u9w4BMUTPHh6UVSwiPGQ.woff2",
+          "bytes": 23040,
+          "sha256": "c447dd7677b419db7b21dbdfc6277c7816a913ffda76fd2e52702df538de0e49"
+        }
+      ]
+    },
+    {
+      "id": "montserrat",
+      "name": "Montserrat",
+      "stylesheet": "https://fonts.googleapis.com/css2?family=Montserrat:wght@400..700&display=swap",
+      "license": "montserrat-OFL.txt",
+      "licenseUrl": "https://raw.githubusercontent.com/google/fonts/2fe1e8c6b137fb13041a7cfca6fdcd8a910ea4dc/ofl/montserrat/OFL.txt",
+      "files": [
+        {
+          "file": "montserrat-latin-ext-400-700.woff2",
+          "url": "https://fonts.gstatic.com/s/montserrat/v31/JTUSjIg1_i6t8kCHKm459Wdhyzbi.woff2",
+          "bytes": 70688,
+          "sha256": "54d9a78b7ff60b689ad9f3017ffac8547b5d871afec733f6c1c3ae36577ee504"
+        },
+        {
+          "file": "montserrat-latin-400-700.woff2",
+          "url": "https://fonts.gstatic.com/s/montserrat/v31/JTUSjIg1_i6t8kCHKm459Wlhyw.woff2",
+          "bytes": 37956,
+          "sha256": "06b16db7a969135d48d38c49183be7fb88d4452e2a3011957c7851941f4e4879"
+        }
+      ]
+    },
+    {
+      "id": "poppins",
+      "name": "Poppins",
+      "stylesheet": "https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap",
+      "license": "poppins-OFL.txt",
+      "licenseUrl": "https://raw.githubusercontent.com/google/fonts/2fe1e8c6b137fb13041a7cfca6fdcd8a910ea4dc/ofl/poppins/OFL.txt",
+      "files": [
+        {
+          "file": "poppins-latin-ext-400.woff2",
+          "url": "https://fonts.gstatic.com/s/poppins/v24/pxiEyp8kv8JHgFVrJJnecmNE.woff2",
+          "bytes": 5644,
+          "sha256": "0b1fcab42c18b69bcfe9ce4799fcbff5af1621c53ffcfdc4723c6f5ec4ee3ffb"
+        },
+        {
+          "file": "poppins-latin-400.woff2",
+          "url": "https://fonts.gstatic.com/s/poppins/v24/pxiEyp8kv8JHgFVrJJfecg.woff2",
+          "bytes": 7884,
+          "sha256": "7d93459d86585bfcdbb7e0376056226adb25821ee54b96236fe2123e9560929f"
+        },
+        {
+          "file": "poppins-latin-ext-600.woff2",
+          "url": "https://fonts.gstatic.com/s/poppins/v24/pxiByp8kv8JHgFVrLEj6Z1JlFc-K.woff2",
+          "bytes": 5524,
+          "sha256": "bb1f2d582e7fba586ab70c91ef062d3becaf78b887654953863521b73665d171"
+        },
+        {
+          "file": "poppins-latin-600.woff2",
+          "url": "https://fonts.gstatic.com/s/poppins/v24/pxiByp8kv8JHgFVrLEj6Z1xlFQ.woff2",
+          "bytes": 8000,
+          "sha256": "f4e80d9dfd374d02989b87a27b5ed4cb78fbb177c27f1478e9a8b0afb7513149"
+        },
+        {
+          "file": "poppins-latin-ext-700.woff2",
+          "url": "https://fonts.gstatic.com/s/poppins/v24/pxiByp8kv8JHgFVrLCz7Z1JlFc-K.woff2",
+          "bytes": 5432,
+          "sha256": "ccfd87f69ef00d811da3d06488cec4e79ec99d289cfbcbe4be42031cecae775a"
+        },
+        {
+          "file": "poppins-latin-700.woff2",
+          "url": "https://fonts.gstatic.com/s/poppins/v24/pxiByp8kv8JHgFVrLCz7Z1xlFQ.woff2",
+          "bytes": 7816,
+          "sha256": "9338e65fc077355c7a87ae0d64cc101e23b9bf8ad78ae65f0f319c857311b526"
+        }
+      ]
+    },
+    {
+      "id": "nunito",
+      "name": "Nunito",
+      "stylesheet": "https://fonts.googleapis.com/css2?family=Nunito:wght@400..700&display=swap",
+      "license": "nunito-OFL.txt",
+      "licenseUrl": "https://raw.githubusercontent.com/google/fonts/2fe1e8c6b137fb13041a7cfca6fdcd8a910ea4dc/ofl/nunito/OFL.txt",
+      "files": [
+        {
+          "file": "nunito-latin-ext-400-700.woff2",
+          "url": "https://fonts.gstatic.com/s/nunito/v32/XRXV3I6Li01BKofIO-aBXso.woff2",
+          "bytes": 35588,
+          "sha256": "2c8d792869818ecb253a46bc3c63c7013df7aac2f69291c3c85e5cdc94160960"
+        },
+        {
+          "file": "nunito-latin-400-700.woff2",
+          "url": "https://fonts.gstatic.com/s/nunito/v32/XRXV3I6Li01BKofINeaB.woff2",
+          "bytes": 39128,
+          "sha256": "ba344451eab25b217a165363b1982048a5e5830a0daf36577973955a04cac793"
+        }
+      ]
+    },
+    {
+      "id": "nunitosans",
+      "name": "Nunito Sans",
+      "stylesheet": "https://fonts.googleapis.com/css2?family=Nunito%20Sans:wght@400..700&display=swap",
+      "license": "nunitosans-OFL.txt",
+      "licenseUrl": "https://raw.githubusercontent.com/google/fonts/2fe1e8c6b137fb13041a7cfca6fdcd8a910ea4dc/ofl/nunitosans/OFL.txt",
+      "files": [
+        {
+          "file": "nunitosans-latin-ext-400-700.woff2",
+          "url": "https://fonts.gstatic.com/s/nunitosans/v19/pe0TMImSLYBIv1o4X1M8ce2xCx3yop4tQpF_MeTm0lfGWVpNn64CL7U8upHZIbMV51Q42ptCp7t7R-tCKQ.woff2",
+          "bytes": 27908,
+          "sha256": "c648ee5bfda70d44b9fb628f4114d1cc4f984d050cbb4881052237ede3638a2e"
+        },
+        {
+          "file": "nunitosans-latin-400-700.woff2",
+          "url": "https://fonts.gstatic.com/s/nunitosans/v19/pe0TMImSLYBIv1o4X1M8ce2xCx3yop4tQpF_MeTm0lfGWVpNn64CL7U8upHZIbMV51Q42ptCp7t1R-s.woff2",
+          "bytes": 31076,
+          "sha256": "29e3890496844a9ea81975c52771c587c872b4eb317026422d1995b88d21b57d"
+        }
+      ]
+    },
+    {
+      "id": "raleway",
+      "name": "Raleway",
+      "stylesheet": "https://fonts.googleapis.com/css2?family=Raleway:wght@400..700&display=swap",
+      "license": "raleway-OFL.txt",
+      "licenseUrl": "https://raw.githubusercontent.com/google/fonts/2fe1e8c6b137fb13041a7cfca6fdcd8a910ea4dc/ofl/raleway/OFL.txt",
+      "files": [
+        {
+          "file": "raleway-latin-ext-400-700.woff2",
+          "url": "https://fonts.gstatic.com/s/raleway/v37/1Ptug8zYS_SKggPNyCMIT5lu.woff2",
+          "bytes": 31480,
+          "sha256": "2d603982caea60f15b741581c9e7bd88d1a7680fc52978137f9bc67c2dec61e0"
+        },
+        {
+          "file": "raleway-latin-400-700.woff2",
+          "url": "https://fonts.gstatic.com/s/raleway/v37/1Ptug8zYS_SKggPNyC0ITw.woff2",
+          "bytes": 48264,
+          "sha256": "b1bef1f03a77a36fc257c5525e32a1dd621bb6f935b743a419da7ed0b18dc8f5"
+        }
+      ]
+    },
+    {
+      "id": "rubik",
+      "name": "Rubik",
+      "stylesheet": "https://fonts.googleapis.com/css2?family=Rubik:wght@400..700&display=swap",
+      "license": "rubik-OFL.txt",
+      "licenseUrl": "https://raw.githubusercontent.com/google/fonts/2fe1e8c6b137fb13041a7cfca6fdcd8a910ea4dc/ofl/rubik/OFL.txt",
+      "files": [
+        {
+          "file": "rubik-latin-ext-400-700.woff2",
+          "url": "https://fonts.gstatic.com/s/rubik/v31/iJWKBXyIfDnIV7nPrXyi0A.woff2",
+          "bytes": 19400,
+          "sha256": "09472f217ad1ebb61a7669cf532f9f2f80685e07652ee862fde9a79665aef479"
+        },
+        {
+          "file": "rubik-latin-400-700.woff2",
+          "url": "https://fonts.gstatic.com/s/rubik/v31/iJWKBXyIfDnIV7nBrXw.woff2",
+          "bytes": 35348,
+          "sha256": "691cd1d9b4c0cdf31a1dcf04259c86f92c85e69f6622abab7964d81e36890691"
+        }
+      ]
+    },
+    {
+      "id": "worksans",
+      "name": "Work Sans",
+      "stylesheet": "https://fonts.googleapis.com/css2?family=Work%20Sans:wght@400..700&display=swap",
+      "license": "worksans-OFL.txt",
+      "licenseUrl": "https://raw.githubusercontent.com/google/fonts/2fe1e8c6b137fb13041a7cfca6fdcd8a910ea4dc/ofl/worksans/OFL.txt",
+      "files": [
+        {
+          "file": "worksans-latin-ext-400-700.woff2",
+          "url": "https://fonts.gstatic.com/s/worksans/v24/QGYsz_wNahGAdqQ43Rh_cqDpp_k.woff2",
+          "bytes": 35716,
+          "sha256": "2aa17fc7b072e46652e84bbe3dbba9ec57cdea320d89e8c951ed7cf3218c300b"
+        },
+        {
+          "file": "worksans-latin-400-700.woff2",
+          "url": "https://fonts.gstatic.com/s/worksans/v24/QGYsz_wNahGAdqQ43Rh_fKDp.woff2",
+          "bytes": 50316,
+          "sha256": "1dd49afc07fb2231b2ff686cbf007725fb2742271bb1f28ebd98f22a0d817343"
+        }
+      ]
+    },
+    {
+      "id": "sourcesans3",
+      "name": "Source Sans 3",
+      "stylesheet": "https://fonts.googleapis.com/css2?family=Source%20Sans%203:wght@400..700&display=swap",
+      "license": "sourcesans3-OFL.txt",
+      "licenseUrl": "https://raw.githubusercontent.com/google/fonts/2fe1e8c6b137fb13041a7cfca6fdcd8a910ea4dc/ofl/sourcesans3/OFL.txt",
+      "files": [
+        {
+          "file": "sourcesans3-latin-ext-400-700.woff2",
+          "url": "https://fonts.gstatic.com/s/sourcesans3/v20/nwpStKy2OAdR1K-IwhWudF-R3wEaZfrc.woff2",
+          "bytes": 60088,
+          "sha256": "a85a7459bdb3cdc1136751e151a506bae653fc29ada3ca86237477df6f1b59e6"
+        },
+        {
+          "file": "sourcesans3-latin-400-700.woff2",
+          "url": "https://fonts.gstatic.com/s/sourcesans3/v20/nwpStKy2OAdR1K-IwhWudF-R3w8aZQ.woff2",
+          "bytes": 28872,
+          "sha256": "19143dca075972bc84e3fd9eab7416dd40cc565dccb2435a044bdfabe060c7d5"
+        }
+      ]
+    },
+    {
+      "id": "notosans",
+      "name": "Noto Sans",
+      "stylesheet": "https://fonts.googleapis.com/css2?family=Noto%20Sans:wght@400..700&display=swap",
+      "license": "notosans-OFL.txt",
+      "licenseUrl": "https://raw.githubusercontent.com/google/fonts/2fe1e8c6b137fb13041a7cfca6fdcd8a910ea4dc/ofl/notosans/OFL.txt",
+      "files": [
+        {
+          "file": "notosans-latin-ext-400-700.woff2",
+          "url": "https://fonts.gstatic.com/s/notosans/v42/o-0bIpQlx3QUlC5A4PNB6Ryti20_6n1iPHjc5aDdu2ui.woff2",
+          "bytes": 167960,
+          "sha256": "6d5a79315528df191b9d86f97b0c4272a8b588fcb166773fe6588ac795de0613"
+        },
+        {
+          "file": "notosans-latin-400-700.woff2",
+          "url": "https://fonts.gstatic.com/s/notosans/v42/o-0bIpQlx3QUlC5A4PNB6Ryti20_6n1iPHjc5a7duw.woff2",
+          "bytes": 35820,
+          "sha256": "51ca196f49a33e79e7870ff88ebd2829a3f627a51e7d690986618f0e7ad2b52d"
+        }
+      ]
+    },
+    {
+      "id": "dmsans",
+      "name": "DM Sans",
+      "stylesheet": "https://fonts.googleapis.com/css2?family=DM%20Sans:wght@400..700&display=swap",
+      "license": "dmsans-OFL.txt",
+      "licenseUrl": "https://raw.githubusercontent.com/google/fonts/2fe1e8c6b137fb13041a7cfca6fdcd8a910ea4dc/ofl/dmsans/OFL.txt",
+      "files": [
+        {
+          "file": "dmsans-latin-ext-400-700.woff2",
+          "url": "https://fonts.gstatic.com/s/dmsans/v17/rP2Yp2ywxg089UriI5-g4vlH9VoD8Cmcqbu6-K6h9Q.woff2",
+          "bytes": 18228,
+          "sha256": "a5d38fe99f930275684999b462c7123faa063d9e44e73b4b241723d884aa0f49"
+        },
+        {
+          "file": "dmsans-latin-400-700.woff2",
+          "url": "https://fonts.gstatic.com/s/dmsans/v17/rP2Yp2ywxg089UriI5-g4vlH9VoD8Cmcqbu0-K4.woff2",
+          "bytes": 36932,
+          "sha256": "9fea608a947e67020c33cad9a6fe3d60c54119dfb8cff87768a8117a15ed7543"
+        }
+      ]
+    },
+    {
+      "id": "manrope",
+      "name": "Manrope",
+      "stylesheet": "https://fonts.googleapis.com/css2?family=Manrope:wght@400..700&display=swap",
+      "license": "manrope-OFL.txt",
+      "licenseUrl": "https://raw.githubusercontent.com/google/fonts/2fe1e8c6b137fb13041a7cfca6fdcd8a910ea4dc/ofl/manrope/OFL.txt",
+      "files": [
+        {
+          "file": "manrope-latin-ext-400-700.woff2",
+          "url": "https://fonts.gstatic.com/s/manrope/v23/xn7gYHE41ni1AdIRggmxSuXd.woff2",
+          "bytes": 15160,
+          "sha256": "2f7335119075b2079f1d882530bbc18728461612bf90743203d73a74a48f4d9b"
+        },
+        {
+          "file": "manrope-latin-400-700.woff2",
+          "url": "https://fonts.gstatic.com/s/manrope/v23/xn7gYHE41ni1AdIRggexSg.woff2",
+          "bytes": 24532,
+          "sha256": "8c2def024c1bf31aacf3624ae3c4d701269b4ec3dc765c04830839f0d36b2d9e"
+        }
+      ]
+    },
+    {
+      "id": "firasans",
+      "name": "Fira Sans",
+      "stylesheet": "https://fonts.googleapis.com/css2?family=Fira%20Sans:wght@400;600;700&display=swap",
+      "license": "firasans-OFL.txt",
+      "licenseUrl": "https://raw.githubusercontent.com/google/fonts/2fe1e8c6b137fb13041a7cfca6fdcd8a910ea4dc/ofl/firasans/OFL.txt",
+      "files": [
+        {
+          "file": "firasans-latin-ext-400.woff2",
+          "url": "https://fonts.gstatic.com/s/firasans/v18/va9E4kDNxMZdWfMOD5VvmYjLeTY.woff2",
+          "bytes": 46400,
+          "sha256": "ed4d0b738d93612b44310bf3f2993d2ce220da28f064c2cdda37b2fcbc23662c"
+        },
+        {
+          "file": "firasans-latin-400.woff2",
+          "url": "https://fonts.gstatic.com/s/firasans/v18/va9E4kDNxMZdWfMOD5Vvl4jL.woff2",
+          "bytes": 23872,
+          "sha256": "3e38d8c01fe97529fbf0a086bf958d724b723ca7fc8be77b4ba5745f6259b6ca"
+        },
+        {
+          "file": "firasans-latin-ext-600.woff2",
+          "url": "https://fonts.gstatic.com/s/firasans/v18/va9B4kDNxMZdWfMOD5VnSKzeSBf6TF0.woff2",
+          "bytes": 50268,
+          "sha256": "8d1b17f77319ceb145549c9489dedc66b117ac2124cd72d0a4559ada43022510"
+        },
+        {
+          "file": "firasans-latin-600.woff2",
+          "url": "https://fonts.gstatic.com/s/firasans/v18/va9B4kDNxMZdWfMOD5VnSKzeRhf6.woff2",
+          "bytes": 24844,
+          "sha256": "55e09735e30d8492afac5d59ac433c6b367bb7dd00c46e157cfe95c9fb29e833"
+        },
+        {
+          "file": "firasans-latin-ext-700.woff2",
+          "url": "https://fonts.gstatic.com/s/firasans/v18/va9B4kDNxMZdWfMOD5VnLK3eSBf6TF0.woff2",
+          "bytes": 50368,
+          "sha256": "9ff55b176e58ac7e0e6c3115858c7120d532957105fde0ca82d47a1e895db730"
+        },
+        {
+          "file": "firasans-latin-700.woff2",
+          "url": "https://fonts.gstatic.com/s/firasans/v18/va9B4kDNxMZdWfMOD5VnLK3eRhf6.woff2",
+          "bytes": 25012,
+          "sha256": "c753d7153cac2cfeb877264d18f11197ca672d3e04ba1472154a54777a4e354d"
+        }
+      ]
+    },
+    {
+      "id": "notoserif",
+      "name": "Noto Serif",
+      "stylesheet": "https://fonts.googleapis.com/css2?family=Noto%20Serif:wght@400..700&display=swap",
+      "license": "notoserif-OFL.txt",
+      "licenseUrl": "https://raw.githubusercontent.com/google/fonts/2fe1e8c6b137fb13041a7cfca6fdcd8a910ea4dc/ofl/notoserif/OFL.txt",
+      "files": [
+        {
+          "file": "notoserif-latin-ext-400-700.woff2",
+          "url": "https://fonts.gstatic.com/s/notoserif/v33/ga6daw1J5X9T9RW6j9bNVls-hfgvz8JcMofYTYf0D33Esw.woff2",
+          "bytes": 186552,
+          "sha256": "2654f8d1261a420fc81628122bee9d494b493227e3d7d9baa4238360b92b11d3"
+        },
+        {
+          "file": "notoserif-latin-400-700.woff2",
+          "url": "https://fonts.gstatic.com/s/notoserif/v33/ga6daw1J5X9T9RW6j9bNVls-hfgvz8JcMofYTYf6D30.woff2",
+          "bytes": 36756,
+          "sha256": "46281456234014ceb2a79bff447245de0f76b8d803be0738972ed374c3206c5b"
+        }
+      ]
+    },
+    {
+      "id": "merriweather",
+      "name": "Merriweather",
+      "stylesheet": "https://fonts.googleapis.com/css2?family=Merriweather:wght@400..700&display=swap",
+      "license": "merriweather-OFL.txt",
+      "licenseUrl": "https://raw.githubusercontent.com/google/fonts/2fe1e8c6b137fb13041a7cfca6fdcd8a910ea4dc/ofl/merriweather/OFL.txt",
+      "files": [
+        {
+          "file": "merriweather-latin-ext-400-700.woff2",
+          "url": "https://fonts.gstatic.com/s/merriweather/v33/u-4e0qyriQwlOrhSvowK_l5UcA6zuSYEqOzpPe3HOZJ5eX1WtLaQwmYiSeqkJ-mFqA.woff2",
+          "bytes": 74960,
+          "sha256": "8ca0880997847953a13964d6769b6712c57aa2dc2f881f4e6e805719791daed8"
+        },
+        {
+          "file": "merriweather-latin-400-700.woff2",
+          "url": "https://fonts.gstatic.com/s/merriweather/v33/u-4e0qyriQwlOrhSvowK_l5UcA6zuSYEqOzpPe3HOZJ5eX1WtLaQwmYiSeqqJ-k.woff2",
+          "bytes": 97548,
+          "sha256": "4fbe8dd9c23b1fd62a988bb8a69b8e692d810f773d9ef6ebca2ba2760c7b11ee"
+        }
+      ]
+    },
+    {
+      "id": "lora",
+      "name": "Lora",
+      "stylesheet": "https://fonts.googleapis.com/css2?family=Lora:wght@400..700&display=swap",
+      "license": "lora-OFL.txt",
+      "licenseUrl": "https://raw.githubusercontent.com/google/fonts/2fe1e8c6b137fb13041a7cfca6fdcd8a910ea4dc/ofl/lora/OFL.txt",
+      "files": [
+        {
+          "file": "lora-latin-ext-400-700.woff2",
+          "url": "https://fonts.gstatic.com/s/lora/v37/0QIvMX1D_JOuMwT7I-NP.woff2",
+          "bytes": 20088,
+          "sha256": "2a2d9c22c9863086a23f5013fede1428585321812b25f2662542c39d02967c5e"
+        },
+        {
+          "file": "lora-latin-400-700.woff2",
+          "url": "https://fonts.gstatic.com/s/lora/v37/0QIvMX1D_JOuMwr7Iw.woff2",
+          "bytes": 37788,
+          "sha256": "ddb8c66035104e233fc024669183aad3738b6daa16deee2ebb1241bd0f98ace1"
+        }
+      ]
+    },
+    {
+      "id": "playfairdisplay",
+      "name": "Playfair Display",
+      "stylesheet": "https://fonts.googleapis.com/css2?family=Playfair%20Display:wght@400..700&display=swap",
+      "license": "playfairdisplay-OFL.txt",
+      "licenseUrl": "https://raw.githubusercontent.com/google/fonts/2fe1e8c6b137fb13041a7cfca6fdcd8a910ea4dc/ofl/playfairdisplay/OFL.txt",
+      "files": [
+        {
+          "file": "playfairdisplay-latin-ext-400-700.woff2",
+          "url": "https://fonts.gstatic.com/s/playfairdisplay/v40/nuFiD-vYSZviVYUb_rj3ij__anPXDTLYgFE_.woff2",
+          "bytes": 21140,
+          "sha256": "42898ad49a6b23f32b109243e1df596edf831015ed685f429e4dafbb181d599d"
+        },
+        {
+          "file": "playfairdisplay-latin-400-700.woff2",
+          "url": "https://fonts.gstatic.com/s/playfairdisplay/v40/nuFiD-vYSZviVYUb_rj3ij__anPXDTzYgA.woff2",
+          "bytes": 38404,
+          "sha256": "e0c764a8e9e1cce92163c55bac4b2ad6cd4cf8c696ce2289ab5c41565e65b7e2"
+        }
+      ]
+    },
+    {
+      "id": "sourceserif4",
+      "name": "Source Serif 4",
+      "stylesheet": "https://fonts.googleapis.com/css2?family=Source%20Serif%204:wght@400..700&display=swap",
+      "license": "sourceserif4-OFL.txt",
+      "licenseUrl": "https://raw.githubusercontent.com/google/fonts/2fe1e8c6b137fb13041a7cfca6fdcd8a910ea4dc/ofl/sourceserif4/OFL.txt",
+      "files": [
+        {
+          "file": "sourceserif4-latin-ext-400-700.woff2",
+          "url": "https://fonts.gstatic.com/s/sourceserif4/v15/vEFF2_tTDB4M7-auWDN0ahZJW3IX2ih5nk3AucvUHf6kA3r4cXk.woff2",
+          "bytes": 42212,
+          "sha256": "d10ccbbd0dc4ebae2938958dc1f622a53460fe297e9c958564742dd684309c3f"
+        },
+        {
+          "file": "sourceserif4-latin-400-700.woff2",
+          "url": "https://fonts.gstatic.com/s/sourceserif4/v15/vEFF2_tTDB4M7-auWDN0ahZJW3IX2ih5nk3AucvUHf6kDXr4.woff2",
+          "bytes": 50936,
+          "sha256": "382475f38242c52d42a3e5ff8dc69b5d73f10d0d21e4550b5fe232984688779a"
+        }
+      ]
+    },
+    {
+      "id": "robotoslab",
+      "name": "Roboto Slab",
+      "stylesheet": "https://fonts.googleapis.com/css2?family=Roboto%20Slab:wght@400..700&display=swap",
+      "license": "robotoslab-LICENSE.txt",
+      "licenseUrl": "https://raw.githubusercontent.com/google/fonts/2fe1e8c6b137fb13041a7cfca6fdcd8a910ea4dc/apache/robotoslab/LICENSE.txt",
+      "files": [
+        {
+          "file": "robotoslab-latin-ext-400-700.woff2",
+          "url": "https://fonts.gstatic.com/s/robotoslab/v36/BngMUXZYTXPIvIBgJJSb6ufD5qW54A.woff2",
+          "bytes": 21188,
+          "sha256": "8ed24f94c25ecf99a50b806ef6ca02988cf8c1d443228ddbd6a8ac99c99df81e"
+        },
+        {
+          "file": "robotoslab-latin-400-700.woff2",
+          "url": "https://fonts.gstatic.com/s/robotoslab/v36/BngMUXZYTXPIvIBgJJSb6ufN5qU.woff2",
+          "bytes": 34236,
+          "sha256": "50cf7d32c18e1001749b51f1565ef745bc0687b0297b2b13465ed577cc20a8ff"
+        }
+      ]
+    },
+    {
+      "id": "firacode",
+      "name": "Fira Code",
+      "stylesheet": "https://fonts.googleapis.com/css2?family=Fira%20Code:wght@400..700&display=swap",
+      "license": "firacode-OFL.txt",
+      "licenseUrl": "https://raw.githubusercontent.com/google/fonts/2fe1e8c6b137fb13041a7cfca6fdcd8a910ea4dc/ofl/firacode/OFL.txt",
+      "files": [
+        {
+          "file": "firacode-latin-ext-400-700.woff2",
+          "url": "https://fonts.gstatic.com/s/firacode/v27/uU9NCBsR6Z2vfE9aq3bh09SDulI.woff2",
+          "bytes": 13272,
+          "sha256": "801677342d1191c5e964719bbcb5834f5da3c39a00e1e1501f450b1379fcc116"
+        },
+        {
+          "file": "firacode-latin-400-700.woff2",
+          "url": "https://fonts.gstatic.com/s/firacode/v27/uU9NCBsR6Z2vfE9aq3bh3dSD.woff2",
+          "bytes": 36276,
+          "sha256": "771bf4b79a97fc005d12866168bd39d868a9dd3d5903008fe8b796723c8a56f4"
+        }
+      ]
+    },
+    {
+      "id": "jetbrainsmono",
+      "name": "JetBrains Mono",
+      "stylesheet": "https://fonts.googleapis.com/css2?family=JetBrains%20Mono:wght@400..700&display=swap",
+      "license": "jetbrainsmono-OFL.txt",
+      "licenseUrl": "https://raw.githubusercontent.com/google/fonts/2fe1e8c6b137fb13041a7cfca6fdcd8a910ea4dc/ofl/jetbrainsmono/OFL.txt",
+      "files": [
+        {
+          "file": "jetbrainsmono-latin-ext-400-700.woff2",
+          "url": "https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbv2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKwBNntkaToggR7BYRbKPx7cwhsk.woff2",
+          "bytes": 11624,
+          "sha256": "db5ff4db83e580426280e9337a58dc57d3a83784a1b03ad80914651594441d52"
+        },
+        {
+          "file": "jetbrainsmono-latin-400-700.woff2",
+          "url": "https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbv2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKwBNntkaToggR7BYRbKPxDcwg.woff2",
+          "bytes": 31432,
+          "sha256": "83c005d49d8a6a50474c73a5a36ac0468076e9c4a29da7bdb14995d80560a5be"
+        }
+      ]
+    }
+  ]
+}

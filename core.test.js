@@ -4,6 +4,28 @@ const assert = require('node:assert/strict');
 const { APP_NAME, initialData, baseData, demoData, demoReleaseDates, validateData, migrateArchive, validateArchive, createOrganization, matchIssues, findDuplicates, sortTasks, dateColor, extractThemePalette, themeFromLogo, normalizeUrl, isWebUrl, validPortalTemplate, portalUrl, ORGANIZATION_FILE_KINDS, organizationExport, organizationFileName, situationFileName, parseOrganizationFile, applyOrganizationImport, importedOrganizationData, uniqueOrganizationName, FONT_SIZE_PARTS, FONT_SIZE_STEP, defaultFontSizes, clampFontSize, HIGHLIGHT_LIMIT, defaultHighlights, TASK_COLUMN_IDS, defaultTaskColumns, normalizeTaskColumns, nextReleaseDate, today } = require('./core');
 const { defaultThemes } = require('./core');
 const { reorderTaskSequences } = require('./core');
+const { FONT_FAMILIES, DEFAULT_FONT_FAMILY } = require('./core');
+
+test('font choices are validated and migrate without changing existing data', () => {
+  const data = baseData();
+  assert.equal(data.settings.fontFamily, DEFAULT_FONT_FAMILY);
+  for (const font of FONT_FAMILIES) { data.settings.fontFamily = font.id; validateData(data); }
+  for (const value of ['', null, 'unknown', 'Arial; color: red', {}]) {
+    data.settings.fontFamily = value;
+    assert.throws(() => validateData(data), /Font/);
+  }
+  delete data.settings.fontFamily;
+  assert.equal(migrateArchive(data).organizations[0].data.settings.fontFamily, DEFAULT_FONT_FAMILY);
+});
+test('fonts travel with configuration exports and old files preserve the current font', () => {
+  const data = baseData(); data.settings.fontFamily = 'georgia';
+  const file = parseOrganizationFile(organizationExport({ name: 'Fonts', data }, 'settings'));
+  assert.equal(file.settings.fontFamily, 'georgia');
+  const target = baseData(); target.settings.fontFamily = 'consolas';
+  assert.equal(applyOrganizationImport(target, file, { settings: true }).settings.fontFamily, 'georgia');
+  const old = structuredClone(file); delete old.settings.fontFamily;
+  assert.equal(applyOrganizationImport(target, old, { settings: true }).settings.fontFamily, 'consolas');
+});
 const luminance = color => color.slice(1).match(/.{2}/g).map(channel => {
   const value = parseInt(channel, 16) / 255;
   return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
@@ -434,7 +456,7 @@ test('organization exports contain only the requested parts as independent copie
   assert.deepEqual(sections(files.data), ['data']);
   assert.deepEqual(sections(files.organization), ['themes', 'settings', 'data']);
   assert.deepEqual(files.themes.themes, { themeId: organization.data.settings.themeId, themes: organization.data.settings.themes });
-  assert.deepEqual(Object.keys(files.settings.settings).sort(), ['fontSizes', 'highlights', 'hoursPerDay', 'issueColumns', 'issueFields', 'language', 'logo', 'portalUrlTemplate', 'savedViews', 'statuses', 'tabNames', 'tags', 'taskColumns', 'taskFields', 'urgencies']);
+  assert.deepEqual(Object.keys(files.settings.settings).sort(), ['fontFamily', 'fontSizes', 'highlights', 'hoursPerDay', 'issueColumns', 'issueFields', 'language', 'logo', 'portalUrlTemplate', 'savedViews', 'statuses', 'tabNames', 'tags', 'taskColumns', 'taskFields', 'urgencies']);
   assert.deepEqual(files.settings.settings.highlights, organization.data.settings.highlights);
   assert.deepEqual(files.data.data.highlights, organization.data.settings.highlights);
   assert.deepEqual(files.settings.settings.fontSizes, defaultFontSizes());

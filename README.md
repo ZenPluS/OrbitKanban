@@ -1,6 +1,6 @@
 # OrbitKanban — workspace portable
 
-App desktop locale per Windows 10/11 a 64 bit, **versione 2.17.0**. Nessun account, server esterno o collegamento a Internet necessario per l'uso. **Il nome dell'app è sempre OrbitKanban e non è configurabile.** Tutte le impostazioni del workspace appartengono alla singola organizzazione. Mentre l'app è aperta puoi usarla anche **dal browser dello stesso PC**, con più organizzazioni aperte contemporaneamente in schede diverse.
+App desktop locale per Windows 10/11 a 64 bit, **versione 2.18.0**. Nessun account, server esterno o collegamento a Internet necessario per l'uso. **Il nome dell'app è sempre OrbitKanban e non è configurabile.** Tutte le impostazioni del workspace appartengono alla singola organizzazione. Mentre l'app è aperta puoi usarla anche **dal browser dello stesso PC**, con più organizzazioni aperte contemporaneamente in schede diverse.
 
 ## Avvio e condivisione
 
@@ -50,7 +50,7 @@ In **Impostazioni → Esporta e importa organizzazione** puoi salvare l'organizz
 | Pulsante | Contenuto del file |
 | --- | --- |
 | **Esporta temi** | tutti i temi dell'organizzazione, con i quattro colori, e il tema attivo |
-| **Esporta configurazione** | lingua, modello del link al portale, nomi dei tab, ore per giorno, dimensioni del testo, stati con colori ed evidenziazione, urgenze, evidenziatori, colonne della lista e logo |
+| **Esporta configurazione** | lingua, modello del link al portale, nomi dei tab, ore per giorno, font e dimensioni del testo, stati con colori ed evidenziazione, urgenze, evidenziatori, colonne della lista e logo |
 | **Esporta dati** | attività e issue, con il colore evidenziatore di ogni riga, insieme a stati, urgenze ed evidenziatori per poterle riassociare |
 | **Esporta tutto** | temi, configurazione e dati in un unico file |
 
@@ -195,6 +195,8 @@ In **Impostazioni → Colonne personalizzate** puoi aggiungere fino a **30 colon
 
 Il tipo si sceglie alla creazione e non cambia successivamente, per proteggere i dati. Nomi (massimo 60 caratteri), opzioni e ordine sono modificabili; nomi e opzioni devono essere univoci senza distinzione di maiuscole. Gli elenchi accettano fino a 100 etichette, oppure possono restare vuoti.
 
+Dalla **2.18.0**, **Salva impostazioni** include anche nome e tipo delle nuove colonne ancora compilate nei moduli, senza obbligare a premere prima **Aggiungi colonna**. Quest'ultimo permette di prepararne altre o configurare subito le etichette. Le colonne in attesa attivano l'avviso di modifiche non salvate; un nome non valido o duplicato blocca tutto il salvataggio senza svuotare i moduli. Se un'altra finestra modifica le definizioni mentre le impostazioni sono aperte, il salvataggio della vecchia bozza viene bloccato esplicitamente per non cancellare colonne e valori: annulla la bozza e ripeti le modifiche sulla configurazione aggiornata.
+
 Dalla **2.17.0**, ogni colonna a scelta genera automaticamente una propria scheda sotto **Impostazioni → Etichette delle colonne**, identificata dal nome della colonna e dalla lista di appartenenza. **Gestisci etichette e colori** apre la scheda: come per i Tags, puoi aggiungere etichette, modificarne nome e colore, trascinarle o usare le frecce per riordinarle ed eliminarle. Rinomine e riordini conservano le assegnazioni tramite identificativi stabili; le eliminazioni rimuovono le selezioni dalle righe solo con **Salva impostazioni**, e sono annullabili.
 
 Le colonne a scelta multipla mostrano le stesse **pillole colorate e lo stesso dropdown con caselle dei Tags**, sia direttamente nelle righe di attività e issue sia negli editor. **Applica** nella tabella salva le selezioni senza aprire la scheda; nell'editor aggiorna solo il modulo, da confermare con il suo pulsante Salva. Le colonne a scelta singola mostrano anch'esse etichette colorate. I vecchi valori testuali vengono convertiti senza perdere le selezioni; etichette, colori e ordine sono portatili e rispettati anche da ricerca, filtri, CSV ed Excel.
@@ -291,6 +293,17 @@ Le impostazioni sono organizzate in **schede**: a sinistra un menu raggruppa le 
 - **Esporta e importa organizzazione**: temi, configurazione e dati dell'organizzazione attiva in file separati, oppure tutto insieme, con importazione selettiva in questa o in una nuova organizzazione (vedi **Esporta e importa per organizzazione**).
 - **Esporta backup** e **Importa backup**: l'intero archivio JSON, incluse tutte le organizzazioni, i loghi, i temi e le impostazioni. L'importazione richiede conferma e sostituisce l'archivio; un file non valido viene rifiutato.
 - “Svuota attività e issue” elimina anche gli esempi iniziali, mantenendo impostazioni e temi.
+
+### Font dell'interfaccia
+
+In **Impostazioni → Font e dimensione del testo**, dalla **2.18.0** puoi scegliere **33 font**, separati nel menu per disponibilità. L'anteprima si applica subito all'interfaccia, mantenendo le dimensioni indipendenti delle sue parti; **Salva impostazioni** conserva la scelta, **Annulla modifiche** ripristina quella precedente.
+
+- **24 inclusi nel portable, disponibili offline senza installazione:** Roboto, Inter, Open Sans, Lato, Montserrat, Poppins, Nunito, Nunito Sans, Raleway, Rubik, Work Sans, Source Sans 3, Noto Sans, DM Sans, Manrope, Fira Sans, Noto Serif, Merriweather, Lora, Playfair Display, Source Serif 4, Roboto Slab, Fira Code e JetBrains Mono.
+- **9 font di sistema, usati se installati sul PC:** Segoe UI (predefinito), Aptos, Arial, Calibri, Verdana, Tahoma, Trebuchet MS, Georgia e Consolas. Aptos e gli altri font proprietari non sono redistribuiti: se mancano viene usata l'alternativa di sistema indicata dalla famiglia.
+
+I font liberi provengono da Google Fonts e sono serviti esclusivamente dai file locali, anche nell'accesso da browser: nessuna richiesta a Google durante l'uso. I sottoinsiemi Latin e Latin Extended coprono anche gli accenti; sono inclusi caratteri normali e grassetti (pesi intermedi ove disponibili). Gli altri alfabeti usano i fallback di sistema. Il catalogo WOFF2 occupa circa **2,2 MB**, caricando solo i caratteri necessari alla scelta attiva. [Origini e checksum](fonts/sources.json) e testi delle licenze sono inclusi in [fonts](fonts/): **SIL OFL 1.1**, tranne Roboto Slab con **Apache 2.0**. I file originali distribuiti da Google non sono modificati.
+
+La preferenza è specifica dell'organizzazione e viaggia con archivio, backup ed esportazione della configurazione. I vecchi archivi ricevono Segoe UI; importare una configurazione senza font conserva la scelta attuale.
 
 ### Catalogo dei temi predefiniti
 

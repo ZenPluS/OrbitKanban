@@ -39,6 +39,28 @@ after(async () => {
   await fs.rm(folder, { recursive: true, force: true });
 });
 
+test('font assets require authentication and only bundled assets are served with the correct MIME type', async () => {
+  const font = require('./fonts/sources.json').fonts[0].files[0].file;
+  assert.equal((await request(`/fonts/${font}`)).status, 401);
+  const authUrl = new URL(server.authUrl(firstOrg));
+  const auth = await request(authUrl.pathname + authUrl.search);
+  const fontCookie = auth.headers['set-cookie'][0].split(';')[0];
+  const headers = { Cookie: fontCookie };
+  const css = await request('/fonts/fonts.css', { headers });
+  assert.equal(css.status, 200);
+  assert.match(css.headers['content-type'], /text\/css/);
+  assert.doesNotMatch(css.text, /https?:|@import/);
+  for (const source of require('./fonts/sources.json').fonts) {
+    for (const file of source.files) {
+      const response = await request(`/fonts/${file.file}`, { headers });
+      assert.equal(response.status, 200, file.file);
+      assert.equal(response.headers['content-type'], 'font/woff2');
+      assert.ok(response.text.startsWith('wOF2'));
+    }
+  }
+  assert.equal((await request('/fonts/unlisted.woff2', { headers })).status, 404);
+});
+
 test('listens on loopback only and persists a strong access key', async () => {
   assert.match(server.url, /^http:\/\/127\.0\.0\.1:\d+\/$/);
   const token = await fs.readFile(path.join(folder, 'runtime', 'browser-access-token'), 'utf8');

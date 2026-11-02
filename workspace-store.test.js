@@ -14,6 +14,35 @@ async function tempStore(options = {}) {
 }
 const task = (data, code) => ({ id: `task-${code}`, code, sequence: data.tasks.length + 1, url: '', description: '', urgencyId: data.settings.urgencies[0].id, statusId: data.settings.statuses[0].id, effortHours: 4, releaseDate: '', notes: '', hidden: false });
 
+test('custom columns, all value types, colors and fonts survive a fresh store and organization switches', async () => {
+  const { store, dataFolder, cleanup } = await tempStore();
+  try {
+    const snapshot = await store.load(), data = snapshot.data;
+    const values = { text: 'Owner', richtext: '<p><b>Rich</b></p>', number: 0, date: '2028-02-29', select: 'a', multiselect: ['a', 'b'], url: 'https://example.com', effort: 1.25, boolean: false };
+    const fields = Object.keys(values).map(type => ({ id: `custom-${type}`, name: type, type, options: ['select', 'multiselect'].includes(type) ? [{ id: 'a', name: 'Alpha', color: '#123456' }, { id: 'b', name: 'Beta', color: '#abcdef' }] : [] }));
+    data.settings.taskFields = fields; data.settings.issueFields = structuredClone(fields);
+    data.settings.fontFamily = 'verdana';
+    const customFields = Object.fromEntries(Object.entries(values).map(([type, value]) => [`custom-${type}`, value]));
+    data.tasks.push({ ...task(data, 'PERSIST'), customFields });
+    data.issues.push({ id: 'issue', code: 'PERSIST', incident: 'INC', problem: '', customFields: structuredClone(customFields) });
+    await store.save(data, snapshot.activeOrganizationId, undefined, snapshot.revision);
+    const other = await store.organization('create', { name: 'Other' }, snapshot.activeOrganizationId);
+    const restarted = createWorkspaceStore({ dataFolder });
+    const original = await restarted.load(snapshot.activeOrganizationId);
+    assert.deepEqual(original.data.settings.taskFields, fields);
+    assert.deepEqual(original.data.settings.issueFields, fields);
+    assert.deepEqual(original.data.tasks[0].customFields, customFields);
+    assert.deepEqual(original.data.issues[0].customFields, customFields);
+    assert.equal(original.data.settings.fontFamily, 'verdana');
+    assert.ok(original.data.settings.taskColumns.some(column => column.id === 'custom-multiselect'));
+    const isolated = await restarted.load(other.activeOrganizationId);
+    assert.equal(isolated.data.settings.fontFamily, 'segoe');
+    assert.deepEqual(isolated.data.settings.taskFields, []);
+    const onDisk = JSON.parse(await fs.readFile(store.dataFile, 'utf8')).organizations.find(org => org.id === snapshot.activeOrganizationId);
+    assert.deepEqual(onDisk.data.tasks[0].customFields, customFields);
+  } finally { await cleanup(); }
+});
+
 test('first load seeds a portable archive and exposes revision and client metadata', async () => {
   const { store, dataFolder, cleanup } = await tempStore({ extras: () => ({ appVersion: '9.9.9' }) });
   try {

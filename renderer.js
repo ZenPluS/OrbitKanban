@@ -4,10 +4,11 @@ const $ = selector => document.querySelector(selector);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const uid = () => crypto.randomUUID();
 const { reorderTaskSequences, indexIssues } = window.OrbitaCore;
+const { FONT_FAMILIES, DEFAULT_FONT_FAMILY } = window.OrbitaCore;
 const CustomColumns = window.OrbitaColumns, Csv = window.OrbitaCsv;
 let columnFilters = { tasks: {}, issues: {} }, issueSearch = '';
 let data, dataFolder, view = 0, search = '', showHidden = false, duplicatesOnly = false, issueDuplicatesOnly = false, statusFilter = '', highlightFilter = '', highlighter = '', sort = [{ key: 'releaseDate', direction: 'asc' }];
-let settingsDraft, saving = false, organizationBusy = false, organizations = [], activeOrganizationId, lastOpenedLink = '';
+let settingsDraft, settingsBase, saving = false, organizationBusy = false, organizations = [], activeOrganizationId, lastOpenedLink = '';
 let revision = '', appVersion = '', browserUrl = '', online = true, refreshing = false, pendingChange = null, renderAfterModal = false, adoptions = 0, subscribed = false;
 const HISTORY_LIMIT = 20, undoHistory = new Map(), redoHistory = new Map();
 let activeSavedViewId = '', backupRequest = 0;
@@ -229,7 +230,7 @@ function closeTagMenu(restoreFocus = false) {
   if (restoreFocus) owner?.focus({ preventScroll: true });
 }
 function openTagMenu(button, custom) {
-  const id = button.dataset.taskTags, owner = custom ? `[data-choice-picker="${CSS.escape(button.dataset.choicePicker)}"]` : `[data-task-tags="${CSS.escape(id)}"]`, same = $('#tag-menu')?.dataset.owner === owner;
+  const id = button.dataset.taskTags, owner = custom ? `${custom.form ? '#' + custom.form.id : '#content'} [data-choice-picker="${CSS.escape(button.dataset.choicePicker)}"]` : `[data-task-tags="${CSS.escape(id)}"]`, same = $('#tag-menu')?.dataset.owner === owner;
   closeTagMenu();
   closeMarkMenu();
   if (same) return;
@@ -244,9 +245,7 @@ function openTagMenu(button, custom) {
   menu.setAttribute('aria-label', custom ? custom.field.name : t('Modifica tag') + ': ' + task.code);
   menu.innerHTML = (custom ? `<fieldset class="field full task-tags"><legend>${esc(custom.field.name)}</legend><p class="muted">${esc(t('Seleziona le etichette. Nomi e colori si gestiscono nella sezione dedicata delle impostazioni.'))}</p><div class="tag-options">${CustomColumns.choices(custom.field).map(option => `<label class="tag-choice"><input type="checkbox" name="tagIds" value="${esc(option.id)}" ${initial.has(option.id) ? 'checked' : ''}>${pill(option.name, option.color, 'tag-pill')}</label>`).join('')}</div></fieldset>` : tagPicker(task)) + ui`<div class="tag-menu-actions"><button type="button" class="button small" data-cancel-tags>Annulla</button><button type="submit" class="button small primary">Applica</button></div>`;
   (custom?.form ? $('#modal') : document.body).append(menu);
-  const rect = button.getBoundingClientRect();
-  menu.style.left = `${Math.max(8, Math.min(rect.left, innerWidth - menu.offsetWidth - 8))}px`;
-  menu.style.top = `${Math.max(8, Math.min(rect.bottom + 4, innerHeight - menu.offsetHeight - 8))}px`;
+  positionTagMenu(menu);
   button.setAttribute('aria-expanded', 'true');
   menu.querySelector('[data-cancel-tags]').onclick = () => closeTagMenu(true);
   menu.addEventListener('keydown', event => {
@@ -283,7 +282,18 @@ document.addEventListener('pointerdown', event => {
   const menu = $('#tag-menu');
   if (menu && !menu.contains(event.target) && !event.target.closest('[data-task-tags], [data-choice-picker]')) closeTagMenu();
 }, true);
-window.addEventListener('scroll', event => { if (!$('#tag-menu')?.contains(event.target)) closeTagMenu(); }, true);
+function positionTagMenu(menu) {
+  const owner = document.querySelector(menu.dataset.owner);
+  if (!owner) { closeTagMenu(); return; }
+  const rect = owner.getBoundingClientRect();
+  menu.style.left = `${Math.max(8, Math.min(rect.left, innerWidth - menu.offsetWidth - 8))}px`;
+  menu.style.top = `${Math.max(8, Math.min(rect.bottom + 4, innerHeight - menu.offsetHeight - 8))}px`;
+}
+window.addEventListener('scroll', event => {
+  const menu = $('#tag-menu');
+  if (!menu || menu.contains(event.target)) return;
+  if (menu.closest('#modal')) positionTagMenu(menu); else closeTagMenu();
+}, true);
 window.addEventListener('resize', () => closeTagMenu());
 function matchesHighlightFilter(task) {
   if (!highlightFilter) return true;
@@ -341,6 +351,7 @@ function paintFontSizes(sizes) {
 function applyTheme() {
   paintTheme(data.settings.themes.find(t => t.id === data.settings.themeId));
   paintFontSizes(data.settings.fontSizes);
+  paintFontFamily(data.settings.fontFamily);
   const organization = organizations.find(o => o.id === activeOrganizationId);
   document.title = browserMode() ? `${organization.name} · ${APP_NAME}` : APP_NAME;
   $('#brand-name').textContent = APP_NAME;
@@ -510,7 +521,7 @@ function collectSettings() {
 }
 function settingsChanged() {
   if (view !== 4 || !$('#organization-name')) return false;
-  return JSON.stringify(collectSettings()) !== JSON.stringify(data.settings) || $('#organization-name').value.trim() !== organizations.find(o => o.id === activeOrganizationId).name;
+  return pendingCustomColumns().length > 0 || JSON.stringify(collectSettings()) !== JSON.stringify(data.settings) || $('#organization-name').value.trim() !== organizations.find(o => o.id === activeOrganizationId).name;
 }
 const settingsTabs = [
   { id: 'identity', group: 'Organizzazione', icon: '◉', label: 'Identità & navigazione', panel: 'identity-panel', keys: ['tabNames', 'hoursPerDay', 'logo'] },
@@ -518,7 +529,7 @@ const settingsTabs = [
   { id: 'portal', group: 'Organizzazione', icon: '⇗', label: 'Link al portale', panel: 'portal-panel', keys: ['portalUrlTemplate'] },
   { id: 'organizations', group: 'Organizzazione', icon: '⌂', label: 'Organizzazioni', panel: 'organizations-panel', keys: [] },
   { id: 'themes', group: 'Aspetto', icon: '◐', label: 'Temi & atmosfera', panel: 'themes-panel', keys: ['themes', 'themeId'] },
-  { id: 'fonts', group: 'Aspetto', icon: 'Aa', label: 'Dimensione del testo', panel: 'font-size-panel', keys: ['fontSizes'] },
+  { id: 'fonts', group: 'Aspetto', icon: 'Aa', label: 'Font e dimensione del testo', panel: 'font-size-panel', keys: ['fontSizes', 'fontFamily'] },
   { id: 'statuses', group: 'Flusso di lavoro', icon: '☰', label: 'Stati del flusso', panel: 'statuses-panel', keys: ['statuses'] },
   { id: 'urgencies', group: 'Flusso di lavoro', icon: '⚑', label: 'Livelli di urgenza', panel: 'urgencies-panel', keys: ['urgencies'] },
   { id: 'highlights', group: 'Flusso di lavoro', icon: '✎', label: 'Evidenziatori', panel: 'highlights-panel', keys: ['highlights'] },
@@ -537,7 +548,7 @@ function choiceSettingsTabs() {
 }
 const allSettingsTabs = () => [...settingsTabs, ...choiceSettingsTabs()];
 // Ordered: the first matching pattern decides which settings tab holds the field to fix.
-const settingsErrorTabs = [[/colonn[ae] personalizzat|opzioni della colonna|nomi e identificativi delle colonne/i, 'custom-columns'], [/\btags?\b/i, 'tags'], [/evidenziatori|highlighter/i, 'highlights'], [/colonne della lista|list columns/i, 'columns'], [/link portale|portal link/i, 'portal'], [/dimensioni del testo|text sizes/i, 'fonts'], [/\b(?:temi|tema|themes?)\b/i, 'themes'], [/urgen/i, 'urgencies'], [/\b(?:stati|status|statuses)\b/i, 'statuses'], [/\b(?:lingua|language)\b/i, 'languages'], [/organizzazione|organization|\btab\b|ore per giorno|hours per day|logo/i, 'identity']];
+const settingsErrorTabs = [[/colonn[ae] personalizzat|opzioni della colonna|nomi e identificativi delle colonne/i, 'custom-columns'], [/\btags?\b/i, 'tags'], [/evidenziatori|highlighter/i, 'highlights'], [/colonne della lista|list columns/i, 'columns'], [/link portale|portal link/i, 'portal'], [/dimensioni del testo|text sizes|\bfont\b/i, 'fonts'], [/\b(?:temi|tema|themes?)\b/i, 'themes'], [/urgen/i, 'urgencies'], [/\b(?:stati|status|statuses)\b/i, 'statuses'], [/\b(?:lingua|language)\b/i, 'languages'], [/organizzazione|organization|\btab\b|ore per giorno|hours per day|logo/i, 'identity']];
 function settingsNav() {
   const tabs = allSettingsTabs(), groups = [...new Set(tabs.map(tab => tab.group))];
   return `<nav class="settings-nav" aria-label="${esc(t('Sezioni delle impostazioni'))}">${groups.map((group, index) => `<div class="settings-nav-group" role="group" aria-labelledby="settings-group-${index}"><span class="settings-nav-label" id="settings-group-${index}">${esc(t(group))}</span>${tabs.filter(tab => tab.group === group).map(tab => `<button type="button" class="settings-tab" id="settings-tab-${tab.id}" data-settings-tab="${tab.id}" aria-controls="${tab.panel}"><span class="settings-tab-icon" aria-hidden="true">${tab.icon}</span><span class="settings-tab-text">${esc(tab.custom ? tab.label : t(tab.label))}</span><span class="settings-tab-dot" role="img" aria-label="${esc(t('Modifiche non salvate'))}" title="${esc(t('Modifiche non salvate'))}" hidden></span></button>`).join('')}</div>`).join('')}</nav>`;
@@ -584,7 +595,7 @@ function refreshSettingsState() {
   banner.hidden = !changed;
   const savedName = organizations.find(o => o.id === activeOrganizationId)?.name;
   const tabs = allSettingsTabs();
-  const dirty = changed ? tabs.filter(tab => tab.custom ? JSON.stringify(tab.field) !== JSON.stringify(CustomColumns.fieldsOf(data.settings, tab.kind).find(field => field.id === tab.field.id)) : tab.keys.some(key => JSON.stringify(settingsDraft[key]) !== JSON.stringify(data.settings[key])) || (tab.id === 'identity' && $('#organization-name').value.trim() !== savedName)) : [];
+  const dirty = changed ? tabs.filter(tab => tab.custom ? JSON.stringify(tab.field) !== JSON.stringify(CustomColumns.fieldsOf(data.settings, tab.kind).find(field => field.id === tab.field.id)) : tab.keys.some(key => JSON.stringify(settingsDraft[key]) !== JSON.stringify(data.settings[key])) || (tab.id === 'custom-columns' && pendingCustomColumns().length > 0) || (tab.id === 'identity' && $('#organization-name').value.trim() !== savedName)) : [];
   for (const tab of tabs) {
     const dot = document.querySelector(`#settings-tab-${tab.id} .settings-tab-dot`);
     if (dot) dot.hidden = !dirty.includes(tab);
@@ -600,9 +611,21 @@ async function saveSettings() {
   try {
     if ($('#logo-file')?.disabled || $('#theme-image-file')?.disabled || $('#create-logo-file')?.disabled) throw new Error(t('Caricamento immagine…'));
     const settings = structuredClone(collectSettings());
+    for (const form of pendingCustomColumns()) {
+      const kind = form.dataset.addField, fields = CustomColumns.fieldsOf(settings, kind);
+      fields.push(newCustomField(form));
+      CustomColumns.validateFields(fields);
+    }
+    settings.taskColumns = normalizeTaskColumns(settings.taskColumns, settings.taskFields);
+    settings.issueColumns = CustomColumns.normalizeIssueColumns(settings.issueColumns, settings.issueFields);
     const organizationName = $('#organization-name').value.trim();
     if (!organizationName || organizationName.length > 100) throw new Error(t('Nome organizzazione non valido.'));
     await commit(next => {
+      for (const key of ['taskFields', 'issueFields']) {
+        if (JSON.stringify(next.settings[key]) !== JSON.stringify(settingsBase[key]) && JSON.stringify(next.settings[key]) !== JSON.stringify(settings[key])) {
+          throw new Error(t('Le colonne personalizzate sono cambiate in un’altra finestra. Annulla le modifiche alle impostazioni e riprova: i dati salvati non sono stati sovrascritti.'));
+        }
+      }
       next.settings = structuredClone(settings);
       const known = new Set((settings.highlights || []).map(h => h.id));
       for (const task of next.tasks) if (task.highlightId && !known.has(task.highlightId)) task.highlightId = '';
@@ -2235,14 +2258,31 @@ function fontSample(id, task) {
 }
 function fontSizePanel() {
   const sizes = settingsDraft.fontSizes || defaultFontSizes(), task = sampleTask();
+  const families = [true, false].map(bundled => `<optgroup label="${esc(t(bundled ? 'Inclusi nel portable (offline)' : 'Font di sistema (se installati)'))}">${FONT_FAMILIES.filter(font => Boolean(font.bundled) === bundled).map(font => `<option value="${font.id}" ${font.id === (settingsDraft.fontFamily ?? DEFAULT_FONT_FAMILY) ? 'selected' : ''}>${font.name}</option>`).join('')}</optgroup>`).join('');
   const presets = fontPresets.map(([value, name]) => `<button type="button" class="button small font-preset" data-font-preset="${value}" aria-pressed="false">${esc(t(name))} <small>${value}%</small></button>`).join('');
   const cards = FONT_SIZE_PARTS.map(({ id, min, max }) => {
     const [name, description] = fontSizeLabels[id], value = sizes[id] ?? 100, reset = t('Ripristina 100%');
     return `<div class="font-size-card" data-font-card="${id}"><div class="font-size-title"><label for="font-size-${id}">${esc(t(name))}</label><small id="font-size-${id}-hint">${esc(t(description))}</small></div><div class="font-size-control"><span class="font-size-limit" aria-hidden="true">${min}%</span><input type="range" id="font-size-${id}" data-font-size="${id}" min="${min}" max="${max}" step="${FONT_SIZE_STEP}" value="${value}" aria-describedby="font-size-${id}-hint"><span class="font-size-limit" aria-hidden="true">${max}%</span><output class="font-size-value" id="font-size-${id}-value" for="font-size-${id}">${value}%</output><button type="button" class="icon-button font-size-reset" data-font-reset="${id}" title="${esc(reset)}" aria-label="${esc(`${reset}: ${t(name)}`)}">↺</button></div><div class="font-sample" data-part="${id}" inert aria-hidden="true">${fontSample(id, task)}</div></div>`;
   }).join('');
-  return ui`<section class="panel settings-section full" id="font-size-panel"><div class="font-size-heading"><div><h2>Dimensione del testo</h2><p class="section-description">Regola il testo di ogni parte dell’app: l’anteprima è immediata in tutta l’interfaccia, salva per mantenerla. Minimi e massimi mantengono tutto leggibile e ordinato.</p></div><div class="font-presets" role="group" aria-label="Preimpostazioni">${presets}</div></div><div class="font-size-grid">${cards}<div class="font-size-card font-size-notes"><h3>Buono a sapersi</h3><ul><li>100% è la dimensione consigliata; le preimpostazioni regolano tutte le parti insieme.</li><li>Ogni parte ha un minimo e un massimo, a passi del 5%: l’interfaccia resta sempre utilizzabile.</li><li>Le dimensioni valgono solo per questa organizzazione e sono incluse nell’esportazione della configurazione.</li></ul></div></div></section>`;
+  return ui`<section class="panel settings-section full" id="font-size-panel"><label class="field font-family-field"><span>${esc(t('Font dell’interfaccia'))}</span><select id="font-family">${families}</select><small>${esc(t('Anteprima immediata; salva per mantenere la scelta. I font inclusi funzionano offline su ogni PC. I font di sistema, come Aptos, richiedono l’installazione locale; se mancano viene usato un carattere alternativo.'))}</small></label><div class="font-size-heading"><div><h2>Dimensione del testo</h2><p class="section-description">Regola il testo di ogni parte dell’app: l’anteprima è immediata in tutta l’interfaccia, salva per mantenerla. Minimi e massimi mantengono tutto leggibile e ordinato.</p></div><div class="font-presets" role="group" aria-label="Preimpostazioni">${presets}</div></div><div class="font-size-grid">${cards}<div class="font-size-card font-size-notes"><h3>Buono a sapersi</h3><ul><li>100% è la dimensione consigliata; le preimpostazioni regolano tutte le parti insieme.</li><li>Ogni parte ha un minimo e un massimo, a passi del 5%: l’interfaccia resta sempre utilizzabile.</li><li>Le dimensioni valgono solo per questa organizzazione e sono incluse nell’esportazione della configurazione.</li></ul></div></div></section>`;
+}
+function paintFontFamily(value = DEFAULT_FONT_FAMILY) {
+  const font = FONT_FAMILIES.find(font => font.id === value);
+  if (!font) throw new Error(t('Font non valido.'));
+  document.documentElement.style.fontFamily = font.css;
+  if (font.bundled) document.fonts.load(`400 14px "${font.name}"`).then(faces => {
+    if (!faces.length) throw new Error(`Missing font face: ${font.name}`);
+  }).catch(error => {
+    console.error('Portable font load failed:', error);
+    notify(t('Impossibile caricare il font incluso. Verifica i file dell’app o scegli un altro font.') + ` (${font.name})`, true);
+  });
 }
 function wireFontSizes() {
+  $('#font-family').onchange = event => {
+    settingsDraft.fontFamily = event.target.value;
+    paintFontFamily(settingsDraft.fontFamily);
+    refreshSettingsState();
+  };
   const draftSizes = () => (settingsDraft.fontSizes ??= defaultFontSizes());
   const sync = () => {
     const sizes = settingsDraft.fontSizes || defaultFontSizes();
@@ -2298,8 +2338,15 @@ function restoreDailyBackup(fileName) {
     notify('Backup ripristinato.');
   });
 }
+function pendingCustomColumns() {
+  return [...document.querySelectorAll('[data-add-field]')].filter(form => form.elements.name.value.trim());
+}
+function newCustomField(form) {
+  const values = new FormData(form), type = values.get('type');
+  return { id: `custom-${uid()}`, name: values.get('name').trim(), type, options: ['select', 'multiselect'].includes(type) ? [{ id: uid(), name: `${t('Opzione')} 1`, color: '#a392ff' }] : [] };
+}
 function customColumnsPanel() {
-  return `<section class="panel settings-section" id="custom-columns-panel"><h2>${esc(t('Colonne personalizzate'))}</h2><p class="section-description">${esc(t('Fino a 30 colonne per lista. Il tipo si sceglie alla creazione; nome, opzioni e ordine restano modificabili. Salvare le impostazioni per applicare.'))}</p>${['tasks', 'issues'].map((kind, index) => `<section class="custom-schema"><h3>${esc(data.settings.tabNames[index])}</h3><div id="custom-definitions-${kind}"></div><form class="custom-add-form" data-add-field="${kind}"><label class="field">${esc(t('Nome colonna'))}<input name="name" maxlength="60" required></label><label class="field">${esc(t('Tipo'))}<select name="type">${Object.entries(fieldTypeNames).map(([type, name]) => `<option value="${type}">${esc(t(name))}</option>`).join('')}</select></label><button type="submit" class="button">${esc(t('Aggiungi colonna'))}</button></form></section>`).join('')}<h3>${esc(t('Colonne visibili nelle issue'))}</h3><div id="issue-columns-editor"></div></section>`;
+  return `<section class="panel settings-section" id="custom-columns-panel"><h2>${esc(t('Colonne personalizzate'))}</h2><p class="section-description">${esc(t('Fino a 30 colonne per lista. Il tipo si sceglie alla creazione; nome, opzioni e ordine restano modificabili. Salvare le impostazioni per applicare.'))}</p><p class="section-description">${esc(t('Salva impostazioni include anche le nuove colonne compilate qui sotto. Usa Aggiungi colonna per configurare subito etichette e colori o preparare altre colonne prima di salvare.'))}</p>${['tasks', 'issues'].map((kind, index) => `<section class="custom-schema"><h3>${esc(data.settings.tabNames[index])}</h3><div id="custom-definitions-${kind}"></div><form class="custom-add-form" data-add-field="${kind}"><label class="field">${esc(t('Nome colonna'))}<input name="name" maxlength="60" required></label><label class="field">${esc(t('Tipo'))}<select name="type">${Object.entries(fieldTypeNames).map(([type, name]) => `<option value="${type}">${esc(t(name))}</option>`).join('')}</select></label><button type="submit" class="button">${esc(t('Aggiungi colonna'))}</button></form></section>`).join('')}<h3>${esc(t('Colonne visibili nelle issue'))}</h3><div id="issue-columns-editor"></div></section>`;
 }
 function refreshChoiceSettings() {
   let panels = $('#choice-settings-panels');
@@ -2349,8 +2396,7 @@ function wireCustomColumns() {
     const form = document.querySelector(`[data-add-field="${kind}"]`);
     form.onsubmit = action(event => {
       event.preventDefault();
-      const fields = new FormData(form), type = fields.get('type');
-      const field = { id: `custom-${uid()}`, name: fields.get('name').trim(), type, options: ['select', 'multiselect'].includes(type) ? [{ id: uid(), name: `${t('Opzione')} 1`, color: '#a392ff' }] : [] };
+      const field = newCustomField(form);
       CustomColumns.validateFields([...settingsDraft[key], field]);
       settingsDraft[key].push(field); form.reset(); draw(); syncColumns();
     });
@@ -2361,6 +2407,7 @@ function wireCustomColumns() {
 }
 function renderSettings() {
   settingsDraft = structuredClone(data.settings);
+  settingsBase = structuredClone(data.settings);
   settingsDraft.highlights ??= [];
   settingsDraft.tags ??= [];
   settingsDraft.taskFields ??= []; settingsDraft.issueFields ??= [];
@@ -2789,6 +2836,18 @@ window.runSmokeTests = async () => {
   {
     const baseline = structuredClone(data), editedId = data.tasks.find(task => !task.hidden).id;
     view = 4; render(); showSettingsTab('custom-columns');
+    for (const kind of ['tasks', 'issues']) {
+      const add = $(`[data-add-field="${kind}"]`);
+      add.elements.name.value = `Pending ${kind}`; add.elements.type.value = 'multiselect';
+      add.elements.name.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    await tick();
+    check(settingsChanged() && !$('#unsaved-banner').hidden && !$('#settings-tab-custom-columns .settings-tab-dot').hidden, 'Colonne compilate ma non aggiunte segnalate come modifiche non salvate');
+    $('#save-settings').click();
+    await waitFor(() => !saving && data.settings.taskFields.some(field => field.name === 'Pending tasks'));
+    const pendingStored = await workspaceApi.load();
+    check(pendingStored.data.settings.issueFields.some(field => field.name === 'Pending issues') && data.settings.taskColumns.some(column => column.id === data.settings.taskFields[0].id), 'Salva impostazioni crea e persiste entrambe le colonne senza richiedere Aggiungi colonna');
+    await commit(baseline); render(); showSettingsTab('custom-columns');
     check(!$('#custom-columns-panel').hidden && document.querySelectorAll('[data-add-field]').length === 2, 'Impostazioni con schemi separati per attività e issue');
     for (const kind of ['tasks', 'issues']) {
       for (const type of kind === 'tasks' ? CustomColumns.TYPES : ['text', 'select', 'boolean', 'multiselect']) {
@@ -2811,9 +2870,20 @@ window.runSmokeTests = async () => {
     const taskFields = Object.fromEntries(data.settings.taskFields.map(field => [field.type, field]));
     const issueFields = Object.fromEntries(data.settings.issueFields.map(field => [field.type, field]));
     check((await workspaceApi.load()).data.settings.issueFields.length === 4 && data.settings.taskColumns.some(column => column.id === taskFields.number.id), 'Schemi e colonne predefinite persistiti nell’archivio');
+    const pendingTask = $('[data-add-field="tasks"]'), pendingIssue = $('[data-add-field="issues"]');
+    pendingTask.elements.name.value = taskFields.text.name;
+    pendingIssue.elements.name.value = 'Must not partially save';
+    let duplicateRejected = false;
+    try { await saveSettings(); } catch (error) { duplicateRejected = /univoc/i.test(error.message); }
+    check(duplicateRejected && (await workspaceApi.load()).data.settings.issueFields.length === 4 && pendingTask.elements.name.value === taskFields.text.name && pendingIssue.elements.name.value === 'Must not partially save', 'Nome duplicato rifiutato senza salvare parzialmente o perdere le colonne ancora compilate');
     view = 0; render(); taskDialog(data.tasks.find(task => task.id === editedId));
     const form = $('#task-form'), values = { text: 'Needle custom text '.repeat(40), number: '17.5', date: '2028-02-29', select: taskFields.select.options[1].id, url: 'https://example.com/custom', effort: '1.25', boolean: 'false' };
     for (const [type, value] of Object.entries(values)) form.elements[taskFields[type].id].value = value;
+    form.querySelector('[data-choice-picker]').click();
+    $('.task-edit-layout').dispatchEvent(new Event('scroll'));
+    check(Boolean($('#tag-menu')), 'Scorrimento automatico dell’editor non chiude la scelta multipla appena aperta');
+    closeTagMenu(true);
+    check(form.querySelector('[data-choice-picker]').getAttribute('aria-expanded') === 'false' && document.activeElement === form.querySelector('[data-choice-picker]'), 'Chiusura del menu ripristina stato e focus sul selettore dell’editor, non sulla tabella sottostante');
     form.querySelector('[data-choice-picker]').click();
     document.querySelectorAll('#tag-menu input').forEach(input => { input.checked = true; });
     $('#tag-menu').requestSubmit(); await waitFor(() => !$('#tag-menu'));
@@ -2823,6 +2893,8 @@ window.runSmokeTests = async () => {
     await waitFor(() => !saving && !$('#modal').open);
     const edited = () => data.tasks.find(task => task.id === editedId);
     check(edited().customFields[taskFields.number.id] === 17.5 && edited().customFields[taskFields.boolean.id] === false && edited().customFields[taskFields.multiselect.id].length === 2 && edited().customFields[taskFields.richtext.id].includes('<strong>'), 'Editor salva numeri, booleani falsi, scelte multiple e rich text personalizzati');
+    const storedCustom = (await workspaceApi.load()).data.tasks.find(task => task.id === editedId).customFields;
+    check(JSON.stringify(storedCustom) === JSON.stringify(edited().customFields), 'Tutti i valori personalizzati riletti dal backend coincidono con quelli salvati');
     const customCells = $(`[data-task-row="${editedId}"]`).querySelectorAll('.custom-cell');
     check(customCells.length === 9 && [...customCells].some(cell => cell.querySelector('a[data-open-url]')) && [...customCells].some(cell => cell.querySelector('.date-pill')) && getComputedStyle(customCells[0]).overflowWrap === 'anywhere', 'Colonne tipizzate leggibili con link, date colorate e testo lungo contenuto');
     check(globalSearchResults('Needle custom').some(result => result.id === editedId), 'Ricerca globale include i valori personalizzati');
@@ -2920,6 +2992,39 @@ window.runSmokeTests = async () => {
     await commit(baseline);
     columnFilters = { tasks: {}, issues: {} }; issueSearch = ''; search = ''; activeSavedViewId = ''; sort = [{ key: 'releaseDate', direction: 'asc' }];
     view = 0; clearHistory(activeOrganizationId); render();
+  }
+  {
+    const baseline = structuredClone(data);
+    view = 4; render();
+    settingsDraft.fontFamily = 'arial'; refreshSettingsState();
+    const external = await workspaceApi.load();
+    external.data.settings.taskFields.push({ id: 'custom-remote', name: 'Remote column', type: 'text', options: [] });
+    external.data.tasks[0].customFields = { 'custom-remote': 'Keep this value' };
+    await workspaceApi.save(external.data, activeOrganizationId, undefined, external.revision);
+    let conflictRejected = false;
+    try { await saveSettings(); } catch (error) { conflictRejected = /altra finestra/.test(error.message); }
+    const protectedData = (await workspaceApi.load()).data;
+    check(conflictRejected && protectedData.settings.taskFields.some(field => field.id === 'custom-remote') && protectedData.tasks[0].customFields['custom-remote'] === 'Keep this value', 'Una bozza vecchia non cancella colonne e valori salvati da un’altra finestra');
+    adoptSnapshot(await workspaceApi.load());
+    await commit(baseline); render(); clearHistory(activeOrganizationId);
+  }
+  {
+    const baseline = structuredClone(data);
+    view = 4; render(); showSettingsTab('fonts');
+    for (const font of FONT_FAMILIES) {
+      $('#font-family').value = font.id; $('#font-family').dispatchEvent(new Event('change', { bubbles: true }));
+      if (font.bundled) {
+        const regular = await document.fonts.load(`400 14px "${font.name}"`, 'Attività Łódź'), bold = await document.fonts.load(`700 14px "${font.name}"`, 'Attività Łódź');
+        check(regular.length > 0 && bold.length > 0 && [...regular, ...bold].every(face => face.status === 'loaded'), `Font ${font.name} caricato realmente dai file locali, anche con accenti e grassetto`);
+      }
+      check(getComputedStyle($('.font-sample input')).fontFamily === getComputedStyle(document.documentElement).fontFamily && document.documentElement.style.fontFamily === font.css, `Anteprima font ${font.name} applicata anche ai controlli`);
+    }
+    $('#discard-settings').click();
+    check(data.settings.fontFamily === DEFAULT_FONT_FAMILY && $('#font-family').value === DEFAULT_FONT_FAMILY, 'Annulla impostazioni ripristina il font precedente');
+    $('#font-family').value = 'verdana'; $('#font-family').dispatchEvent(new Event('change', { bubbles: true }));
+    $('#save-settings').click(); await waitFor(() => !saving && data.settings.fontFamily === 'verdana');
+    check((await workspaceApi.load()).data.settings.fontFamily === 'verdana' && $('#unsaved-banner').hidden, 'Font salvato nell’archivio e riletto nelle impostazioni');
+    await commit(baseline); clearHistory(activeOrganizationId); view = 0; render();
   }
   const historyTask = data.tasks.find(task => !task.hidden);
   const originalHistoryNotes = historyTask.notes;

@@ -2439,6 +2439,10 @@ td.custom-cell > span {
   border-top: 1px solid var(--border);
   padding-top: 12px;
 }
+.font-family-field {
+  margin-bottom: 24px;
+  max-width: 650px;
+}
 .custom-edit-fields h3 {
   margin: 0 0 12px;
   font-size: calc(14px * var(--fs));

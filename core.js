@@ -17,6 +17,28 @@ const FONT_SIZE_PARTS = [
   { id: 'dialogs', min: 80, max: 140 }
 ];
 const FONT_SIZE_STEP = 5;
+const FONT_FAMILIES = [
+  { id: 'segoe', name: 'Segoe UI', css: '"Segoe UI", sans-serif' },
+  { id: 'aptos', name: 'Aptos', css: 'Aptos, "Segoe UI", sans-serif' },
+  { id: 'arial', name: 'Arial', css: 'Arial, sans-serif' },
+  { id: 'calibri', name: 'Calibri', css: 'Calibri, "Segoe UI", sans-serif' },
+  { id: 'verdana', name: 'Verdana', css: 'Verdana, sans-serif' },
+  { id: 'tahoma', name: 'Tahoma', css: 'Tahoma, sans-serif' },
+  { id: 'trebuchet', name: 'Trebuchet MS', css: '"Trebuchet MS", sans-serif' },
+  { id: 'georgia', name: 'Georgia', css: 'Georgia, serif' },
+  { id: 'consolas', name: 'Consolas', css: 'Consolas, monospace' },
+  ...[
+    ['roboto', 'Roboto'], ['inter', 'Inter'], ['opensans', 'Open Sans'], ['lato', 'Lato'],
+    ['montserrat', 'Montserrat'], ['poppins', 'Poppins'], ['nunito', 'Nunito'], ['nunitosans', 'Nunito Sans'],
+    ['raleway', 'Raleway'], ['rubik', 'Rubik'], ['worksans', 'Work Sans'], ['sourcesans3', 'Source Sans 3'],
+    ['notosans', 'Noto Sans'], ['dmsans', 'DM Sans'], ['manrope', 'Manrope'], ['firasans', 'Fira Sans'],
+    ['notoserif', 'Noto Serif', 'serif'], ['merriweather', 'Merriweather', 'serif'], ['lora', 'Lora', 'serif'],
+    ['playfairdisplay', 'Playfair Display', 'serif'], ['sourceserif4', 'Source Serif 4', 'serif'],
+    ['robotoslab', 'Roboto Slab', 'serif'], ['firacode', 'Fira Code', 'monospace'], ['jetbrainsmono', 'JetBrains Mono', 'monospace']
+  ].map(([id, name, fallback = 'sans-serif']) => ({ id, name, css: `${name.includes(' ') ? `"${name}"` : name}, ${fallback}`, bundled: true }))
+];
+const DEFAULT_FONT_FAMILY = 'segoe';
+const validFontFamily = value => FONT_FAMILIES.some(font => font.id === value);
 const defaultFontSizes = () => Object.fromEntries(FONT_SIZE_PARTS.map(part => [part.id, 100]));
 function validFontSizes(sizes) {
   return Boolean(sizes) && typeof sizes === 'object' && !Array.isArray(sizes) && Object.keys(sizes).length === FONT_SIZE_PARTS.length
@@ -121,7 +143,7 @@ function baseData(language = 'it') {
     version: 1,
     settings: {
       language, logo: '', portalUrlTemplate: '', tabNames: ['Attività', 'Issue collegate', 'Milestone', 'Kanban'].map(name => T(name)),
-      hoursPerDay: 8, fontSizes: defaultFontSizes(), statuses, urgencies, highlights: defaultHighlights(language), tags: [], taskColumns: defaultTaskColumns(), themeId: 'midnight',
+      hoursPerDay: 8, fontSizes: defaultFontSizes(), fontFamily: DEFAULT_FONT_FAMILY, statuses, urgencies, highlights: defaultHighlights(language), tags: [], taskColumns: defaultTaskColumns(), themeId: 'midnight',
       themes: defaultThemes(), savedViews: [], taskFields: [], issueFields: [], issueColumns: columns.normalizeIssueColumns()
     },
     tasks: [],
@@ -271,6 +293,7 @@ function validateData(data) {
   assert(s.portalUrlTemplate === undefined || validPortalTemplate(s.portalUrlTemplate), 'Il modello del link portale deve essere un indirizzo web valido e contenere {codice}.');
   assert(s.logo === undefined || s.logo === '' || (text(s.logo) && s.logo.length <= 1500000 && /^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/.test(s.logo)), 'Logo non valido.');
   assert(s.fontSizes === undefined || validFontSizes(s.fontSizes), 'Dimensioni del testo non valide.');
+  assert(s.fontFamily === undefined || validFontFamily(s.fontFamily), 'Font non valido.');
   for (const key of ['statuses', 'urgencies']) {
     assert(Array.isArray(s[key]) && s[key].length > 0 && uniqueIds(s[key]), `Elenco ${key} non valido o vuoto.`);
     assert(s[key].every(x => text(x.id) && x.id && text(x.name) && x.name.trim() && color(x.color)), `Valori ${key} non validi.`);
@@ -340,6 +363,7 @@ function validateArchive(archive) {
     organization.data.settings.logo ??= '';
     organization.data.settings.portalUrlTemplate ??= '';
     organization.data.settings.fontSizes ??= defaultFontSizes();
+    organization.data.settings.fontFamily ??= DEFAULT_FONT_FAMILY;
     organization.data.settings.savedViews ??= [];
     organization.data.settings.taskFields ??= [];
     organization.data.settings.issueFields ??= [];
@@ -404,7 +428,7 @@ function organizationExport(organization, kind, { appVersion = '', exportedAt = 
   if (parts.includes('settings')) {
     file.settings = {
       language: settings.language || 'it', logo: settings.logo || '', portalUrlTemplate: settings.portalUrlTemplate || '',
-      tabNames: [...settings.tabNames], hoursPerDay: settings.hoursPerDay, fontSizes: { ...(settings.fontSizes || defaultFontSizes()) },
+      tabNames: [...settings.tabNames], hoursPerDay: settings.hoursPerDay, fontSizes: { ...(settings.fontSizes || defaultFontSizes()) }, fontFamily: settings.fontFamily ?? DEFAULT_FONT_FAMILY,
       statuses: structuredClone(settings.statuses), urgencies: structuredClone(settings.urgencies),
       highlights: structuredClone(highlights), tags: structuredClone(settings.tags || []),
       taskColumns: normalizeTaskColumns(settings.taskColumns, settings.taskFields), savedViews: structuredClone(settings.savedViews || []),
@@ -471,6 +495,7 @@ function parseOrganizationFile(input) {
       statuses: fileRecords(source.statuses, RECORD_KEYS.status, 'Elenco statuses non valido o vuoto.'),
       urgencies: fileRecords(source.urgencies, RECORD_KEYS.urgency, 'Elenco urgencies non valido o vuoto.')
     };
+    if (source.fontFamily !== undefined) settings.fontFamily = source.fontFamily;
     if (source.fontSizes !== undefined) {
       assert(source.fontSizes && typeof source.fontSizes === 'object' && !Array.isArray(source.fontSizes), 'Dimensioni del testo non valide.');
       settings.fontSizes = Object.fromEntries(FONT_SIZE_PARTS.map(({ id }) => [id, source.fontSizes[id] ?? 100]));
@@ -552,6 +577,7 @@ function applyOrganizationImport(current, file, options = {}) {
     for (const task of next.tasks) { task.statusId = status(task.statusId); task.urgencyId = urgency(task.urgencyId); }
     for (const key of ['language', 'portalUrlTemplate', 'tabNames', 'hoursPerDay', 'statuses', 'urgencies']) settings[key] = incoming[key];
     if (incoming.fontSizes) settings.fontSizes = incoming.fontSizes;
+    if (incoming.fontFamily !== undefined) settings.fontFamily = incoming.fontFamily;
     if (incoming.highlights) {
       const highlight = colorOptionRemapper(settings.highlights || [], incoming.highlights);
       for (const task of next.tasks) task.highlightId = highlight(task.highlightId);
@@ -808,7 +834,7 @@ const core = {
   APP_NAME, initialData, baseData, demoData, demoReleaseDates, validateData, migrateArchive, validateArchive, createOrganization, matchIssues, indexIssues, findDuplicates, sortTasks, dateColor, today, validLanguage,
   extractThemePalette, themeFromLogo, normalizeUrl, isWebUrl, validPortalTemplate, portalUrl,
   ORGANIZATION_FILE_KINDS, organizationExport, organizationFileName, situationFileName, parseOrganizationFile, applyOrganizationImport, importedOrganizationData, uniqueOrganizationName,
-  FONT_SIZE_PARTS, FONT_SIZE_STEP, defaultFontSizes, clampFontSize, defaultThemes,
+  FONT_SIZE_PARTS, FONT_SIZE_STEP, FONT_FAMILIES, DEFAULT_FONT_FAMILY, validFontFamily, defaultFontSizes, clampFontSize, defaultThemes,
   HIGHLIGHT_LIMIT, defaultHighlights, TASK_COLUMN_IDS, defaultTaskColumns, normalizeTaskColumns, TAG_LIMIT, TAG_NAME_MAX, nextReleaseDate, reorderTaskSequences
 };
 if (typeof module !== 'undefined') module.exports = core;

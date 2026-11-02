@@ -4,12 +4,15 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const i18n = require('./i18n');
+const fontSources = require('./fonts/sources.json');
 
 const DEFAULT_PORT = 47821;
 const HOST = '127.0.0.1';
 const BODY_LIMIT = 64 * 1024 * 1024;
 const STATIC_FILES = new Map([
   ['/styles.css', 'text/css; charset=utf-8'],
+  ['/fonts/fonts.css', 'text/css; charset=utf-8'],
+  ...fontSources.fonts.flatMap(font => font.files.map(file => [`/fonts/${file.file}`, 'font/woff2'])),
   ['/core.js', 'text/javascript; charset=utf-8'],
   ['/columns.js', 'text/javascript; charset=utf-8'],
   ['/csv.js', 'text/javascript; charset=utf-8'],
