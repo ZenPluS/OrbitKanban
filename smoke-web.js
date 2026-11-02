@@ -69,6 +69,12 @@ async function run({ server, win }) {
 
   const page = await request(port, '/', { headers: { Cookie: cookie } });
   check(page.status === 200 && page.text.includes('<script defer src="web-bridge.js"></script>') && page.text.includes("connect-src 'self'") && /frame-ancestors 'none'/.test(page.headers['content-security-policy']) && page.headers['x-content-type-options'] === 'nosniff', 'Pagina browser con bridge e intestazioni di sicurezza');
+  check((await request(port, '/api/backups', { headers: { 'X-OrbitKanban': '1' } })).status === 401, 'Elenco backup non accessibile senza sessione');
+  const backups = await request(port, '/api/backups', { headers: api });
+  const backupList = backups.status === 200 ? JSON.parse(backups.text) : {};
+  check(backups.status === 200 && backupList.retention === 14 && backupList.backups.length > 0 && backupList.backups.every(backup => /^\d{4}-\d{2}-\d{2}-workspace\.json$/.test(backup.fileName)), 'Backup giornalieri portabili elencati con retention verificabile');
+  const invalidRestore = await post('/api/backups', { operation: 'restore', fileName: '../workspace.json' });
+  check(invalidRestore.status === 400, 'Ripristino backup con percorso non consentito rifiutato');
   check((await request(port, '/', { headers: { Cookie: cookie, Host: 'evil.example' } })).status === 403, 'Host non locale rifiutato (DNS rebinding)');
   check((await request(port, '/api/load', { headers: { Cookie: cookie } })).status === 403, 'API senza intestazione dedicata rifiutate');
   check((await request(port, '/api/load', { headers: { ...api, 'Sec-Fetch-Site': 'cross-site' } })).status === 403, 'Richieste cross-site rifiutate');

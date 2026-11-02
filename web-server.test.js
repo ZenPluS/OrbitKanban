@@ -207,3 +207,16 @@ test('languages are listed for the browser and operations are forwarded to the a
     assert.match(denied, /Invalid link/);
   } finally { await custom.close(); }
 });
+
+test('daily backups are listed only to authenticated browser clients and unsafe restores are rejected', async () => {
+  const anonymous = await request('/api/backups', { headers: { 'X-OrbitKanban': '1' } });
+  assert.equal(anonymous.status, 401);
+  const listed = await request('/api/backups', { headers: api() });
+  assert.equal(listed.status, 200);
+  const result = JSON.parse(listed.text);
+  assert.equal(result.retention, 14);
+  assert.ok(result.backups.length > 0);
+  assert.ok(result.backups.every(backup => /^\d{4}-\d{2}-\d{2}-workspace\.json$/.test(backup.fileName)));
+  const unsafe = await post('/api/backups', { operation: 'restore', fileName: '../workspace.json' });
+  assert.equal(unsafe.status, 400);
+});

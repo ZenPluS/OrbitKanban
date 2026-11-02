@@ -129,6 +129,11 @@ handle('import', async () => {
   if (answer.response !== 1) return null;
   return store.replace(archive);
 });
+handle('backups', (operation = 'list', fileName) => {
+  if (operation === 'list') return store.listBackups();
+  if (operation === 'restore') return store.restoreBackup(fileName);
+  throw new Error(message('Operazione non supportata.'));
+});
 handle('open-link', async url => {
   if (!isWebUrl(url)) throw new Error('URL non valido.');
   if (!smoke) await shell.openExternal(url);

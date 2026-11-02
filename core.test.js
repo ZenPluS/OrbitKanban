@@ -416,10 +416,11 @@ test('organization exports contain only the requested parts as independent copie
   assert.deepEqual(sections(files.data), ['data']);
   assert.deepEqual(sections(files.organization), ['themes', 'settings', 'data']);
   assert.deepEqual(files.themes.themes, { themeId: organization.data.settings.themeId, themes: organization.data.settings.themes });
-  assert.deepEqual(Object.keys(files.settings.settings).sort(), ['fontSizes', 'highlights', 'hoursPerDay', 'language', 'logo', 'portalUrlTemplate', 'statuses', 'tabNames', 'tags', 'taskColumns', 'urgencies']);
+  assert.deepEqual(Object.keys(files.settings.settings).sort(), ['fontSizes', 'highlights', 'hoursPerDay', 'language', 'logo', 'portalUrlTemplate', 'savedViews', 'statuses', 'tabNames', 'tags', 'taskColumns', 'urgencies']);
   assert.deepEqual(files.settings.settings.highlights, organization.data.settings.highlights);
   assert.deepEqual(files.data.data.highlights, organization.data.settings.highlights);
   assert.deepEqual(files.settings.settings.fontSizes, defaultFontSizes());
+  assert.deepEqual(files.settings.settings.savedViews, []);
   assert.equal(files.settings.settings.logo, organization.data.settings.logo);
   assert.deepEqual(files.data.data.statuses, organization.data.settings.statuses);
   assert.equal(files.data.data.tasks.length, organization.data.tasks.length);
@@ -674,6 +675,46 @@ test('task columns keep the saved order and restore missing columns in their def
   assert.equal(normalizeTaskColumns([{ id: 'link', visible: false }]).filter(column => column.visible).length, TASK_COLUMN_IDS.length - 2);
   const allHidden = normalizeTaskColumns(TASK_COLUMN_IDS.map(id => ({ id, visible: false })));
   assert.deepEqual(allHidden.filter(column => column.visible).map(column => column.id), ['code']);
+});
+test('saved views are portable settings and normalize safely in older archives', () => {
+  const data = baseData('it'), savedView = {
+    id: 'release-next', name: 'Prossima release', search: 'ORBIT', statusFilter: data.settings.statuses[0].id,
+    highlightFilter: '__any', showHidden: false, duplicatesOnly: false,
+    sort: [{ key: 'releaseDate', direction: 'asc' }, { key: 'sequence', direction: 'desc' }],
+    columns: [{ id: 'code', visible: true }, { id: 'releaseDate', visible: true }]
+  };
+  data.settings.savedViews = [savedView];
+  assert.equal(validateData(data), data);
+  const exported = parseOrganizationFile(organizationExport({ name: 'Views', data }, 'settings'));
+  assert.deepEqual(exported.settings.savedViews, [savedView]);
+  const imported = importedOrganizationData(exported, { settings: true }, 'it');
+  assert.deepEqual(imported.settings.savedViews, [savedView]);
+  const legacy = legacyArchive();
+  delete legacy.organizations[0].data.settings.savedViews;
+  assert.deepEqual(validateArchive(legacy).organizations[0].data.settings.savedViews, []);
+});
+test('invalid saved view names, filters, sorts, and columns are rejected', () => {
+  const invalid = [
+    view => { view.name = ' '; },
+    view => { view.name = 'x'.repeat(61); },
+    view => { view.search = 'x'.repeat(201); },
+    view => { view.showHidden = 'yes'; },
+    view => { view.sort = [{ key: 'description', direction: 'asc' }]; },
+    view => { view.sort = [{ key: 'sequence', direction: 'sideways' }]; },
+    view => { view.sort = [{ key: 'sequence', direction: 'asc' }, { key: 'sequence', direction: 'desc' }]; },
+    view => { view.columns = [{ id: 'description', visible: false }]; },
+    view => { view.columns = [{ id: 'invalid', visible: true }]; }
+  ];
+  for (const mutate of invalid) {
+    const data = baseData('it');
+    const view = { id: 'v1', name: 'Valid', search: '', statusFilter: '', highlightFilter: '', showHidden: false, duplicatesOnly: false, sort: [{ key: 'sequence', direction: 'asc' }], columns: defaultTaskColumns() };
+    mutate(view);
+    data.settings.savedViews = [view];
+    assert.throws(() => validateData(data), /Viste salvate non valide/);
+  }
+  const duplicateNames = baseData('it');
+  duplicateNames.settings.savedViews = ['Vista', 'vista'].map((name, i) => ({ id: `v${i}`, name, search: '', statusFilter: '', highlightFilter: '', showHidden: false, duplicatesOnly: false, sort: [{ key: 'sequence', direction: 'asc' }], columns: defaultTaskColumns() }));
+  assert.throws(() => validateData(duplicateNames), /Viste salvate non valide/);
 });
 test('demo data highlights a mix of open and recently released tasks', () => {
   const data = demoData('it', new Date(2026, 4, 20, 10));

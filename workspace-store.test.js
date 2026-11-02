@@ -24,6 +24,53 @@ test('first load seeds a portable archive and exposes revision and client metada
     assert.equal(snapshot.activeOrganizationId, archive.activeOrganizationId);
     assert.equal(snapshot.revision, revisionOf(archive.organizations[0]));
     assert.equal(snapshot.organizations.length, 1);
+    const backups = await store.listBackups();
+    assert.equal(backups.retention, 14);
+    assert.equal(backups.backups.length, 1);
+    assert.match(backups.backups[0].fileName, /^\d{4}-\d{2}-\d{2}-workspace\.json$/);
+  } finally { await cleanup(); }
+});
+test('daily backups preserve the pre-change archive and restore without losing the current backup', async () => {
+  const { store, dataFolder, cleanup } = await tempStore();
+  try {
+    const loaded = await store.load(), backup = (await store.listBackups()).backups[0];
+    loaded.data.tasks.push(task(loaded.data, 'BACKUP-1'));
+    const saved = await store.save(loaded.data, loaded.activeOrganizationId, undefined, loaded.revision);
+    assert.equal((await store.listBackups()).backups[0].fileName, backup.fileName);
+    const restored = await store.restoreBackup(backup.fileName);
+    assert.equal(restored.data.tasks.length, 0);
+    assert.equal(restored.activeOrganizationId, loaded.activeOrganizationId);
+    const currentBackup = JSON.parse(await fs.readFile(`${store.dataFile}.bak`, 'utf8'));
+    assert.deepEqual(currentBackup.organizations[0].data.tasks.map(item => item.code), ['BACKUP-1']);
+    assert.notEqual(saved.revision, restored.revision);
+    assert.deepEqual((await store.listBackups()).backups.map(item => item.fileName), [backup.fileName]);
+  } finally { await cleanup(); }
+});
+test('daily backup retention removes only the oldest named snapshots', async () => {
+  const { store, dataFolder, cleanup } = await tempStore();
+  try {
+    const folder = path.join(dataFolder, 'backups');
+    await fs.mkdir(folder, { recursive: true });
+    for (let day = 1; day <= 16; day++) {
+      const date = new Date(Date.UTC(2000, 0, day)).toISOString().slice(0, 10);
+      await fs.writeFile(path.join(folder, `${date}-workspace.json`), '{}');
+    }
+    const listing = await store.listBackups();
+    assert.equal(listing.backups.length, listing.retention);
+    assert.equal(listing.backups[0].fileName, `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')}-workspace.json`);
+    assert.ok(!listing.backups.some(item => ['2000-01-01-workspace.json', '2000-01-02-workspace.json', '2000-01-03-workspace.json'].includes(item.fileName)));
+  } finally { await cleanup(); }
+});
+test('backup restore rejects path traversal and corrupt archives without changing workspace data', async () => {
+  const { store, dataFolder, cleanup } = await tempStore();
+  try {
+    const loaded = await store.load(), before = await fs.readFile(store.dataFile, 'utf8');
+    await assert.rejects(store.restoreBackup('..\\workspace.json'), /Backup selezionato non valido/);
+    const corrupt = '2001-02-03-workspace.json';
+    await fs.writeFile(path.join(dataFolder, 'backups', corrupt), '{broken', 'utf8');
+    await assert.rejects(store.restoreBackup(corrupt), { code: 'unreadable' });
+    assert.equal(await fs.readFile(store.dataFile, 'utf8'), before);
+    assert.equal((await store.load()).revision, loaded.revision);
   } finally { await cleanup(); }
 });
 

@@ -1,6 +1,6 @@
 # OrbitKanban — workspace portable
 
-App desktop locale per Windows 10/11 a 64 bit, **versione 2.13.0**. Nessun account, server esterno o collegamento a Internet necessario per l'uso. **Il nome dell'app è sempre OrbitKanban e non è configurabile.** Tutte le impostazioni del workspace appartengono alla singola organizzazione. Mentre l'app è aperta puoi usarla anche **dal browser dello stesso PC**, con più organizzazioni aperte contemporaneamente in schede diverse.
+App desktop locale per Windows 10/11 a 64 bit, **versione 2.14.0**. Nessun account, server esterno o collegamento a Internet necessario per l'uso. **Il nome dell'app è sempre OrbitKanban e non è configurabile.** Tutte le impostazioni del workspace appartengono alla singola organizzazione. Mentre l'app è aperta puoi usarla anche **dal browser dello stesso PC**, con più organizzazioni aperte contemporaneamente in schede diverse.
 
 ## Avvio e condivisione
 
@@ -16,7 +16,7 @@ L'icona dell'eseguibile portable, della finestra e della barra delle applicazion
 
 L'eseguibile portable estrae i file dell'app in una cartella temporanea a ogni avvio: è la parte che richiede qualche secondo. Appena fai doppio clic compare la **schermata di caricamento**, sempre in inglese, con logo, versione e una **barra di caricamento infinita** che scorre senza fermarsi fin dal primo istante, già durante l'estrazione. Quando l'app parte, la stessa schermata, nella stessa posizione, prosegue con la stessa animazione finché l'organizzazione non è pronta; non ci sono fasi numerate, perché la durata di ogni passaggio dipende dal PC. Tra la schermata del launcher e quella dell'app può esserci un passaggio di qualche decimo di secondo. La finestra principale compare solo quando l'organizzazione è già disegnata, con lo sfondo del suo tema. Se il sistema chiede di ridurre le animazioni, la barra non scorre ma pulsa lentamente. Il pacchetto include soltanto le risorse di Chromium per italiano e inglese, così l'estrazione è più leggera.
 
-L'archivio è `data/workspace.json`; `workspace.json.bak` contiene il salvataggio precedente. Cache, log e la chiave dell'accesso da browser (`data/runtime/browser-access-token`) restano anch'essi nella cartella `data`. Non usare l'app direttamente dentro un archivio ZIP e non aprire più copie dell'eseguibile sullo stesso archivio condiviso: per lavorare in più finestre usa l'[accesso da browser](#accesso-da-browser), che passa sempre dall'unica app aperta. È un'app monoutente, non un sistema di collaborazione in rete.
+L'archivio è `data/workspace.json`; `workspace.json.bak` contiene il salvataggio precedente e le copie giornaliere sono in `data/backups`. Cache, log e la chiave dell'accesso da browser (`data/runtime/browser-access-token`) restano anch'essi nella cartella `data`. Non usare l'app direttamente dentro un archivio ZIP e non aprire più copie dell'eseguibile sullo stesso archivio condiviso: per lavorare in più finestre usa l'[accesso da browser](#accesso-da-browser), che passa sempre dall'unica app aperta. È un'app monoutente, non un sistema di collaborazione in rete.
 
 ## Organizzazioni, logo e lingua
 
@@ -87,7 +87,7 @@ Mentre OrbitKanban è aperto, l'app espone la stessa interfaccia anche al browse
 - Le modifiche si **sincronizzano in tempo reale** tra app e schede, senza ricaricare. Se due finestre modificano la stessa organizzazione quasi insieme, la seconda modifica viene riapplicata sui dati aggiornati invece di sovrascriverli. Le impostazioni che stai modificando e non hai ancora salvato non vengono perse quando arrivano aggiornamenti da altre finestre.
 - In **Impostazioni → Accesso da browser** trovi l'indirizzo e il comando **Copia link di accesso**.
 - Il server ascolta **solo su 127.0.0.1**: non è raggiungibile da altri computer della rete. Il primo accesso usa un link con una chiave personale, poi il browser ricorda la sessione con un cookie protetto. **Non condividere il link di accesso**: contiene la chiave. Eliminando `data/runtime/browser-access-token` ad app chiusa la chiave viene rigenerata e le sessioni precedenti vengono invalidate.
-- Chiudendo l'app le schede mostrano **App non raggiungibile** e non possono salvare; riaprendo l'app e ricaricando la pagina si riprende a lavorare. I dati restano sempre e solo in `data/workspace.json`.
+- Chiudendo l'app le schede mostrano **App non raggiungibile** e non possono salvare; riaprendo l'app e ricaricando la pagina si riprende a lavorare. Archivio principale e copie di sicurezza restano nella cartella portable `data`.
 - Dal browser funzionano anche esportazione (download del backup), importazione, esportazione e importazione per organizzazione (i file vengono scaricati dal browser) e apertura dei link al portale in una nuova scheda.
 
 ## Link al portale
@@ -118,6 +118,10 @@ Dalla **2.12.0**, salvataggi, eliminazioni e cambio di visibilità conservano lo
 Nelle **Milestone**, la prima data di release **da oggi in avanti** è avvolta da una colonna evidenziata con bordo, sfondo ed etichetta **Prossima release**; se la data è oggi compare **Release di oggi**. La selezione dipende dalla data locale del PC, non dallo stato o dalla visibilità delle attività, e mantiene i colori originali delle date e delle righe. All'apertura della vista la colonna viene portata in vista; il pulsante con la prossima data nell'intestazione permette di ritrovarla dopo aver scorso lo storico. Le sincronizzazioni mantengono lo scorrimento scelto dall'utente. L'indicatore si aggiorna con i dati e al cambio di giorno (entro un minuto, senza interrompere un editor aperto). Se restano solo release passate o attività senza data, nessuna colonna viene evidenziata e compare **Nessuna release in programma**.
 
 L'ordinamento iniziale delle attività è per release crescente, con date mancanti in fondo. Clic sulle intestazioni per cambiare verso; `Maiusc+clic` per ordinamenti a più livelli. Descrizione e note non sono ordinabili. Urgenza e stato vengono ordinati in base all'ordine delle rispettive opzioni, non alfabeticamente. Il pulsante “Release” ripristina l'ordinamento iniziale. Ricerca e filtri della lista non limitano le altre viste.
+
+La **ricerca globale** in alto (`Ctrl+K`) cerca attività e issue per codice, incident e problem, oltre ai contenuti descrittivi e alle date di release; selezionando un risultato si apre direttamente la relativa modifica. Nella lista attività puoi **salvare fino a 30 viste per organizzazione**: ciascuna conserva ricerca, filtri, attività nascoste/duplicate, ordinamento e colonne, e si riapplica dal menu delle viste salvate.
+
+Le modifiche salvate possono essere annullate con **Annulla** (`Ctrl+Z`) e ripristinate con **Ripristina** (`Ctrl+Y` o `Ctrl+Maiusc+Z`). La cronologia conserva fino a 20 operazioni per organizzazione finché l'app resta aperta; non modifica le azioni non ancora salvate e viene azzerata al riavvio o quando i dati cambiano in un'altra finestra.
 
 Per un **ordine manuale**, trascina la maniglia accanto alla casella di selezione di una riga, oppure usa le frecce su/giù con il focus sulla maniglia. La tabella scorre automaticamente avvicinandosi ai bordi e `Esc` annulla il trascinamento. Al rilascio l'ordine viene salvato, i campi **Progressivo / Sequence** vengono rinumerati da 1 per tutte le attività e la vista passa a **Sequence crescente**, anche se la relativa colonna è nascosta. Con filtri attivi vengono riordinate soltanto le righe mostrate: le altre conservano le proprie posizioni nell'ordine globale, pur ricevendo i nuovi progressivi. I valori manuali precedenti, anche duplicati, vengono quindi sostituiti dalla numerazione consecutiva. Le nuove Sequence restano nell'archivio e negli export; all'avvio resta predefinito l'ordinamento per release, selezionando l'intestazione Progressivo ritrovi l'ordine manuale.
 
@@ -205,6 +209,10 @@ I fogli disponibili, con i nomi dei tab dell'organizzazione:
 - **Kanban**: una colonna per stato, nell'ordine degli stati, con codice e descrizione delle attività.
 
 Il nome proposto è `OrbitKanban-<organizzazione>-situazione-<data>.xlsx` (in inglese `situation`). Nell'app desktop scegli dove salvarlo; dal browser viene scaricato come un normale file. L'esportazione non modifica i dati e non cambia il formato dell'archivio.
+
+## Backup automatici
+
+OrbitKanban crea una copia portable giornaliera dell'intero archivio prima della prima modifica del giorno e ne conserva le **14 più recenti** in `data/backups`. La lista in **Impostazioni → Dati e accesso** mostra data e dimensione; **Ripristina** richiede conferma e ripristina tutte le organizzazioni e impostazioni. Prima del ripristino, lo stato corrente viene salvato anche in `data/workspace.json.bak`. I backup si spostano e si condividono insieme all'eseguibile e alla cartella `data`; dal browser locale sono consultabili e ripristinabili con le stesse conferme.
 
 ## Impostazioni
 

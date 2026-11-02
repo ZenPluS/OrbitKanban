@@ -6,6 +6,8 @@ const { EventEmitter } = require('node:events');
 const { initialData, validateData, validateArchive, migrateArchive, createOrganization, organizationExport, organizationFileName } = require('./core');
 const { translate } = require('./i18n');
 
+const BACKUP_RETENTION = 14;
+const BACKUP_NAME = /^\d{4}-\d{2}-\d{2}-workspace\.json$/;
 function revisionOf(organization) {
   return crypto.createHash('sha256').update(JSON.stringify([organization.name, organization.data])).digest('base64url').slice(0, 22);
 }
@@ -17,6 +19,7 @@ function codedError(code, message) {
 
 function createWorkspaceStore({ dataFolder, extras = () => ({}), seed = initialData }) {
   const dataFile = path.join(dataFolder, 'workspace.json');
+  const backupsFolder = path.join(dataFolder, 'backups');
   const events = new EventEmitter();
   let current;
   let queue = Promise.resolve();
@@ -39,11 +42,37 @@ function createWorkspaceStore({ dataFolder, extras = () => ({}), seed = initialD
       organizations: current.organizations.map(({ id, name }) => ({ id, name }))
     };
   }
+  function backupName(date = new Date()) {
+    const localDate = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    return `${localDate}-workspace.json`;
+  }
+  async function pruneBackups() {
+    const files = (await fs.readdir(backupsFolder)).filter(name => BACKUP_NAME.test(name)).sort().reverse();
+    await Promise.all(files.slice(BACKUP_RETENTION).map(name => fs.rm(path.join(backupsFolder, name))));
+  }
+  async function ensureDailyBackup(archive) {
+    await fs.mkdir(backupsFolder, { recursive: true });
+    const target = path.join(backupsFolder, backupName());
+    try { await fs.access(target); await pruneBackups(); return; }
+    catch (error) { if (error.code !== 'ENOENT') throw error; }
+    const temp = `${target}.${process.pid}.${crypto.randomUUID()}.tmp`;
+    try {
+      await fs.writeFile(temp, JSON.stringify(archive, null, 2), { encoding: 'utf8', flag: 'wx' });
+      await fs.rename(temp, target);
+    } catch (error) {
+      await fs.rm(temp, { force: true });
+      try { await fs.access(target); }
+      catch { throw error; }
+    }
+    await pruneBackups();
+  }
   function changeInfo() {
     return { defaultOrganizationId: current.activeOrganizationId, organizations: current.organizations.map(o => ({ id: o.id, name: o.name, revision: revisionOf(o) })) };
   }
   async function write(archive) {
     validateArchive(archive);
+    const hadCurrent = Boolean(current);
+    if (hadCurrent) await ensureDailyBackup(current);
     await fs.mkdir(dataFolder, { recursive: true });
     const temp = `${dataFile}.${process.pid}.tmp`;
     await fs.writeFile(temp, JSON.stringify(archive, null, 2), 'utf8');
@@ -51,6 +80,7 @@ function createWorkspaceStore({ dataFolder, extras = () => ({}), seed = initialD
     catch (error) { if (error.code !== 'ENOENT') { await fs.rm(temp, { force: true }); throw error; } }
     await fs.rename(temp, dataFile);
     current = structuredClone(archive);
+    if (!hadCurrent) await ensureDailyBackup(current);
   }
   async function ensureLoaded() {
     if (current) return;
@@ -64,7 +94,10 @@ function createWorkspaceStore({ dataFolder, extras = () => ({}), seed = initialD
     try { migrated = migrateArchive(original); }
     catch (error) { throw codedError('unreadable', `Archivio non leggibile: ${dataFile}\n${error.message}\nIl file non è stato sovrascritto. È disponibile anche workspace.json.bak.`); }
     if (JSON.stringify(original) !== JSON.stringify(migrated)) await write(migrated);
-    else current = migrated;
+    else {
+      current = migrated;
+      await ensureDailyBackup(current);
+    }
   }
   function transact(update) {
     return enqueue(async () => {
@@ -133,6 +166,28 @@ function createWorkspaceStore({ dataFolder, extras = () => ({}), seed = initialD
     replace(input) {
       return transact(async () => {
         const archive = migrateArchive(input);
+        await write(archive);
+        return archive.activeOrganizationId;
+      });
+    },
+    listBackups: () => enqueue(async () => {
+      await ensureLoaded();
+      const names = (await fs.readdir(backupsFolder)).filter(name => BACKUP_NAME.test(name)).sort().reverse();
+      const backups = await Promise.all(names.map(async fileName => {
+        const info = await fs.stat(path.join(backupsFolder, fileName));
+        return { fileName, date: fileName.slice(0, 10), size: info.size };
+      }));
+      return { backups, retention: BACKUP_RETENTION };
+    }),
+    restoreBackup(fileName) {
+      return transact(async () => {
+        if (typeof fileName !== 'string' || path.basename(fileName) !== fileName || !BACKUP_NAME.test(fileName)) throw new Error(message(undefined, 'Backup selezionato non valido.'));
+        let archive;
+        try { archive = migrateArchive(JSON.parse(await fs.readFile(path.join(backupsFolder, fileName), 'utf8'))); }
+        catch (error) {
+          if (error.code === 'ENOENT') throw new Error(message(undefined, 'Il backup selezionato non esiste più.'));
+          throw codedError('unreadable', `${message(undefined, 'Backup non leggibile:')} ${fileName}\n${error.message}`);
+        }
         await write(archive);
         return archive.activeOrganizationId;
       });

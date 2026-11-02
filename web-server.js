@@ -132,6 +132,7 @@ function createWebServer({ store, appRoot, tokenFolder, port = DEFAULT_PORT, ope
     if (route === 'GET /api/export') {
       return send(res, 200, await store.exportText(), 'application/json; charset=utf-8', { 'Content-Disposition': 'attachment; filename="OrbitKanban-backup.json"' });
     }
+    if (route === 'GET /api/backups') return json(res, 200, await store.listBackups());
     if (route === 'GET /api/export-organization') {
       const exported = await store.exportOrganization(url.searchParams.get('org') || undefined, url.searchParams.get('kind') || '');
       return send(res, 200, exported.text, 'application/json; charset=utf-8', { 'Content-Disposition': `attachment; filename="${exported.fileName}"` });
@@ -142,6 +143,7 @@ function createWebServer({ store, appRoot, tokenFolder, port = DEFAULT_PORT, ope
     if (url.pathname === '/api/save') return json(res, 200, await store.save(body.data, body.organizationId, body.organizationName, body.revision));
     if (url.pathname === '/api/organization') return json(res, 200, await store.organization(body.operation, body.payload, body.organizationId));
     if (url.pathname === '/api/import') return json(res, 200, await store.replace(body.archive));
+    if (url.pathname === '/api/backups' && body.operation === 'restore') return json(res, 200, await store.restoreBackup(body.fileName));
     if (url.pathname === '/api/languages') return json(res, 200, await languages(body.operation));
     if (url.pathname === '/api/open-data-folder') { await openDataFolder(); return json(res, 200, { ok: true }); }
     throw httpError('not-found', say('Risorsa non trovata.'));

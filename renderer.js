@@ -7,6 +7,8 @@ const { reorderTaskSequences } = window.OrbitaCore;
 let data, dataFolder, view = 0, search = '', showHidden = false, duplicatesOnly = false, issueDuplicatesOnly = false, statusFilter = '', highlightFilter = '', highlighter = '', sort = [{ key: 'releaseDate', direction: 'asc' }];
 let settingsDraft, saving = false, organizationBusy = false, organizations = [], activeOrganizationId, lastOpenedLink = '';
 let revision = '', appVersion = '', browserUrl = '', online = true, refreshing = false, pendingChange = null, renderAfterModal = false, adoptions = 0, subscribed = false;
+const HISTORY_LIMIT = 20, undoHistory = new Map(), redoHistory = new Map();
+let activeSavedViewId = '', backupRequest = 0;
 let languageInfo = { folder: '', template: '', languages: [], errors: [] };
 let milestoneDay = '';
 // Tasks ticked in the list for bulk edit or export; kept across filters and dropped when they no longer exist.
@@ -56,6 +58,78 @@ function notify(message, error = false, detail = '') {
   clearTimeout(notify.timeout);
   notify.timeout = setTimeout(() => { $('#toast').className = ''; }, error ? 10000 : 3500);
 }
+function historyFor(collection, organizationId = activeOrganizationId) {
+  if (!collection.has(organizationId)) collection.set(organizationId, []);
+  return collection.get(organizationId);
+}
+function clearHistory(organizationId) {
+  if (organizationId) { undoHistory.delete(organizationId); redoHistory.delete(organizationId); }
+  else { undoHistory.clear(); redoHistory.clear(); }
+  updateHistoryButtons();
+}
+function updateHistoryButtons() {
+  const undo = $('#undo-button'), redo = $('#redo-button');
+  if (!undo || !redo) return;
+  const pendingSettings = settingsDraftPending();
+  const canUndo = Boolean(undoHistory.get(activeOrganizationId)?.length) && !saving && !organizationBusy && !pendingSettings;
+  const canRedo = Boolean(redoHistory.get(activeOrganizationId)?.length) && !saving && !organizationBusy && !pendingSettings;
+  undo.disabled = !canUndo;
+  redo.disabled = !canRedo;
+  undo.title = t('Annulla (Ctrl+Z)');
+  redo.title = t('Ripristina (Ctrl+Y)');
+  undo.setAttribute('aria-label', undo.title);
+  redo.setAttribute('aria-label', redo.title);
+}
+function recordHistory(organizationId, before, after) {
+  if (JSON.stringify(before) === JSON.stringify(after)) return;
+  const undo = historyFor(undoHistory, organizationId);
+  if (undo.length && JSON.stringify(undo.at(-1).after) !== JSON.stringify(before)) undo.length = 0;
+  undo.push({ before: structuredClone(before), after: structuredClone(after) });
+  if (undo.length > HISTORY_LIMIT) undo.splice(0, undo.length - HISTORY_LIMIT);
+  historyFor(redoHistory, organizationId).length = 0;
+  updateHistoryButtons();
+}
+async function changeHistory(direction) {
+  if (saving || organizationBusy || $('#modal').open || settingsDraftPending()) return;
+  const undo = historyFor(undoHistory), redo = historyFor(redoHistory);
+  const source = direction === 'undo' ? undo : redo, targetStack = direction === 'undo' ? redo : undo;
+  const entry = source.at(-1);
+  if (!entry) return;
+  const expected = direction === 'undo' ? entry.after : entry.before;
+  if (JSON.stringify(data) !== JSON.stringify(expected)) {
+    clearHistory(activeOrganizationId);
+    notify('La cronologia non corrisponde più ai dati correnti; annulla e ripristina sono stati azzerati.', true);
+    return;
+  }
+  const organizationId = activeOrganizationId;
+  saving = true;
+  updateHistoryButtons();
+  $('#save-status').textContent = t('Salvataggio…');
+  try {
+    const snapshot = await workspaceApi.save(structuredClone(direction === 'undo' ? entry.before : entry.after), organizationId, undefined, revision);
+    adoptSnapshot(snapshot);
+    source.pop();
+    targetStack.push(entry);
+    if (targetStack.length > HISTORY_LIMIT) targetStack.splice(0, targetStack.length - HISTORY_LIMIT);
+    $('#save-status').innerHTML = ui`<i class="connection-dot"></i> Tutto salvato in locale`;
+    rerenderPreservingView();
+    notify(direction === 'undo' ? 'Modifica annullata.' : 'Modifica ripristinata.');
+  } catch (error) {
+    if (error.code === 'conflict') {
+      adoptSnapshot(await workspaceApi.load(organizationId));
+      clearHistory(organizationId);
+      rerenderPreservingView();
+      notify('Le modifiche sono cambiate in un’altra finestra; annulla e ripristina sono stati azzerati.', true);
+      return;
+    }
+    $('#save-status').textContent = t('Salvataggio non riuscito');
+    throw error;
+  } finally {
+    saving = false;
+    updateHistoryButtons();
+    flushPendingChange();
+  }
+}
 async function commit(change, organizationName) {
   if (saving || organizationBusy) throw new Error(t('Un salvataggio è già in corso. Riprova tra un istante.'));
   const build = () => {
@@ -65,6 +139,7 @@ async function commit(change, organizationName) {
     return next;
   };
   const organizationId = activeOrganizationId;
+  let before = structuredClone(data);
   let next = validateData(build());
   saving = true;
   $('#save-status').textContent = t('Salvataggio…');
@@ -76,16 +151,18 @@ async function commit(change, organizationName) {
       const fresh = await workspaceApi.load(organizationId);
       if (fresh.activeOrganizationId !== organizationId) throw Object.assign(new Error(t('Questa organizzazione non esiste più.')), { code: 'missing-organization' });
       adoptSnapshot(fresh);
+      before = structuredClone(data);
       next = validateData(build());
       saved = await workspaceApi.save(next, organizationId, organizationName, revision);
     }
     adoptSnapshot(saved);
+    recordHistory(organizationId, before, saved.data);
     $('#save-status').innerHTML = ui`<i class="connection-dot"></i> Tutto salvato in locale`;
   } catch (error) {
     $('#save-status').textContent = t('Salvataggio non riuscito');
     if (error.code === 'missing-organization') pendingChange = { forced: true };
     throw error;
-  } finally { saving = false; flushPendingChange(); }
+  } finally { saving = false; updateHistoryButtons(); flushPendingChange(); }
 }
 function action(handler) { return async event => { try { await handler(event); } catch (error) { notify(error.message, true); } }; }
 const openPortal = action(async url => { lastOpenedLink = await workspaceApi.openLink(url); });
@@ -286,6 +363,8 @@ function renderChrome() {
   $('.local-card small').textContent = t('I tuoi dati. Sempre con te.');
   $('footer>span').innerHTML = ui`<i class="connection-dot"></i> Nessun cloud. Nessun account. Tutto sotto controllo.`;
   $('#folder-button').textContent = t('Apri cartella dati') + ' ↗';
+  $('#global-search-label').textContent = t('Cerca');
+  $('#global-search').title = t('Cerca in OrbitKanban (Ctrl+K)');
   renderConnectionStatus();
   $('#navigation').setAttribute('aria-label', t('Viste principali'));
   $('.organization-switcher label').textContent = t('Organizzazione');
@@ -294,6 +373,7 @@ function renderChrome() {
   $('#open-browser').textContent = t(browserMode() ? 'Apri in nuova scheda' : 'Apri nel browser') + ' ↗';
   $('#open-browser').disabled = !browserUrl;
   $('.version').innerHTML = `${browserMode() ? 'BROWSER' : 'PORTABLE'} EDITION <span id="app-version">${esc(appVersion ? `v${appVersion}` : '')}</span>`;
+  updateHistoryButtons();
 }
 function renderConnectionStatus() {
   const status = $('#save-status');
@@ -328,7 +408,7 @@ function applyRemoteSnapshot(snapshot, previousId) {
     renderAfterModal = false;
     if ($('#modal').open) $('#modal').close();
     adoptSnapshot(snapshot);
-    search = ''; statusFilter = ''; highlightFilter = ''; highlighter = ''; selectedTasks.clear(); showHidden = false; duplicatesOnly = false; issueDuplicatesOnly = false; sort = [{ key: 'releaseDate', direction: 'asc' }];
+    search = ''; statusFilter = ''; highlightFilter = ''; highlighter = ''; selectedTasks.clear(); showHidden = false; duplicatesOnly = false; issueDuplicatesOnly = false; activeSavedViewId = ''; sort = [{ key: 'releaseDate', direction: 'asc' }];
     render();
     notify('L’organizzazione aperta è stata eliminata in un’altra finestra. Ora stai vedendo un’altra organizzazione.', true);
     return;
@@ -452,6 +532,7 @@ function refreshSettingsState() {
   const banner = $('#unsaved-banner');
   if (!banner) return;
   const changed = settingsChanged();
+  updateHistoryButtons();
   banner.hidden = !changed;
   const savedName = organizations.find(o => o.id === activeOrganizationId)?.name;
   const dirty = changed ? settingsTabs.filter(tab => tab.keys.some(key => JSON.stringify(settingsDraft[key]) !== JSON.stringify(data.settings[key])) || (tab.id === 'identity' && $('#organization-name').value.trim() !== savedName)) : [];
@@ -480,6 +561,7 @@ async function saveSettings() {
       for (const task of next.tasks) task.tagIds = (task.tagIds || []).filter(id => tags.has(id));
     }, organizationName);
     statusFilter = '';
+    activeSavedViewId = '';
   } catch (error) {
     const tab = settingsErrorTabs.find(([pattern]) => pattern.test(String(error?.message)))?.[1];
     if (tab && $('#settings-page')) showSettingsTab(tab, true);
@@ -505,7 +587,7 @@ async function organizationAction(operation, payload) {
   $('#organization-select').disabled = true;
   try {
     adoptSnapshot(await workspaceApi.organization(operation, payload, activeOrganizationId));
-    search = ''; statusFilter = ''; highlightFilter = ''; highlighter = ''; selectedTasks.clear(); showHidden = false; duplicatesOnly = false; issueDuplicatesOnly = false; sort = [{ key: 'releaseDate', direction: 'asc' }];
+    search = ''; statusFilter = ''; highlightFilter = ''; highlighter = ''; selectedTasks.clear(); showHidden = false; duplicatesOnly = false; issueDuplicatesOnly = false; activeSavedViewId = ''; sort = [{ key: 'releaseDate', direction: 'asc' }];
     render();
   } finally { organizationBusy = false; $('#organization-select').disabled = false; flushPendingChange(); }
 }
@@ -605,6 +687,8 @@ function sortedRows(tasks) {
 }
 function renderTasks() {
   const hidden = data.tasks.filter(t => t.hidden).length, highlights = highlightsOf(), columns = shownColumns(), duplicateCount = duplicatesOf().tasks.size;
+  const savedViews = data.settings.savedViews || [];
+  if (activeSavedViewId && !savedViews.some(saved => saved.id === activeSavedViewId)) activeSavedViewId = '';
   if (duplicatesOnly && !duplicateCount) duplicatesOnly = false;
   if (highlightFilter && !['__any', '__none'].includes(highlightFilter) && !highlights.some(h => h.id === highlightFilter)) highlightFilter = '';
   if (highlighter && highlighter !== 'erase' && !highlights.some(h => h.id === highlighter)) highlighter = '';
@@ -614,6 +698,7 @@ function renderTasks() {
   if (!sort.length) sort = [{ key: 'releaseDate', direction: 'asc' }];
   const highlightOptions = [['', 'Tutte le evidenziazioni'], ['__any', 'Solo evidenziate'], ['__none', 'Senza evidenziazione']].map(([value, label]) => `<option value="${value}" ${value === highlightFilter ? 'selected' : ''}>${esc(t(label))}</option>`).join('') +
     highlights.map(h => `<option value="${esc(h.id)}" ${h.id === highlightFilter ? 'selected' : ''}>● ${esc(h.name)}</option>`).join('');
+  const savedViewOptions = `<option value="">${esc(t('Viste salvate…'))}</option>` + savedViews.map(saved => `<option value="${esc(saved.id)}" ${saved.id === activeSavedViewId ? 'selected' : ''}>${esc(saved.name)}</option>`).join('');
   const headers = columns.map(id => {
     const def = taskColumnDefs[id], label = esc(def.header || t(def.name)), current = def.sort && sort.find(s => s.key === def.sort);
     const title = def.header ? ` title="${esc(t(def.name))}"` : '';
@@ -621,21 +706,24 @@ function renderTasks() {
   }).join('');
   $('#content').innerHTML = heading(data.settings.tabNames[0], 'Tutte le attività, una direzione. Pianifica il lavoro e tieni a fuoco le prossime release.',
     excelButton() + ui`<button class="button primary" id="new-task">＋ Nuova attività</button>`) + stats() +
-    ui`<section class="panel"><div class="table-toolbar"><div class="search-wrap"><span>⌕</span><input id="search" aria-label="Cerca attività" placeholder="Cerca codice, descrizione, incident…" value="${esc(search)}"></div><div class="filters"><select id="status-filter" aria-label="Filtra stato">${optionList(data.settings.statuses, statusFilter, 'Tutti gli stati')}</select><select id="highlight-filter" aria-label="Filtra evidenziazione">${highlightOptions}</select><label class="toggle-label"><input id="show-hidden" type="checkbox" ${showHidden ? 'checked' : ''}> Nascoste <span class="tiny-count">${hidden}</span></label><label class="toggle-label duplicate-toggle ${duplicateCount ? 'has-duplicates' : ''}" title="Mostra solo le attività con un incident collegato anche ad altre attività, comprese quelle nascoste"><input id="duplicates-only" type="checkbox" ${duplicatesOnly ? 'checked' : ''} ${duplicateCount ? '' : 'disabled'}> Duplicati <span class="tiny-count">${duplicateCount}</span></label><button class="button subtle" id="columns-button" aria-haspopup="dialog" title="Scegli quali colonne mostrare e in che ordine">▥ Colonne</button><button class="button subtle" id="reset-sort" title="Ripristina ordinamento release crescente">↕ Release</button></div></div><div class="highlighter-bar"></div><div class="table-scroll"><table class="activity-table"><thead><tr><th class="select-col"><input type="checkbox" id="select-all" aria-label="Seleziona tutte le attività mostrate" title="Seleziona tutte le attività mostrate"></th>${headers}<th><span class="sr-only">Azioni</span></th></tr></thead><tbody id="task-rows"></tbody></table></div><div class="table-footer"><span id="row-count"></span><span id="footer-hint">Maiusc + clic su una colonna per ordinare su più livelli</span><div class="bulk-bar" id="bulk-bar" role="toolbar" aria-label="Azioni sulle attività selezionate" hidden><strong id="bulk-count"></strong><button type="button" class="button small primary" id="bulk-edit">✎ Modifica multipla…</button><button type="button" class="button small" id="bulk-excel">⤓ Esporta in Excel</button><button type="button" class="button small subtle" id="bulk-clear">Deseleziona</button></div></div></section><div class="hint"><span>✧</span> Un unico archivio, quattro prospettive. Issue, milestone e kanban si aggiornano automaticamente.</div>`;
+    ui`<section class="panel"><div class="table-toolbar"><div class="search-wrap"><span>⌕</span><input id="search" aria-label="Cerca attività" placeholder="Cerca codice, descrizione, incident…" value="${esc(search)}"></div><div class="filters"><select id="status-filter" aria-label="Filtra stato">${optionList(data.settings.statuses, statusFilter, 'Tutti gli stati')}</select><select id="highlight-filter" aria-label="Filtra evidenziazione">${highlightOptions}</select><label class="toggle-label"><input id="show-hidden" type="checkbox" ${showHidden ? 'checked' : ''}> Nascoste <span class="tiny-count">${hidden}</span></label><label class="toggle-label duplicate-toggle ${duplicateCount ? 'has-duplicates' : ''}" title="Mostra solo le attività con un incident collegato anche ad altre attività, comprese quelle nascoste"><input id="duplicates-only" type="checkbox" ${duplicatesOnly ? 'checked' : ''} ${duplicateCount ? '' : 'disabled'}> Duplicati <span class="tiny-count">${duplicateCount}</span></label><div class="saved-view-tools"><select id="saved-view-select" aria-label="Carica una vista salvata">${savedViewOptions}</select><button type="button" class="button subtle" id="saved-view-manage" aria-haspopup="dialog">Viste</button></div><button class="button subtle" id="columns-button" aria-haspopup="dialog" title="Scegli quali colonne mostrare e in che ordine">▥ Colonne</button><button class="button subtle" id="reset-sort" title="Ripristina ordinamento release crescente">↕ Release</button></div></div><div class="highlighter-bar"></div><div class="table-scroll"><table class="activity-table"><thead><tr><th class="select-col"><input type="checkbox" id="select-all" aria-label="Seleziona tutte le attività mostrate" title="Seleziona tutte le attività mostrate"></th>${headers}<th><span class="sr-only">Azioni</span></th></tr></thead><tbody id="task-rows"></tbody></table></div><div class="table-footer"><span id="row-count"></span><span id="footer-hint">Maiusc + clic su una colonna per ordinare su più livelli</span><div class="bulk-bar" id="bulk-bar" role="toolbar" aria-label="Azioni sulle attività selezionate" hidden><strong id="bulk-count"></strong><button type="button" class="button small primary" id="bulk-edit">✎ Modifica multipla…</button><button type="button" class="button small" id="bulk-excel">⤓ Esporta in Excel</button><button type="button" class="button small subtle" id="bulk-clear">Deseleziona</button></div></div></section><div class="hint"><span>✧</span> Un unico archivio, quattro prospettive. Issue, milestone e kanban si aggiornano automaticamente.</div>`;
   drawHighlighter();
   drawTaskRows();
   $('#new-task').onclick = () => taskDialog();
-  $('#search').oninput = event => { search = event.target.value; drawTaskRows(); };
-  $('#status-filter').onchange = event => { statusFilter = event.target.value; drawTaskRows(); };
-  $('#highlight-filter').onchange = event => { highlightFilter = event.target.value; drawTaskRows(); };
-  $('#show-hidden').onchange = event => { showHidden = event.target.checked; drawTaskRows(); };
-  $('#duplicates-only').onchange = event => { duplicatesOnly = event.target.checked; drawTaskRows(); };
+  $('#search').oninput = event => { search = event.target.value; clearActiveSavedView(); drawTaskRows(); };
+  $('#status-filter').onchange = event => { statusFilter = event.target.value; clearActiveSavedView(); drawTaskRows(); };
+  $('#highlight-filter').onchange = event => { highlightFilter = event.target.value; clearActiveSavedView(); drawTaskRows(); };
+  $('#show-hidden').onchange = event => { showHidden = event.target.checked; clearActiveSavedView(); drawTaskRows(); };
+  $('#duplicates-only').onchange = event => { duplicatesOnly = event.target.checked; clearActiveSavedView(); drawTaskRows(); };
+  $('#saved-view-select').onchange = action(async event => { if (event.target.value) await applySavedView(event.target.value); });
+  $('#saved-view-manage').onclick = () => openSavedViews();
   $('#columns-button').onclick = () => columnsDialog();
-  $('#reset-sort').onclick = () => { sort = [{ key: 'releaseDate', direction: 'asc' }]; renderTasks(); };
+  $('#reset-sort').onclick = () => { sort = [{ key: 'releaseDate', direction: 'asc' }]; clearActiveSavedView(); renderTasks(); };
   document.querySelectorAll('[data-sort]').forEach(button => button.onclick = event => {
     const key = button.dataset.sort, old = sort.find(s => s.key === key);
     const entry = { key, direction: old?.direction === 'asc' ? 'desc' : 'asc' };
     sort = event.shiftKey ? [...sort.filter(s => s.key !== key), entry] : [entry];
+    clearActiveSavedView();
     renderTasks();
   });
   // While a highlighter is active, a click anywhere on a row colors it instead of opening links or the task.
@@ -660,6 +748,92 @@ function renderTasks() {
   $('#bulk-edit').onclick = () => bulkDialog([...selectedTasks]);
   $('#bulk-excel').onclick = () => excelDialog({ scope: 'selected' });
   $('#bulk-clear').onclick = () => clearSelection();
+}
+function clearActiveSavedView() {
+  if (!activeSavedViewId) return;
+  activeSavedViewId = '';
+  const select = $('#saved-view-select');
+  if (select) select.value = '';
+}
+function savedViewSnapshot(name, id = uid()) {
+  return {
+    id, name: name.trim(), search, statusFilter, highlightFilter, showHidden, duplicatesOnly,
+    sort: structuredClone(sort), columns: normalizeTaskColumns(data.settings.taskColumns)
+  };
+}
+function savedViewSummary(saved) {
+  const status = data.settings.statuses.find(item => item.id === saved.statusFilter)?.name;
+  const mark = highlightsOf().find(item => item.id === saved.highlightFilter)?.name;
+  const columns = saved.columns.filter(column => column.visible).length;
+  const order = saved.sort.map(item => `${taskColumnDefs[Object.keys(taskColumnDefs).find(key => taskColumnDefs[key].sort === item.key)]?.name || item.key} ${item.direction === 'asc' ? '↑' : '↓'}`).join(', ');
+  return [saved.search && fillText('Ricerca: {0}', saved.search), status && fillText('Stato: {0}', status), mark && fillText('Evidenziazione: {0}', mark),
+    saved.highlightFilter === '__any' && t('Solo evidenziate'), saved.highlightFilter === '__none' && t('Senza evidenziazione'),
+    saved.showHidden && t('Include nascoste'), saved.duplicatesOnly && t('Solo duplicati'),
+    fillText('{0} colonne', columns), order && fillText('Ordine: {0}', order)].filter(Boolean).join(' · ') || t('Tutte le attività');
+}
+async function saveSavedView(name, existingId = '') {
+  const normalized = name.trim();
+  if (!normalized || normalized.length > 60) throw new Error(t('Il nome della vista deve contenere da 1 a 60 caratteri.'));
+  const saved = savedViewSnapshot(normalized, existingId || uid());
+  await commit(next => {
+    const list = next.settings.savedViews || (next.settings.savedViews = []);
+    const duplicate = list.find(item => item.id !== saved.id && item.name.trim().toLocaleLowerCase() === normalized.toLocaleLowerCase());
+    if (duplicate) throw new Error(t('Esiste già una vista con questo nome.'));
+    const index = list.findIndex(item => item.id === saved.id);
+    if (index >= 0) list[index] = saved;
+    else {
+      if (list.length >= 30) throw new Error(t('Hai raggiunto il limite di 30 viste salvate.'));
+      list.push(saved);
+    }
+  });
+  activeSavedViewId = saved.id;
+  $('#modal').close();
+  rerenderPreservingView();
+  notify(existingId ? 'Vista aggiornata.' : 'Vista salvata.');
+}
+async function applySavedView(id) {
+  const saved = (data.settings.savedViews || []).find(item => item.id === id);
+  if (!saved) throw new Error(t('La vista salvata non esiste più.'));
+  const columns = normalizeTaskColumns(saved.columns);
+  if (JSON.stringify(columns) !== JSON.stringify(normalizeTaskColumns(data.settings.taskColumns))) {
+    await commit(next => { next.settings.taskColumns = structuredClone(columns); });
+  }
+  search = saved.search;
+  statusFilter = data.settings.statuses.some(item => item.id === saved.statusFilter) ? saved.statusFilter : '';
+  highlightFilter = ['__any', '__none'].includes(saved.highlightFilter) || highlightsOf().some(item => item.id === saved.highlightFilter) ? saved.highlightFilter : '';
+  showHidden = saved.showHidden;
+  duplicatesOnly = saved.duplicatesOnly;
+  sort = structuredClone(saved.sort);
+  activeSavedViewId = saved.id;
+  $('#modal').open && $('#modal').close();
+  render();
+  notify(fillText('Vista «{0}» applicata.', saved.name));
+}
+function renderSavedViewList() {
+  const list = $('#saved-view-list');
+  if (!list) return;
+  const savedViews = data.settings.savedViews || [];
+  list.innerHTML = savedViews.length ? savedViews.map(saved => `<article class="saved-view-item"><div class="saved-view-info"><strong>${esc(saved.name)}</strong><small>${esc(savedViewSummary(saved))}</small></div><button type="button" class="button small primary" data-view-action="apply" data-view-id="${esc(saved.id)}">${esc(t('Apri'))}</button><button type="button" class="button small" data-view-action="update" data-view-id="${esc(saved.id)}">${esc(t('Aggiorna'))}</button><button type="button" class="button small danger" data-view-action="delete" data-view-id="${esc(saved.id)}" aria-label="${esc(fillText('Elimina vista {0}', saved.name))}">✕</button></article>`).join('') : `<p class="backup-empty">${esc(t('Non hai ancora salvato viste.'))}</p>`;
+}
+function openSavedViews() {
+  openModal(ui`<div class="modal-heading"><div><div class="eyebrow">${esc(t('ATTIVITÀ'))}</div><h2>${esc(t('Viste salvate'))}</h2></div><button type="button" class="icon-button" data-close aria-label="Chiudi">✕</button></div><p class="section-description">${esc(t('Salva filtri, ordinamento e colonne per riapplicarli con un clic. Le viste appartengono solo a questa organizzazione.'))}</p><form id="saved-view-form" class="form-grid"><label class="field full">${esc(t('Nome vista'))}<input name="name" maxlength="60" required autocomplete="off" placeholder="${esc(t('Es. Prossima release'))}"></label><div class="modal-actions full"><span class="spacer"></span><button type="submit" class="button primary">${esc(t('Salva vista corrente'))}</button></div></form><div class="saved-view-list" id="saved-view-list"></div>`);
+  const form = $('#saved-view-form');
+  form.onsubmit = action(async event => { event.preventDefault(); await saveSavedView(new FormData(form).get('name')); });
+  $('#saved-view-list').onclick = action(async event => {
+    const button = event.target.closest('[data-view-action]');
+    if (!button) return;
+    const saved = (data.settings.savedViews || []).find(item => item.id === button.dataset.viewId);
+    if (!saved) throw new Error(t('La vista salvata non esiste più.'));
+    if (button.dataset.viewAction === 'apply') return applySavedView(saved.id);
+    if (button.dataset.viewAction === 'update') return saveSavedView(saved.name, saved.id);
+    if (button.dataset.viewAction === 'delete') confirmDialog('Eliminare la vista salvata?', saved.name, async () => {
+      await commit(next => { next.settings.savedViews = (next.settings.savedViews || []).filter(item => item.id !== saved.id); });
+      if (activeSavedViewId === saved.id) activeSavedViewId = '';
+      rerenderPreservingView();
+      notify('Vista eliminata.');
+    });
+  });
+  renderSavedViewList();
 }
 function taskCell(column, task, status, urgency, links, duplicateGroups = []) {
   const none = '<span class="muted">—</span>';
@@ -706,6 +880,7 @@ function drawTaskRows() {
     try {
       await commit(next => reorderTaskSequences(next.tasks, tasks.map(task => task.id), from, to));
       sort = [{ key: 'sequence', direction: 'asc' }];
+      clearActiveSavedView();
       notify('Ordine salvato. Sequence aggiornate.');
     } finally { rerenderPreservingView(); }
     document.querySelector(`[data-task-row="${CSS.escape(tasks[from].id)}"] [data-drag-handle]`)?.focus({ preventScroll: true });
@@ -1149,6 +1324,7 @@ function columnsDialog() {
   $('#columns-default').onclick = () => { columns.splice(0, columns.length, ...defaultTaskColumns()); columnEditor(container, columns); };
   $('#columns-apply').onclick = action(async () => {
     await commit(next => { next.settings.taskColumns = structuredClone(columns); });
+    clearActiveSavedView();
     $('#modal').close();
     rerenderPreservingView();
     notify('Colonne aggiornate.');
@@ -1159,6 +1335,50 @@ function openModal(html) {
   $('#modal-content').innerHTML = html;
   $('#modal').showModal();
   document.querySelectorAll('[data-close]').forEach(b => b.onclick = () => $('#modal').close());
+}
+function globalSearchResults(query) {
+  const needle = query.trim().toLocaleLowerCase();
+  if (!needle) return [];
+  const results = [];
+  for (const task of data.tasks) {
+    const links = matchIssues(task, data.issues), status = data.settings.statuses.find(item => item.id === task.statusId)?.name || '';
+    const urgency = data.settings.urgencies.find(item => item.id === task.urgencyId)?.name || '';
+    const mark = highlightOf(task)?.name || '', tags = tagsOf(task).map(tag => tag.name);
+    const fields = [task.code, String(task.sequence), plain(task.description), plain(task.notes), task.releaseDate, formatDate(task.releaseDate), status, urgency, mark, ...tags, ...Object.values(links).flat()];
+    if (!fields.some(value => String(value || '').toLocaleLowerCase().includes(needle))) continue;
+    const detail = [task.releaseDate ? formatDate(task.releaseDate) : t('Da pianificare'), status, links.incidents.length && `INC ${links.incidents.join(', ')}`, links.problems.length && `PRB ${links.problems.join(', ')}`, task.hidden && t('Nascosta')].filter(Boolean).join(' · ');
+    results.push({ kind: 'task', id: task.id, title: task.code, detail, subtitle: plain(task.description) });
+  }
+  for (const issue of data.issues) {
+    if (![issue.code, issue.incident, issue.problem].some(value => value.toLocaleLowerCase().includes(needle))) continue;
+    results.push({ kind: 'issue', id: issue.id, title: issue.code, detail: [issue.incident && `INC ${issue.incident}`, issue.problem && `PRB ${issue.problem}`].filter(Boolean).join(' · '), subtitle: '' });
+  }
+  return results.slice(0, 40);
+}
+function openGlobalSearch(initial = '') {
+  openModal(ui`<div class="modal-heading"><div><div class="eyebrow">${esc(t('RICERCA GLOBALE'))}</div><h2>${esc(t('Cerca in OrbitKanban'))}</h2></div><button type="button" class="icon-button" data-close aria-label="Chiudi">✕</button></div><label class="global-search-field"><span aria-hidden="true">⌕</span><input id="global-search-input" type="search" autocomplete="off" placeholder="${esc(t('Codice, incident, problem, release date…'))}" aria-label="${esc(t('Cerca attività e issue'))}"><kbd>Esc</kbd></label><div class="global-search-results" id="global-search-results" role="listbox" aria-label="${esc(t('Risultati della ricerca'))}"></div>`);
+  const input = $('#global-search-input'), list = $('#global-search-results');
+  const draw = () => {
+    const results = globalSearchResults(input.value);
+    list.innerHTML = results.length ? results.map((item, index) => `<button type="button" class="global-search-result" role="option" aria-selected="false" data-global-kind="${item.kind}" data-global-id="${esc(item.id)}" ${index === 0 ? 'data-first-result' : ''}><strong>${esc(item.title)}</strong><span class="global-search-kind">${esc(t(item.kind === 'task' ? 'Attività' : 'Issue'))}</span><small>${esc([item.detail, item.subtitle].filter(Boolean).join(' · '))}</small></button>`).join('') : input.value.trim() ? `<p class="backup-empty">${esc(t('Nessun risultato.'))}</p>` : `<p class="backup-empty">${esc(t('Cerca codici, incident, problem o date di release.'))}</p>`;
+  };
+  input.value = initial;
+  input.oninput = draw;
+  input.onkeydown = event => {
+    if (event.key === 'Enter') { event.preventDefault(); list.querySelector('[data-first-result]')?.click(); }
+  };
+  list.onclick = event => {
+    const button = event.target.closest('[data-global-kind]');
+    if (!button) return;
+    const item = button.dataset.globalKind === 'task' ? data.tasks.find(task => task.id === button.dataset.globalId) : data.issues.find(issue => issue.id === button.dataset.globalId);
+    if (!item) { notify('L’elemento non esiste più.', true); return; }
+    $('#modal').close();
+    view = button.dataset.globalKind === 'task' ? 0 : 1;
+    render();
+    if (view === 0) taskDialog(item); else issueDialog(item);
+  };
+  draw();
+  input.focus();
 }
 function editor(id, label, html) {
   return ui`<div class="field full"><span class="field-label" id="${id}-label">${t(label)}</span><div class="rich-editor"><div class="rich-toolbar" data-editor="${id}"><button type="button" data-command="bold" title="Grassetto"><b>B</b></button><button type="button" data-command="italic" title="Corsivo"><i>I</i></button><button type="button" data-command="underline" title="Sottolineato"><u>U</u></button><button type="button" data-command="insertUnorderedList" title="Elenco puntato">• Elenco</button><button type="button" data-command="insertOrderedList" title="Elenco numerato">1. Elenco</button><button type="button" data-command="removeFormat" title="Rimuovi formattazione">Tx</button></div><div id="${id}" class="editable" contenteditable="true" role="textbox" aria-multiline="true" aria-labelledby="${id}-label">${sanitize(html)}</div></div></div>`;
@@ -1724,6 +1944,29 @@ function wireFontSizes() {
   });
   sync();
 }
+async function loadBackupList() {
+  const requestId = ++backupRequest;
+  const result = await workspaceApi.backups('list');
+  if (requestId !== backupRequest || !$('#backup-list')) return;
+  $('#backup-status').textContent = fillText('Copie disponibili: {0} su {1}.', result.backups.length, result.retention);
+  $('#backup-list').innerHTML = result.backups.length ? result.backups.map(backup => {
+    const date = new Date(`${backup.date}T12:00:00`);
+    const label = Number.isNaN(date.getTime()) ? backup.date : date.toLocaleDateString(locale(), { weekday: 'short', day: '2-digit', month: 'long', year: 'numeric' });
+    const size = backup.size >= 1024 * 1024 ? `${(backup.size / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(backup.size / 1024))} KB`;
+    return `<article class="backup-item"><div class="backup-info"><strong>${esc(label)}</strong><small>${esc(size)} · ${esc(backup.fileName)}</small></div><button type="button" class="button small danger" data-restore-backup="${esc(backup.fileName)}">${esc(t('Ripristina…'))}</button></article>`;
+  }).join('') : `<p class="backup-empty">${esc(t('Non sono ancora disponibili copie automatiche.'))}</p>`;
+}
+function restoreDailyBackup(fileName) {
+  const date = fileName.slice(0, 10);
+  confirmDialog('Ripristinare questa copia?', fillText('Il backup del {0} sostituirà tutte le organizzazioni, attività e impostazioni. Prima viene creato workspace.json.bak con lo stato corrente.', date), async () => {
+    const snapshot = await workspaceApi.backups('restore', fileName);
+    clearHistory();
+    adoptSnapshot(snapshot);
+    search = ''; statusFilter = ''; highlightFilter = ''; highlighter = ''; selectedTasks.clear(); showHidden = false; duplicatesOnly = false; issueDuplicatesOnly = false; activeSavedViewId = ''; sort = [{ key: 'releaseDate', direction: 'asc' }];
+    render();
+    notify('Backup ripristinato.');
+  });
+}
 function renderSettings() {
   settingsDraft = structuredClone(data.settings);
   settingsDraft.highlights ??= [];
@@ -1747,7 +1990,7 @@ function renderSettings() {
     <section class="panel settings-section" id="tags-panel"><h2>Tags</h2><p class="section-description">Crea i tag di questa organizzazione, scegli nome e colore e ordinane la visualizzazione. Ogni attività può avere più tag.</p><div id="tags-list"></div><button class="button" data-add-option="tags">＋ Aggiungi tag</button><p class="muted">${esc(fillText('Massimo {0} tag, con nomi univoci di massimo {1} caratteri.', TAG_LIMIT, TAG_NAME_MAX))}</p><p class="muted">Eliminando un tag e salvando, viene rimosso dalle attività che lo usano, anche nascoste. Le attività e gli altri tag non vengono eliminati.</p></section>
     <section class="panel settings-section" id="columns-panel"><h2>Colonne della lista</h2><p class="section-description">Scegli quali colonne mostrare nella lista attività e in che ordine. Nascondere una colonna non cancella i dati. Puoi farlo anche dal pulsante “Colonne” sopra la tabella.</p><div id="columns-editor"></div><button type="button" class="button" id="reset-columns">↺ Ripristina colonne predefinite</button></section>
     <section class="panel settings-section full" id="browser-panel"><h2>Accesso da browser</h2><p class="section-description">Mentre OrbitKanban è aperto puoi lavorare anche dal browser di questo PC, con più organizzazioni in schede diverse. Le modifiche si sincronizzano in tempo reale tra app e schede.</p><code class="data-path" id="browser-url">${esc(browserUrl || t('Non disponibile'))}</code><div class="storage-actions"><button class="button" id="browser-open" ${browserUrl ? '' : 'disabled'}>${t(browserMode() ? 'Apri in nuova scheda' : 'Apri nel browser')} ↗</button><button class="button" id="browser-copy" ${browserUrl ? '' : 'disabled'}>${t(browserMode() ? 'Copia indirizzo' : 'Copia link di accesso')}</button></div><p class="muted">${t(browserMode() ? 'Stai usando OrbitKanban dal browser: l’app sul PC deve restare aperta. Ogni scheda può mostrare un’organizzazione diversa.' : 'Raggiungibile solo da questo computer (127.0.0.1) e protetto da una chiave personale: il link di accesso contiene la chiave, non condividerlo. Chiudendo l’app le schede del browser si disconnettono.')}</p></section>
-    ${transferPanel()}<section class="panel settings-section full" id="storage-panel"><div class="storage-heading"><div><h2>Dati che viaggiano con te</h2><p class="section-description">Archivio JSON locale e copia automatica del salvataggio precedente.</p></div><span class="readonly-badge">100% LOCALE</span></div><code class="data-path">${esc(dataFolder)}</code><div class="storage-actions"><button class="button" id="export-data">↗ Esporta backup</button><button class="button" id="import-data">↙ Importa backup</button><button class="button" id="open-folder">Apri cartella dati</button><span class="spacer"></span><button class="button danger" id="clear-data">Svuota attività e issue</button></div><p class="muted">Per condividere l’app chiudila e copia l’eseguibile insieme alla cartella data.     Non eseguire contemporaneamente copie che condividono la stessa cartella dati.</p></section></div></div></div>`;
+    ${transferPanel()}<section class="panel settings-section full" id="storage-panel"><div class="storage-heading"><div><h2>Dati che viaggiano con te</h2><p class="section-description">Archivio JSON locale e copia automatica del salvataggio precedente.</p></div><span class="readonly-badge">100% LOCALE</span></div><code class="data-path">${esc(dataFolder)}</code><div class="storage-actions"><button class="button" id="export-data">↗ Esporta backup</button><button class="button" id="import-data">↙ Importa backup</button><button class="button" id="open-folder">Apri cartella dati</button><span class="spacer"></span><button class="button danger" id="clear-data">Svuota attività e issue</button></div><div class="backup-section"><div class="storage-heading"><div><h3>Copie di sicurezza automatiche</h3><p class="section-description">Una copia al giorno, conservate nella cartella data per gli ultimi 14 giorni. Puoi ripristinarne una senza perdere l’archivio corrente: prima del ripristino viene creato il backup standard .bak.</p></div><button type="button" class="button small" id="refresh-backups">Aggiorna copie</button></div><p id="backup-status" class="muted" role="status" aria-live="polite"></p><div id="backup-list"></div></div><p class="muted">Per condividere l’app chiudila e copia l’eseguibile insieme alla cartella data. Non eseguire contemporaneamente copie che condividono la stessa cartella dati.</p></section></div></div></div>`;
       showSettingsTab(settingsTab); wireSettingsNav();
       drawOptionLists(); drawThemes(); drawLogoPreview(); wireOrganizationCreation(); drawPortalPreview(); wireFontSizes(); wireLanguages();
       columnEditor($('#columns-editor'), settingsDraft.taskColumns);
@@ -1807,9 +2050,15 @@ function renderSettings() {
   $('#export-data').onclick = action(async () => { if (await workspaceApi.exportData()) notify('Backup esportato.'); });
   $('#import-data').onclick = action(async () => {
     const imported = await workspaceApi.importData();
-    if (imported) { adoptSnapshot(imported); search = ''; statusFilter = ''; highlightFilter = ''; highlighter = ''; selectedTasks.clear(); showHidden = false; duplicatesOnly = false; issueDuplicatesOnly = false; render(); notify('Archivio importato.'); }
+    if (imported) { clearHistory(); adoptSnapshot(imported); search = ''; statusFilter = ''; highlightFilter = ''; highlighter = ''; selectedTasks.clear(); showHidden = false; duplicatesOnly = false; issueDuplicatesOnly = false; activeSavedViewId = ''; sort = [{ key: 'releaseDate', direction: 'asc' }]; render(); notify('Archivio importato.'); }
   });
   $('#open-folder').onclick = action(() => workspaceApi.openDataFolder());
+  $('#refresh-backups').onclick = action(loadBackupList);
+  $('#backup-list').onclick = action(event => {
+    const button = event.target.closest('[data-restore-backup]');
+    if (button) restoreDailyBackup(button.dataset.restoreBackup);
+  });
+  action(loadBackupList)();
   wireTransfer();
   $('#browser-open').onclick = action(openBrowserAccess);
   $('#browser-copy').onclick = action(async () => {
@@ -2053,13 +2302,24 @@ async function openBrowserAccess() {
   if (!browserMode()) notify('Organizzazione aperta nel browser predefinito.');
 }
 $('#open-browser').onclick = action(openBrowserAccess);
+$('#global-search').onclick = action(() => withSavedSettings(openGlobalSearch));
+$('#undo-button').onclick = action(() => changeHistory('undo'));
+$('#redo-button').onclick = action(() => changeHistory('redo'));
 $('#modal').addEventListener('close', () => {
   if (!renderAfterModal || !data) return;
   renderAfterModal = false;
   if (settingsDraftPending()) { renderChrome(); refreshSettingsState(); } else rerenderPreservingView();
 });
 document.addEventListener('keydown', e => {
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'n' && !$('#modal').open && data && view === 0) { e.preventDefault(); taskDialog(); }
+  const command = e.ctrlKey || e.metaKey, key = e.key.toLowerCase();
+  if (command && key === 'k' && !$('#modal').open && data) { e.preventDefault(); action(() => withSavedSettings(openGlobalSearch))(); return; }
+  const editing = e.target.closest?.('input, select, textarea, [contenteditable="true"]');
+  if (command && !editing && !$('#modal').open && (key === 'z' || key === 'y')) {
+    e.preventDefault();
+    action(() => changeHistory(key === 'y' || (key === 'z' && e.shiftKey) ? 'redo' : 'undo'))();
+    return;
+  }
+  if (command && key === 'n' && !$('#modal').open && data && view === 0) { e.preventDefault(); taskDialog(); }
   if (e.key === 'Escape' && highlighter && !$('#modal').open && !document.getElementById('mark-menu')) { highlighter = ''; drawHighlighter(); }
   else if (e.key === 'Escape' && view === 0 && selectedTasks.size && !$('#modal').open && !document.getElementById('mark-menu') && !e.target.closest?.('input:not([type="checkbox"]), select, textarea, [contenteditable]')) clearSelection();
 });
@@ -2105,6 +2365,76 @@ window.runSmokeTests = async () => {
     await tick();
     check(dimmed && windowChromeSent.dimmed === false, 'Pulsanti della finestra oscurati insieme alla pagina durante i dialog');
   }
+  const historyTask = data.tasks.find(task => !task.hidden);
+  const originalHistoryNotes = historyTask.notes;
+  await commit(next => { next.tasks.find(task => task.id === historyTask.id).notes = '<p>Undo smoke</p>'; });
+  check(!$('#undo-button').disabled && $('#redo-button').disabled, 'Modifiche persistite abilitate in Annulla');
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true, cancelable: true }));
+  await waitFor(() => !saving && data.tasks.find(task => task.id === historyTask.id).notes === originalHistoryNotes);
+  check($('#undo-button').disabled && !$('#redo-button').disabled, 'Ctrl+Z ripristina i dati e abilita Ripristina');
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'y', ctrlKey: true, bubbles: true, cancelable: true }));
+  await waitFor(() => !saving && data.tasks.find(task => task.id === historyTask.id).notes === '<p>Undo smoke</p>');
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true, cancelable: true }));
+  await waitFor(() => !saving && data.tasks.find(task => task.id === historyTask.id).notes === originalHistoryNotes);
+  clearHistory(activeOrganizationId);
+  check($('#undo-button').disabled && $('#redo-button').disabled, 'Annulla e Ripristina restano disabilitati senza operazioni nello storico');
+  view = 2;
+  render();
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true, cancelable: true }));
+  check($('#modal').open && $('#global-search-input'), 'Ctrl+K apre la ricerca globale anche da un’altra scheda');
+  const searchTask = data.tasks.find(task => !task.hidden);
+  $('#global-search-input').value = searchTask.code;
+  $('#global-search-input').dispatchEvent(new Event('input', { bubbles: true }));
+  check($('#global-search-results [data-global-kind="task"]')?.dataset.globalId === searchTask.id, 'Ricerca globale trova attività per codice');
+  $('#global-search-results [data-global-kind="task"]').click();
+  check(view === 0 && $('#modal').open && $('#task-form'), 'Risultato attività apre direttamente la modifica');
+  $('#modal').close();
+  const searchIssue = data.issues.find(issue => issue.incident);
+  openGlobalSearch(searchIssue.incident);
+  check($('#global-search-results [data-global-kind="issue"]'), 'Ricerca globale trova issue per incident');
+  $('#global-search-results [data-global-kind="issue"]').click();
+  check(view === 1 && $('#modal').open && $('#issue-form'), 'Risultato issue apre direttamente la modifica');
+  $('#modal').close();
+  view = 0;
+  render();
+  const savedViewTask = data.tasks.find(task => !task.hidden && task.highlightId) || data.tasks.find(task => !task.hidden);
+  const savedViewState = { search, statusFilter, highlightFilter, showHidden, duplicatesOnly, sort: structuredClone(sort), columns: structuredClone(data.settings.taskColumns), savedViews: structuredClone(data.settings.savedViews || []) };
+  search = savedViewTask.code;
+  statusFilter = savedViewTask.statusId;
+  highlightFilter = savedViewTask.highlightId || '__none';
+  showHidden = true;
+  duplicatesOnly = false;
+  sort = [{ key: 'sequence', direction: 'desc' }];
+  const savedColumns = defaultTaskColumns().map(column => ({ ...column, visible: ['code', 'releaseDate'].includes(column.id) }));
+  await commit(next => { next.settings.taskColumns = savedColumns; });
+  render();
+  openSavedViews();
+  $('#saved-view-form').elements.name.value = 'Smoke saved view';
+  $('#saved-view-form').requestSubmit();
+  await waitFor(() => !saving && data.settings.savedViews.some(saved => saved.name === 'Smoke saved view'));
+  const smokeView = data.settings.savedViews.find(saved => saved.name === 'Smoke saved view');
+  search = 'not-the-saved-view';
+  statusFilter = '';
+  highlightFilter = '';
+  showHidden = false;
+  sort = [{ key: 'releaseDate', direction: 'asc' }];
+  await commit(next => { next.settings.taskColumns = defaultTaskColumns(); });
+  render();
+  $('#saved-view-select').value = smokeView.id;
+  $('#saved-view-select').dispatchEvent(new Event('change', { bubbles: true }));
+  await waitFor(() => !saving && activeSavedViewId === smokeView.id && search === savedViewTask.code);
+  check(statusFilter === savedViewTask.statusId && showHidden && sort[0].key === 'sequence' && sort[0].direction === 'desc' && shownColumns().join() === 'code,releaseDate', 'Vista salvata riapplica filtri, ordinamento e colonne');
+  openSavedViews();
+  $('#saved-view-list [data-view-action="delete"]').click();
+  check($('#confirm-action'), 'Eliminazione vista richiede conferma');
+  $('#confirm-action').click();
+  await waitFor(() => !saving && !data.settings.savedViews.some(saved => saved.id === smokeView.id));
+  await commit(next => { next.settings.savedViews = savedViewState.savedViews; next.settings.taskColumns = savedViewState.columns; });
+  ({ search, statusFilter, highlightFilter, showHidden, duplicatesOnly, sort } = savedViewState);
+  activeSavedViewId = '';
+  clearHistory(activeOrganizationId);
+  render();
+  check(!(data.settings.savedViews || []).some(saved => saved.name === 'Smoke saved view'), 'Vista salvata eliminata senza lasciare dati di prova');
   check(initialTaskCount > 200 && visibleTasks().length < initialTaskCount && document.querySelectorAll('#task-rows tr').length === visibleTasks().length, 'Caricamento dati dimostrativi con righe già rilasciate nascoste');
   const demoReleases = [...new Set(data.tasks.map(t => t.releaseDate).filter(Boolean))].sort();
   check(demoReleases[0] === '2025-01-01' && demoReleases.length > 40 && demoReleases.every((date, i) => new Date(`${date}T12:00:00Z`).getUTCDay() === 3 && (!i || Date.parse(date) - Date.parse(demoReleases[i - 1]) === 14 * 86400000)), 'Milestone dimostrative ogni due settimane di mercoledì da gennaio 2025');

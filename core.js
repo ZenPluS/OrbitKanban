@@ -36,6 +36,9 @@ const TASK_COLUMNS = [
   ['tags', true], ['effort', true], ['incident', true], ['problem', true], ['releaseDate', true], ['notes', true]
 ];
 const TASK_COLUMN_IDS = TASK_COLUMNS.map(([columnId]) => columnId);
+const SAVED_VIEW_LIMIT = 30;
+const SAVED_VIEW_NAME_MAX = 60;
+const SAVED_VIEW_SORT_KEYS = ['sequence', 'code', 'urgencyId', 'statusId', 'highlightId', 'effortHours', 'releaseDate'];
 const defaultTaskColumns = () => TASK_COLUMNS.map(([columnId, visible]) => ({ id: columnId, visible }));
 // Unknown or repeated columns are dropped and missing ones come back in their default place, so files from other versions stay usable.
 function normalizeTaskColumns(columns) {
@@ -132,7 +135,7 @@ function baseData(language = 'it') {
     settings: {
       language, logo: '', portalUrlTemplate: '', tabNames: ['Attività', 'Issue collegate', 'Milestone', 'Kanban'].map(name => T(name)),
       hoursPerDay: 8, fontSizes: defaultFontSizes(), statuses, urgencies, highlights: defaultHighlights(language), tags: [], taskColumns: defaultTaskColumns(), themeId: 'midnight',
-      themes: defaultThemes()
+      themes: defaultThemes(), savedViews: []
     },
     tasks: [],
     issues: []
@@ -290,6 +293,16 @@ function validateData(data) {
   assert(s.tags === undefined || (Array.isArray(s.tags) && s.tags.length <= TAG_LIMIT && s.tags.every(x => x && text(x.id) && x.id && x.id.length <= 200 && text(x.name) && x.name.trim() && x.name.length <= TAG_NAME_MAX && color(x.color)) && uniqueIds(s.tags)), 'Tags non validi.');
   assert(s.tags === undefined || new Set(s.tags.map(tag => tag.name.trim().toLowerCase())).size === s.tags.length, 'I nomi dei tag devono essere univoci.');
   assert(s.taskColumns === undefined || (Array.isArray(s.taskColumns) && s.taskColumns.every(c => c && text(c.id) && c.id && typeof c.visible === 'boolean') && uniqueIds(s.taskColumns) && s.taskColumns.some(c => c.visible && TASK_COLUMN_IDS.includes(c.id))), 'Colonne della lista non valide.');
+  assert(s.savedViews === undefined || (Array.isArray(s.savedViews) && s.savedViews.length <= SAVED_VIEW_LIMIT && s.savedViews.every(view =>
+    view && text(view.id) && view.id && view.id.length <= 200 && text(view.name) && view.name.trim() && view.name.length <= SAVED_VIEW_NAME_MAX &&
+    text(view.search) && view.search.length <= 200 && text(view.statusFilter) && view.statusFilter.length <= 200 &&
+    text(view.highlightFilter) && view.highlightFilter.length <= 200 && typeof view.showHidden === 'boolean' &&
+    typeof view.duplicatesOnly === 'boolean' && Array.isArray(view.sort) && view.sort.length > 0 && view.sort.length <= SAVED_VIEW_SORT_KEYS.length &&
+    view.sort.every(item => item && SAVED_VIEW_SORT_KEYS.includes(item.key) && ['asc', 'desc'].includes(item.direction)) &&
+    new Set(view.sort.map(item => item.key)).size === view.sort.length && Array.isArray(view.columns) &&
+    view.columns.length > 0 && view.columns.every(column => column && TASK_COLUMN_IDS.includes(column.id) && typeof column.visible === 'boolean') &&
+    uniqueIds(view.columns) && view.columns.some(column => column.visible)
+  ) && uniqueIds(s.savedViews) && new Set(s.savedViews.map(view => view.name.trim().toLocaleLowerCase())).size === s.savedViews.length), 'Viste salvate non valide.');
   assert(Array.isArray(s.themes) && s.themes.length > 0 && uniqueIds(s.themes) && s.themes.every(t => text(t.id) && t.id && text(t.name) && t.name.trim() && ['background', 'surface', 'text', 'accent'].every(k => color(t[k]))), 'Temi non validi.');
   assert(s.themes.some(t => t.id === s.themeId), 'Tema selezionato inesistente.');
   assert(Array.isArray(data.tasks) && uniqueIds(data.tasks), 'Elenco attività non valido.');
@@ -333,6 +346,7 @@ function validateArchive(archive) {
     organization.data.settings.logo ??= '';
     organization.data.settings.portalUrlTemplate ??= '';
     organization.data.settings.fontSizes ??= defaultFontSizes();
+    organization.data.settings.savedViews ??= [];
     normalizeThemes(organization.data.settings);
     normalizeHighlights(organization.data);
     normalizeTags(organization.data);
@@ -394,7 +408,8 @@ function organizationExport(organization, kind, { appVersion = '', exportedAt = 
       language: settings.language || 'it', logo: settings.logo || '', portalUrlTemplate: settings.portalUrlTemplate || '',
       tabNames: [...settings.tabNames], hoursPerDay: settings.hoursPerDay, fontSizes: { ...(settings.fontSizes || defaultFontSizes()) },
       statuses: structuredClone(settings.statuses), urgencies: structuredClone(settings.urgencies),
-      highlights: structuredClone(highlights), tags: structuredClone(settings.tags || []), taskColumns: normalizeTaskColumns(settings.taskColumns)
+      highlights: structuredClone(highlights), tags: structuredClone(settings.tags || []),
+      taskColumns: normalizeTaskColumns(settings.taskColumns), savedViews: structuredClone(settings.savedViews || [])
     };
   }
   if (parts.includes('data')) {
@@ -465,6 +480,7 @@ function parseOrganizationFile(input) {
       assert(columns.every(column => typeof column.id === 'string' && typeof column.visible === 'boolean'), 'Colonne della lista non valide.');
       settings.taskColumns = normalizeTaskColumns(columns);
     }
+    if (source.savedViews !== undefined) settings.savedViews = structuredClone(source.savedViews);
     assert(validLanguage(settings.language), 'Lingua non supportata.');
     check(settings);
     result.settings = settings;
@@ -535,6 +551,7 @@ function applyOrganizationImport(current, file, options = {}) {
       settings.tags = incoming.tags;
     }
     if (incoming.taskColumns) settings.taskColumns = incoming.taskColumns;
+    if (incoming.savedViews) settings.savedViews = incoming.savedViews;
     if (options.logo) settings.logo = incoming.logo;
   }
   if (wanted('themes')) {

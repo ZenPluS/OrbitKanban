@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('workspace', {
   exportOrganization: (organizationId, kind) => ipcRenderer.invoke('export-organization', organizationId, kind),
   exportSpreadsheet: (fileName, bytes) => ipcRenderer.invoke('export-spreadsheet', fileName, bytes),
   importData: () => ipcRenderer.invoke('import'),
+  backups: (operation = 'list', fileName) => ipcRenderer.invoke('backups', operation, fileName),
   openLink: url => ipcRenderer.invoke('open-link', url),
   openDataFolder: () => ipcRenderer.invoke('open-data-folder'),
   languages: (operation = 'info') => ipcRenderer.invoke('languages', operation),

@@ -89,6 +89,9 @@
       if (!confirm(say('Sostituire tutte le organizzazioni, i dati e le impostazioni? Il precedente archivio sarà conservato in workspace.json.bak.'))) return null;
       return request('/api/import', { archive }).then(track);
     },
+    backups: async (operation = 'list', fileName) => operation === 'list'
+      ? request('/api/backups')
+      : request('/api/backups', { operation, fileName }).then(track),
     async openLink(url) {
       if (!/^https?:\/\/\S+$/i.test(String(url))) throw new Error('URL non valido.');
       window.open(url, '_blank', 'noopener,noreferrer');
