@@ -1,6 +1,6 @@
 # OrbitKanban — workspace portable
 
-App desktop locale per Windows 10/11 a 64 bit, **versione 2.14.0**. Nessun account, server esterno o collegamento a Internet necessario per l'uso. **Il nome dell'app è sempre OrbitKanban e non è configurabile.** Tutte le impostazioni del workspace appartengono alla singola organizzazione. Mentre l'app è aperta puoi usarla anche **dal browser dello stesso PC**, con più organizzazioni aperte contemporaneamente in schede diverse.
+App desktop locale per Windows 10/11 a 64 bit, **versione 2.15.0**. Nessun account, server esterno o collegamento a Internet necessario per l'uso. **Il nome dell'app è sempre OrbitKanban e non è configurabile.** Tutte le impostazioni del workspace appartengono alla singola organizzazione. Mentre l'app è aperta puoi usarla anche **dal browser dello stesso PC**, con più organizzazioni aperte contemporaneamente in schede diverse.
 
 ## Avvio e condivisione
 
@@ -107,6 +107,10 @@ Il testo dell'interfaccia non viene selezionato trascinando il mouse, come in un
 Dalla **2.13.0**, su Windows la finestra non usa più la barra del titolo di sistema: la **barra superiore dell'app** (percorso, stato dell'archivio) fa da barra del titolo e i pulsanti **riduci a icona, ingrandisci e chiudi** prendono sfondo e colore del testo del **tema attivo**, anche durante l'anteprima di un tema. Trascina la barra superiore o il logo in alto a sinistra per spostare la finestra; doppio clic per ingrandirla o ripristinarla. L'altezza segue le dimensioni del testo configurate e, con una finestra di dialogo aperta, i pulsanti si oscurano insieme alla pagina. Nella versione browser non cambia nulla.
 
 Nelle liste **Attività** e **Issue collegate**, fai **doppio clic su una cella della riga** per aprire la relativa finestra di modifica. Restano disponibili i pulsanti di modifica e il clic sul codice; link e pulsanti mantengono le proprie azioni. Con un evidenziatore attivo, i clic continuano a colorare le righe senza aprire l'editor. Il Kanban resta in sola lettura.
+
+Dalla **2.15.0**, la creazione e la modifica delle attività usano una **finestra larga**: proprietà, link e associazioni a sinistra, descrizione e note a destra. Sul desktop i campi sono visibili insieme; i testi lunghi scorrono dentro i rispettivi editor e **Salva, Annulla ed Elimina restano sempre accessibili**. Su schermi stretti i gruppi tornano in colonna e scorre solo il contenuto, rispettando le dimensioni del testo configurate.
+
+Ricerca e cambi di vista riutilizzano le anteprime rich text già elaborate e il formattatore delle date. Le associazioni incident/problem vengono indicizzate una sola volta per ogni ricerca, lista o esportazione, evitando di rileggere tutte le issue per ogni attività. La cache delle anteprime è limitata in memoria, non viene salvata e non altera la sanitizzazione o il contenuto dell'archivio.
 
 Dalla **2.12.0**, salvataggi, eliminazioni e cambio di visibilità conservano lo scorrimento orizzontale e verticale della vista corrente, compresi ricerca delle issue e filtri. Descrizione e note mostrano direttamente nella tabella fino a tre righe di testo, andando a capo anche con parole o URL molto lunghi; il suggerimento al passaggio del mouse contiene il testo completo. Un clic apre l'editor rich text, senza alterare il contenuto salvato.
 

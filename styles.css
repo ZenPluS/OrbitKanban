@@ -2373,6 +2373,133 @@ tr.duplicate-row td:last-child {
   border-radius: 8px;
   color: var(--muted);
 }
+#modal:has(#task-form) {
+  width: 1260px;
+  max-width: 96vw;
+  max-height: 94vh;
+  overflow: hidden;
+}
+#modal:has(#task-form) #modal-content {
+  padding: 0;
+}
+#task-form {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(94vh - 2px);
+}
+#task-form .modal-heading {
+  flex: none;
+  margin: 0;
+  padding: 14px 22px 12px;
+}
+#task-form .modal-actions {
+  flex: none;
+  margin: 0;
+  padding: 14px 22px;
+}
+.task-edit-layout {
+  display: grid;
+  grid-template-columns: minmax(470px, 0.85fr) minmax(0, 1.15fr);
+  gap: 22px;
+  padding: 0 22px 18px;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.task-edit-fields {
+  gap: 10px 14px;
+  align-content: start;
+}
+#task-form .field {
+  gap: 5px;
+}
+.task-effort-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0 6px;
+}
+#task-form .field input,
+#task-form .field select {
+  padding: 8px 10px;
+}
+#task-form .checkbox-field {
+  padding-top: 0;
+  line-height: 1.5;
+}
+#task-form .portal-field small {
+  max-height: calc(54px * var(--fs));
+  overflow: auto;
+  overflow-wrap: anywhere;
+}
+#task-form .auto-match {
+  min-width: 0;
+  max-height: calc(115px * var(--fs));
+  padding: 8px 10px;
+  overflow: auto;
+  overflow-wrap: anywhere;
+}
+.task-edit-text {
+  display: grid;
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  min-width: 0;
+  min-height: 0;
+}
+.task-edit-text .rich-editor {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.task-edit-text .rich-toolbar {
+  flex: none;
+  flex-wrap: wrap;
+}
+.task-edit-text .editable {
+  flex: 1;
+  height: 0;
+  min-height: calc(135px * var(--fs));
+  max-height: none;
+}
+@media (max-height: 760px) {
+  #task-form .modal-heading .eyebrow {
+    display: none;
+  }
+}
+@media (max-width: 1000px) {
+  .task-edit-layout {
+    display: block;
+  }
+  .task-edit-text {
+    display: flex;
+    flex-direction: column;
+    margin-top: 18px;
+  }
+  .task-edit-text .rich-editor {
+    flex: none;
+  }
+  .task-edit-text .editable {
+    flex: none;
+    height: calc(180px * var(--fs));
+  }
+}
+@media (max-width: 520px) {
+  #task-form .modal-heading,
+  #task-form .modal-actions {
+    padding-inline: 12px;
+  }
+  .task-edit-layout {
+    padding-inline: 12px;
+  }
+  .task-edit-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  #task-form .modal-actions {
+    gap: 6px;
+  }
+}
 @media (max-width: 1200px) {
   .topbar-right {
     gap: 5px;

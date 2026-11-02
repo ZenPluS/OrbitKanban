@@ -3,7 +3,7 @@ const { APP_NAME, validateData, matchIssues, findDuplicates, sortTasks, dateColo
 const $ = selector => document.querySelector(selector);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const uid = () => crypto.randomUUID();
-const { reorderTaskSequences } = window.OrbitaCore;
+const { reorderTaskSequences, indexIssues } = window.OrbitaCore;
 let data, dataFolder, view = 0, search = '', showHidden = false, duplicatesOnly = false, issueDuplicatesOnly = false, statusFilter = '', highlightFilter = '', highlighter = '', sort = [{ key: 'releaseDate', direction: 'asc' }];
 let settingsDraft, saving = false, organizationBusy = false, organizations = [], activeOrganizationId, lastOpenedLink = '';
 let revision = '', appVersion = '', browserUrl = '', online = true, refreshing = false, pendingChange = null, renderAfterModal = false, adoptions = 0, subscribed = false;
@@ -29,12 +29,27 @@ const locale = () => window.OrbitaI18n.locale(currentLanguage());
 const term = text => window.OrbitaI18n.term(text, currentLanguage());
 const plural = (count, key) => window.OrbitaI18n.plural(count, key, currentLanguage());
 const icons = ['▤', '⌘', '◈', '▥'];
+const plainCache = new Map();
+const PLAIN_CACHE_LIMIT = 4096, PLAIN_CACHE_CHARS = 4_000_000;
+let plainCacheChars = 0;
 const plain = html => {
+  const source = String(html);
+  if (plainCache.has(source)) return plainCache.get(source);
   const el = document.createElement('div');
-  el.innerHTML = sanitize(html);
+  el.innerHTML = sanitize(source);
   el.querySelectorAll('br').forEach(node => node.replaceWith(' '));
   el.querySelectorAll('p,div,li,blockquote').forEach(node => node.append(' '));
-  return el.textContent.replace(/\s+/g, ' ').trim();
+  const text = el.textContent.replace(/\s+/g, ' ').trim(), size = source.length + text.length;
+  if (size <= PLAIN_CACHE_CHARS) {
+    while (plainCache.size && (plainCache.size >= PLAIN_CACHE_LIMIT || plainCacheChars + size > PLAIN_CACHE_CHARS)) {
+      const oldest = plainCache.keys().next().value;
+      plainCacheChars -= oldest.length + plainCache.get(oldest).length;
+      plainCache.delete(oldest);
+    }
+    plainCache.set(source, text);
+    plainCacheChars += size;
+  }
+  return text;
 };
 function sanitize(html) {
   const doc = new DOMParser().parseFromString(String(html), 'text/html');
@@ -176,7 +191,16 @@ document.addEventListener('click', event => {
   openPortal(link.getAttribute('href'));
 });
 function pill(name, color, extra = '') { return `<span class="pill ${extra}" style="--pill:${esc(color)}"><i></i>${esc(name)}</span>`; }
-function formatDate(date) { return date ? new Date(date + 'T12:00:00').toLocaleDateString(locale(), { day: '2-digit', month: 'short', year: 'numeric' }) : t('Da pianificare'); }
+let dateFormatter, dateFormatterLocale;
+function formatDate(date) {
+  if (!date) return t('Da pianificare');
+  const currentLocale = locale();
+  if (dateFormatterLocale !== currentLocale) {
+    dateFormatter = new Intl.DateTimeFormat(currentLocale, { day: '2-digit', month: 'short', year: 'numeric' });
+    dateFormatterLocale = currentLocale;
+  }
+  return dateFormatter.format(new Date(date + 'T12:00:00'));
+}
 function effort(value) {
   const days = Math.floor(value / data.settings.hoursPerDay);
   const hours = Math.round((value - days * data.settings.hoursPerDay) * 100) / 100;
@@ -273,9 +297,10 @@ function issueDuplicateLine(issueId, group, issues = data.issues) {
   const others = group.issueIds.filter(id => id !== issueId).map(id => issues.find(issue => issue.id === id)).map(issue => issue.problem.trim() ? `${issue.code} · ${issue.problem}` : issue.code);
   return fillText('{0} è presente anche in: {1}', group.incident, others.join(', '));
 }
-function filteredTasks(duplicates = duplicatesOf()) {
+function filteredTasks(duplicates = duplicatesOf(), issues = search ? indexIssues(data.issues) : data.issues) {
+  const needle = search.toLowerCase();
   return data.tasks.filter(t => (duplicatesOnly ? duplicates.tasks.has(t.id) : showHidden || !t.hidden) && (!statusFilter || t.statusId === statusFilter) && matchesHighlightFilter(t) && (
-    !search || [t.code, String(t.sequence), plain(t.description), plain(t.notes), highlightOf(t)?.name || '', ...tagsOf(t).map(tag => tag.name), ...Object.values(matchIssues(t, data.issues)).flat()].some(v => v.toLowerCase().includes(search.toLowerCase()))
+    !search || [t.code, String(t.sequence), plain(t.description), plain(t.notes), highlightOf(t)?.name || '', ...tagsOf(t).map(tag => tag.name), ...Object.values(matchIssues(t, issues)).flat()].some(v => v.toLowerCase().includes(needle))
   ));
 }
 function paintTheme(theme) {
@@ -864,10 +889,10 @@ function taskCell(column, task, status, urgency, links, duplicateGroups = []) {
   }
 }
 function drawTaskRows() {
-  const duplicates = duplicatesOf(), tasks = sortedRows(filteredTasks(duplicates)), columns = shownColumns();
+  const duplicates = duplicatesOf(), issues = indexIssues(data.issues), tasks = sortedRows(filteredTasks(duplicates, issues)), columns = shownColumns();
   $('#task-rows').innerHTML = tasks.map(task => {
     const status = data.settings.statuses.find(s => s.id === task.statusId), urgency = data.settings.urgencies.find(s => s.id === task.urgencyId);
-    const links = matchIssues(task, data.issues), mark = highlightOf(task), duplicateGroups = duplicates.tasks.get(task.id) || [];
+    const links = matchIssues(task, issues), mark = highlightOf(task), duplicateGroups = duplicates.tasks.get(task.id) || [];
     const classes = [status.highlight ? 'highlighted' : '', mark ? 'marked' : '', task.hidden ? 'hidden-row' : '', duplicateGroups.length ? 'duplicate-row' : '', selectedTasks.has(task.id) ? 'selected' : ''].filter(Boolean).join(' ');
     const markLabel = mark ? fillText('Evidenziazione: {0}', mark.name) : t('Evidenzia riga');
     const duplicateLabel = duplicateGroups.length ? [t('Possibile duplicato'), ...taskDuplicateLines(task.id, duplicateGroups)].join('\n') : '';
@@ -1339,21 +1364,23 @@ function openModal(html) {
 function globalSearchResults(query) {
   const needle = query.trim().toLocaleLowerCase();
   if (!needle) return [];
-  const results = [];
+  const results = [], issues = indexIssues(data.issues);
   for (const task of data.tasks) {
-    const links = matchIssues(task, data.issues), status = data.settings.statuses.find(item => item.id === task.statusId)?.name || '';
+    const links = matchIssues(task, issues), status = data.settings.statuses.find(item => item.id === task.statusId)?.name || '';
     const urgency = data.settings.urgencies.find(item => item.id === task.urgencyId)?.name || '';
     const mark = highlightOf(task)?.name || '', tags = tagsOf(task).map(tag => tag.name);
     const fields = [task.code, String(task.sequence), plain(task.description), plain(task.notes), task.releaseDate, formatDate(task.releaseDate), status, urgency, mark, ...tags, ...Object.values(links).flat()];
     if (!fields.some(value => String(value || '').toLocaleLowerCase().includes(needle))) continue;
     const detail = [task.releaseDate ? formatDate(task.releaseDate) : t('Da pianificare'), status, links.incidents.length && `INC ${links.incidents.join(', ')}`, links.problems.length && `PRB ${links.problems.join(', ')}`, task.hidden && t('Nascosta')].filter(Boolean).join(' · ');
     results.push({ kind: 'task', id: task.id, title: task.code, detail, subtitle: plain(task.description) });
+    if (results.length === 40) return results;
   }
   for (const issue of data.issues) {
     if (![issue.code, issue.incident, issue.problem].some(value => value.toLocaleLowerCase().includes(needle))) continue;
     results.push({ kind: 'issue', id: issue.id, title: issue.code, detail: [issue.incident && `INC ${issue.incident}`, issue.problem && `PRB ${issue.problem}`].filter(Boolean).join(' · '), subtitle: '' });
+    if (results.length === 40) return results;
   }
-  return results.slice(0, 40);
+  return results;
 }
 function openGlobalSearch(initial = '') {
   openModal(ui`<div class="modal-heading"><div><div class="eyebrow">${esc(t('RICERCA GLOBALE'))}</div><h2>${esc(t('Cerca in OrbitKanban'))}</h2></div><button type="button" class="icon-button" data-close aria-label="Chiudi">✕</button></div><label class="global-search-field"><span aria-hidden="true">⌕</span><input id="global-search-input" type="search" autocomplete="off" placeholder="${esc(t('Codice, incident, problem, release date…'))}" aria-label="${esc(t('Cerca attività e issue'))}"><kbd>Esc</kbd></label><div class="global-search-results" id="global-search-results" role="listbox" aria-label="${esc(t('Risultati della ricerca'))}"></div>`);
@@ -1408,21 +1435,22 @@ function taskDialog(existing) {
     effortHours: 0, releaseDate: '', notes: '', hidden: false, highlightId: '', tagIds: []
   };
   const days = Math.floor(t.effortHours / data.settings.hoursPerDay), hours = Math.round((t.effortHours - days * data.settings.hoursPerDay) * 100) / 100;
-  openModal(ui`<form id="task-form"><div class="modal-heading"><div><div class="eyebrow">ATTIVITÀ</div><h2>${tr(existing ? 'Modifica attività' : 'Una nuova direzione')}</h2></div><button type="button" class="icon-button" data-close aria-label="Chiudi">✕</button></div><div class="form-grid">
+  openModal(ui`<form id="task-form"><div class="modal-heading"><div><div class="eyebrow">ATTIVITÀ</div><h2>${tr(existing ? 'Modifica attività' : 'Una nuova direzione')}</h2></div><button type="button" class="icon-button" data-close aria-label="Chiudi">✕</button></div><div class="task-edit-layout"><div class="form-grid task-edit-fields">
     <label class="field">Codice portale *<input name="code" required maxlength="200" value="${esc(t.code)}" placeholder="es. PRJ-1042"></label>
     <label class="field">Progressivo *<input name="sequence" type="number" min="0" step="1" required value="${t.sequence}"></label>
-    <div class="field full portal-field"><label for="task-url">Link specifico (facoltativo)</label><input id="task-url" name="url" inputmode="url" spellcheck="false" autocomplete="off" maxlength="2000" value="${esc(t.url)}"><small id="portal-link-preview" aria-live="polite"></small></div>
-    ${editor('description-editor', 'Descrizione', t.description)}
     <label class="field">Urgenza<select name="urgencyId">${optionList(data.settings.urgencies, t.urgencyId)}</select></label>
     <label class="field">Stato<select name="statusId">${optionList(data.settings.statuses, t.statusId)}</select></label>
-    <label class="field">Effort in giorni<input name="days" type="number" min="0" step="0.01" value="${days}"></label>
-    <label class="field">Effort in ore aggiuntive<input name="hours" type="number" min="0" step="0.01" value="${hours}"><small>${esc(fillText('1 giorno = {0} ore', data.settings.hoursPerDay))}</small></label>
     <label class="field">Release date<input name="releaseDate" type="date" value="${esc(t.releaseDate)}"></label>
-    <label class="field">Evidenziazione<select name="highlightId">${optionList(highlightsOf(), currentMark(t), 'Nessuna evidenziazione')}</select><small>Colora la riga nella lista attività. I colori si gestiscono in Impostazioni › Evidenziatori.</small></label>
+    <label class="field" title="Colora la riga nella lista attività. I colori si gestiscono in Impostazioni › Evidenziatori.">Evidenziazione<select name="highlightId">${optionList(highlightsOf(), currentMark(t), 'Nessuna evidenziazione')}</select></label>
+    <label class="field"><span class="task-effort-label">Effort in giorni <small>${esc(fillText('1 giorno = {0} ore', data.settings.hoursPerDay))}</small></span><input name="days" type="number" min="0" step="0.01" value="${days}"></label>
+    <label class="field">Effort in ore aggiuntive<input name="hours" type="number" min="0" step="0.01" value="${hours}"></label>
+    <div class="field full portal-field"><label for="task-url">Link specifico (facoltativo)</label><input id="task-url" name="url" inputmode="url" spellcheck="false" autocomplete="off" maxlength="2000" value="${esc(t.url)}"><small id="portal-link-preview" aria-live="polite"></small></div>
     <label class="field full checkbox-field"><input type="checkbox" name="hidden" ${t.hidden ? 'checked' : ''}> Nascondi solo dalla lista attività (resta visibile in milestone e kanban)</label>
     <div class="auto-match full" id="match-preview"></div>
+    </div><div class="task-edit-text">
+    ${editor('description-editor', 'Descrizione', t.description)}
     ${editor('notes-editor', 'Note', t.notes)}
-    </div><div class="modal-actions">${existing ? ui`<button type="button" class="button danger" id="delete-task">Elimina</button>` : ''}<span class="spacer"></span><button type="button" class="button" data-close>Annulla</button><button type="submit" class="button primary">Salva attività</button></div></form>`);
+    </div></div><div class="modal-actions">${existing ? ui`<button type="button" class="button danger" id="delete-task">Elimina</button>` : ''}<span class="spacer"></span><button type="button" class="button" data-close>Annulla</button><button type="submit" class="button primary">Salva attività</button></div></form>`);
   const form = $('#task-form');
   const updateMatches = () => {
     const code = form.elements.code.value, links = matchIssues({ code }, data.issues);
@@ -1665,13 +1693,14 @@ async function situationWorkbook(options, now = new Date()) {
     sheets.push({ name: t('Riepilogo'), columns: [{ width: 26 }, { width: 30 }, { width: 14 }, { width: 14 }, { width: 9 }], rows, gridLines: false, tabColor: '#2d3142', merges: [{ row: 0, col: 0, cols: 5 }] });
   }
   if (wanted.has('tasks')) {
+    const issues = indexIssues(data.issues);
     const ids = options.columns === 'all' ? normalizeTaskColumns(settings.taskColumns).map(column => column.id) : shownColumns();
     const widths = { sequence: 7, code: 16, link: 40, description: 56, urgency: 14, status: 18, highlight: 18, tags: 22, effort: 11, incident: 18, problem: 18, releaseDate: 14, notes: 48 };
     const defs = ids.flatMap(id => id === 'effort' ? [{ id, name: t('Effort'), width: 11 }, { id: 'effortHours', name: t('Effort (ore)'), width: 11 }] : [{ id, name: t(taskColumnDefs[id].name), width: widths[id] }]);
     if (tasks.some(task => task.hidden)) defs.push({ id: 'hidden', name: t('Nascosta'), width: 11 });
     const rows = [defs.map(def => ({ v: def.name, style: { ...header, wrap: true } }))];
     for (const task of tasks) {
-      const status = statusOf(task), urgency = urgencyOf(task), mark = highlightOf(task), links = matchIssues(task, data.issues), url = portalUrl(task, settings);
+      const status = statusOf(task), urgency = urgencyOf(task), mark = highlightOf(task), links = matchIssues(task, issues), url = portalUrl(task, settings);
       const fill = mark ? tint(mark.color, 0.22) : status.highlight ? tint(status.color, 0.14) : '';
       const base = { border: grid, vertical: 'top', ...(fill && { fill }), ...(task.hidden && { italic: true, color: muted }) };
       const cell = (v, style = {}, extra = {}) => ({ v, ...extra, style: { ...base, ...style } });
@@ -2365,6 +2394,17 @@ window.runSmokeTests = async () => {
     await tick();
     check(dimmed && windowChromeSent.dimmed === false, 'Pulsanti della finestra oscurati insieme alla pagina durante i dialog');
   }
+  taskDialog(data.tasks.find(task => !task.hidden));
+  const editModal = $('#modal'), editBody = $('.task-edit-layout'), editWidth = editModal.clientWidth;
+  check(editWidth >= Math.min(1100, innerWidth * 0.9) && $('.task-edit-fields').getBoundingClientRect().right < $('.task-edit-text').getBoundingClientRect().left, 'Editor attività largo con proprietà e testi affiancati');
+  check(editModal.scrollHeight <= editModal.clientHeight + 1 && editBody.scrollHeight <= editBody.clientHeight + 1 && $('#task-form [type="submit"]').getBoundingClientRect().bottom <= innerHeight, 'Editor desktop interamente visibile senza scorrere la modale');
+  $('#description-editor').innerHTML = '<p>Descrizione lunga da modificare.</p>'.repeat(100);
+  $('#notes-editor').innerHTML = '<p>Note lunghe da modificare.</p>'.repeat(100);
+  check($('#description-editor').scrollHeight > $('#description-editor').clientHeight && $('#notes-editor').scrollHeight > $('#notes-editor').clientHeight && editBody.scrollHeight <= editBody.clientHeight + 1, 'Testi lunghi scorrono solo negli editor, senza spostare campi e pulsanti');
+  editModal.close();
+  openModal('<p>OrbitKanban</p>');
+  check($('#modal').clientWidth < editWidth, 'Le altre finestre mantengono il layout compatto');
+  $('#modal').close();
   const historyTask = data.tasks.find(task => !task.hidden);
   const originalHistoryNotes = historyTask.notes;
   await commit(next => { next.tasks.find(task => task.id === historyTask.id).notes = '<p>Undo smoke</p>'; });
@@ -3199,6 +3239,23 @@ window.runSmokeTests = async () => {
   check(document.querySelector('.kanban-heading').textContent.includes(data.settings.statuses[0].name), 'Ordine kanban segue impostazioni');
   check(sanitize('<img src=x onerror=alert(1)><p onclick="x()">ok<script>x()</script></p>') === '<p>ok</p>', 'Sanitizzazione rich text');
   check(plain('<p>Prima</p><p>Seconda<br>Terza</p>') === 'Prima Seconda Terza', 'Anteprime rich text preservano separazione parole');
+  const previewSource = `<p>Anteprima ${uid()}<script>non visibile</script></p>`;
+  const parseDocument = DOMParser.prototype.parseFromString;
+  let previewParses = 0, cachedPreview;
+  try {
+    DOMParser.prototype.parseFromString = function (...args) { previewParses++; return parseDocument.apply(this, args); };
+    cachedPreview = plain(previewSource);
+    plain(previewSource);
+    plain(previewSource + '<p>Modificata</p>');
+  } finally { DOMParser.prototype.parseFromString = parseDocument; }
+  check(previewParses === 2 && !cachedPreview.includes('non visibile') && plain(previewSource + '<p>Modificata</p>').endsWith('Modificata'), 'Cache anteprime evita parsing ripetuti senza riutilizzare testi superati o non sanitizzati');
+  const formatterLanguage = data.settings.language;
+  try {
+    for (const language of ['en', 'it', 'en']) {
+      data.settings.language = language;
+      check(formatDate('2026-11-02') === new Date('2026-11-02T12:00:00').toLocaleDateString(locale(), { day: '2-digit', month: 'short', year: 'numeric' }), `Formattatore date riutilizzato nella lingua ${language}`);
+    }
+  } finally { data.settings.language = formatterLanguage; }
   const firstOrganizationId = activeOrganizationId;
   const firstSettings = structuredClone(data.settings);
   const firstOrganizationName = organizationName();

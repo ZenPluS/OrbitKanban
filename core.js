@@ -612,14 +612,31 @@ function uniqueOrganizationName(name, existingNames, fallback = 'Organizzazione 
     if (!taken.has(candidate.toLowerCase())) return candidate;
   }
 }
+const referenceKey = value => String(value ?? '').trim().toUpperCase();
+function indexIssues(issues) {
+  const index = new Map();
+  for (const issue of issues) {
+    const code = issue.code.trim().toUpperCase();
+    if (!index.has(code)) index.set(code, { incidents: new Set(), problems: new Set() });
+    const links = index.get(code), incident = issue.incident.trim(), problem = issue.problem.trim();
+    if (incident) links.incidents.add(incident);
+    if (problem) links.problems.add(problem);
+  }
+  return index;
+}
 function matchIssues(task, issues) {
-  const matches = issues.filter(x => x.code.trim().toUpperCase() === task.code.trim().toUpperCase());
+  const code = task.code.trim().toUpperCase();
+  // Batch callers build the index once; return fresh arrays just like the single-task path.
+  if (issues instanceof Map) {
+    const links = issues.get(code);
+    return { incidents: [...(links?.incidents || [])], problems: [...(links?.problems || [])] };
+  }
+  const matches = issues.filter(x => x.code.trim().toUpperCase() === code);
   return {
     incidents: [...new Set(matches.map(x => x.incident.trim()).filter(Boolean))],
     problems: [...new Set(matches.map(x => x.problem.trim()).filter(Boolean))]
   };
 }
-const referenceKey = value => String(value ?? '').trim().toUpperCase();
 // The incident is the duplicate key: it is compared like portal codes, ignoring case and surrounding spaces.
 // An incident is duplicated in the issue list when it appears in more than one association, and among tasks
 // when, through its associations, it resolves to more than one task. Associations without incident are never duplicates.
@@ -766,7 +783,7 @@ function themeFromLogo(pixels) {
   return palette;
 }
 const core = {
-  APP_NAME, initialData, baseData, demoData, demoReleaseDates, validateData, migrateArchive, validateArchive, createOrganization, matchIssues, findDuplicates, sortTasks, dateColor, today, validLanguage,
+  APP_NAME, initialData, baseData, demoData, demoReleaseDates, validateData, migrateArchive, validateArchive, createOrganization, matchIssues, indexIssues, findDuplicates, sortTasks, dateColor, today, validLanguage,
   extractThemePalette, themeFromLogo, normalizeUrl, isWebUrl, validPortalTemplate, portalUrl,
   ORGANIZATION_FILE_KINDS, organizationExport, organizationFileName, situationFileName, parseOrganizationFile, applyOrganizationImport, importedOrganizationData, uniqueOrganizationName,
   FONT_SIZE_PARTS, FONT_SIZE_STEP, defaultFontSizes, clampFontSize, defaultThemes,

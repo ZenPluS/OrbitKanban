@@ -140,6 +140,24 @@ test('automatic associations are case-insensitive, many-to-many and deduplicated
   assert.deepEqual(matchIssues({ code: 'abc-1' }, issues), { incidents: ['INC-1', 'INC-2'], problems: ['PRB-1', 'PRB-2'] });
   assert.deepEqual(matchIssues({ code: 'none' }, issues), { incidents: [], problems: [] });
 });
+
+test('batch issue index preserves association order, case, empty references and independent results', () => {
+  const { indexIssues } = require('./core');
+  const issues = [
+    { code: ' abc-1 ', incident: ' INC-1 ', problem: 'PRB-1' },
+    { code: 'ABC-1', incident: 'INC-1', problem: ' PRB-2 ' },
+    { code: 'Abc-1', incident: 'inc-1', problem: '' },
+    { code: 'OTHER', incident: ' ', problem: 'PRB-1' }
+  ];
+  const index = indexIssues(issues);
+  for (const code of ['ABC-1', ' abc-1 ', 'OTHER', 'missing']) {
+    assert.deepEqual(matchIssues({ code }, index), matchIssues({ code }, issues));
+  }
+  matchIssues({ code: 'ABC-1' }, index).incidents.push('not-an-association');
+  assert.deepEqual(matchIssues({ code: 'ABC-1' }, index).incidents, ['INC-1', 'inc-1']);
+  issues[0].incident = 'INC-CHANGED';
+  assert.deepEqual(matchIssues({ code: 'ABC-1' }, indexIssues(issues)), matchIssues({ code: 'ABC-1' }, issues));
+});
 test('default sort is chronological, unplanned last and sequence as tie-breaker', () => {
   const tasks = [
     { sequence: 4, releaseDate: '' }, { sequence: 3, releaseDate: '2027-01-02' },
