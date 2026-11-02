@@ -2185,3 +2185,26 @@ tr.duplicate-row td:last-child {
   color: var(--muted);
   line-height: 1.4;
 }
+
+/* Custom desktop title bar (Windows): the top bar and the brand drag the window, native caption buttons sit on the right */
+.custom-titlebar .topbar,
+.custom-titlebar .sidebar .brand {
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+.custom-titlebar .topbar {
+  padding-right: calc(24px + 100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw));
+}
+.custom-titlebar .sidebar {
+  padding-top: 0;
+}
+.custom-titlebar .sidebar .brand {
+  padding-top: 33px;
+}
+.custom-titlebar dialog,
+.custom-titlebar #tag-menu,
+.custom-titlebar .mark-menu,
+.custom-titlebar #toast {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}

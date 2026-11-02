@@ -14,6 +14,8 @@ contextBridge.exposeInMainWorld('workspace', {
   languages: (operation = 'info') => ipcRenderer.invoke('languages', operation),
   browserAccess: (operation, organizationId) => ipcRenderer.invoke('browser-access', operation, organizationId),
   ready: () => ipcRenderer.send('app-ready'),
+  titleBarOverlay: process.argv.includes('--orbitkanban-title-bar=overlay'),
+  windowChrome: chrome => ipcRenderer.send('window-chrome', chrome),
   onChange: callback => {
     const listener = (_, info) => callback(info);
     ipcRenderer.on('workspace-changed', listener);

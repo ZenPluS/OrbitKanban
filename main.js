@@ -8,7 +8,11 @@ const { createWorkspaceStore } = require('./workspace-store');
 const { createWebServer, DEFAULT_PORT } = require('./web-server');
 const { createSplash, splashHoldTime, windowBackground, SPLASH_STATUS } = require('./splash');
 const { createLanguageStore } = require('./languages');
+const { TITLE_BAR_ARGUMENT, TITLE_BAR_HEIGHT, themeColors, titleBarOverlay } = require('./window-chrome');
 app.setName(APP_NAME);
+// On Windows the app draws its own title bar: the top bar drags the window and the caption buttons follow the theme.
+const customTitleBar = process.platform === 'win32';
+let windowChrome = null;
 const smoke = process.argv.includes('--smoke-test');
 if (smoke) {
   // Match the build's rasterizer and scale for the SVG/icon pixel comparison.
@@ -73,6 +77,15 @@ function handle(channel, handler) {
 }
 handle('load', organizationId => store.load(organizationId));
 ipcMain.on('app-ready', event => { if (win && event.sender === win.webContents) revealMainWindow('renderer'); });
+ipcMain.on('window-chrome', (event, request) => {
+  if (!customTitleBar || !win || win.isDestroyed() || event.sender !== win.webContents) return;
+  const overlay = titleBarOverlay(request, win.webContents.getZoomFactor());
+  if (!overlay || (windowChrome && ['color', 'symbolColor', 'height'].every(key => windowChrome[key] === overlay[key]))) return;
+  try {
+    win.setTitleBarOverlay(overlay);
+    windowChrome = overlay;
+  } catch (error) { console.error('Barra del titolo non aggiornata:', error); }
+});
 handle('save', (data, organizationId, organizationName, revision) => store.save(data, organizationId, organizationName, revision));
 handle('organization', (operation, payload, organizationId) => store.organization(operation, payload, organizationId));
 handle('export', async () => {
@@ -152,11 +165,15 @@ else {
     catch (error) { console.error('Archivio non aperto in anticipo:', error); }
     try { await webServer.start(); }
     catch (error) { console.error('Accesso da browser non avviato:', error); }
+    windowChrome = customTitleBar ? titleBarOverlay({ ...themeColors(settings), height: TITLE_BAR_HEIGHT.initial }) : null;
     win = new BrowserWindow({
       width: 1500, height: 960, minWidth: 1050, minHeight: 700, show: false,
-      backgroundColor: windowBackground(settings), autoHideMenuBar: true, title: APP_NAME, icon,
-      webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true }
+      backgroundColor: windowBackground(settings), title: APP_NAME, icon,
+      ...(customTitleBar ? { titleBarStyle: 'hidden', titleBarOverlay: windowChrome } : { autoHideMenuBar: true }),
+      webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, additionalArguments: customTitleBar ? [TITLE_BAR_ARGUMENT] : [] }
     });
+    // The default menu keeps its shortcuts, but Alt must not slide a native menu bar under the custom title bar.
+    if (customTitleBar) win.setMenuBarVisibility(false);
     win.on('closed', () => splash?.close());
     revealTimer = setTimeout(() => revealMainWindow('timeout'), 15000);
     win.webContents.on('did-fail-load', (event, code, description, url, isMainFrame) => { if (isMainFrame) revealMainWindow('failed'); });
@@ -202,6 +219,16 @@ else {
         const result = await win.webContents.executeJavaScript('window.runSmokeTests()');
         if (!result.ok) throw new Error('Smoke test UI fallito');
         result.checks.unshift(...splashChecks);
+        if (customTitleBar) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+          const chrome = await win.webContents.executeJavaScript(`(() => {
+            const style = document.documentElement.style;
+            return { background: style.getPropertyValue('--background'), text: style.getPropertyValue('--text'), height: document.querySelector('.topbar').clientHeight, dimmed: document.querySelector('#modal').open };
+          })()`);
+          const expected = titleBarOverlay(chrome, win.webContents.getZoomFactor());
+          if (!expected || !windowChrome || ['color', 'symbolColor', 'height'].some(key => windowChrome[key] !== expected[key]) || win.isMenuBarVisible()) throw new Error(`Barra del titolo non allineata al tema: ${JSON.stringify({ windowChrome, expected })}`);
+          result.checks.push('Pulsanti nativi della finestra aggiornati con tema e altezza della barra superiore');
+        }
         result.checks.push(...await require('./smoke-web').run({ server: webServer, win }));
         const exportsFolder = path.join(root, 'exports'), exportNames = await fs.readdir(exportsFolder);
         const exportedFiles = await Promise.all(exportNames.filter(name => name.endsWith('.json')).map(async name => ({ name, file: parseOrganizationFile(await fs.readFile(path.join(exportsFolder, name), 'utf8')) })));

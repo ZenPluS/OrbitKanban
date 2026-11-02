@@ -1,6 +1,6 @@
 # OrbitKanban — workspace portable
 
-App desktop locale per Windows 10/11 a 64 bit, **versione 2.12.0**. Nessun account, server esterno o collegamento a Internet necessario per l'uso. **Il nome dell'app è sempre OrbitKanban e non è configurabile.** Tutte le impostazioni del workspace appartengono alla singola organizzazione. Mentre l'app è aperta puoi usarla anche **dal browser dello stesso PC**, con più organizzazioni aperte contemporaneamente in schede diverse.
+App desktop locale per Windows 10/11 a 64 bit, **versione 2.13.0**. Nessun account, server esterno o collegamento a Internet necessario per l'uso. **Il nome dell'app è sempre OrbitKanban e non è configurabile.** Tutte le impostazioni del workspace appartengono alla singola organizzazione. Mentre l'app è aperta puoi usarla anche **dal browser dello stesso PC**, con più organizzazioni aperte contemporaneamente in schede diverse.
 
 ## Avvio e condivisione
 
@@ -103,6 +103,8 @@ Il simbolo **↗** accanto al codice nella lista attività, nelle card delle mil
 Le intestazioni e i riepiloghi sono compatti in tutte le schede. Tabelle, milestone e kanban occupano lo spazio rimanente della finestra e scorrono al proprio interno; le dimensioni del testo configurate restano rispettate. Su finestre basse o con caratteri grandi, anche l'area contenuti può scorrere per mantenere accessibili tutti i comandi.
 
 Il testo dell'interfaccia non viene selezionato trascinando il mouse, come in un'app desktop. La selezione e il copia/incolla restano disponibili nei campi di testo, nella ricerca e negli editor rich text.
+
+Dalla **2.13.0**, su Windows la finestra non usa più la barra del titolo di sistema: la **barra superiore dell'app** (percorso, stato dell'archivio) fa da barra del titolo e i pulsanti **riduci a icona, ingrandisci e chiudi** prendono sfondo e colore del testo del **tema attivo**, anche durante l'anteprima di un tema. Trascina la barra superiore o il logo in alto a sinistra per spostare la finestra; doppio clic per ingrandirla o ripristinarla. L'altezza segue le dimensioni del testo configurate e, con una finestra di dialogo aperta, i pulsanti si oscurano insieme alla pagina. Nella versione browser non cambia nulla.
 
 Nelle liste **Attività** e **Issue collegate**, fai **doppio clic su una cella della riga** per aprire la relativa finestra di modifica. Restano disponibili i pulsanti di modifica e il clic sul codice; link e pulsanti mantengono le proprie azioni. Con un evidenziatore attivo, i clic continuano a colorare le righe senza aprire l'editor. Il Kanban resta in sola lettura.
 

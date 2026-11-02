@@ -205,6 +205,28 @@ function paintTheme(theme) {
   for (const key of ['background', 'surface', 'text', 'accent']) document.documentElement.style.setProperty(`--${key}`, theme[key]);
   const rgb = theme.background.slice(1).match(/.{2}/g).map(value => parseInt(value, 16));
   document.documentElement.style.colorScheme = (rgb[0] * 299 + rgb[1] * 587 + rgb[2] * 114) / 1000 > 150 ? 'light' : 'dark';
+  windowChromeColors = { background: theme.background, text: theme.text };
+  syncWindowChrome();
+}
+// The desktop window has no native title bar: the top bar drags it and the caption buttons take the theme colors.
+const customTitleBar = () => window.workspace?.titleBarOverlay === true && typeof window.workspace.windowChrome === 'function';
+let windowChromeColors = null, windowChromeKey = '', windowChromeSent = null;
+function syncWindowChrome() {
+  if (!customTitleBar() || !windowChromeColors) return;
+  // The overlay stops above the top bar's bottom border, so the separator line runs under the caption buttons too.
+  const request = { ...windowChromeColors, height: $('.topbar').clientHeight, dimmed: $('#modal').open };
+  const key = JSON.stringify([request, devicePixelRatio]);
+  if (key === windowChromeKey) return;
+  windowChromeKey = key;
+  windowChromeSent = request;
+  window.workspace.windowChrome(request);
+}
+if (customTitleBar()) {
+  document.documentElement.classList.add('custom-titlebar');
+  new ResizeObserver(syncWindowChrome).observe($('.topbar'));
+  new MutationObserver(syncWindowChrome).observe($('#modal'), { attributes: true, attributeFilter: ['open'] });
+  // Page zoom changes the device pixel ratio but not the CSS height of the top bar.
+  window.addEventListener('resize', syncWindowChrome);
 }
 function paintFontSizes(sizes) {
   const values = { ...defaultFontSizes(), ...sizes };
@@ -2070,6 +2092,19 @@ window.runSmokeTests = async () => {
   const tableArea = $('.table-scroll').getBoundingClientRect();
   check($('.page-heading').offsetHeight <= 75 && tableArea.top < 330 && tableArea.height >= innerHeight * 0.5 && tableArea.bottom <= $('footer').getBoundingClientRect().top, 'Intestazione compatta e almeno metà finestra disponibile per la tabella');
   check(getComputedStyle($('.page-heading h1')).userSelect === 'none' && getComputedStyle($('#task-rows td')).userSelect === 'none' && getComputedStyle($('#search')).userSelect === 'text', 'Testo dell’interfaccia non selezionabile, ricerca selezionabile');
+  if (customTitleBar()) {
+    const overlay = navigator.windowControlsOverlay, area = overlay?.visible ? overlay.getTitlebarAreaRect() : null;
+    const controls = area ? innerWidth - area.x - area.width : 0, region = selector => getComputedStyle($(selector)).getPropertyValue('-webkit-app-region');
+    check(document.documentElement.classList.contains('custom-titlebar') && region('.topbar') === 'drag' && region('.sidebar .brand') === 'drag' && region('#modal') === 'no-drag' && region('#toast') === 'no-drag' && region('#organization-select') !== 'drag' && controls >= 90 && parseFloat(getComputedStyle($('.topbar')).paddingRight) >= controls + 23 && $('.topbar .avatar').getBoundingClientRect().right <= innerWidth - controls, 'Barra superiore trascinabile come barra del titolo, con spazio per i pulsanti della finestra');
+    const style = document.documentElement.style;
+    check(windowChromeSent && windowChromeSent.background === style.getPropertyValue('--background') && windowChromeSent.text === style.getPropertyValue('--text') && windowChromeSent.height === $('.topbar').clientHeight && $('.topbar').clientHeight < $('.topbar').offsetHeight && windowChromeSent.dimmed === false && Math.abs(area.height - windowChromeSent.height) <= 1, 'Pulsanti della finestra con i colori del tema e l’altezza della barra superiore');
+    openModal('<p>OrbitKanban</p>');
+    await tick();
+    const dimmed = windowChromeSent.dimmed === true;
+    $('#modal').close();
+    await tick();
+    check(dimmed && windowChromeSent.dimmed === false, 'Pulsanti della finestra oscurati insieme alla pagina durante i dialog');
+  }
   check(initialTaskCount > 200 && visibleTasks().length < initialTaskCount && document.querySelectorAll('#task-rows tr').length === visibleTasks().length, 'Caricamento dati dimostrativi con righe già rilasciate nascoste');
   const demoReleases = [...new Set(data.tasks.map(t => t.releaseDate).filter(Boolean))].sort();
   check(demoReleases[0] === '2025-01-01' && demoReleases.length > 40 && demoReleases.every((date, i) => new Date(`${date}T12:00:00Z`).getUTCDay() === 3 && (!i || Date.parse(date) - Date.parse(demoReleases[i - 1]) === 14 * 86400000)), 'Milestone dimostrative ogni due settimane di mercoledì da gennaio 2025');
@@ -2580,6 +2615,7 @@ window.runSmokeTests = async () => {
   document.querySelector(`[data-theme="${previewTheme.id}"]`).click();
   await new Promise(resolve => setTimeout(resolve));
   check(accent() === previewTheme.accent && document.documentElement.style.getPropertyValue('--background') === previewTheme.background, 'Selezione tema applicata subito in anteprima');
+  if (customTitleBar()) check(windowChromeSent.background === previewTheme.background && windowChromeSent.text === previewTheme.text, 'Barra del titolo aggiornata con l’anteprima del tema');
   check(!$('#unsaved-banner').hidden && data.settings.themeId !== previewTheme.id, 'Avviso impostazioni non salvate visibile senza salvare il tema');
   check(!$('#settings-tab-themes .settings-tab-dot').hidden && settingsTabs.filter(tab => !$(`#settings-tab-${tab.id} .settings-tab-dot`).hidden).length === 1 && $('#unsaved-where').textContent.includes(t('Temi & atmosfera')) && $('#unsaved-where [data-goto-settings-tab="themes"]'), 'Scheda con modifiche segnalata nella navigazione e nell’avviso');
   showSettingsTab('identity');
@@ -2597,6 +2633,12 @@ window.runSmokeTests = async () => {
   document.querySelector('[data-theme-color="accent"]').value = '#12ab34';
   document.querySelector('[data-theme-color="accent"]').dispatchEvent(new Event('input', { bubbles: true }));
   check(accent() === '#12ab34', 'Modifica colore tema applicata in tempo reale');
+  if (customTitleBar()) {
+    const backgroundInput = document.querySelector('[data-theme-color="background"]');
+    backgroundInput.value = '#f4f1e8';
+    backgroundInput.dispatchEvent(new Event('input', { bubbles: true }));
+    check(windowChromeSent.background === '#f4f1e8' && windowChromeSent.text === previewTheme.text, 'Barra del titolo segue in tempo reale lo sfondo del tema');
+  }
   check($('.theme-choice.chosen .theme-kind').textContent === t('Predefinito modificato') && !$('#delete-theme'), 'Tema predefinito modificabile senza eliminare il modello incorporato');
   $('#reset-theme').click();
   check(accent() === previewTheme.accent && $('#theme-name').value === previewTheme.name && $('.theme-choice.chosen .theme-kind').textContent === t('Predefinito'), 'Ripristino tema recupera nome e quattro colori originali');
@@ -2604,6 +2646,10 @@ window.runSmokeTests = async () => {
   document.querySelector('[data-theme-color="accent"]').dispatchEvent(new Event('input', { bubbles: true }));
   $('#discard-settings').click();
   check(accent() === savedAccent && $('#unsaved-banner').hidden && !settingsDraft.themes.some(theme => theme.accent === '#12ab34'), 'Annulla modifiche ripristina il tema salvato');
+  if (customTitleBar()) {
+    const savedTheme = data.settings.themes.find(theme => theme.id === data.settings.themeId);
+    check(windowChromeSent.background === savedTheme.background && windowChromeSent.text === savedTheme.text, 'Barra del titolo ripristinata con il tema salvato');
+  }
   document.querySelector(`[data-theme="${previewTheme.id}"]`).click();
   check(accent() === previewTheme.accent, 'Anteprima tema riattivata');
   document.querySelector('[data-view="0"]').click();
