@@ -223,26 +223,27 @@ function tagPicker(task) {
 function closeTagMenu(restoreFocus = false) {
   const menu = $('#tag-menu');
   if (!menu) return;
-  const owner = document.querySelector(`[data-task-tags="${CSS.escape(menu.dataset.task)}"]`);
+  const owner = document.querySelector(menu.dataset.owner);
   menu.remove();
   owner?.setAttribute('aria-expanded', 'false');
   if (restoreFocus) owner?.focus({ preventScroll: true });
 }
-function openTagMenu(button) {
-  const id = button.dataset.taskTags, same = $('#tag-menu')?.dataset.task === id;
+function openTagMenu(button, custom) {
+  const id = button.dataset.taskTags, owner = custom ? `[data-choice-picker="${CSS.escape(button.dataset.choicePicker)}"]` : `[data-task-tags="${CSS.escape(id)}"]`, same = $('#tag-menu')?.dataset.owner === owner;
   closeTagMenu();
   closeMarkMenu();
   if (same) return;
   const task = data.tasks.find(task => task.id === id);
-  if (!task) return;
-  const initial = new Set(task.tagIds || []);
+  if (!task && !custom) return;
+  const initial = new Set(custom ? custom.values : task.tagIds || []);
   const menu = document.createElement('form');
   menu.id = 'tag-menu';
   menu.dataset.task = id;
+  menu.dataset.owner = owner;
   menu.setAttribute('role', 'dialog');
-  menu.setAttribute('aria-label', t('Modifica tag') + ': ' + task.code);
-  menu.innerHTML = tagPicker(task) + ui`<div class="tag-menu-actions"><button type="button" class="button small" data-cancel-tags>Annulla</button><button type="submit" class="button small primary">Applica</button></div>`;
-  document.body.append(menu);
+  menu.setAttribute('aria-label', custom ? custom.field.name : t('Modifica tag') + ': ' + task.code);
+  menu.innerHTML = (custom ? `<fieldset class="field full task-tags"><legend>${esc(custom.field.name)}</legend><p class="muted">${esc(t('Seleziona le etichette. Nomi e colori si gestiscono nella sezione dedicata delle impostazioni.'))}</p><div class="tag-options">${CustomColumns.choices(custom.field).map(option => `<label class="tag-choice"><input type="checkbox" name="tagIds" value="${esc(option.id)}" ${initial.has(option.id) ? 'checked' : ''}>${pill(option.name, option.color, 'tag-pill')}</label>`).join('')}</div></fieldset>` : tagPicker(task)) + ui`<div class="tag-menu-actions"><button type="button" class="button small" data-cancel-tags>Annulla</button><button type="submit" class="button small primary">Applica</button></div>`;
+  (custom?.form ? $('#modal') : document.body).append(menu);
   const rect = button.getBoundingClientRect();
   menu.style.left = `${Math.max(8, Math.min(rect.left, innerWidth - menu.offsetWidth - 8))}px`;
   menu.style.top = `${Math.max(8, Math.min(rect.bottom + 4, innerHeight - menu.offsetHeight - 8))}px`;
@@ -264,22 +265,23 @@ function openTagMenu(button) {
     const submit = menu.querySelector('[type="submit"]');
     submit.disabled = true;
     try {
-      await commit(next => {
+      if (custom) await custom.apply(added, removed, [...chosen]);
+      else await commit(next => {
         const row = next.tasks.find(task => task.id === id);
         if (!row) throw new Error('Attività non più disponibile.');
         const known = new Set(next.settings.tags.map(tag => tag.id));
         row.tagIds = [...new Set([...(row.tagIds || []).filter(id => !removed.includes(id)), ...added])].filter(id => known.has(id));
       });
       closeTagMenu();
-      rerenderPreservingView();
-      document.querySelector(`[data-task-tags="${CSS.escape(id)}"]`)?.focus({ preventScroll: true });
+      if (!custom?.form) rerenderPreservingView();
+      document.querySelector(owner)?.focus({ preventScroll: true });
     } finally { submit.disabled = false; }
   });
   (menu.querySelector('input') || menu.querySelector('button')).focus({ preventScroll: true });
 }
 document.addEventListener('pointerdown', event => {
   const menu = $('#tag-menu');
-  if (menu && !menu.contains(event.target) && !event.target.closest('[data-task-tags]')) closeTagMenu();
+  if (menu && !menu.contains(event.target) && !event.target.closest('[data-task-tags], [data-choice-picker]')) closeTagMenu();
 }, true);
 window.addEventListener('scroll', event => { if (!$('#tag-menu')?.contains(event.target)) closeTagMenu(); }, true);
 window.addEventListener('resize', () => closeTagMenu());
@@ -375,6 +377,14 @@ function adoptSnapshot(snapshot) {
   if (activeOrganizationId !== snapshot.activeOrganizationId) { columnFilters = { tasks: {}, issues: {} }; issueSearch = ''; }
   data = validateData(snapshot.data);
   for (const kind of ['tasks', 'issues']) columnFilters[kind] = Object.fromEntries(Object.entries(columnFilters[kind]).filter(([id]) => columnDef(id, kind)));
+  for (const kind of ['tasks', 'issues']) for (const field of CustomColumns.fieldsOf(data.settings, kind).filter(field => ['select', 'multiselect'].includes(field.type))) {
+    const filter = columnFilters[kind][field.id];
+    if (filter) {
+      const known = CustomColumns.choices(field).map(option => option.id);
+      filter.values = filter.values.filter(value => known.includes(value));
+      if (!CustomColumns.activeFilter(filter)) delete columnFilters[kind][field.id];
+    }
+  }
   dataFolder = snapshot.dataFolder;
   organizations = snapshot.organizations;
   activeOrganizationId = snapshot.activeOrganizationId;
@@ -519,17 +529,24 @@ const settingsTabs = [
   { id: 'storage', group: 'Dati e accesso', icon: '▣', label: 'Dati che viaggiano con te', panel: 'storage-panel', keys: [] },
   { id: 'browser', group: 'Dati e accesso', icon: '◍', label: 'Accesso da browser', panel: 'browser-panel', keys: [] }
 ];
+function choiceSettingsTabs() {
+  return ['tasks', 'issues'].flatMap((kind, index) => CustomColumns.fieldsOf(settingsDraft || data.settings, kind).filter(field => ['select', 'multiselect'].includes(field.type)).map(field => ({
+    id: `choice-${kind}-${field.id}`, panel: `choice-${kind}-${field.id}-panel`, group: 'Etichette delle colonne', icon: '#',
+    label: `${field.name} · ${data.settings.tabNames[index]}`, field, kind, custom: true, keys: [kind === 'tasks' ? 'taskFields' : 'issueFields']
+  })));
+}
+const allSettingsTabs = () => [...settingsTabs, ...choiceSettingsTabs()];
 // Ordered: the first matching pattern decides which settings tab holds the field to fix.
 const settingsErrorTabs = [[/colonn[ae] personalizzat|opzioni della colonna|nomi e identificativi delle colonne/i, 'custom-columns'], [/\btags?\b/i, 'tags'], [/evidenziatori|highlighter/i, 'highlights'], [/colonne della lista|list columns/i, 'columns'], [/link portale|portal link/i, 'portal'], [/dimensioni del testo|text sizes/i, 'fonts'], [/\b(?:temi|tema|themes?)\b/i, 'themes'], [/urgen/i, 'urgencies'], [/\b(?:stati|status|statuses)\b/i, 'statuses'], [/\b(?:lingua|language)\b/i, 'languages'], [/organizzazione|organization|\btab\b|ore per giorno|hours per day|logo/i, 'identity']];
 function settingsNav() {
-  const groups = [...new Set(settingsTabs.map(tab => tab.group))];
-  return `<nav class="settings-nav" aria-label="${esc(t('Sezioni delle impostazioni'))}">${groups.map((group, index) => `<div class="settings-nav-group" role="group" aria-labelledby="settings-group-${index}"><span class="settings-nav-label" id="settings-group-${index}">${esc(t(group))}</span>${settingsTabs.filter(tab => tab.group === group).map(tab => `<button type="button" class="settings-tab" id="settings-tab-${tab.id}" data-settings-tab="${tab.id}" aria-controls="${tab.panel}"><span class="settings-tab-icon" aria-hidden="true">${tab.icon}</span><span class="settings-tab-text">${esc(t(tab.label))}</span><span class="settings-tab-dot" role="img" aria-label="${esc(t('Modifiche non salvate'))}" title="${esc(t('Modifiche non salvate'))}" hidden></span></button>`).join('')}</div>`).join('')}</nav>`;
+  const tabs = allSettingsTabs(), groups = [...new Set(tabs.map(tab => tab.group))];
+  return `<nav class="settings-nav" aria-label="${esc(t('Sezioni delle impostazioni'))}">${groups.map((group, index) => `<div class="settings-nav-group" role="group" aria-labelledby="settings-group-${index}"><span class="settings-nav-label" id="settings-group-${index}">${esc(t(group))}</span>${tabs.filter(tab => tab.group === group).map(tab => `<button type="button" class="settings-tab" id="settings-tab-${tab.id}" data-settings-tab="${tab.id}" aria-controls="${tab.panel}"><span class="settings-tab-icon" aria-hidden="true">${tab.icon}</span><span class="settings-tab-text">${esc(tab.custom ? tab.label : t(tab.label))}</span><span class="settings-tab-dot" role="img" aria-label="${esc(t('Modifiche non salvate'))}" title="${esc(t('Modifiche non salvate'))}" hidden></span></button>`).join('')}</div>`).join('')}</nav>`;
 }
 function showSettingsTab(id, reveal = false) {
-  const selected = settingsTabs.find(tab => tab.id === id) || settingsTabs[0];
+  const tabs = allSettingsTabs(), selected = tabs.find(tab => tab.id === id) || settingsTabs[0];
   settingsTab = selected.id;
   try { sessionStorage.setItem('orbitkanban.settingsTab', selected.id); } catch {}
-  for (const tab of settingsTabs) {
+  for (const tab of tabs) {
     const button = document.getElementById(`settings-tab-${tab.id}`), panel = document.getElementById(tab.panel);
     if (!button || !panel) continue;
     panel.hidden = tab !== selected;
@@ -548,7 +565,8 @@ function wireSettingsNav() {
     showSettingsTab(id, true);
     if (target.dataset.gotoSettingsTab) document.getElementById(`settings-tab-${id}`)?.focus();
   });
-  $('.settings-nav').addEventListener('keydown', event => {
+  $('#settings-page').addEventListener('keydown', event => {
+    if (!event.target.closest('.settings-nav')) return;
     const tabs = [...document.querySelectorAll('.settings-tab')], index = tabs.indexOf(document.activeElement);
     const next = index < 0 ? undefined : { ArrowDown: index + 1, ArrowRight: index + 1, ArrowUp: index - 1, ArrowLeft: index - 1, Home: 0, End: tabs.length - 1 }[event.key];
     if (next === undefined) return;
@@ -565,15 +583,16 @@ function refreshSettingsState() {
   updateHistoryButtons();
   banner.hidden = !changed;
   const savedName = organizations.find(o => o.id === activeOrganizationId)?.name;
-  const dirty = changed ? settingsTabs.filter(tab => tab.keys.some(key => JSON.stringify(settingsDraft[key]) !== JSON.stringify(data.settings[key])) || (tab.id === 'identity' && $('#organization-name').value.trim() !== savedName)) : [];
-  for (const tab of settingsTabs) {
+  const tabs = allSettingsTabs();
+  const dirty = changed ? tabs.filter(tab => tab.custom ? JSON.stringify(tab.field) !== JSON.stringify(CustomColumns.fieldsOf(data.settings, tab.kind).find(field => field.id === tab.field.id)) : tab.keys.some(key => JSON.stringify(settingsDraft[key]) !== JSON.stringify(data.settings[key])) || (tab.id === 'identity' && $('#organization-name').value.trim() !== savedName)) : [];
+  for (const tab of tabs) {
     const dot = document.querySelector(`#settings-tab-${tab.id} .settings-tab-dot`);
     if (dot) dot.hidden = !dirty.includes(tab);
   }
   const where = $('#unsaved-where'), key = dirty.map(tab => tab.id).join();
   if (where && where.dataset.key !== key) {
     where.dataset.key = key;
-    where.innerHTML = dirty.length ? `${esc(t('Sezioni modificate:'))} ${dirty.map(tab => `<button type="button" class="unsaved-link" data-goto-settings-tab="${tab.id}">${esc(t(tab.label))}</button>`).join(', ')}` : '';
+    where.innerHTML = dirty.length ? `${esc(t('Sezioni modificate:'))} ${dirty.map(tab => `<button type="button" class="unsaved-link" data-goto-settings-tab="${tab.id}">${esc(tab.custom ? tab.label : t(tab.label))}</button>`).join(', ')}` : '';
   }
   $('#settings-page')?.style.setProperty('--unsaved-offset', changed ? `${banner.offsetHeight + 12}px` : '0px');
 }
@@ -592,6 +611,15 @@ async function saveSettings() {
       for (const kind of ['tasks', 'issues']) {
         const ids = new Set(CustomColumns.fieldsOf(settings, kind).map(field => field.id));
         for (const record of next[kind]) if (record.customFields) record.customFields = Object.fromEntries(Object.entries(record.customFields).filter(([id]) => ids.has(id)));
+        for (const field of CustomColumns.fieldsOf(settings, kind).filter(field => ['select', 'multiselect'].includes(field.type))) {
+          const known = CustomColumns.choices(field).map(option => option.id);
+          for (const record of next[kind]) {
+            const value = record.customFields?.[field.id];
+            if (value !== undefined) record.customFields[field.id] = Array.isArray(value) ? value.filter(id => known.includes(id)) : known.includes(value) ? value : '';
+          }
+          const clean = filters => { if (filters?.[field.id]) filters[field.id].values = filters[field.id].values.filter(id => known.includes(id)); };
+          if (kind === 'tasks') for (const saved of next.settings.savedViews || []) clean(saved.columnFilters);
+        }
       }
       const columnIds = normalizeTaskColumns(settings.taskColumns, settings.taskFields).map(column => column.id);
       for (const saved of next.settings.savedViews || []) {
@@ -732,11 +760,40 @@ function customText(value, field) {
   if (field.type === 'date') return formatDate(value);
   if (field.type === 'boolean') return t(value ? 'Sì' : 'No');
   if (field.type === 'effort') return value === 0 ? '0h' : effort(value);
+  if (['select', 'multiselect'].includes(field.type)) return CustomColumns.choices(field).filter(option => Array.isArray(value) ? value.includes(option.id) : value === option.id).map(option => option.name).join(', ');
   return Array.isArray(value) ? value.join(', ') : String(value);
 }
 function customSearchValues(record, kind) { return CustomColumns.fieldsOf(data.settings, kind).map(field => customText(record.customFields?.[field.id], field)); }
-function customCell(record, field) {
+function choiceButton(record, field, kind, values = record.customFields?.[field.id] || []) {
+  const chips = CustomColumns.choices(field).filter(option => values.includes(option.id)).map(option => pill(option.name, option.color, 'tag-pill')).join('');
+  return `<button type="button" class="task-tags-button" data-choice-picker="${esc(`${kind}:${record.id}:${field.id}`)}" data-choice-kind="${kind}" data-choice-record="${esc(record.id)}" data-choice-field="${field.id}" aria-haspopup="dialog" aria-expanded="false" aria-label="${esc(field.name)}"><span class="tag-chips">${chips || `<span class="muted">+ ${esc(field.name)}</span>`}</span><span aria-hidden="true"> ▾</span></button>`;
+}
+function wireChoicePickers() {
+  document.querySelectorAll('[data-choice-picker]').forEach(button => button.onclick = () => {
+    const kind = button.dataset.choiceKind, id = button.dataset.choiceRecord, fieldId = button.dataset.choiceField, form = button.closest('#task-form, #issue-form');
+    const field = CustomColumns.fieldsOf(data.settings, kind).find(field => field.id === fieldId);
+    const record = data[kind].find(record => record.id === id);
+    if (!field || !record && !form) { notify('L’elemento non esiste più.', true); return; }
+    const values = form ? new FormData(form).getAll(fieldId) : record.customFields?.[fieldId] || [];
+    openTagMenu(button, { field, values, form, apply: async (added, removed, chosen) => {
+      if (form) {
+        const container = button.parentElement;
+        container.innerHTML = choiceButton({ id }, field, kind, chosen) + chosen.map(value => `<input type="hidden" name="${fieldId}" value="${esc(value)}">`).join('');
+        wireChoicePickers();
+      } else await commit(next => {
+        const row = next[kind].find(row => row.id === id), current = CustomColumns.fieldsOf(next.settings, kind).find(field => field.id === fieldId);
+        if (!row || !current) throw new Error(t('L’elemento non esiste più.'));
+        const known = CustomColumns.choices(current).map(option => option.id);
+        if (added.some(id => !known.includes(id))) throw new Error(t('Il catalogo è cambiato. Riapri il menu delle etichette.'));
+        (row.customFields ||= {})[fieldId] = [...new Set([...(row.customFields[fieldId] || []).filter(id => !removed.includes(id)), ...added])];
+      });
+    } });
+  });
+}
+function customCell(record, field, kind = 'tasks') {
   const value = record.customFields?.[field.id], text = customText(value, field);
+  if (field.type === 'multiselect') return `<td class="tags-cell custom-cell">${choiceButton(record, field, kind)}</td>`;
+  if (field.type === 'select') { const option = CustomColumns.choices(field).find(option => option.id === value); return `<td class="custom-cell">${option ? pill(option.name, option.color, 'tag-pill') : '—'}</td>`; }
   const html = field.type === 'url' && value ? `<a href="${esc(value)}" data-open-url>${esc(value)} ↗</a>` :
     field.type === 'date' && value ? `<span class="date-pill" style="--date:${dateColor(value)}">${esc(text)}</span>` : esc(text || '—');
   return `<td class="custom-cell" title="${esc(text)}"><span>${html}</span></td>`;
@@ -795,7 +852,7 @@ function sortedRows(tasks) {
   const ranked = tasks.map(t => {
     const highlightRank = highlights.findIndex(h => h.id === t.highlightId);
     return { ...t,
-      ...Object.fromEntries(CustomColumns.fieldsOf(data.settings, 'tasks').map(field => [field.id, field.type === 'select' ? (t.customFields?.[field.id] ? field.options.indexOf(t.customFields[field.id]) : '') : t.customFields?.[field.id] ?? ''])),
+      ...Object.fromEntries(CustomColumns.fieldsOf(data.settings, 'tasks').map(field => [field.id, field.type === 'select' ? (t.customFields?.[field.id] ? CustomColumns.choices(field).findIndex(option => option.id === t.customFields[field.id]) : '') : t.customFields?.[field.id] ?? ''])),
       urgencyRank: data.settings.urgencies.findIndex(s => s.id === t.urgencyId),
       statusRank: data.settings.statuses.findIndex(s => s.id === t.statusId),
       highlightRank: highlightRank < 0 ? '' : highlightRank
@@ -851,7 +908,7 @@ function renderTasks() {
   // While a highlighter is active, a click anywhere on a row colors it instead of opening links or the task.
   $('#task-rows').addEventListener('click', event => {
     const row = highlighter && event.target.closest('tr[data-task-row]');
-    if (!row || event.target.closest('.select-cell, [data-task-tags]')) return;
+    if (!row || event.target.closest('.select-cell, [data-task-tags], [data-choice-picker]')) return;
     event.preventDefault();
     event.stopPropagation();
     paintRow(row);
@@ -1014,6 +1071,7 @@ function drawTaskRows() {
     taskDialog(data.tasks.find(t => t.id === b.dataset.editTask));
   });
   document.querySelectorAll('[data-task-tags]').forEach(button => button.onclick = () => openTagMenu(button));
+  wireChoicePickers();
   document.querySelectorAll('[data-toggle-task]').forEach(b => b.onclick = action(async () => {
     const id = b.dataset.toggleTask, hidden = !data.tasks.find(t => t.id === id).hidden;
     await commit(next => { const task = next.tasks.find(t => t.id === id); if (task) task.hidden = hidden; }); rerenderPreservingView();
@@ -1509,6 +1567,7 @@ function editor(id, label, html, translateLabel = true) {
   return ui`<div class="field full"><span class="field-label" id="${id}-label">${esc(translateLabel ? t(label) : label)}</span><div class="rich-editor"><div class="rich-toolbar" data-editor="${id}"><button type="button" data-command="bold" title="Grassetto"><b>B</b></button><button type="button" data-command="italic" title="Corsivo"><i>I</i></button><button type="button" data-command="underline" title="Sottolineato"><u>U</u></button><button type="button" data-command="insertUnorderedList" title="Elenco puntato">• Elenco</button><button type="button" data-command="insertOrderedList" title="Elenco numerato">1. Elenco</button><button type="button" data-command="removeFormat" title="Rimuovi formattazione">Tx</button></div><div id="${id}" class="editable" contenteditable="true" role="textbox" aria-multiline="true" aria-labelledby="${id}-label">${sanitize(html)}</div></div></div>`;
 }
 function wireEditors() {
+  wireChoicePickers();
   document.querySelectorAll('[data-command]').forEach(b => {
     b.onmousedown = e => e.preventDefault();
     b.onclick = () => {
@@ -1535,7 +1594,8 @@ function customEditors(kind, record) {
     const choice = (value, name, selected) => `<option value="${esc(value)}" ${selected ? 'selected' : ''}>${esc(name)}</option>`;
     let input;
     if (field.type === 'boolean') input = `<select name="${name}">${choice('', '—', value === undefined)}${choice('true', t('Sì'), value === true)}${choice('false', t('No'), value === false)}</select>`;
-    else if (['select', 'multiselect'].includes(field.type)) input = `<select name="${name}" ${field.type === 'multiselect' ? 'multiple size="4"' : ''}>${field.type === 'select' ? choice('', '—', !value) : ''}${field.options.map(option => choice(option, option, Array.isArray(value) ? value.includes(option) : option === value)).join('')}</select>`;
+    else if (field.type === 'multiselect') input = `<div>${choiceButton(record, field, kind)}${(value || []).map(value => `<input type="hidden" name="${name}" value="${esc(value)}">`).join('')}</div>`;
+    else if (field.type === 'select') input = `<select name="${name}">${choice('', '—', !value)}${CustomColumns.choices(field).map(option => choice(option.id, option.name, option.id === value)).join('')}</select>`;
     else input = `<input name="${name}" type="${field.type === 'date' ? 'date' : ['number', 'effort'].includes(field.type) ? 'number' : 'text'}" ${['number', 'effort'].includes(field.type) ? 'step="any"' : 'maxlength="200000"'} ${field.type === 'effort' ? 'min="0"' : ''} value="${esc(value ?? '')}">`;
     return `<label class="field">${label}${input}${field.type === 'effort' ? `<small>${esc(t('Valore in ore'))}</small>` : ''}</label>`;
   }).join('')}</div></section>`;
@@ -1725,8 +1785,9 @@ function renderIssues() {
       const identical = identicalIds.has(i.id) ? `<span class="dup-note" title="${esc(t('Stesso codice portale, incident e problem di un’altra associazione.'))}">${esc(t('identica'))}</span>` : '';
       const incident = group ? `<button type="button" class="dup-ref" data-dup-issue="${esc(group.incident)}" title="${esc(issueDuplicateLine(i.id, group) + '\n' + t('Clic per vedere solo le associazioni coinvolte.'))}">⧉ ${esc(i.incident)}</button>${identical}` : esc(i.incident) || '—';
       const cells = { code: `<td><button class="code-link" data-issue="${i.id}">${esc(i.code)}</button></td>`, incident: `<td>${incident}</td>`, problem: `<td>${pill(i.problem || '—', '#9d8de8')}</td>`, linked: `<td><span class="${count ? 'linked' : 'muted'}">${count ? ui`↗ ${count} attività collegate` : t('In attesa di attività')}</span></td>` };
-      return ui`<tr data-issue-row="${esc(i.id)}" class="${group ? 'duplicate-row' : ''}" title="Doppio clic sulla riga per modificare.">${columns.map(id => cells[id] || customCell(i, columnDef(id, 'issues').field)).join('')}<td><button class="button small" data-issue="${i.id}">Modifica</button></td></tr>`;
+      return ui`<tr data-issue-row="${esc(i.id)}" class="${group ? 'duplicate-row' : ''}" title="Doppio clic sulla riga per modificare.">${columns.map(id => cells[id] || customCell(i, columnDef(id, 'issues').field, 'issues')).join('')}<td><button class="button small" data-issue="${i.id}">Modifica</button></td></tr>`;
     }).join('') || ui`<tr><td colspan="${columns.length + 1}" class="empty">Nessuna associazione. Aggiungi un codice portale con incident e/o problem.</td></tr>`;
+    wireChoicePickers();
     document.querySelectorAll('[data-issue]').forEach(b => b.onclick = () => issueDialog(data.issues.find(i => i.id === b.dataset.issue)));
     document.querySelectorAll('#issue-rows [data-dup-issue]').forEach(b => b.onclick = () => {
       $('#issue-search').value = b.dataset.dupIssue;
@@ -1885,6 +1946,10 @@ function customSpreadsheetCell(record, field, style) {
   if (field.type === 'date') return { v: value, type: 'date', style: { ...style, fill: tint(dateColor(value), 0.5) } };
   if (field.type === 'url') return { v: value, link: value, style };
   if (['number', 'effort'].includes(field.type)) return { v: value, type: 'number', style };
+  if (field.type === 'select') {
+    const option = CustomColumns.choices(field).find(option => option.id === value);
+    return { v: option?.name || '', style: { ...style, ...(option && { fill: tint(option.color, 0.35) }) } };
+  }
   return { v: field.type === 'richtext' ? richText(value) : customText(value, field), style: { ...style, wrap: true } };
 }
 async function situationWorkbook(options, now = new Date()) {
@@ -2236,23 +2301,37 @@ function restoreDailyBackup(fileName) {
 function customColumnsPanel() {
   return `<section class="panel settings-section" id="custom-columns-panel"><h2>${esc(t('Colonne personalizzate'))}</h2><p class="section-description">${esc(t('Fino a 30 colonne per lista. Il tipo si sceglie alla creazione; nome, opzioni e ordine restano modificabili. Salvare le impostazioni per applicare.'))}</p>${['tasks', 'issues'].map((kind, index) => `<section class="custom-schema"><h3>${esc(data.settings.tabNames[index])}</h3><div id="custom-definitions-${kind}"></div><form class="custom-add-form" data-add-field="${kind}"><label class="field">${esc(t('Nome colonna'))}<input name="name" maxlength="60" required></label><label class="field">${esc(t('Tipo'))}<select name="type">${Object.entries(fieldTypeNames).map(([type, name]) => `<option value="${type}">${esc(t(name))}</option>`).join('')}</select></label><button type="submit" class="button">${esc(t('Aggiungi colonna'))}</button></form></section>`).join('')}<h3>${esc(t('Colonne visibili nelle issue'))}</h3><div id="issue-columns-editor"></div></section>`;
 }
+function refreshChoiceSettings() {
+  let panels = $('#choice-settings-panels');
+  if (!panels) { panels = document.createElement('div'); panels.id = 'choice-settings-panels'; $('.settings-panels').append(panels); }
+  panels.innerHTML = choiceSettingsTabs().map(tab => `<section class="panel settings-section" id="${tab.panel}"><h2>${esc(tab.field.name)}</h2><p class="section-description">${esc(t('Gestisci etichette, colori e ordine come nei Tags. Le etichette eliminate vengono rimosse dalle righe solo al salvataggio.'))}</p><div id="${tab.id}-list"></div><button type="button" class="button" data-add-choice="${tab.id}">+ ${esc(t('Aggiungi etichetta'))}</button></section>`).join('');
+  $('.settings-nav').outerHTML = settingsNav();
+  document.querySelectorAll('[data-add-choice]').forEach(button => button.onclick = () => {
+    const list = optionCatalog(button.dataset.addChoice);
+    if (list.length >= 100) { notify('Opzioni della colonna non valide.', true); return; }
+    let index = 1;
+    while (list.some(option => option.name.trim().toLocaleLowerCase() === `${t('Opzione')} ${index}`.toLocaleLowerCase())) index++;
+    list.push({ id: uid(), name: `${t('Opzione')} ${index}`, color: '#a392ff' });
+    drawOptionLists(); refreshSettingsState();
+  });
+  drawOptionLists(); showSettingsTab(settingsTab); refreshSettingsState();
+}
 function wireCustomColumns() {
   const syncColumns = () => {
     settingsDraft.taskColumns = normalizeTaskColumns(settingsDraft.taskColumns, settingsDraft.taskFields);
     settingsDraft.issueColumns = CustomColumns.normalizeIssueColumns(settingsDraft.issueColumns, settingsDraft.issueFields);
     columnEditor($('#columns-editor'), settingsDraft.taskColumns, 'tasks', settingsDraft);
     columnEditor($('#issue-columns-editor'), settingsDraft.issueColumns, 'issues', settingsDraft);
+    refreshChoiceSettings();
     refreshSettingsState();
   };
   for (const kind of ['tasks', 'issues']) {
     const key = kind === 'tasks' ? 'taskFields' : 'issueFields', columnKey = kind === 'tasks' ? 'taskColumns' : 'issueColumns', container = $(`#custom-definitions-${kind}`);
     const draw = () => {
-      container.innerHTML = settingsDraft[key].map(field => `<article class="custom-definition" data-field-id="${field.id}">${dragHandle(field.name)}<div class="custom-definition-fields"><label class="field">${esc(t('Nome colonna'))}<input data-field-name maxlength="60" value="${esc(field.name)}"></label><span class="muted">${esc(t(fieldTypeNames[field.type]))}</span>${['select', 'multiselect'].includes(field.type) ? `<label class="field">${esc(t('Opzioni, una per riga'))}<textarea data-field-options rows="3">${esc(field.options.join('\n'))}</textarea></label>` : ''}</div><button type="button" class="button small danger" data-delete-field>${esc(t('Elimina'))}</button></article>`).join('');
+      container.innerHTML = settingsDraft[key].map(field => `<article class="custom-definition" data-field-id="${field.id}">${dragHandle(field.name)}<div class="custom-definition-fields"><label class="field">${esc(t('Nome colonna'))}<input data-field-name maxlength="60" value="${esc(field.name)}"></label><span class="muted">${esc(t(fieldTypeNames[field.type]))}</span>${['select', 'multiselect'].includes(field.type) ? `<button type="button" class="button small" data-goto-settings-tab="choice-${kind}-${field.id}">${esc(t('Gestisci etichette e colori'))}</button>` : ''}</div><button type="button" class="button small danger" data-delete-field>${esc(t('Elimina'))}</button></article>`).join('');
       container.querySelectorAll('[data-field-id]').forEach(row => {
         const field = settingsDraft[key].find(field => field.id === row.dataset.fieldId);
         row.querySelector('[data-field-name]').oninput = event => { field.name = event.target.value; syncColumns(); };
-        const options = row.querySelector('[data-field-options]');
-        if (options) options.oninput = () => { field.options = options.value.split(/\r?\n/).map(value => value.trim()).filter(Boolean); refreshSettingsState(); };
         row.querySelector('[data-delete-field]').onclick = () => confirmDialog('Eliminare la colonna personalizzata?', t('I valori della colonna verranno eliminati al salvataggio delle impostazioni.') + ` (${field.name})`, async () => {
           settingsDraft[key] = settingsDraft[key].filter(item => item.id !== field.id);
           settingsDraft[columnKey] = settingsDraft[columnKey].filter(column => column.id !== field.id);
@@ -2271,13 +2350,14 @@ function wireCustomColumns() {
     form.onsubmit = action(event => {
       event.preventDefault();
       const fields = new FormData(form), type = fields.get('type');
-      const field = { id: `custom-${uid()}`, name: fields.get('name').trim(), type, options: ['select', 'multiselect'].includes(type) ? [`${t('Opzione')} 1`] : [] };
+      const field = { id: `custom-${uid()}`, name: fields.get('name').trim(), type, options: ['select', 'multiselect'].includes(type) ? [{ id: uid(), name: `${t('Opzione')} 1`, color: '#a392ff' }] : [] };
       CustomColumns.validateFields([...settingsDraft[key], field]);
       settingsDraft[key].push(field); form.reset(); draw(); syncColumns();
     });
     draw();
   }
   columnEditor($('#issue-columns-editor'), settingsDraft.issueColumns, 'issues', settingsDraft);
+  refreshChoiceSettings();
 }
 function renderSettings() {
   settingsDraft = structuredClone(data.settings);
@@ -2480,29 +2560,44 @@ async function processLogo(file) {
   } finally { bitmap.close(); }
 }
 const highlightPalette = ['#f2c94c', '#f0647a', '#5aa9f6', '#4fcf8f', '#b18cff', '#ff9f5a', '#3fd0c9', '#ff7ac6', '#9ccc65', '#7986cb', '#e57373', '#4db6ac', '#ffd54f', '#ba68c8', '#90a4ae', '#a1887f'];
+function optionCatalog(key) {
+  const custom = choiceSettingsTabs().find(tab => tab.id === key);
+  return custom ? custom.field.options : settingsDraft[key];
+}
+function setOptionCatalog(key, list) {
+  const custom = choiceSettingsTabs().find(tab => tab.id === key);
+  if (custom) custom.field.options = list; else settingsDraft[key] = list;
+}
 function drawOptionLists() {
-  for (const key of ['statuses', 'urgencies', 'highlights', 'tags']) {
-    const optional = key === 'highlights' || key === 'tags';
-    const usage = id => `<span class="option-usage" title="${esc(t(key === 'tags' ? 'Attività con questo tag' : 'Righe con questo colore'))}">${esc(plural(data.tasks.filter(task => key === 'tags' ? task.tagIds?.includes(id) : task.highlightId === id).length, 'attività'))}</span>`;
-    document.getElementById(`${key}-list`).innerHTML = settingsDraft[key].map((item, index) => ui`<div class="option-row">${dragHandle(item.name)}<span class="order-number">${String(index + 1).padStart(2, '0')}</span><input type="color" aria-label="Colore ${esc(item.name)}" data-color="${key}:${esc(item.id)}" value="${item.color}"><input class="option-name" aria-label="Nome opzione" ${optional ? 'maxlength="60"' : ''} data-option-name="${key}:${esc(item.id)}" value="${esc(item.name)}">${optional ? usage(item.id) : ''}${key === 'statuses' ? ui`<button class="icon-button star ${item.highlight ? 'selected' : ''}" data-highlight="${esc(item.id)}" title="Evidenzia le attività con questo stato" aria-pressed="${item.highlight}">★</button>` : ''}<button class="icon-button" data-move="${key}:${esc(item.id)}:-1" ${index === 0 ? 'disabled' : ''} title="Sposta su">↑</button><button class="icon-button" data-move="${key}:${esc(item.id)}:1" ${index === settingsDraft[key].length - 1 ? 'disabled' : ''} title="Sposta giù">↓</button><button class="icon-button delete-option" data-remove="${key}:${esc(item.id)}" title="Elimina opzione">×</button></div>`).join('') || (optional ? `<p class="muted option-empty">${esc(t(key === 'tags' ? 'Nessun tag: aggiungine uno per classificare le attività.' : 'Nessun colore: aggiungine uno per usare l’evidenziatore.'))}</p>` : '');
+  for (const key of ['statuses', 'urgencies', 'highlights', 'tags', ...choiceSettingsTabs().map(tab => tab.id)]) {
+    const custom = choiceSettingsTabs().find(tab => tab.id === key), list = optionCatalog(key);
+    if (!document.getElementById(`${key}-list`)) continue;
+    const optional = custom || key === 'highlights' || key === 'tags';
+    const usage = id => {
+      const count = custom ? data[custom.kind].filter(row => { const value = row.customFields?.[custom.field.id]; return Array.isArray(value) ? value.includes(id) : value === id; }).length : data.tasks.filter(task => key === 'tags' ? task.tagIds?.includes(id) : task.highlightId === id).length;
+      return `<span class="option-usage" title="${esc(t(custom ? 'Righe con questa etichetta' : key === 'tags' ? 'Attività con questo tag' : 'Righe con questo colore'))}">${custom ? count : esc(plural(count, 'attività'))}</span>`;
+    };
+    document.getElementById(`${key}-list`).innerHTML = list.map((item, index) => ui`<div class="option-row">${dragHandle(item.name)}<span class="order-number">${String(index + 1).padStart(2, '0')}</span><input type="color" aria-label="Colore ${esc(item.name)}" data-color="${key}:${esc(item.id)}" value="${item.color}"><input class="option-name" aria-label="Nome opzione" ${optional ? 'maxlength="60"' : ''} data-option-name="${key}:${esc(item.id)}" value="${esc(item.name)}">${optional ? usage(item.id) : ''}${key === 'statuses' ? ui`<button class="icon-button star ${item.highlight ? 'selected' : ''}" data-highlight="${esc(item.id)}" title="Evidenzia le attività con questo stato" aria-pressed="${item.highlight}">★</button>` : ''}<button class="icon-button" data-move="${key}:${esc(item.id)}:-1" ${index === 0 ? 'disabled' : ''} title="Sposta su">↑</button><button class="icon-button" data-move="${key}:${esc(item.id)}:1" ${index === list.length - 1 ? 'disabled' : ''} title="Sposta giù">↓</button><button class="icon-button delete-option" data-remove="${key}:${esc(item.id)}" title="Elimina opzione">×</button></div>`).join('') || (optional ? `<p class="muted option-empty">${esc(t(custom ? 'Nessuna etichetta. Aggiungine una per iniziare.' : key === 'tags' ? 'Nessun tag: aggiungine uno per classificare le attività.' : 'Nessun colore: aggiungine uno per usare l’evidenziatore.'))}</p>` : '');
     const add = document.querySelector(`[data-add-option="${key}"]`);
     if (optional && add) add.disabled = settingsDraft[key].length >= (key === 'tags' ? TAG_LIMIT : HIGHLIGHT_LIMIT);
-    sortable(document.getElementById(`${key}-list`), '.option-row', (from, to) => { const list = settingsDraft[key]; list.splice(to, 0, ...list.splice(from, 1)); drawOptionLists(); });
+    const choiceAdd = document.querySelector(`[data-add-choice="${key}"]`);
+    if (choiceAdd) choiceAdd.disabled = list.length >= 100;
+    sortable(document.getElementById(`${key}-list`), '.option-row', (from, to) => { list.splice(to, 0, ...list.splice(from, 1)); drawOptionLists(); refreshSettingsState(); });
   }
   function optionId(value) { const [key, ...parts] = value.split(':'); return [key, parts.join(':')]; }
-  function itemAt(value) { const [key, id] = optionId(value); return settingsDraft[key].find(x => x.id === id); }
+  function itemAt(value) { const [key, id] = optionId(value); return optionCatalog(key).find(x => x.id === id); }
   document.querySelectorAll('[data-color]').forEach(input => input.oninput = () => { itemAt(input.dataset.color).color = input.value; });
   document.querySelectorAll('[data-option-name]').forEach(input => input.oninput = () => { itemAt(input.dataset.optionName).name = input.value; });
   document.querySelectorAll('[data-highlight]').forEach(b => b.onclick = () => {
     const item = settingsDraft.statuses.find(s => s.id === b.dataset.highlight); item.highlight = !item.highlight; drawOptionLists();
   });
   document.querySelectorAll('[data-move]').forEach(b => b.onclick = () => {
-    const parts = b.dataset.move.split(':'), key = parts.shift(), offset = parts.pop(), id = parts.join(':'), list = settingsDraft[key], index = list.findIndex(x => x.id === id);
-    [list[index], list[index + Number(offset)]] = [list[index + Number(offset)], list[index]]; drawOptionLists();
+    const parts = b.dataset.move.split(':'), key = parts.shift(), offset = parts.pop(), id = parts.join(':'), list = optionCatalog(key), index = list.findIndex(x => x.id === id);
+    [list[index], list[index + Number(offset)]] = [list[index + Number(offset)], list[index]]; drawOptionLists(); refreshSettingsState();
   });
   document.querySelectorAll('[data-remove]').forEach(b => b.onclick = () => {
     const [key, id] = optionId(b.dataset.remove);
-    if (key === 'highlights' || key === 'tags') { settingsDraft[key] = settingsDraft[key].filter(x => x.id !== id); drawOptionLists(); return; }
+    if (key === 'highlights' || key === 'tags' || key.startsWith('choice-')) { setOptionCatalog(key, optionCatalog(key).filter(x => x.id !== id)); drawOptionLists(); refreshSettingsState(); return; }
     const field = key === 'statuses' ? 'statusId' : 'urgencyId';
     if (settingsDraft[key].length === 1) { notify('Deve restare almeno un’opzione.', true); return; }
     if (data.tasks.some(t => t[field] === id)) { notify('Questa opzione è usata da alcune attività, anche nascoste. Riassegnale prima di eliminarla.', true); return; }
@@ -2696,25 +2791,33 @@ window.runSmokeTests = async () => {
     view = 4; render(); showSettingsTab('custom-columns');
     check(!$('#custom-columns-panel').hidden && document.querySelectorAll('[data-add-field]').length === 2, 'Impostazioni con schemi separati per attività e issue');
     for (const kind of ['tasks', 'issues']) {
-      for (const type of kind === 'tasks' ? CustomColumns.TYPES : ['text', 'select', 'boolean']) {
+      for (const type of kind === 'tasks' ? CustomColumns.TYPES : ['text', 'select', 'boolean', 'multiselect']) {
         const add = $(`[data-add-field="${kind}"]`);
         add.elements.name.value = `Smoke ${kind} ${type}`; add.elements.type.value = type;
         add.requestSubmit(); await tick();
         const field = settingsDraft[kind === 'tasks' ? 'taskFields' : 'issueFields'].at(-1);
-        const options = $(`[data-field-id="${field.id}"] [data-field-options]`);
-        if (options) { options.value = 'Uno\nDue'; options.dispatchEvent(new Event('input', { bubbles: true })); }
+        if (['select', 'multiselect'].includes(type)) {
+          const key = `choice-${kind}-${field.id}`;
+          $(`[data-add-choice="${key}"]`).click();
+          const inputs = [...document.querySelectorAll(`#${key}-list [data-option-name]`)];
+          inputs.forEach((input, index) => { input.value = ['Uno', 'Due'][index]; input.dispatchEvent(new Event('input', { bubbles: true })); });
+        }
       }
     }
-    check(settingsDraft.taskFields.length === 9 && settingsDraft.issueFields.length === 3 && !$('#unsaved-banner').hidden && document.querySelectorAll('.custom-definition select').length === 0, 'Aggiunta dei nove tipi con tipo immutabile e impostazioni ancora non salvate');
+    check(settingsDraft.taskFields.length === 9 && settingsDraft.issueFields.length === 4 && !$('#unsaved-banner').hidden && document.querySelectorAll('.custom-definition select').length === 0, 'Aggiunta dei nove tipi con tipo immutabile e impostazioni ancora non salvate');
+    check(choiceSettingsTabs().length === 4 && document.querySelectorAll('#choice-settings-panels .option-row').length === 8, 'Una sezione dinamica di etichette e colori per ogni colonna a scelta');
     $('#save-settings').click();
     await waitFor(() => !saving && data.settings.taskFields.length === 9);
     const taskFields = Object.fromEntries(data.settings.taskFields.map(field => [field.type, field]));
     const issueFields = Object.fromEntries(data.settings.issueFields.map(field => [field.type, field]));
-    check((await workspaceApi.load()).data.settings.issueFields.length === 3 && data.settings.taskColumns.some(column => column.id === taskFields.number.id), 'Schemi e colonne predefinite persistiti nell’archivio');
+    check((await workspaceApi.load()).data.settings.issueFields.length === 4 && data.settings.taskColumns.some(column => column.id === taskFields.number.id), 'Schemi e colonne predefinite persistiti nell’archivio');
     view = 0; render(); taskDialog(data.tasks.find(task => task.id === editedId));
-    const form = $('#task-form'), values = { text: 'Needle custom text '.repeat(40), number: '17.5', date: '2028-02-29', select: 'Due', url: 'https://example.com/custom', effort: '1.25', boolean: 'false' };
+    const form = $('#task-form'), values = { text: 'Needle custom text '.repeat(40), number: '17.5', date: '2028-02-29', select: taskFields.select.options[1].id, url: 'https://example.com/custom', effort: '1.25', boolean: 'false' };
     for (const [type, value] of Object.entries(values)) form.elements[taskFields[type].id].value = value;
-    for (const option of form.elements[taskFields.multiselect.id].options) option.selected = true;
+    form.querySelector('[data-choice-picker]').click();
+    document.querySelectorAll('#tag-menu input').forEach(input => { input.checked = true; });
+    $('#tag-menu').requestSubmit(); await waitFor(() => !$('#tag-menu'));
+    check(!form.querySelector('select[multiple]') && form.querySelectorAll('.tag-pill').length === 2 && $('#modal').open, 'Scelta multipla nella scheda con dropdown e pillole colorate, senza lista nativa');
     $(`#editor-${taskFields.richtext.id}`).innerHTML = '<p>Needle custom <strong>rich</strong></p>';
     form.requestSubmit();
     await waitFor(() => !saving && !$('#modal').open);
@@ -2769,7 +2872,7 @@ window.runSmokeTests = async () => {
     $('#issue-form').requestSubmit(); await waitFor(() => !saving && !$('#modal').open);
     check(data.issues.find(issue => issue.id === csvIssue.id).customFields[issueFields.boolean.id] === false, 'Editor issue conserva le scelte importate e salva altri campi personalizzati');
     columnFilterDialog(issueFields.select.id, 'issues');
-    $('#column-filter-form input[value="Due"]').checked = true;
+    $('#column-filter-form').querySelector(`input[value="${issueFields.select.options[1].id}"]`).checked = true;
     $('#column-filter-form').requestSubmit(); await tick();
     await setColumnFilter('linked', 'issues', { min: '1' });
     check(filteredIssues().length === 1 && document.querySelectorAll('#issue-rows [data-issue]').length === 2, 'Filtri issue combinano scelta personalizzata e conteggio attività collegate');
@@ -2782,7 +2885,32 @@ window.runSmokeTests = async () => {
     $('#columns-apply').click(); await waitFor(() => !saving && !$('#modal').open);
     const visibleBook = await unzipParts(await situationWorkbook({ scope: 'view', columns: 'visible', sheets: ['issues'] }));
     check(!visibleBook.get('xl/sharedStrings.xml').includes(issueFields.select.name) && $('.column-filter-bar').textContent.includes(issueFields.select.name), 'Colonna issue nascosta esclusa da Excel ma filtro ancora visibile e rimovibile');
+    const issuePicker = document.querySelector(`#issue-rows [data-choice-field="${issueFields.multiselect.id}"]`);
+    issuePicker.click();
+    $('#tag-menu input').checked = true; $('#tag-menu').requestSubmit();
+    await waitFor(() => !saving && !$('#tag-menu'));
+    check(data.issues.find(issue => issue.id === csvIssue.id).customFields[issueFields.multiselect.id].length === 1 && !$('#modal').open, 'Dropdown multiselezione direttamente nella tabella issue, con salvataggio');
     view = 4; render(); showSettingsTab('custom-columns');
+    const optionKey = `choice-tasks-${taskFields.multiselect.id}`, chosenId = taskFields.multiselect.options[0].id;
+    showSettingsTab(optionKey);
+    const labelInput = document.querySelector(`#${optionKey}-list [data-option-name]`), colorInput = document.querySelector(`#${optionKey}-list [data-color]`);
+    labelInput.value = 'Etichetta rinominata'; labelInput.dispatchEvent(new Event('input', { bubbles: true }));
+    colorInput.value = '#12ab34'; colorInput.dispatchEvent(new Event('input', { bubbles: true }));
+    $(`#${optionKey}-list [data-move="${optionKey}:${chosenId}:1"]`).click();
+    $('#save-settings').click(); await waitFor(() => !saving && data.settings.taskFields.find(field => field.id === taskFields.multiselect.id).options[1].name === 'Etichetta rinominata');
+    check(edited().customFields[taskFields.multiselect.id].includes(chosenId) && customText([chosenId], data.settings.taskFields.find(field => field.id === taskFields.multiselect.id)) === 'Etichetta rinominata', 'Rinomina, colore e riordino preservano le assegnazioni grazie a identificativi stabili');
+    view = 0; columnFilters.tasks = {}; render();
+    const picker = document.querySelector(`[data-task-row="${editedId}"] [data-choice-field="${taskFields.multiselect.id}"]`);
+    check(picker.textContent.includes('Etichetta rinominata') && picker.querySelectorAll('.tag-pill')[1].style.getPropertyValue('--pill') === '#12ab34', 'Etichette e colori del catalogo aggiornati nelle pillole della tabella');
+    picker.click(); $('#tag-menu input').checked = false; $('#tag-menu').requestSubmit();
+    await waitFor(() => !saving && !$('#tag-menu'));
+    check(edited().customFields[taskFields.multiselect.id].length === 1 && !$('#modal').open, 'Dropdown multiselezione direttamente nella lista attività');
+    view = 4; render(); showSettingsTab(optionKey);
+    $(`#${optionKey}-list [data-remove="${optionKey}:${chosenId}"]`).click();
+    check(edited().customFields[taskFields.multiselect.id].includes(chosenId), 'Rimozione etichetta ancora reversibile prima del salvataggio');
+    $('#save-settings').click(); await waitFor(() => !saving && !edited().customFields[taskFields.multiselect.id].includes(chosenId));
+    check(data.settings.taskFields.find(field => field.id === taskFields.multiselect.id).options.length === 1, 'Eliminazione etichetta pulisce i valori solo al salvataggio');
+    showSettingsTab('custom-columns');
     $(`[data-field-id="${taskFields.number.id}"] [data-delete-field]`).click();
     $('#confirm-action').click(); await waitFor(() => !$('#modal').open);
     check(edited().customFields[taskFields.number.id] === 17.5, 'Eliminazione colonna richiede conferma e non cancella dati prima di salvare');

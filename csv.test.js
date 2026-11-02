@@ -111,3 +111,12 @@ test('invalid mappings and missing data are explicitly rejected', () => {
   assert.throws(() => C.prepareImport(data, 'tasks', [], ['code']));
   assert.throws(() => C.prepareImport(data, 'tasks', Array.from({ length: C.MAX_ROWS + 1 }, () => ['A']), ['code']));
 });
+test('CSV matches colored choices by label or stable id after a rename', () => {
+  const data = baseData();
+  data.settings.taskFields = [{ id: 'custom-team', name: 'Team', type: 'multiselect', options: [{ id: 'stable', name: 'New label', color: '#123456' }] }];
+  for (const input of ['New label', 'stable']) {
+    const result = C.prepareImport(data, 'tasks', [['A', input]], ['code', 'custom-team']);
+    assert.equal(result.errorCount, 0);
+    assert.deepEqual(result.records[0].customFields['custom-team'], ['stable']);
+  }
+});

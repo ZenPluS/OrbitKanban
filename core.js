@@ -343,6 +343,7 @@ function validateArchive(archive) {
     organization.data.settings.savedViews ??= [];
     organization.data.settings.taskFields ??= [];
     organization.data.settings.issueFields ??= [];
+    for (const kind of ['tasks', 'issues']) for (const field of columns.fieldsOf(organization.data.settings, kind)) field.options = columns.choices(field);
     organization.data.settings.issueColumns = columns.normalizeIssueColumns(organization.data.settings.issueColumns, organization.data.settings.issueFields);
     normalizeThemes(organization.data.settings);
     normalizeHighlights(organization.data);
@@ -535,17 +536,17 @@ function colorOptionRemapper(source, target, add = false, { limit = HIGHLIGHT_LI
 const tagRemapper = (source, target, add = false) => colorOptionRemapper(source, target, add, { limit: TAG_LIMIT, matchName: true, overflow: 'Troppi tag: riduci il catalogo prima di importare.' });
 function applyOrganizationImport(current, file, options = {}) {
   const next = structuredClone(current), settings = next.settings;
-  const importFields = source => Object.fromEntries(['tasks', 'issues'].map(kind => {
+  const importFields = (source, preferIncoming = false) => Object.fromEntries(['tasks', 'issues'].map(kind => {
     const key = kind === 'tasks' ? 'taskFields' : 'issueFields';
-    const merged = columns.mergeFields(settings[key] || [], source[key] || []);
+    const merged = columns.mergeFields(settings[key] || [], source[key] || [], preferIncoming);
     settings[key] = merged.fields;
-    return [kind, merged.mapping];
+    return [kind, merged];
   }));
   const wanted = part => Boolean(options[part] && file[part]);
   assert(['themes', 'settings', 'data'].some(wanted), 'Seleziona almeno una parte da importare.');
   if (wanted('settings')) {
     const incoming = structuredClone(file.settings);
-    const maps = importFields(incoming);
+    const maps = importFields(incoming, true);
     const remapColumns = (list, map) => list.map(column => ({ ...column, id: map.get(column.id) || column.id }));
     const status = optionRemapper(settings.statuses, incoming.statuses), urgency = optionRemapper(settings.urgencies, incoming.urgencies);
     for (const task of next.tasks) { task.statusId = status(task.statusId); task.urgencyId = urgency(task.urgencyId); }
@@ -561,11 +562,11 @@ function applyOrganizationImport(current, file, options = {}) {
       for (const task of next.tasks) task.tagIds = [...new Set((task.tagIds || []).map(tag).filter(Boolean))];
       settings.tags = incoming.tags;
     }
-    if (incoming.taskColumns) settings.taskColumns = normalizeTaskColumns(remapColumns(incoming.taskColumns, maps.tasks), settings.taskFields);
-    if (incoming.issueColumns) settings.issueColumns = columns.normalizeIssueColumns(remapColumns(incoming.issueColumns, maps.issues), settings.issueFields);
+    if (incoming.taskColumns) settings.taskColumns = normalizeTaskColumns(remapColumns(incoming.taskColumns, maps.tasks.mapping), settings.taskFields);
+    if (incoming.issueColumns) settings.issueColumns = columns.normalizeIssueColumns(remapColumns(incoming.issueColumns, maps.issues.mapping), settings.issueFields);
     if (incoming.savedViews) settings.savedViews = incoming.savedViews.map(view => ({
-      ...view, columns: remapColumns(view.columns, maps.tasks), sort: view.sort.map(item => ({ ...item, key: maps.tasks.get(item.key) || item.key })),
-      ...(view.columnFilters && { columnFilters: columns.remapValues(view.columnFilters, maps.tasks) })
+      ...view, columns: remapColumns(view.columns, maps.tasks.mapping), sort: view.sort.map(item => ({ ...item, key: maps.tasks.mapping.get(item.key) || item.key })),
+      ...(view.columnFilters && { columnFilters: columns.remapValues(view.columnFilters, maps.tasks.mapping, maps.tasks.valueMappings, true) })
     }));
     if (options.logo) settings.logo = incoming.logo;
   }
@@ -592,9 +593,9 @@ function applyOrganizationImport(current, file, options = {}) {
       ...task, statusId: status(task.statusId), urgencyId: urgency(task.urgencyId),
       highlightId: task.highlightId === undefined ? existing.get(task.id) || '' : highlight(task.highlightId),
       tagIds: task.tagIds === undefined ? existingTags.get(task.id) || [] : [...new Set(task.tagIds.map(tag).filter(Boolean))],
-      ...(task.customFields !== undefined || oldTasks.get(task.id) !== undefined ? { customFields: { ...(oldTasks.get(task.id) || {}), ...columns.remapValues(task.customFields, maps.tasks) } } : {})
+      ...(task.customFields !== undefined || oldTasks.get(task.id) !== undefined ? { customFields: { ...(oldTasks.get(task.id) || {}), ...columns.remapValues(task.customFields, maps.tasks.mapping, maps.tasks.valueMappings) } } : {})
     }));
-    const issues = structuredClone(file.data.issues).map(issue => ({ ...issue, ...(issue.customFields !== undefined || oldIssues.get(issue.id) !== undefined ? { customFields: { ...(oldIssues.get(issue.id) || {}), ...columns.remapValues(issue.customFields, maps.issues) } } : {}) }));
+    const issues = structuredClone(file.data.issues).map(issue => ({ ...issue, ...(issue.customFields !== undefined || oldIssues.get(issue.id) !== undefined ? { customFields: { ...(oldIssues.get(issue.id) || {}), ...columns.remapValues(issue.customFields, maps.issues.mapping, maps.issues.valueMappings) } } : {}) }));
     if (options.dataMode === 'replace') { next.tasks = tasks; next.issues = issues; }
     else {
       const triple = issue => [issue.code, issue.incident, issue.problem].map(value => value.trim().toUpperCase()).join('\u0000');

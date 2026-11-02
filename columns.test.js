@@ -20,7 +20,8 @@ test('invalid field names, identifiers, options and excessive schemas are reject
   assert.throws(() => C.validateFields([field('text'), { ...field('number'), name: 'TEXT' }]));
   assert.throws(() => C.validateFields([{ ...field('text'), id: '__proto__' }]));
   assert.throws(() => C.validateFields([{ ...field('select'), options: ['Uno', 'uno'] }]));
-  assert.throws(() => C.validateFields([{ ...field('select'), options: [] }]));
+  C.validateFields([{ ...field('select'), options: [] }]);
+  assert.throws(() => C.validateFields([{ ...field('select'), options: [{ id: 'a', name: 'A', color: 'bad' }] }]));
   assert.throws(() => C.validateFields(Array.from({ length: 31 }, (_, i) => ({ ...field('text'), id: `custom-${i}`, name: String(i) }))));
 });
 test('old archives get empty custom schemas and all built-in issue columns', () => {
@@ -93,4 +94,39 @@ test('malformed custom schemas and removal of still-used options are rejected', 
   const file = organizationExport({ name: 'Invalid', data: baseData() }, 'data');
   file.data.taskFields = null;
   assert.throws(() => parseOrganizationFile(file), /colonne personalizzate/);
+});
+test('legacy choice labels migrate to stable ids without losing assignments', () => {
+  const data = baseData();
+  data.settings.taskFields = [field('multiselect')];
+  data.tasks = [{ ...task(data), customFields: { 'custom-multiselect': ['Uno', 'Due'] } }];
+  const migrated = migrateArchive(data).organizations[0].data;
+  assert.deepEqual(migrated.settings.taskFields[0].options, [
+    { id: 'Uno', name: 'Uno', color: '#a392ff' }, { id: 'Due', name: 'Due', color: '#a392ff' }
+  ]);
+  migrated.settings.taskFields[0].options[0].name = 'Renamed';
+  migrated.settings.taskFields[0].options[0].color = '#123456';
+  validateData(migrated);
+  assert.deepEqual(migrated.tasks[0].customFields['custom-multiselect'], ['Uno', 'Due']);
+});
+test('colored choice schemas, values and saved filters roundtrip and remap option identifiers', () => {
+  const source = baseData(), target = baseData();
+  source.settings.taskFields = [{ ...field('multiselect'), options: [{ id: 'source-id', name: 'Team', color: '#123456' }] }];
+  source.tasks = [{ ...task(source), customFields: { 'custom-multiselect': ['source-id'] } }];
+  source.settings.savedViews = [{ id: 'view', name: 'View', search: '', statusFilter: '', highlightFilter: '', showHidden: false, duplicatesOnly: false, sort: [{ key: 'sequence', direction: 'asc' }], columns: normalizeTaskColumns(undefined, source.settings.taskFields), columnFilters: { 'custom-multiselect': { ...C.emptyFilter(), values: ['source-id'] } } }];
+  target.settings.taskFields = [{ ...field('multiselect'), options: [{ id: 'target-id', name: 'Team', color: '#abcdef' }] }];
+  const incoming = parseOrganizationFile(organizationExport({ name: 'Source', data: source }, 'organization'));
+  const imported = applyOrganizationImport(target, incoming, { settings: true, data: true });
+  assert.deepEqual(imported.tasks[0].customFields['custom-multiselect'], ['target-id']);
+  assert.deepEqual(imported.settings.savedViews[0].columnFilters['custom-multiselect'].values, ['target-id']);
+  assert.equal(imported.settings.taskFields[0].options[0].color, '#123456');
+  const again = applyOrganizationImport(imported, incoming, { settings: true, data: true });
+  assert.deepEqual(again, imported);
+  const renamed = structuredClone(source);
+  renamed.settings.taskFields[0].options[0].name = 'New team';
+  const updated = applyOrganizationImport(source, parseOrganizationFile(organizationExport({ name: 'Source', data: renamed }, 'settings')), { settings: true });
+  assert.equal(updated.settings.taskFields[0].options[0].name, 'New team');
+  assert.deepEqual(updated.tasks[0].customFields['custom-multiselect'], ['source-id']);
+  const collision = C.mergeFields([{ ...field('multiselect'), options: [{ id: 'source-id', name: 'Other', color: '#abcdef' }] }], source.settings.taskFields);
+  assert.notEqual(collision.valueMappings.get('custom-multiselect').get('source-id'), 'source-id');
+  assert.equal(collision.fields[0].options[0].name, 'Other');
 });

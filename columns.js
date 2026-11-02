@@ -7,6 +7,7 @@ const assert = (condition, message) => { if (!condition) throw new Error(message
 const key = value => value.trim().toLocaleLowerCase();
 const fieldsOf = (settings, kind) => settings[kind === 'tasks' ? 'taskFields' : 'issueFields'] === undefined ? [] : settings[kind === 'tasks' ? 'taskFields' : 'issueFields'];
 const validDate = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
+const choices = field => field.options.map(option => typeof option === 'string' ? { id: option, name: option, color: '#a392ff' } : { ...option });
 function validateFields(fields) {
   assert(Array.isArray(fields) && fields.length <= FIELD_LIMIT, 'Elenco colonne personalizzate non valido.');
   const ids = new Set(), names = new Set();
@@ -14,21 +15,23 @@ function validateFields(fields) {
     assert(field && /^custom-[a-z0-9-]{1,80}$/i.test(field.id) && typeof field.name === 'string' && field.name.trim() && field.name.length <= 60 && TYPES.includes(field.type), 'Colonna personalizzata non valida.');
     assert(!ids.has(field.id) && !names.has(key(field.name)), 'Nomi e identificativi delle colonne devono essere univoci.');
     ids.add(field.id); names.add(key(field.name));
-    assert(Array.isArray(field.options) && field.options.length <= 100 && field.options.every(option => typeof option === 'string' && option.trim() && option.length <= 60) && new Set(field.options.map(key)).size === field.options.length, 'Opzioni della colonna non valide.');
-    assert(!['select', 'multiselect'].includes(field.type) || field.options.length > 0, 'Specificare almeno una opzione per la colonna.');
+    assert(Array.isArray(field.options) && field.options.length <= 100, 'Opzioni della colonna non valide.');
+    const options = choices(field);
+    assert(options.every(option => option && typeof option.id === 'string' && option.id.trim() && option.id.length <= 200 && typeof option.name === 'string' && option.name.trim() && option.name.length <= 60 && /^#[0-9a-f]{6}$/i.test(option.color)) && new Set(options.map(option => option.id)).size === options.length && new Set(options.map(option => key(option.name))).size === options.length, 'Opzioni della colonna non valide.');
   }
   return fields;
 }
-function validateValue(value, field) {
+function validateValue(value, field, optionIds) {
   if (value === undefined || value === null || value === '') return;
+  if (['select', 'multiselect'].includes(field.type)) optionIds ||= new Set(choices(field).map(option => option.id));
   let valid;
   switch (field.type) {
     case 'number': valid = typeof value === 'number' && Number.isFinite(value); break;
     case 'effort': valid = typeof value === 'number' && Number.isFinite(value) && value >= 0; break;
     case 'date': valid = validDate(value); break;
     case 'boolean': valid = typeof value === 'boolean'; break;
-    case 'select': valid = field.options.includes(value); break;
-    case 'multiselect': valid = Array.isArray(value) && value.every(item => field.options.includes(item)) && new Set(value).size === value.length; break;
+    case 'select': valid = optionIds.has(value); break;
+    case 'multiselect': valid = Array.isArray(value) && value.every(item => optionIds.has(item)) && new Set(value).size === value.length; break;
     case 'url':
       try { const url = new URL(value); valid = typeof value === 'string' && value.length <= 2000 && /^https?:\/\/\S+$/i.test(value) && Boolean(url.hostname); }
       catch { valid = false; }
@@ -40,12 +43,13 @@ function validateValue(value, field) {
 function validateCustomData(data) {
   for (const kind of ['tasks', 'issues']) {
     const fields = validateFields(fieldsOf(data.settings, kind)), known = new Map(fields.map(field => [field.id, field]));
+    const options = new Map(fields.map(field => [field.id, new Set(choices(field).map(option => option.id))]));
     for (const record of data[kind]) {
       if (record.customFields === undefined) continue;
       assert(ownObject(record.customFields), 'Valori delle colonne personalizzate non validi.');
       for (const [id, value] of Object.entries(record.customFields)) {
         assert(known.has(id), 'Colonna personalizzata mancante nella configurazione.');
-        validateValue(value, known.get(id));
+        validateValue(value, known.get(id), options.get(id));
       }
     }
   }
@@ -95,13 +99,25 @@ function matchesFilter(value, filter, type) {
   }
   return true;
 }
-function mergeFields(target, source) {
-  const fields = structuredClone(target), mapping = new Map();
+function mergeFields(target, source, preferIncoming = false) {
+  const fields = structuredClone(target), mapping = new Map(), valueMappings = new Map();
   for (const incoming of source) {
     let field = fields.find(field => key(field.name) === key(incoming.name));
     if (field) {
       assert(field.type === incoming.type, 'Una colonna con lo stesso nome ha un tipo diverso.');
-      field.options = [...new Set([...field.options, ...incoming.options])];
+      const options = choices(field), values = new Map();
+      for (const option of choices(incoming)) {
+        let match = (preferIncoming && options.find(existing => existing.id === option.id)) || options.find(existing => key(existing.name) === key(option.name));
+        if (match && preferIncoming) { match.name = option.name; match.color = option.color; }
+        if (!match) {
+          match = { ...option };
+          if (options.some(existing => existing.id === match.id)) match.id = globalThis.crypto.randomUUID();
+          options.push(match);
+        }
+        values.set(option.id, match.id);
+      }
+      field.options = options;
+      valueMappings.set(incoming.id, values);
     } else {
       field = structuredClone(incoming);
       if (fields.some(item => item.id === field.id)) field.id = `custom-${globalThis.crypto.randomUUID()}`;
@@ -110,13 +126,17 @@ function mergeFields(target, source) {
     mapping.set(incoming.id, field.id);
   }
   validateFields(fields);
-  return { fields, mapping };
+  return { fields, mapping, valueMappings };
 }
-function remapValues(values, mapping) {
-  return Object.fromEntries(Object.entries(values || {}).map(([id, value]) => [mapping.get(id) || id, structuredClone(value)]));
+function remapValues(values, mapping, valueMappings = new Map(), filters = false) {
+  return Object.fromEntries(Object.entries(values || {}).map(([id, value]) => {
+    const choices = valueMappings.get(id), remap = item => choices?.get(item) || item;
+    const result = filters ? { ...value, values: value.values.map(remap) } : Array.isArray(value) ? value.map(remap) : remap(value);
+    return [mapping.get(id) || id, structuredClone(result)];
+  }));
 }
 const valuesKey = values => JSON.stringify(Object.entries(values || {}).sort(([a], [b]) => a.localeCompare(b)));
-const api = { TYPES, FIELD_LIMIT, fieldsOf, validateFields, validateValue, validateCustomData, normalizeColumns, normalizeIssueColumns, validDate, validFilters, emptyFilter, activeFilter, matchesFilter, mergeFields, remapValues, valuesKey };
+const api = { TYPES, FIELD_LIMIT, fieldsOf, choices, validateFields, validateValue, validateCustomData, normalizeColumns, normalizeIssueColumns, validDate, validFilters, emptyFilter, activeFilter, matchesFilter, mergeFields, remapValues, valuesKey };
 if (typeof module !== 'undefined') module.exports = api;
 else globalThis.OrbitaColumns = api;
 })();

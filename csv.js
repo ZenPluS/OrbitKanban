@@ -55,7 +55,7 @@ function destinations(data, kind) {
     { id: 'highlightId', name: 'Evidenziazione', type: 'select', options: options(s.highlights || []) },
     { id: 'tagIds', name: 'Tags', type: 'multiselect', options: options(s.tags || []) }, { id: 'hidden', name: 'Nascosta', type: 'boolean' }
   ] : ['code', 'incident', 'problem'].map((id, i) => ({ id, name: ['Codice portale', 'Incident', 'Problem'][i], type: 'text' }));
-  return [...base, ...C.fieldsOf(s, kind).map(field => ({ ...field, custom: true, options: field.options.map(name => ({ value: name, name })) }))];
+  return [...base, ...C.fieldsOf(s, kind).map(field => ({ ...field, custom: true, options: C.choices(field).map(option => ({ ...option, value: option.id })) }))];
 }
 const aliases = {
   code: ['key', 'issue key', 'codice', 'portal code'], sequence: ['sequence'], url: ['url', 'link'],

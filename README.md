@@ -1,6 +1,6 @@
 # OrbitKanban — workspace portable
 
-App desktop locale per Windows 10/11 a 64 bit, **versione 2.16.0**. Nessun account, server esterno o collegamento a Internet necessario per l'uso. **Il nome dell'app è sempre OrbitKanban e non è configurabile.** Tutte le impostazioni del workspace appartengono alla singola organizzazione. Mentre l'app è aperta puoi usarla anche **dal browser dello stesso PC**, con più organizzazioni aperte contemporaneamente in schede diverse.
+App desktop locale per Windows 10/11 a 64 bit, **versione 2.17.0**. Nessun account, server esterno o collegamento a Internet necessario per l'uso. **Il nome dell'app è sempre OrbitKanban e non è configurabile.** Tutte le impostazioni del workspace appartengono alla singola organizzazione. Mentre l'app è aperta puoi usarla anche **dal browser dello stesso PC**, con più organizzazioni aperte contemporaneamente in schede diverse.
 
 ## Avvio e condivisione
 
@@ -188,16 +188,20 @@ In **Impostazioni → Colonne personalizzate** puoi aggiungere fino a **30 colon
 | Testo / Testo formattato | Testo semplice o rich text |
 | Numero | Numero intero o decimale, anche negativo |
 | Data | Data di calendario, con colore deterministico |
-| Elenco a scelta singola / multipla | Opzioni configurate una per riga |
+| Elenco a scelta singola / multipla | Etichette con nome e colore, configurate nella sezione dedicata |
 | Link | Indirizzo HTTP/HTTPS cliccabile |
 | Effort (ore) | Numero di ore non negativo |
 | Sì / No | Sì, no oppure non compilato |
 
-Il tipo si sceglie alla creazione e non cambia successivamente, per proteggere i dati. Nomi (massimo 60 caratteri), opzioni e ordine sono modificabili; nomi e opzioni devono essere univoci senza distinzione di maiuscole. Gli elenchi accettano fino a 100 opzioni: non si può rimuovere un'opzione ancora utilizzata senza prima aggiornare le righe interessate.
+Il tipo si sceglie alla creazione e non cambia successivamente, per proteggere i dati. Nomi (massimo 60 caratteri), opzioni e ordine sono modificabili; nomi e opzioni devono essere univoci senza distinzione di maiuscole. Gli elenchi accettano fino a 100 etichette, oppure possono restare vuoti.
+
+Dalla **2.17.0**, ogni colonna a scelta genera automaticamente una propria scheda sotto **Impostazioni → Etichette delle colonne**, identificata dal nome della colonna e dalla lista di appartenenza. **Gestisci etichette e colori** apre la scheda: come per i Tags, puoi aggiungere etichette, modificarne nome e colore, trascinarle o usare le frecce per riordinarle ed eliminarle. Rinomine e riordini conservano le assegnazioni tramite identificativi stabili; le eliminazioni rimuovono le selezioni dalle righe solo con **Salva impostazioni**, e sono annullabili.
+
+Le colonne a scelta multipla mostrano le stesse **pillole colorate e lo stesso dropdown con caselle dei Tags**, sia direttamente nelle righe di attività e issue sia negli editor. **Applica** nella tabella salva le selezioni senza aprire la scheda; nell'editor aggiorna solo il modulo, da confermare con il suo pulsante Salva. Le colonne a scelta singola mostrano anch'esse etichette colorate. I vecchi valori testuali vengono convertiti senza perdere le selezioni; etichette, colori e ordine sono portatili e rispettati anche da ricerca, filtri, CSV ed Excel.
 
 I valori si compilano nelle finestre di modifica di attività e issue, sono ricercabili e vengono salvati insieme all'archivio. Le colonne si mostrano, nascondono e riordinano con **▥ Colonne** su entrambe le liste. Nelle attività, numero, data, effort, sì/no ed elenco singolo sono anche ordinabili. Eliminare una definizione richiede conferma e rimuove i suoi valori soltanto con **Salva impostazioni**; la modifica è annullabile. La modifica multipla dei campi standard conserva i valori personalizzati.
 
-Schemi e valori viaggiano nei backup, nei file dell'organizzazione e nell'export dei soli dati. In importazione, colonne con lo stesso nome e tipo vengono riutilizzate; tipi diversi con lo stesso nome producono un errore. Gli archivi precedenti si aprono senza perdere dati. Non usare versioni precedenti alla 2.16.0 per modificare archivi che contengono colonne personalizzate.
+Schemi e valori viaggiano nei backup, nei file dell'organizzazione e nell'export dei soli dati. In importazione, colonne con lo stesso nome e tipo vengono riutilizzate; tipi diversi con lo stesso nome producono un errore. Gli archivi precedenti si aprono senza perdere dati. Non usare versioni precedenti alla 2.17.0 per modificare archivi aggiornati con le etichette colorate.
 
 ## Importazione CSV
 
