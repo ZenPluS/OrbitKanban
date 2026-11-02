@@ -2904,12 +2904,22 @@ window.runSmokeTests = async () => {
       for (const [name, value] of Object.entries(fields)) form.elements[name].value = value;
       form.requestSubmit(); await tick();
     }
+    // The rows must be on screen, not just in the DOM: the filter bar once took the table's space and hid every row.
+    const tableShowsRows = rowSelector => {
+      const area = $('.table-scroll').getBoundingClientRect(), bar = $('.column-filter-bar').getBoundingClientRect(), row = $(rowSelector)?.getBoundingClientRect();
+      return area.height >= 160 && bar.height < 80 && bar.bottom <= area.top + 1 && Boolean(row) && row.height > 0 && row.top < area.bottom && row.bottom > area.top;
+    };
     await setColumnFilter(taskFields.number.id, 'tasks', { min: '10', max: '20' });
     check(filteredTasks().length === 1 && $('.column-filter-button.active'), 'Filtro numerico per colonna seleziona la riga attesa');
+    check(tableShowsRows('#task-rows tr[data-task-row]') && $('#task-rows tr[data-task-row]').children.length === shownColumns().length + 2, 'Con un filtro di colonna attivo la tabella resta visibile con tutte le colonne');
     await setColumnFilter(taskFields.text.id, 'tasks', { empty: 'empty' });
     check(filteredTasks().length === 0 && $('.column-filter-bar').querySelectorAll('[data-filter-column]').length === 2, 'Filtri di colonne diverse si combinano con AND, inclusi i valori vuoti');
     $('[data-clear-column-filters]').click();
     check(filteredTasks().length === baseline.tasks.filter(task => !task.hidden).length && !$('.column-filter-bar'), 'Azzera filtri ripristina la lista senza cambiare i dati');
+    const dated = data.tasks.find(task => task.releaseDate && !task.hidden), sameDay = data.tasks.filter(task => !task.hidden && task.releaseDate === dated.releaseDate).length;
+    await setColumnFilter('releaseDate', 'tasks', { min: dated.releaseDate, max: dated.releaseDate });
+    check(filteredTasks().length === sameDay && document.querySelectorAll('#task-rows tr[data-task-row]').length === sameDay && $('#row-count').textContent.startsWith(String(sameDay)) && tableShowsRows('#task-rows tr[data-task-row]'), 'Filtro sulla release date dello stesso giorno mostra le righe di quella data');
+    $('[data-clear-column-filters]').click();
     await csvImportDialog(new File(['code;releaseDate\nBAD;2027-02-29'], 'invalid.csv'), 'tasks');
     check($('#csv-import').disabled && $('#csv-status').textContent.includes('1') && data.tasks.length === baseline.tasks.length, 'CSV invalido mostra gli errori e non importa alcuna riga');
     $('#modal').close();
@@ -2934,6 +2944,7 @@ window.runSmokeTests = async () => {
     const saved = data.settings.savedViews.find(saved => saved.name === 'Custom filters smoke');
     columnFilters.tasks = {}; await applySavedView(saved.id);
     check(filteredTasks().length === 1 && columnFilters.tasks[taskFields.number.id].min === '40' && savedViewSummary(saved).includes(taskFields.number.name), 'Viste salvate mantengono filtri e ordinamento delle colonne personalizzate');
+    check(tableShowsRows('#task-rows tr[data-task-row]'), 'Vista salvata con filtri di colonna mostra le righe nella tabella');
     view = 1; render();
     await csvImportDialog(new File([`code;incident;${issueFields.select.name}\nCSV-CUSTOM;INC-CSV-CUSTOM;Due`], 'issues.csv'), 'issues');
     $('#csv-import-form').requestSubmit();
@@ -2948,6 +2959,7 @@ window.runSmokeTests = async () => {
     $('#column-filter-form').requestSubmit(); await tick();
     await setColumnFilter('linked', 'issues', { min: '1' });
     check(filteredIssues().length === 1 && document.querySelectorAll('#issue-rows [data-issue]').length === 2, 'Filtri issue combinano scelta personalizzata e conteggio attività collegate');
+    check(tableShowsRows('#issue-rows tr'), 'Con filtri di colonna attivi la tabella delle issue resta visibile');
     const book = await unzipParts(await situationWorkbook({ scope: 'view', columns: 'all', sheets: ['tasks', 'issues'] }));
     const xml = text => new DOMParser().parseFromString(text, 'application/xml');
     check(xml(book.get('xl/worksheets/sheet1.xml')).getElementsByTagName('row').length === 2 && xml(book.get('xl/worksheets/sheet2.xml')).getElementsByTagName('row').length === 2, 'Excel della vista applica i filtri di entrambe le liste');
