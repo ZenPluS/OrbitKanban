@@ -55,6 +55,7 @@ test('upcoming milestone indicators are translated', () => {
   assert.deepEqual(['Prossima release', 'Release di oggi', 'Vai alla prossima release', 'Nessuna release in programma'].map(text => translate(text, 'en')), ['Next release', "Today's release", 'Go to next release', 'No upcoming release']);
 });
 test('drag and drop ordering is translated', () => {
+  assert.deepEqual(['Ordine salvato. Sequence aggiornate.', 'La lista è cambiata. Riprova il riordino.', 'Attività non più disponibile.'].map(text => translate(text, 'en')), ['Order saved. Sequence updated.', 'The list has changed. Try reordering again.', 'Task no longer available.']);
   assert.deepEqual(['Trascina per riordinare, oppure usa i tasti ↑ ↓', 'Riordina «{0}»', 'Spostato in posizione {0} di {1}', 'Spostamento annullato'].map(text => translate(text, 'en')), ['Drag to reorder, or use the ↑ ↓ keys', 'Reorder “{0}”', 'Moved to position {0} of {1}', 'Move cancelled']);
   assert.match(translate('Spunta le colonne da mostrare e trascinale (o usa le frecce) per cambiarne l’ordine. Nascondere una colonna non cancella i dati.', 'en'), /^Tick the columns to show and drag them/);
   assert.equal(translate('Trascina per riordinare, oppure usa i tasti ↑ ↓', 'it'), 'Trascina per riordinare, oppure usa i tasti ↑ ↓');

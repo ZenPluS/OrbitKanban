@@ -3,6 +3,7 @@ const { APP_NAME, validateData, matchIssues, findDuplicates, sortTasks, dateColo
 const $ = selector => document.querySelector(selector);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const uid = () => crypto.randomUUID();
+const { reorderTaskSequences } = window.OrbitaCore;
 let data, dataFolder, view = 0, search = '', showHidden = false, duplicatesOnly = false, issueDuplicatesOnly = false, statusFilter = '', highlightFilter = '', highlighter = '', sort = [{ key: 'releaseDate', direction: 'asc' }];
 let settingsDraft, saving = false, organizationBusy = false, organizations = [], activeOrganizationId, lastOpenedLink = '';
 let revision = '', appVersion = '', browserUrl = '', online = true, refreshing = false, pendingChange = null, renderAfterModal = false, adoptions = 0, subscribed = false;
@@ -116,6 +117,69 @@ function tagPicker(task) {
   const tags = data.settings.tags || [];
   return `<fieldset class="field full task-tags" tabindex="-1"><legend>${esc(t('Tags'))}</legend><p class="muted">${esc(t(tags.length ? 'Seleziona uno o più tag. Gestiscili in Impostazioni › Tags.' : 'Nessun tag disponibile. Aggiungili in Impostazioni › Tags.'))}</p><div class="tag-options">${tags.map(tag => `<label class="tag-choice"><input type="checkbox" name="tagIds" value="${esc(tag.id)}" ${task.tagIds?.includes(tag.id) ? 'checked' : ''}>${pill(tag.name, tag.color, 'tag-pill')}</label>`).join('')}</div></fieldset>`;
 }
+function closeTagMenu(restoreFocus = false) {
+  const menu = $('#tag-menu');
+  if (!menu) return;
+  const owner = document.querySelector(`[data-task-tags="${CSS.escape(menu.dataset.task)}"]`);
+  menu.remove();
+  owner?.setAttribute('aria-expanded', 'false');
+  if (restoreFocus) owner?.focus({ preventScroll: true });
+}
+function openTagMenu(button) {
+  const id = button.dataset.taskTags, same = $('#tag-menu')?.dataset.task === id;
+  closeTagMenu();
+  closeMarkMenu();
+  if (same) return;
+  const task = data.tasks.find(task => task.id === id);
+  if (!task) return;
+  const initial = new Set(task.tagIds || []);
+  const menu = document.createElement('form');
+  menu.id = 'tag-menu';
+  menu.dataset.task = id;
+  menu.setAttribute('role', 'dialog');
+  menu.setAttribute('aria-label', t('Modifica tag') + ': ' + task.code);
+  menu.innerHTML = tagPicker(task) + ui`<div class="tag-menu-actions"><button type="button" class="button small" data-cancel-tags>Annulla</button><button type="submit" class="button small primary">Applica</button></div>`;
+  document.body.append(menu);
+  const rect = button.getBoundingClientRect();
+  menu.style.left = `${Math.max(8, Math.min(rect.left, innerWidth - menu.offsetWidth - 8))}px`;
+  menu.style.top = `${Math.max(8, Math.min(rect.bottom + 4, innerHeight - menu.offsetHeight - 8))}px`;
+  button.setAttribute('aria-expanded', 'true');
+  menu.querySelector('[data-cancel-tags]').onclick = () => closeTagMenu(true);
+  menu.addEventListener('keydown', event => {
+    if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeTagMenu(true); }
+    if (event.key === 'Tab') {
+      const inputs = [...menu.querySelectorAll('input,button')], index = inputs.indexOf(document.activeElement);
+      if (event.shiftKey && index === 0 || !event.shiftKey && index === inputs.length - 1) {
+        event.preventDefault(); inputs[event.shiftKey ? inputs.length - 1 : 0].focus();
+      }
+    }
+  });
+  menu.onsubmit = action(async event => {
+    event.preventDefault();
+    const chosen = new Set(new FormData(menu).getAll('tagIds'));
+    const added = [...chosen].filter(id => !initial.has(id)), removed = [...initial].filter(id => !chosen.has(id));
+    const submit = menu.querySelector('[type="submit"]');
+    submit.disabled = true;
+    try {
+      await commit(next => {
+        const row = next.tasks.find(task => task.id === id);
+        if (!row) throw new Error('Attività non più disponibile.');
+        const known = new Set(next.settings.tags.map(tag => tag.id));
+        row.tagIds = [...new Set([...(row.tagIds || []).filter(id => !removed.includes(id)), ...added])].filter(id => known.has(id));
+      });
+      closeTagMenu();
+      rerenderPreservingView();
+      document.querySelector(`[data-task-tags="${CSS.escape(id)}"]`)?.focus({ preventScroll: true });
+    } finally { submit.disabled = false; }
+  });
+  (menu.querySelector('input') || menu.querySelector('button')).focus({ preventScroll: true });
+}
+document.addEventListener('pointerdown', event => {
+  const menu = $('#tag-menu');
+  if (menu && !menu.contains(event.target) && !event.target.closest('[data-task-tags]')) closeTagMenu();
+}, true);
+window.addEventListener('scroll', event => { if (!$('#tag-menu')?.contains(event.target)) closeTagMenu(); }, true);
+window.addEventListener('resize', () => closeTagMenu());
 function matchesHighlightFilter(task) {
   if (!highlightFilter) return true;
   if (highlightFilter === '__any') return Boolean(highlightOf(task));
@@ -159,6 +223,7 @@ function applyTheme() {
 }
 function render() {
   closeMarkMenu();
+  closeTagMenu();
   const content = $('#content'), nextView = ['tasks', 'issues', 'milestones', 'kanban', 'settings'][view];
   if (content.dataset.workspaceView !== nextView) content.scrollTop = 0;
   content.dataset.workspaceView = nextView;
@@ -522,7 +587,7 @@ function renderTasks() {
   if (highlightFilter && !['__any', '__none'].includes(highlightFilter) && !highlights.some(h => h.id === highlightFilter)) highlightFilter = '';
   if (highlighter && highlighter !== 'erase' && !highlights.some(h => h.id === highlighter)) highlighter = '';
   if (highlighter === 'erase' && !highlights.length) highlighter = '';
-  const sortable = columns.map(id => taskColumnDefs[id].sort).filter(Boolean);
+  const sortable = [...columns.map(id => taskColumnDefs[id].sort).filter(Boolean), 'sequence'];
   sort = sort.filter(s => sortable.includes(s.key));
   if (!sort.length) sort = [{ key: 'releaseDate', direction: 'asc' }];
   const highlightOptions = [['', 'Tutte le evidenziazioni'], ['__any', 'Solo evidenziate'], ['__none', 'Senza evidenziazione']].map(([value, label]) => `<option value="${value}" ${value === highlightFilter ? 'selected' : ''}>${esc(t(label))}</option>`).join('') +
@@ -554,7 +619,7 @@ function renderTasks() {
   // While a highlighter is active, a click anywhere on a row colors it instead of opening links or the task.
   $('#task-rows').addEventListener('click', event => {
     const row = highlighter && event.target.closest('tr[data-task-row]');
-    if (!row || event.target.closest('.select-cell')) return;
+    if (!row || event.target.closest('.select-cell, [data-task-tags]')) return;
     event.preventDefault();
     event.stopPropagation();
     paintRow(row);
@@ -583,11 +648,11 @@ function taskCell(column, task, status, urgency, links, duplicateGroups = []) {
       const url = portalUrl(task, data.settings);
       return `<td class="link-cell">${url ? `<a class="portal-link" href="${esc(url)}" data-open-url title="${esc(t('Apri nel browser predefinito') + ': ' + url)}">${esc(url.replace(/^https?:\/\//i, ''))}</a>` : none}</td>`;
     }
-    case 'description': return `<td class="description-col"><button class="description-cell" data-edit-task="${task.id}">${esc(plain(task.description) || t('Senza descrizione'))}</button></td>`;
+    case 'description': return `<td class="description-col"><button class="description-cell" data-edit-task="${task.id}" title="${esc(plain(task.description))}">${esc(plain(task.description) || t('Senza descrizione'))}</button></td>`;
     case 'urgency': return `<td>${pill(urgency.name, urgency.color)}</td>`;
     case 'status': return `<td>${pill(status.name, status.color, 'status-pill')}</td>`;
     case 'highlight': { const mark = highlightOf(task); return `<td>${mark ? pill(mark.name, mark.color, 'mark-pill') : none}</td>`; }
-    case 'tags': return `<td class="tags-cell"><button type="button" class="task-tags-button" data-edit-task="${esc(task.id)}" aria-label="${esc(t('Modifica tag'))}" title="${esc(t('Modifica tag'))}">${tagsOf(task).length ? tagChips(task) : `<span class="muted">+ ${esc(t('Tags'))}</span>`}</button></td>`;
+    case 'tags': return `<td class="tags-cell"><button type="button" class="task-tags-button" data-task-tags="${esc(task.id)}" aria-haspopup="dialog" aria-expanded="false" aria-label="${esc(t('Modifica tag'))}" title="${esc(t('Modifica tag'))}">${tagsOf(task).length ? tagChips(task) : `<span class="muted">+ ${esc(t('Tags'))}</span>`}<span aria-hidden="true"> ▾</span></button></td>`;
     case 'effort': return `<td class="effort-cell">${effort(task.effortHours)}</td>`;
     case 'incident': {
       const groups = new Map(duplicateGroups.map(group => [group.key, group]));
@@ -598,7 +663,7 @@ function taskCell(column, task, status, urgency, links, duplicateGroups = []) {
     }
     case 'problem': return `<td class="references">${links.problems.map(esc).join('<br>') || none}</td>`;
     case 'releaseDate': return `<td><span class="date-pill" style="--date:${task.releaseDate ? dateColor(task.releaseDate) : '#929bb2'}">◷ ${formatDate(task.releaseDate)}</span></td>`;
-    case 'notes': return `<td><button class="notes-button ${plain(task.notes) ? 'has-notes' : ''}" data-edit-task="${task.id}" title="${esc(plain(task.notes) || t('Aggiungi note'))}">☰</button></td>`;
+    case 'notes': return `<td class="notes-col"><button class="description-cell notes-cell" data-edit-task="${task.id}" title="${esc(plain(task.notes) || t('Aggiungi note'))}">${esc(plain(task.notes) || t('Aggiungi note'))}</button></td>`;
     default: return '<td></td>';
   }
 }
@@ -614,18 +679,24 @@ function drawTaskRows() {
     const selectLabel = fillText('Seleziona {0}', task.code);
     return `<tr data-task-row="${esc(task.id)}" title="${esc(t('Doppio clic sulla riga per modificare.'))}" class="${classes}" style="--row-color:${status.color}${mark ? `;--mark:${mark.color}` : ''}"><td class="select-cell"><label class="select-hit" title="${esc(selectLabel + '\n' + t('Maiusc + clic per selezionare un intervallo.'))}"><input type="checkbox" data-select-task="${esc(task.id)}" ${selectedTasks.has(task.id) ? 'checked' : ''} aria-label="${esc(selectLabel)}"></label></td>${columns.map(column => taskCell(column, task, status, urgency, links, duplicateGroups)).join('')}<td class="row-actions">${duplicateFlag}<button type="button" class="icon-button mark-button ${mark ? 'is-marked' : ''}" data-mark-task="${esc(task.id)}" title="${esc(markLabel)}" aria-label="${esc(markLabel)}" aria-haspopup="menu" aria-expanded="false"><i class="mark-dot"></i></button><button class="icon-button" data-toggle-task="${task.id}" title="${esc(t(task.hidden ? 'Mostra attività' : 'Nascondi attività'))}">${task.hidden ? '◉' : '◌'}</button><button class="icon-button" data-edit-task="${task.id}" title="${esc(t('Modifica attività'))}">⋯</button></td></tr>`;
   }).join('') || `<tr><td colspan="${columns.length + 2}" class="empty">${esc(t('Nessuna attività trovata. Crea una nuova attività o modifica i filtri.'))}</td></tr>`;
+  document.querySelectorAll('#task-rows .select-cell').forEach((cell, index) => cell.insertAdjacentHTML('afterbegin', dragHandle(tasks[index].code)));
+  sortable($('#task-rows'), 'tr[data-task-row]', async (from, to) => {
+    try {
+      await commit(next => reorderTaskSequences(next.tasks, tasks.map(task => task.id), from, to));
+      sort = [{ key: 'sequence', direction: 'asc' }];
+      notify('Ordine salvato. Sequence aggiornate.');
+    } finally { rerenderPreservingView(); }
+    document.querySelector(`[data-task-row="${CSS.escape(tasks[from].id)}"] [data-drag-handle]`)?.focus({ preventScroll: true });
+  }, true);
   $('#row-count').textContent = ui`${tasks.length} attività mostrate · ${data.tasks.length} totali`;
   drawSelection();
   document.querySelectorAll('[data-edit-task]').forEach(b => b.onclick = () => {
     taskDialog(data.tasks.find(t => t.id === b.dataset.editTask));
-    if (b.classList.contains('task-tags-button')) {
-      $('.task-tags').scrollIntoView({ block: 'center' });
-      ($('.tag-choice input') || $('.task-tags')).focus({ preventScroll: true });
-    }
   });
+  document.querySelectorAll('[data-task-tags]').forEach(button => button.onclick = () => openTagMenu(button));
   document.querySelectorAll('[data-toggle-task]').forEach(b => b.onclick = action(async () => {
     const id = b.dataset.toggleTask, hidden = !data.tasks.find(t => t.id === id).hidden;
-    await commit(next => { const task = next.tasks.find(t => t.id === id); if (task) task.hidden = hidden; }); render();
+    await commit(next => { const task = next.tasks.find(t => t.id === id); if (task) task.hidden = hidden; }); rerenderPreservingView();
   }));
   document.querySelectorAll('[data-mark-task]').forEach(b => b.onclick = () => openMarkMenu(b));
   document.querySelectorAll('#task-rows [data-dup-incident]').forEach(b => b.onclick = () => showTaskDuplicates(b.dataset.dupIncident));
@@ -772,7 +843,7 @@ function bulkDialog(ids, context = '') {
         removed = before - next.tasks.length;
       });
       ids.forEach(id => { selectedTasks.delete(id); pendingMarks.delete(id); });
-      render();
+      rerenderPreservingView();
       notify(fillText('Attività eliminate: {0}.', removed));
     });
   };
@@ -912,25 +983,34 @@ function announceOrder(container, message) {
   }
   region.textContent = message;
 }
-function sortable(container, rowSelector, move) {
+function sortable(container, rowSelector, move, handlesOnly = false) {
   const rowsOf = () => [...container.querySelectorAll(rowSelector)];
   const place = (from, to) => {
     const count = rowsOf().length;
-    if (from !== to) move(from, to);
+    if (from !== to) {
+      const result = move(from, to);
+      if (result?.then) {
+        result.then(() => {
+          announceOrder(container, fillText('Spostato in posizione {0} di {1}', to + 1, count));
+        }).catch(error => notify(error.message, true));
+        return;
+      }
+    }
     rowsOf()[to]?.querySelector('[data-drag-handle]')?.focus();
     if (from !== to) announceOrder(container, fillText('Spostato in posizione {0} di {1}', to + 1, count));
     refreshSettingsState();
   };
   container.onkeydown = event => {
     const handle = event.target.closest?.('[data-drag-handle]');
-    if (!handle || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+    if (!handle || saving || organizationBusy || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
     event.preventDefault();
     const rows = rowsOf(), from = rows.indexOf(handle.closest(rowSelector)), to = from + (event.key === 'ArrowUp' ? -1 : 1);
     if (from >= 0 && to >= 0 && to < rows.length) place(from, to);
   };
   container.onpointerdown = event => {
     const row = event.target.closest(rowSelector);
-    if (event.button !== 0 || !event.isPrimary || !row || !container.contains(row) || document.body.classList.contains('is-sorting')) return;
+    if (event.button !== 0 || !event.isPrimary || !row || !container.contains(row) || saving || organizationBusy || document.body.classList.contains('is-sorting')) return;
+    if (handlesOnly && !event.target.closest('[data-drag-handle]')) return;
     if (!event.target.closest('[data-drag-handle]') && event.target.closest('input,select,textarea,button,a,[contenteditable]')) return;
     const from = rowsOf().indexOf(row), startX = event.clientX, startY = event.clientY, pointerId = event.pointerId;
     let dragging = false, pointerY = startY, grab = 0, frame = 0, scrollers = [];
@@ -1053,6 +1133,7 @@ function columnsDialog() {
   });
 }
 function openModal(html) {
+  closeTagMenu();
   $('#modal-content').innerHTML = html;
   $('#modal').showModal();
   document.querySelectorAll('[data-close]').forEach(b => b.onclick = () => $('#modal').close());
@@ -1096,7 +1177,6 @@ function taskDialog(existing) {
     <label class="field">Effort in ore aggiuntive<input name="hours" type="number" min="0" step="0.01" value="${hours}"><small>${esc(fillText('1 giorno = {0} ore', data.settings.hoursPerDay))}</small></label>
     <label class="field">Release date<input name="releaseDate" type="date" value="${esc(t.releaseDate)}"></label>
     <label class="field">Evidenziazione<select name="highlightId">${optionList(highlightsOf(), currentMark(t), 'Nessuna evidenziazione')}</select><small>Colora la riga nella lista attività. I colori si gestiscono in Impostazioni › Evidenziatori.</small></label>
-    ${tagPicker(t)}
     <label class="field full checkbox-field"><input type="checkbox" name="hidden" ${t.hidden ? 'checked' : ''}> Nascondi solo dalla lista attività (resta visibile in milestone e kanban)</label>
     <div class="auto-match full" id="match-preview"></div>
     ${editor('notes-editor', 'Note', t.notes)}
@@ -1133,17 +1213,17 @@ function taskDialog(existing) {
       description: sanitize($('#description-editor').innerHTML), notes: sanitize($('#notes-editor').innerHTML),
       urgencyId: fields.get('urgencyId'), statusId: fields.get('statusId'), releaseDate: fields.get('releaseDate'),
       effortHours: Math.round((Number(fields.get('days')) * data.settings.hoursPerDay + Number(fields.get('hours'))) * 100) / 100,
-      hidden: fields.has('hidden'), highlightId: fields.get('highlightId') || '', tagIds: fields.getAll('tagIds')
+      hidden: fields.has('hidden'), highlightId: fields.get('highlightId') || ''
     };
     pendingMarks.delete(item.id);
     await commit(next => {
       const index = next.tasks.findIndex(x => x.id === item.id);
-      if (index >= 0) next.tasks[index] = item; else next.tasks.push(item);
+      if (index >= 0) next.tasks[index] = { ...item, tagIds: next.tasks[index].tagIds }; else next.tasks.push(item);
     });
-    $('#modal').close(); render(); notify('Attività salvata.');
+    $('#modal').close(); rerenderPreservingView(); notify('Attività salvata.');
   });
   if (existing) $('#delete-task').onclick = () => confirmDialog('Eliminare questa attività?', `${t.code} sarà eliminata definitivamente. Le associazioni issue resteranno disponibili.`, async () => {
-    await commit(next => { next.tasks = next.tasks.filter(x => x.id !== t.id); }); render(); notify('Attività eliminata.');
+    await commit(next => { next.tasks = next.tasks.filter(x => x.id !== t.id); }); rerenderPreservingView(); notify('Attività eliminata.');
   });
 }
 function confirmDialog(title, message, callback) {
@@ -1181,7 +1261,7 @@ function renderIssues() {
       removed = ids.size;
       next.issues = next.issues.filter(issue => !ids.has(issue.id));
     });
-    render(); notify(fillText('Associazioni identiche rimosse: {0}.', removed));
+    rerenderPreservingView(); notify(fillText('Associazioni identiche rimosse: {0}.', removed));
   });
 }
 function issueDialog(existing) {
@@ -1209,10 +1289,10 @@ function issueDialog(existing) {
       const index = next.issues.findIndex(i => i.id === item.id);
       if (index < 0) next.issues.push(item); else next.issues[index] = item;
     });
-    $('#modal').close(); render(); notify('Associazione salvata. Attività aggiornate.');
+    $('#modal').close(); rerenderPreservingView(); notify('Associazione salvata. Attività aggiornate.');
   });
   if (existing) $('#delete-issue').onclick = () => confirmDialog('Eliminare l’associazione?', 'I relativi incident e problem non appariranno più nelle attività, a meno che esistano altre associazioni.', async () => {
-    await commit(next => { next.issues = next.issues.filter(i => i.id !== issue.id); }); render();
+    await commit(next => { next.issues = next.issues.filter(i => i.id !== issue.id); }); rerenderPreservingView();
   });
 }
 function miniTask(t, readOnly = false) {
@@ -1699,7 +1779,7 @@ function renderSettings() {
     drawOptionLists();
   });
   $('#save-settings').onclick = $('#save-settings-inline').onclick = action(async () => {
-    await saveSettings(); render(); notify('Impostazioni salvate.');
+    await saveSettings(); rerenderPreservingView(); notify('Impostazioni salvate.');
   });
   $('#discard-settings').onclick = () => { render(); notify('Modifiche annullate.'); };
   $('#export-data').onclick = action(async () => { if (await workspaceApi.exportData()) notify('Backup esportato.'); });
@@ -1969,7 +2049,7 @@ window.runSmokeTests = async () => {
   const pointer = (target, type, x, y) => target.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, composed: true, clientX: x, clientY: y, pointerId: 7, isPrimary: true, pointerType: 'mouse', button: 0, buttons: type === 'pointerup' ? 0 : 1 }));
   // Presses on grip, drags it over the upper or lower half of target (depending on the direction) and drops it, or presses Esc.
   function dragTo(grip, target, finish = 'drop') {
-    const row = grip.closest('.option-row, .column-row'), start = grip.getBoundingClientRect(), goal = target.getBoundingClientRect();
+    const row = grip.closest('.option-row, .column-row, tr[data-task-row]'), start = grip.getBoundingClientRect(), goal = target.getBoundingClientRect();
     const x = start.left + start.width / 2, y = start.top + start.height / 2, endY = goal.top + goal.height * (goal.top > start.top ? 0.75 : 0.25);
     pointer(grip, 'pointerdown', x, y);
     pointer(grip, 'pointermove', x, y + 6);
@@ -2094,6 +2174,35 @@ window.runSmokeTests = async () => {
   check(markedRows().length > 0 && markedRows().every(row => highlightOf(data.tasks.find(task => task.id === row.dataset.taskRow))) && document.querySelectorAll('.highlighter-bar [data-highlighter]').length === highlightsOf().length + 1, 'Righe evidenziate con colori personalizzati e barra evidenziatore');
   const smokeTask = () => data.tasks.find(task => task.code === 'SMOKE-1');
   const smokeRow = () => document.querySelector(`tr[data-task-row="${CSS.escape(smokeTask().id)}"]`);
+  const savedSequences = new Map(data.tasks.map(task => [task.id, task.sequence]));
+  const rowIds = () => [...document.querySelectorAll('#task-rows [data-drag-handle]')].map(handle => handle.closest('tr').dataset.taskRow);
+  const beforeDrag = rowIds(), targetRow = document.querySelector(`[data-task-row="${beforeDrag[2]}"]`);
+  const rowLifted = dragTo($('#task-rows [data-drag-handle]'), targetRow);
+  await waitFor(() => !saving && sort[0].key === 'sequence');
+  check(rowLifted && rowIds()[2] === beforeDrag[0] && data.tasks.every(task => task.sequence >= 1) && new Set(data.tasks.map(task => task.sequence)).size === data.tasks.length, 'Drag delle righe salva Sequence univoche e mantiene ordine manuale');
+  check((await workspaceApi.load()).data.tasks.find(task => task.id === beforeDrag[0]).sequence === data.tasks.find(task => task.id === beforeDrag[0]).sequence, 'Sequence riordinate persistite su disco');
+  const beforeCancel = rowIds(), sequenceBeforeCancel = data.tasks.map(task => task.sequence).join();
+  dragTo($('#task-rows [data-drag-handle]'), document.querySelector(`[data-task-row="${beforeCancel[2]}"]`), 'escape');
+  check(rowIds().join() === beforeCancel.join() && data.tasks.map(task => task.sequence).join() === sequenceBeforeCancel && !saving, 'Esc durante drag non modifica ordine o Sequence');
+  $('#task-rows [data-drag-handle]').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+  await waitFor(() => !saving && rowIds()[1] === beforeCancel[0]);
+  check(rowIds()[1] === beforeCancel[0], 'Riordino attività disponibile anche con frecce sulla maniglia');
+  await commit(next => next.tasks.forEach(task => { task.sequence = savedSequences.get(task.id); }));
+  sort = [{ key: 'releaseDate', direction: 'asc' }]; render();
+  const oldText = { description: smokeTask().description, notes: smokeTask().notes };
+  await commit(next => Object.assign(next.tasks.find(task => task.id === smokeTask().id), { description: '<p>' + 'LongDescription'.repeat(100) + '</p>', notes: '<p>' + 'LongNotes'.repeat(100) + '</p>' }));
+  rerenderPreservingView();
+  const descriptions = [...smokeRow().querySelectorAll('.description-cell')];
+  check(descriptions.length === 2 && smokeRow().querySelector('.notes-cell').textContent.startsWith('LongNotes') && descriptions.every(cell => cell.scrollWidth <= cell.clientWidth + 1 && cell.getBoundingClientRect().right <= cell.closest('td').getBoundingClientRect().right), 'Note leggibili e testi lunghi senza spazi contenuti nelle celle');
+  $('.table-scroll').scrollTop = 500; $('.table-scroll').scrollLeft = 160;
+  const tablePosition = [$('.table-scroll').scrollLeft, $('.table-scroll').scrollTop];
+  taskDialog(smokeTask());
+  check($('#description-editor').scrollWidth <= $('#description-editor').clientWidth + 1 && $('#notes-editor').scrollWidth <= $('#notes-editor').clientWidth + 1, 'Editor descrizione e note a capo anche con parole molto lunghe');
+  $('#task-form').requestSubmit();
+  await waitFor(() => !saving && !$('#modal').open);
+  check(tablePosition[0] > 0 && tablePosition[1] > 0 && Math.abs($('.table-scroll').scrollTop - tablePosition[1]) <= 1 && Math.abs($('.table-scroll').scrollLeft - tablePosition[0]) <= 1, 'Modificare attività conserva scorrimento orizzontale e verticale della lista');
+  await commit(next => Object.assign(next.tasks.find(task => task.id === smokeTask().id), oldText));
+  render();
   view = 4; render(); showSettingsTab('tags');
   check(!$('#tags-panel').hidden && $('#settings-tab-tags').getAttribute('aria-current') === 'true' && document.querySelectorAll('#tags-list .option-row').length === data.settings.tags.length, 'Catalogo Tags in una scheda dedicata per organizzazione');
   const savedTagCount = data.settings.tags.length;
@@ -2114,23 +2223,42 @@ window.runSmokeTests = async () => {
   view = 0; render();
   check($('.activity-table th[data-column="tags"]').textContent === 'Tags' && !$('.activity-table th[data-column="tags"] button'), 'Colonna Tags visibile e non ordinabile come campo testuale multiplo');
   smokeRow().querySelector('.task-tags-button').click();
-  check($('#task-form') && document.querySelectorAll('.tag-choice').length === data.settings.tags.length && !$('.tag-choice b') && document.activeElement?.name === 'tagIds', 'Colonna Tags apre direttamente la selezione, con nomi mostrati come testo sicuro');
+  check($('#tag-menu') && !$('#modal').open && document.querySelectorAll('.tag-choice').length === data.settings.tags.length && !$('.tag-choice b') && document.activeElement?.name === 'tagIds', 'Colonna Tags apre il dropdown multiselezione senza editor attività, con testo sicuro');
   document.querySelector(`.tag-choice input[value="${tagOne}"]`).click();
   document.querySelector(`.tag-choice input[value="${tagTwo}"]`).click();
-  $('#task-form').requestSubmit();
-  await waitFor(() => !saving && !$('#modal').open);
+  $('#tag-menu').requestSubmit();
+  await waitFor(() => !saving && !$('#tag-menu'));
   check(smokeTask().tagIds.includes(tagOne) && smokeTask().tagIds.includes(tagTwo) && smokeRow().querySelectorAll('.tag-pill').length === 2, 'Selezione multipla visualizzata come etichette nella riga');
   check((await workspaceApi.load()).data.tasks.find(task => task.id === smokeTask().id).tagIds.length === 2, 'Selezione multipla persistita sul disco');
   smokeRow().querySelector('.task-tags-button').click();
   check(document.querySelectorAll('.tag-choice input:checked').length === 2, 'La modifica ripristina i tag già selezionati');
   document.querySelector(`.tag-choice input[value="${tagOne}"]`).click();
-  $('#task-form').requestSubmit();
-  await waitFor(() => !saving && !$('#modal').open);
+  $('#tag-menu').requestSubmit();
+  await waitFor(() => !saving && !$('#tag-menu'));
   check(smokeTask().tagIds.length === 1 && smokeTask().tagIds[0] === tagTwo, 'Un tag si può rimuovere dalla singola attività');
   smokeRow().querySelector('.task-tags-button').click();
   document.querySelector(`.tag-choice input[value="${tagOne}"]`).click();
+  $('#tag-menu').requestSubmit();
+  await waitFor(() => !saving && !$('#tag-menu'));
+  smokeRow().querySelector('.task-tags-button').click();
+  document.querySelector(`.tag-choice input[value="${tagOne}"]`).click();
+  $('#tag-menu').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  check(!$('#tag-menu') && smokeTask().tagIds.includes(tagOne), 'Esc annulla il dropdown senza cambiare i tag');
+  taskDialog(smokeTask());
+  check(!$('#task-form [name="tagIds"]') && !$('#task-form .task-tags'), 'I tag non sono più modificabili dalla scheda attività');
   $('#task-form').requestSubmit();
   await waitFor(() => !saving && !$('#modal').open);
+  check(smokeTask().tagIds.length === 2, 'Salvare una scheda attività mantiene i tag della lista');
+  smokeRow().querySelector('.task-tags-button').click();
+  document.querySelector(`.tag-choice input[value="${tagOne}"]`).click();
+  const submitTagChanges = $('#tag-menu').onsubmit;
+  const externalTag = data.settings.tags[0].id, externalSnapshot = await workspaceApi.load();
+  externalSnapshot.data.tasks.find(task => task.id === smokeTask().id).tagIds.push(externalTag);
+  await workspaceApi.save(externalSnapshot.data, activeOrganizationId, undefined, externalSnapshot.revision);
+  await submitTagChanges(new Event('submit', { cancelable: true }));
+  check(smokeTask().tagIds.includes(externalTag) && !smokeTask().tagIds.includes(tagOne) && smokeTask().tagIds.includes(tagTwo), 'Dropdown tag conserva le aggiunte concorrenti di altre finestre');
+  await commit(next => { next.tasks.find(task => task.id === smokeTask().id).tagIds = [tagOne, tagTwo]; });
+  rerenderPreservingView();
   $('#search').value = 'smoke-tag';
   $('#search').dispatchEvent(new Event('input'));
   check(document.querySelectorAll('#task-rows tr[data-task-row]').length === 1 && smokeRow(), 'Ricerca attività estesa ai nomi dei tag');
@@ -2750,7 +2878,7 @@ window.runSmokeTests = async () => {
   check($('.highlighter-label').textContent.includes('Highlighter') && $('#columns-button').textContent.includes('Columns') && $('#highlight-filter').options[0].textContent === 'All highlights' && $('.activity-table th[data-column="description"]').textContent === 'Description', 'Evidenziatore e colonne tradotti in inglese');
   taskDialog();
   check($('#task-form').textContent.includes('Portal code') && $('#task-form').textContent.includes('Effort in days') && $('#task-form').textContent.includes('1 day'), 'Dialog attività, editor e unità in inglese');
-  check(data.settings.tags.length === 0 && !$('.tag-choice') && $('.task-tags').textContent.includes('No tags available. Add them in Settings'), 'Catalogo tag isolato per organizzazione e istruzioni tradotte in inglese');
+  check(data.settings.tags.length === 0 && !$('.tag-choice') && !$('.task-tags'), 'Catalogo tag isolato e selettore assente dalla scheda attività');
   $('#task-form').elements.code.value = 'SMOKE-1';
   $('#description-editor').innerHTML = '<p>Attività personalizzate</p>';
   $('#task-form').elements.days.value = '1';
@@ -2759,6 +2887,9 @@ window.runSmokeTests = async () => {
   check(data.tasks[0].code === 'SMOKE-1' && matchIssues(data.tasks[0], data.issues).incidents.length === 0, 'Codici uguali tra organizzazioni non condividono issue');
   check(data.settings.portalUrlTemplate === '' && !document.querySelector('#task-rows a[data-open-url]'), 'Modello link separato per organizzazione');
   check($('#task-rows').textContent.includes('Attività personalizzate') && effort(data.tasks[0].effortHours) === '1d', 'Contenuti utente preservati e effort localizzato');
+  $('.task-tags-button').click();
+  check($('#tag-menu').textContent.includes('No tags available. Add them in Settings'), 'Dropdown senza catalogo mostra istruzioni in inglese');
+  closeTagMenu();
   view = 1; render(); issueDialog();
   check($('#issue-form').textContent.includes('Save association') && $('.page-heading p').textContent.startsWith('Connect work to its origin.'), 'Vista issue e dialog tradotti in inglese');
   $('#modal').close();

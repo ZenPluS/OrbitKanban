@@ -1,6 +1,6 @@
 # OrbitKanban — workspace portable
 
-App desktop locale per Windows 10/11 a 64 bit, **versione 2.11.0**. Nessun account, server esterno o collegamento a Internet necessario per l'uso. **Il nome dell'app è sempre OrbitKanban e non è configurabile.** Tutte le impostazioni del workspace appartengono alla singola organizzazione. Mentre l'app è aperta puoi usarla anche **dal browser dello stesso PC**, con più organizzazioni aperte contemporaneamente in schede diverse.
+App desktop locale per Windows 10/11 a 64 bit, **versione 2.12.0**. Nessun account, server esterno o collegamento a Internet necessario per l'uso. **Il nome dell'app è sempre OrbitKanban e non è configurabile.** Tutte le impostazioni del workspace appartengono alla singola organizzazione. Mentre l'app è aperta puoi usarla anche **dal browser dello stesso PC**, con più organizzazioni aperte contemporaneamente in schede diverse.
 
 ## Avvio e condivisione
 
@@ -106,6 +106,8 @@ Il testo dell'interfaccia non viene selezionato trascinando il mouse, come in un
 
 Nelle liste **Attività** e **Issue collegate**, fai **doppio clic su una cella della riga** per aprire la relativa finestra di modifica. Restano disponibili i pulsanti di modifica e il clic sul codice; link e pulsanti mantengono le proprie azioni. Con un evidenziatore attivo, i clic continuano a colorare le righe senza aprire l'editor. Il Kanban resta in sola lettura.
 
+Dalla **2.12.0**, salvataggi, eliminazioni e cambio di visibilità conservano lo scorrimento orizzontale e verticale della vista corrente, compresi ricerca delle issue e filtri. Descrizione e note mostrano direttamente nella tabella fino a tre righe di testo, andando a capo anche con parole o URL molto lunghi; il suggerimento al passaggio del mouse contiene il testo completo. Un clic apre l'editor rich text, senza alterare il contenuto salvato.
+
 - **Attività**: creazione e modifica tramite “Nuova attività”, codice o descrizione. Progressivo automatico ma modificabile; codice portale con link facoltativo (vedi **Link al portale**); descrizione e note rich text; urgenza, stato, effort in giorni e ore, release date e associazioni incident/problem automatiche. I numeri progressivi possono essere duplicati intenzionalmente. Scorciatoia: `Ctrl+N`.
 - **Issue collegate**: ogni riga associa un codice portale a un incident e/o problem. Sono consentiti più incident per problem e più righe per codice. Il confronto del codice ignora spazi esterni e maiuscole/minuscole. Nelle attività le associazioni vengono aggregate senza duplicati; non è necessaria alcuna connessione a JIRA.
 - **Milestone**: timeline orizzontale per data di release, con tutte le attività della tappa. Scorre sia in larghezza sia in altezza; il codice apre la modifica. Le attività senza data compaiono in “Da pianificare”. Include anche le attività nascoste dalla lista, contrassegnate dall'etichetta “Nascosta in lista” e da un bordo tratteggiato.
@@ -115,13 +117,15 @@ Nelle **Milestone**, la prima data di release **da oggi in avanti** è avvolta d
 
 L'ordinamento iniziale delle attività è per release crescente, con date mancanti in fondo. Clic sulle intestazioni per cambiare verso; `Maiusc+clic` per ordinamenti a più livelli. Descrizione e note non sono ordinabili. Urgenza e stato vengono ordinati in base all'ordine delle rispettive opzioni, non alfabeticamente. Il pulsante “Release” ripristina l'ordinamento iniziale. Ricerca e filtri della lista non limitano le altre viste.
 
+Per un **ordine manuale**, trascina la maniglia accanto alla casella di selezione di una riga, oppure usa le frecce su/giù con il focus sulla maniglia. La tabella scorre automaticamente avvicinandosi ai bordi e `Esc` annulla il trascinamento. Al rilascio l'ordine viene salvato, i campi **Progressivo / Sequence** vengono rinumerati da 1 per tutte le attività e la vista passa a **Sequence crescente**, anche se la relativa colonna è nascosta. Con filtri attivi vengono riordinate soltanto le righe mostrate: le altre conservano le proprie posizioni nell'ordine globale, pur ricevendo i nuovi progressivi. I valori manuali precedenti, anche duplicati, vengono quindi sostituiti dalla numerazione consecutiva. Le nuove Sequence restano nell'archivio e negli export; all'avvio resta predefinito l'ordinamento per release, selezionando l'intestazione Progressivo ritrovi l'ordine manuale.
+
 Il pulsante circolare a destra della riga la nasconde **solo dalla lista attività**, senza eliminarla: è utile, per esempio, per togliere dalla lista le attività già rilasciate in produzione. Le attività nascoste restano visibili in **Milestone** e **Kanban**, contrassegnate da “Nascosta in lista”. Attiva “Nascoste” nella lista per ritrovarle e ripristinarle. Il contatore del tab e le statistiche della lista escludono le righe nascoste. Le associazioni issue restano sempre disponibili.
 
 ## Tags delle attività
 
 La **2.7.0** aggiunge la colonna **Tags**, visibile anche aggiornando gli archivi esistenti. In **Impostazioni → Tags** crea il catalogo della singola organizzazione: ogni tag ha nome e colore, e l'ordine si cambia trascinando le righe o con le frecce (vedi [Riordino con trascinamento](#riordino-con-trascinamento)). Sono disponibili fino a **100 tag**, con nomi univoci (senza distinzione tra maiuscole e minuscole) di massimo **60 caratteri**. Premi **Salva impostazioni** per applicare le modifiche.
 
-Clicca la cella **Tags** di un'attività, oppure aprine la modifica, e spunta uno o più tag. Deselezionandoli tutti l'attività resta senza tag. La ricerca della lista trova anche i nomi dei tag; dal pulsante **Colonne** puoi nascondere o spostare la colonna senza cancellare le assegnazioni.
+Clicca la cella **Tags ▾** di un'attività per aprire il menu multiselezione direttamente nella lista: spunta uno o più tag e premi **Applica**. **Annulla**, `Esc` o un clic fuori dal menu scartano la scelta; deselezionandoli tutti e applicando l'attività resta senza tag. Dalla **2.12.0** i tag non sono più modificabili nella scheda attività: salvare la scheda conserva le assegnazioni della lista. Per le nuove attività, assegna i tag dopo il primo salvataggio; resta disponibile anche la modifica multipla. La ricerca della lista trova i nomi dei tag; dal pulsante **Colonne** puoi nascondere o spostare la colonna senza cancellare le assegnazioni.
 
 Rinominare, ricolorare o riordinare un tag aggiorna la sua visualizzazione nelle righe che lo usano. Eliminare un tag e salvare lo rimuove anche dalle attività nascoste, senza eliminare attività o altri tag. Le modifiche non salvate possono essere annullate come per le altre impostazioni.
 

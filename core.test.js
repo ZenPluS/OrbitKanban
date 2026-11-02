@@ -3,6 +3,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { APP_NAME, initialData, baseData, demoData, demoReleaseDates, validateData, migrateArchive, validateArchive, createOrganization, matchIssues, findDuplicates, sortTasks, dateColor, extractThemePalette, themeFromLogo, normalizeUrl, isWebUrl, validPortalTemplate, portalUrl, ORGANIZATION_FILE_KINDS, organizationExport, organizationFileName, situationFileName, parseOrganizationFile, applyOrganizationImport, importedOrganizationData, uniqueOrganizationName, FONT_SIZE_PARTS, FONT_SIZE_STEP, defaultFontSizes, clampFontSize, HIGHLIGHT_LIMIT, defaultHighlights, TASK_COLUMN_IDS, defaultTaskColumns, normalizeTaskColumns, nextReleaseDate, today } = require('./core');
 const { defaultThemes } = require('./core');
+const { reorderTaskSequences } = require('./core');
 const luminance = color => color.slice(1).match(/.{2}/g).map(channel => {
   const value = parseInt(channel, 16) / 255;
   return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
@@ -14,6 +15,28 @@ test('default archive is valid and independent between invocations', () => {
   assert.equal(validateData(first), first);
   assert.ok(first.tasks.length > 200);
   assert.notEqual(first.tasks[0].id, second.tasks[0].id);
+});
+test('row reordering renumbers Sequence and preserves fields and filtered-out positions', () => {
+  const tasks = ['a', 'b', 'c', 'd', 'e'].map((id, i) => ({ id, sequence: i * 10, notes: id, hidden: i === 1 }));
+  reorderTaskSequences(tasks, ['e', 'c', 'a'], 0, 2);
+  assert.deepEqual(sortTasks(tasks, [{ key: 'sequence', direction: 'asc' }]).map(task => task.id), ['c', 'b', 'a', 'd', 'e']);
+  assert.deepEqual(tasks.map(task => [task.id, task.notes, task.hidden]), ['a', 'b', 'c', 'd', 'e'].map((id, i) => [id, id, i === 1]));
+  assert.deepEqual(tasks.map(task => task.sequence).sort((a, b) => a - b), [1, 2, 3, 4, 5]);
+  const before = structuredClone(tasks);
+  reorderTaskSequences(tasks, ['c', 'a'], 0, 0);
+  assert.deepEqual(tasks, before);
+  for (const [ids, from, to] of [[['missing', 'a'], 0, 1], [['a', 'a'], 0, 1], [['a', 'c'], -1, 0], [['a', 'c'], 0, 2]]) {
+    assert.throws(() => reorderTaskSequences(tasks, ids, from, to), /lista è cambiata/);
+    assert.deepEqual(tasks, before);
+  }
+});
+test('row reordering handles duplicate sequences and saves the visible order across reloads', () => {
+  const data = initialData();
+  data.tasks.forEach(task => { task.sequence = 0; });
+  const ids = data.tasks.map(task => task.id);
+  reorderTaskSequences(data.tasks, ids, 0, ids.length - 1);
+  const restored = validateData(JSON.parse(JSON.stringify(data)));
+  assert.deepEqual(sortTasks(restored.tasks, [{ key: 'sequence', direction: 'asc' }]).map(task => task.id), [...ids.slice(1), ids[0]]);
 });
 test('40 distinct built-in themes have four colors with readable text and accents', () => {
   const themes = defaultThemes();

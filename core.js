@@ -658,6 +658,19 @@ function dateColor(date) {
   for (const c of date) hash = ((hash << 5) - hash + c.charCodeAt(0)) | 0;
   return `hsl(${Math.abs(hash) % 360} 65% 68%)`;
 }
+function reorderTaskSequences(tasks, visibleIds, from, to) {
+  const byId = new Map(tasks.map(task => [task.id, task]));
+  assert(new Set(visibleIds).size === visibleIds.length && visibleIds.every(id => byId.has(id))
+    && Number.isInteger(from) && Number.isInteger(to) && from >= 0 && to >= 0 && from < visibleIds.length && to < visibleIds.length,
+  'La lista è cambiata. Riprova il riordino.');
+  if (from === to) return;
+  const ids = [...visibleIds], visible = new Set(ids);
+  ids.splice(to, 0, ids.splice(from, 1)[0]);
+  let index = 0;
+  // Filtered-out tasks keep their slots; visible tasks take those slots in the requested order.
+  sortTasks(tasks, [{ key: 'sequence', direction: 'asc' }]).map(task => visible.has(task.id) ? byId.get(ids[index++]) : task)
+    .forEach((task, position) => { task.sequence = position + 1; });
+}
 function nextReleaseDate(tasks, referenceDate = today()) {
   return tasks.reduce((next, task) => {
     const date = task.releaseDate;
@@ -740,7 +753,7 @@ const core = {
   extractThemePalette, themeFromLogo, normalizeUrl, isWebUrl, validPortalTemplate, portalUrl,
   ORGANIZATION_FILE_KINDS, organizationExport, organizationFileName, situationFileName, parseOrganizationFile, applyOrganizationImport, importedOrganizationData, uniqueOrganizationName,
   FONT_SIZE_PARTS, FONT_SIZE_STEP, defaultFontSizes, clampFontSize, defaultThemes,
-  HIGHLIGHT_LIMIT, defaultHighlights, TASK_COLUMN_IDS, defaultTaskColumns, normalizeTaskColumns, TAG_LIMIT, TAG_NAME_MAX, nextReleaseDate
+  HIGHLIGHT_LIMIT, defaultHighlights, TASK_COLUMN_IDS, defaultTaskColumns, normalizeTaskColumns, TAG_LIMIT, TAG_NAME_MAX, nextReleaseDate, reorderTaskSequences
 };
 if (typeof module !== 'undefined') module.exports = core;
 else window.OrbitaCore = core;

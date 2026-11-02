@@ -1873,6 +1873,64 @@ tr.duplicate-row td:last-child {
   border-color: color-mix(in srgb, var(--duplicate) 45%, transparent);
 }
 /* Row selection and bulk edit */
+.activity-table td.description-col,
+.activity-table td.notes-col {
+  min-width: calc(250px * var(--fs));
+  max-width: calc(310px * var(--fs));
+  white-space: normal;
+}
+.activity-table .description-cell {
+  width: calc(270px * var(--fs));
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  -webkit-line-clamp: 3;
+}
+.editable,
+.card-title {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.activity-table tr.is-dragging {
+  position: relative;
+  z-index: 4;
+  background: var(--surface);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+.activity-table .select-cell {
+  white-space: nowrap;
+}
+.select-cell .drag-handle,
+.select-cell .select-hit {
+  display: inline-flex;
+  vertical-align: middle;
+}
+#tag-menu {
+  position: fixed;
+  z-index: 50;
+  width: min(340px, calc(100vw - 16px));
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 8px 32px #00000055;
+}
+#tag-menu .tag-options {
+  display: flex;
+  flex-direction: column;
+  max-height: min(300px, 45vh);
+  overflow-y: auto;
+}
+.tag-menu-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
 .activity-table th.select-col,
 .activity-table td.select-cell {
   width: 1%;
