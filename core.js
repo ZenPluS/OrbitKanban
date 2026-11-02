@@ -4,6 +4,7 @@ const id = () => globalThis.crypto.randomUUID();
 const APP_NAME = 'OrbitKanban';
 const today = () => new Date().toLocaleDateString('en-CA');
 const i18n = typeof module !== 'undefined' ? require('./i18n') : null;
+const columns = typeof module !== 'undefined' ? require('./columns') : globalThis.OrbitaColumns;
 const term = (text, language) => (i18n || globalThis.OrbitaI18n)?.term(text, language) ?? String(text);
 const validLanguage = code => typeof code === 'string' && /^[a-z]{2,3}(?:-[a-zA-Z0-9]{2,8})*$/.test(code);
 const FONT_SIZE_PARTS = [
@@ -39,24 +40,10 @@ const TASK_COLUMN_IDS = TASK_COLUMNS.map(([columnId]) => columnId);
 const SAVED_VIEW_LIMIT = 30;
 const SAVED_VIEW_NAME_MAX = 60;
 const SAVED_VIEW_SORT_KEYS = ['sequence', 'code', 'urgencyId', 'statusId', 'highlightId', 'effortHours', 'releaseDate'];
-const defaultTaskColumns = () => TASK_COLUMNS.map(([columnId, visible]) => ({ id: columnId, visible }));
+const defaultTaskColumns = (fields = []) => [...TASK_COLUMNS.map(([columnId, visible]) => ({ id: columnId, visible })), ...fields.map(field => ({ id: field.id, visible: true }))];
 // Unknown or repeated columns are dropped and missing ones come back in their default place, so files from other versions stay usable.
-function normalizeTaskColumns(columns) {
-  if (!Array.isArray(columns)) return defaultTaskColumns();
-  const result = [], seen = new Set();
-  for (const column of columns) {
-    if (!column || !TASK_COLUMN_IDS.includes(column.id) || seen.has(column.id)) continue;
-    seen.add(column.id);
-    result.push({ id: column.id, visible: column.visible !== false });
-  }
-  TASK_COLUMNS.forEach(([columnId, visible], index) => {
-    if (seen.has(columnId)) return;
-    const previous = TASK_COLUMN_IDS.slice(0, index).reverse().find(other => seen.has(other));
-    result.splice(previous ? result.findIndex(column => column.id === previous) + 1 : 0, 0, { id: columnId, visible });
-    seen.add(columnId);
-  });
-  if (!result.some(column => column.visible)) result.find(column => column.id === 'code').visible = true;
-  return result;
+function normalizeTaskColumns(input, fields = []) {
+  return columns.normalizeColumns(input, defaultTaskColumns(), fields);
 }
 function defaultHighlights(language = 'it') {
   const T = text => { const value = term(text, language).trim(); return value && value.length <= HIGHLIGHT_NAME_MAX ? value : text; };
@@ -135,7 +122,7 @@ function baseData(language = 'it') {
     settings: {
       language, logo: '', portalUrlTemplate: '', tabNames: ['Attività', 'Issue collegate', 'Milestone', 'Kanban'].map(name => T(name)),
       hoursPerDay: 8, fontSizes: defaultFontSizes(), statuses, urgencies, highlights: defaultHighlights(language), tags: [], taskColumns: defaultTaskColumns(), themeId: 'midnight',
-      themes: defaultThemes(), savedViews: []
+      themes: defaultThemes(), savedViews: [], taskFields: [], issueFields: [], issueColumns: columns.normalizeIssueColumns()
     },
     tasks: [],
     issues: []
@@ -292,16 +279,22 @@ function validateData(data) {
   assert(s.highlights === undefined || (Array.isArray(s.highlights) && s.highlights.length <= HIGHLIGHT_LIMIT && s.highlights.every(x => x && text(x.id) && x.id && text(x.name) && x.name.trim() && x.name.length <= HIGHLIGHT_NAME_MAX && color(x.color)) && uniqueIds(s.highlights)), 'Evidenziatori non validi.');
   assert(s.tags === undefined || (Array.isArray(s.tags) && s.tags.length <= TAG_LIMIT && s.tags.every(x => x && text(x.id) && x.id && x.id.length <= 200 && text(x.name) && x.name.trim() && x.name.length <= TAG_NAME_MAX && color(x.color)) && uniqueIds(s.tags)), 'Tags non validi.');
   assert(s.tags === undefined || new Set(s.tags.map(tag => tag.name.trim().toLowerCase())).size === s.tags.length, 'I nomi dei tag devono essere univoci.');
-  assert(s.taskColumns === undefined || (Array.isArray(s.taskColumns) && s.taskColumns.every(c => c && text(c.id) && c.id && typeof c.visible === 'boolean') && uniqueIds(s.taskColumns) && s.taskColumns.some(c => c.visible && TASK_COLUMN_IDS.includes(c.id))), 'Colonne della lista non valide.');
+  columns.validateFields(columns.fieldsOf(s, 'tasks'));
+  columns.validateFields(columns.fieldsOf(s, 'issues'));
+  const taskColumnIds = [...TASK_COLUMN_IDS, ...(s.taskFields || []).map(field => field.id)];
+  const filterTypes = { sequence: 'number', effort: 'effort', releaseDate: 'date', ...Object.fromEntries((s.taskFields || []).map(field => [field.id, field.type])) };
+  const sortKeys = [...SAVED_VIEW_SORT_KEYS, ...(s.taskFields || []).filter(field => !['text', 'richtext', 'url', 'multiselect'].includes(field.type)).map(field => field.id)];
+  assert(s.taskColumns === undefined || (Array.isArray(s.taskColumns) && s.taskColumns.every(c => c && text(c.id) && c.id && typeof c.visible === 'boolean') && uniqueIds(s.taskColumns) && s.taskColumns.some(c => c.visible && taskColumnIds.includes(c.id))), 'Colonne della lista non valide.');
+  assert(s.issueColumns === undefined || (Array.isArray(s.issueColumns) && s.issueColumns.every(c => c && text(c.id) && typeof c.visible === 'boolean') && uniqueIds(s.issueColumns) && s.issueColumns.some(c => c.visible)), 'Colonne della lista non valide.');
   assert(s.savedViews === undefined || (Array.isArray(s.savedViews) && s.savedViews.length <= SAVED_VIEW_LIMIT && s.savedViews.every(view =>
     view && text(view.id) && view.id && view.id.length <= 200 && text(view.name) && view.name.trim() && view.name.length <= SAVED_VIEW_NAME_MAX &&
     text(view.search) && view.search.length <= 200 && text(view.statusFilter) && view.statusFilter.length <= 200 &&
     text(view.highlightFilter) && view.highlightFilter.length <= 200 && typeof view.showHidden === 'boolean' &&
-    typeof view.duplicatesOnly === 'boolean' && Array.isArray(view.sort) && view.sort.length > 0 && view.sort.length <= SAVED_VIEW_SORT_KEYS.length &&
-    view.sort.every(item => item && SAVED_VIEW_SORT_KEYS.includes(item.key) && ['asc', 'desc'].includes(item.direction)) &&
+    typeof view.duplicatesOnly === 'boolean' && Array.isArray(view.sort) && view.sort.length > 0 && view.sort.length <= sortKeys.length &&
+    view.sort.every(item => item && sortKeys.includes(item.key) && ['asc', 'desc'].includes(item.direction)) &&
     new Set(view.sort.map(item => item.key)).size === view.sort.length && Array.isArray(view.columns) &&
-    view.columns.length > 0 && view.columns.every(column => column && TASK_COLUMN_IDS.includes(column.id) && typeof column.visible === 'boolean') &&
-    uniqueIds(view.columns) && view.columns.some(column => column.visible)
+    view.columns.length > 0 && view.columns.every(column => column && taskColumnIds.includes(column.id) && typeof column.visible === 'boolean') &&
+    uniqueIds(view.columns) && view.columns.some(column => column.visible) && columns.validFilters(view.columnFilters, taskColumnIds, filterTypes)
   ) && uniqueIds(s.savedViews) && new Set(s.savedViews.map(view => view.name.trim().toLocaleLowerCase())).size === s.savedViews.length), 'Viste salvate non valide.');
   assert(Array.isArray(s.themes) && s.themes.length > 0 && uniqueIds(s.themes) && s.themes.every(t => text(t.id) && t.id && text(t.name) && t.name.trim() && ['background', 'surface', 'text', 'accent'].every(k => color(t[k]))), 'Temi non validi.');
   assert(s.themes.some(t => t.id === s.themeId), 'Tema selezionato inesistente.');
@@ -319,6 +312,7 @@ function validateData(data) {
   }
   assert(Array.isArray(data.issues) && uniqueIds(data.issues), 'Elenco issue non valido.');
   assert(data.issues.every(x => ['id', 'code', 'incident', 'problem'].every(k => text(x[k])) && x.id && x.code.trim() && (x.incident.trim() || x.problem.trim())), 'Indicare codice e almeno un incident o problem.');
+  columns.validateCustomData(data);
   return data;
 }
 function migrateArchive(input) {
@@ -347,6 +341,9 @@ function validateArchive(archive) {
     organization.data.settings.portalUrlTemplate ??= '';
     organization.data.settings.fontSizes ??= defaultFontSizes();
     organization.data.settings.savedViews ??= [];
+    organization.data.settings.taskFields ??= [];
+    organization.data.settings.issueFields ??= [];
+    organization.data.settings.issueColumns = columns.normalizeIssueColumns(organization.data.settings.issueColumns, organization.data.settings.issueFields);
     normalizeThemes(organization.data.settings);
     normalizeHighlights(organization.data);
     normalizeTags(organization.data);
@@ -358,7 +355,7 @@ function validateArchive(archive) {
 function normalizeHighlights(data) {
   const settings = data.settings;
   settings.highlights ??= defaultHighlights(settings.language || 'it');
-  settings.taskColumns = normalizeTaskColumns(settings.taskColumns);
+  settings.taskColumns = normalizeTaskColumns(settings.taskColumns, settings.taskFields);
   const known = new Set(settings.highlights.map(highlight => highlight.id));
   for (const task of data.tasks) if (!known.has(task.highlightId)) task.highlightId = '';
   return data;
@@ -394,8 +391,8 @@ const RECORD_KEYS = {
   urgency: ['id', 'name', 'color'],
   highlight: ['id', 'name', 'color'],
   column: ['id', 'visible'],
-  task: ['id', 'code', 'sequence', 'url', 'description', 'notes', 'releaseDate', 'statusId', 'urgencyId', 'effortHours', 'hidden', 'highlightId', 'tagIds'],
-  issue: ['id', 'code', 'incident', 'problem']
+  task: ['id', 'code', 'sequence', 'url', 'description', 'notes', 'releaseDate', 'statusId', 'urgencyId', 'effortHours', 'hidden', 'highlightId', 'tagIds', 'customFields'],
+  issue: ['id', 'code', 'incident', 'problem', 'customFields']
 };
 function organizationExport(organization, kind, { appVersion = '', exportedAt = new Date().toISOString() } = {}) {
   assert(ORGANIZATION_FILE_KINDS.includes(kind), 'Tipo di esportazione non supportato.');
@@ -409,11 +406,15 @@ function organizationExport(organization, kind, { appVersion = '', exportedAt = 
       tabNames: [...settings.tabNames], hoursPerDay: settings.hoursPerDay, fontSizes: { ...(settings.fontSizes || defaultFontSizes()) },
       statuses: structuredClone(settings.statuses), urgencies: structuredClone(settings.urgencies),
       highlights: structuredClone(highlights), tags: structuredClone(settings.tags || []),
-      taskColumns: normalizeTaskColumns(settings.taskColumns), savedViews: structuredClone(settings.savedViews || [])
+      taskColumns: normalizeTaskColumns(settings.taskColumns, settings.taskFields), savedViews: structuredClone(settings.savedViews || []),
+      taskFields: structuredClone(settings.taskFields || []), issueFields: structuredClone(settings.issueFields || []),
+      issueColumns: columns.normalizeIssueColumns(settings.issueColumns, settings.issueFields)
     };
   }
   if (parts.includes('data')) {
     file.data = { statuses: structuredClone(settings.statuses), urgencies: structuredClone(settings.urgencies), highlights: structuredClone(highlights), tags: structuredClone(settings.tags || []), tasks: structuredClone(organization.data.tasks), issues: structuredClone(organization.data.issues) };
+    file.data.taskFields = structuredClone(settings.taskFields || []);
+    file.data.issueFields = structuredClone(settings.issueFields || []);
   }
   return file;
 }
@@ -475,10 +476,11 @@ function parseOrganizationFile(input) {
     }
     if (source.highlights !== undefined) settings.highlights = fileRecords(source.highlights, RECORD_KEYS.highlight, 'Evidenziatori non validi.');
     if (source.tags !== undefined) settings.tags = fileRecords(source.tags, RECORD_KEYS.highlight, 'Tags non validi.');
+    for (const key of ['taskFields', 'issueFields', 'issueColumns']) if (source[key] !== undefined) settings[key] = structuredClone(source[key]);
     if (source.taskColumns !== undefined) {
       const columns = fileRecords(source.taskColumns, RECORD_KEYS.column, 'Colonne della lista non valide.');
       assert(columns.every(column => typeof column.id === 'string' && typeof column.visible === 'boolean'), 'Colonne della lista non valide.');
-      settings.taskColumns = normalizeTaskColumns(columns);
+      settings.taskColumns = normalizeTaskColumns(columns, settings.taskFields);
     }
     if (source.savedViews !== undefined) settings.savedViews = structuredClone(source.savedViews);
     assert(validLanguage(settings.language), 'Lingua non supportata.');
@@ -495,7 +497,8 @@ function parseOrganizationFile(input) {
     };
     if (source.highlights !== undefined) content.highlights = fileRecords(source.highlights, RECORD_KEYS.highlight, 'Evidenziatori non validi.');
     if (source.tags !== undefined) content.tags = fileRecords(source.tags, RECORD_KEYS.highlight, 'Tags non validi.');
-    check({ statuses: content.statuses, urgencies: content.urgencies, ...(content.highlights ? { highlights: content.highlights } : {}), tags: content.tags || [] }, { tasks: content.tasks, issues: content.issues });
+    for (const key of ['taskFields', 'issueFields']) if (source[key] !== undefined) content[key] = structuredClone(source[key]);
+    check({ statuses: content.statuses, urgencies: content.urgencies, ...(content.highlights ? { highlights: content.highlights } : {}), tags: content.tags || [], taskFields: columns.fieldsOf(content, 'tasks'), issueFields: columns.fieldsOf(content, 'issues') }, { tasks: content.tasks, issues: content.issues });
     result.data = content;
   }
   return result;
@@ -532,10 +535,18 @@ function colorOptionRemapper(source, target, add = false, { limit = HIGHLIGHT_LI
 const tagRemapper = (source, target, add = false) => colorOptionRemapper(source, target, add, { limit: TAG_LIMIT, matchName: true, overflow: 'Troppi tag: riduci il catalogo prima di importare.' });
 function applyOrganizationImport(current, file, options = {}) {
   const next = structuredClone(current), settings = next.settings;
+  const importFields = source => Object.fromEntries(['tasks', 'issues'].map(kind => {
+    const key = kind === 'tasks' ? 'taskFields' : 'issueFields';
+    const merged = columns.mergeFields(settings[key] || [], source[key] || []);
+    settings[key] = merged.fields;
+    return [kind, merged.mapping];
+  }));
   const wanted = part => Boolean(options[part] && file[part]);
   assert(['themes', 'settings', 'data'].some(wanted), 'Seleziona almeno una parte da importare.');
   if (wanted('settings')) {
     const incoming = structuredClone(file.settings);
+    const maps = importFields(incoming);
+    const remapColumns = (list, map) => list.map(column => ({ ...column, id: map.get(column.id) || column.id }));
     const status = optionRemapper(settings.statuses, incoming.statuses), urgency = optionRemapper(settings.urgencies, incoming.urgencies);
     for (const task of next.tasks) { task.statusId = status(task.statusId); task.urgencyId = urgency(task.urgencyId); }
     for (const key of ['language', 'portalUrlTemplate', 'tabNames', 'hoursPerDay', 'statuses', 'urgencies']) settings[key] = incoming[key];
@@ -550,8 +561,12 @@ function applyOrganizationImport(current, file, options = {}) {
       for (const task of next.tasks) task.tagIds = [...new Set((task.tagIds || []).map(tag).filter(Boolean))];
       settings.tags = incoming.tags;
     }
-    if (incoming.taskColumns) settings.taskColumns = incoming.taskColumns;
-    if (incoming.savedViews) settings.savedViews = incoming.savedViews;
+    if (incoming.taskColumns) settings.taskColumns = normalizeTaskColumns(remapColumns(incoming.taskColumns, maps.tasks), settings.taskFields);
+    if (incoming.issueColumns) settings.issueColumns = columns.normalizeIssueColumns(remapColumns(incoming.issueColumns, maps.issues), settings.issueFields);
+    if (incoming.savedViews) settings.savedViews = incoming.savedViews.map(view => ({
+      ...view, columns: remapColumns(view.columns, maps.tasks), sort: view.sort.map(item => ({ ...item, key: maps.tasks.get(item.key) || item.key })),
+      ...(view.columnFilters && { columnFilters: columns.remapValues(view.columnFilters, maps.tasks) })
+    }));
     if (options.logo) settings.logo = incoming.logo;
   }
   if (wanted('themes')) {
@@ -562,6 +577,7 @@ function applyOrganizationImport(current, file, options = {}) {
     if (options.activateTheme) settings.themeId = file.themes.themeId;
   }
   if (wanted('data')) {
+    const maps = importFields(file.data);
     const status = optionRemapper(file.data.statuses, settings.statuses), urgency = optionRemapper(file.data.urgencies, settings.urgencies);
     settings.highlights ??= defaultHighlights(settings.language || 'it');
     const highlight = colorOptionRemapper(file.data.highlights || [], settings.highlights, true);
@@ -570,12 +586,15 @@ function applyOrganizationImport(current, file, options = {}) {
     // Files from versions without highlighters do not erase the highlight of the tasks they update.
     const existing = new Map(options.dataMode === 'replace' ? [] : next.tasks.map(task => [task.id, task.highlightId]));
     const existingTags = new Map(options.dataMode === 'replace' ? [] : next.tasks.map(task => [task.id, task.tagIds || []]));
+    const oldTasks = new Map(options.dataMode === 'replace' ? [] : next.tasks.map(task => [task.id, task.customFields]));
+    const oldIssues = new Map(options.dataMode === 'replace' ? [] : next.issues.map(issue => [issue.id, issue.customFields]));
     const tasks = structuredClone(file.data.tasks).map(task => ({
       ...task, statusId: status(task.statusId), urgencyId: urgency(task.urgencyId),
       highlightId: task.highlightId === undefined ? existing.get(task.id) || '' : highlight(task.highlightId),
-      tagIds: task.tagIds === undefined ? existingTags.get(task.id) || [] : [...new Set(task.tagIds.map(tag).filter(Boolean))]
+      tagIds: task.tagIds === undefined ? existingTags.get(task.id) || [] : [...new Set(task.tagIds.map(tag).filter(Boolean))],
+      ...(task.customFields !== undefined || oldTasks.get(task.id) !== undefined ? { customFields: { ...(oldTasks.get(task.id) || {}), ...columns.remapValues(task.customFields, maps.tasks) } } : {})
     }));
-    const issues = structuredClone(file.data.issues);
+    const issues = structuredClone(file.data.issues).map(issue => ({ ...issue, ...(issue.customFields !== undefined || oldIssues.get(issue.id) !== undefined ? { customFields: { ...(oldIssues.get(issue.id) || {}), ...columns.remapValues(issue.customFields, maps.issues) } } : {}) }));
     if (options.dataMode === 'replace') { next.tasks = tasks; next.issues = issues; }
     else {
       const triple = issue => [issue.code, issue.incident, issue.problem].map(value => value.trim().toUpperCase()).join('\u0000');
@@ -586,10 +605,12 @@ function applyOrganizationImport(current, file, options = {}) {
       for (const issue of issues) {
         const index = next.issues.findIndex(existing => existing.id === issue.id);
         if (index >= 0) next.issues[index] = issue;
-        else if (!next.issues.some(existing => triple(existing) === triple(issue))) next.issues.push(issue);
+        else if (!next.issues.some(existing => triple(existing) === triple(issue) && columns.valuesKey(existing.customFields) === columns.valuesKey(issue.customFields))) next.issues.push(issue);
       }
     }
   }
+  settings.taskColumns = normalizeTaskColumns(settings.taskColumns, settings.taskFields);
+  settings.issueColumns = columns.normalizeIssueColumns(settings.issueColumns, settings.issueFields);
   return normalizeTags(validateData(next));
 }
 function importedOrganizationData(file, options = {}, fallbackLanguage = 'it') {
@@ -669,7 +690,7 @@ function findDuplicates(tasks, issues) {
   const seen = new Set();
   for (const issue of issues) {
     if (!referenceKey(issue.incident)) continue;
-    const triple = [issue.code, issue.incident, issue.problem].map(referenceKey).join('\u0000');
+    const triple = [...[issue.code, issue.incident, issue.problem].map(referenceKey), columns.valuesKey(issue.customFields)].join('\u0000');
     if (seen.has(triple)) result.identical.push(issue.id); else seen.add(triple);
   }
   return result;

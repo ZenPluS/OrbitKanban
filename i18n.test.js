@@ -54,6 +54,13 @@ test('tag settings, task selection and validation messages are translated', () =
 test('upcoming milestone indicators are translated', () => {
   assert.deepEqual(['Prossima release', 'Release di oggi', 'Vai alla prossima release', 'Nessuna release in programma'].map(text => translate(text, 'en')), ['Next release', "Today's release", 'Go to next release', 'No upcoming release']);
 });
+test('custom columns, per-column filters and CSV validation messages are translated', () => {
+  assert.deepEqual(['Colonne personalizzate', 'Filtra colonna', 'Importa CSV', 'Mappa le colonne', 'Solo vuote'].map(text => translate(text, 'en')), ['Custom columns', 'Filter column', 'Import CSV', 'Map columns', 'Empty only']);
+  assert.equal(translate('{0} righe valide · {1} errori', 'en'), '{0} valid rows · {1} errors');
+  assert.equal(translate('Valore della colonna personalizzata non valido.', 'en'), 'Invalid custom column value.');
+  assert.equal(translate('Mappatura colonne non valida o duplicata.', 'en'), 'Invalid or duplicate column mapping.');
+  assert.equal(translate('Il CSV supera il limite di 16 MB.', 'en'), 'The CSV exceeds the 16 MB limit.');
+});
 test('drag and drop ordering is translated', () => {
   assert.deepEqual(['Ordine salvato. Sequence aggiornate.', 'La lista è cambiata. Riprova il riordino.', 'Attività non più disponibile.'].map(text => translate(text, 'en')), ['Order saved. Sequence updated.', 'The list has changed. Try reordering again.', 'Task no longer available.']);
   assert.deepEqual(['Trascina per riordinare, oppure usa i tasti ↑ ↓', 'Riordina «{0}»', 'Spostato in posizione {0} di {1}', 'Spostamento annullato'].map(text => translate(text, 'en')), ['Drag to reorder, or use the ↑ ↓ keys', 'Reorder “{0}”', 'Moved to position {0} of {1}', 'Move cancelled']);

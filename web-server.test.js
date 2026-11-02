@@ -76,7 +76,7 @@ test('serves the interface with the browser bridge and strict security headers',
   assert.match(page.headers['content-security-policy'], /frame-ancestors 'none'/);
   assert.equal(page.headers['x-content-type-options'], 'nosniff');
   assert.equal(page.headers['cache-control'], 'no-store');
-  for (const file of ['/styles.css', '/core.js', '/i18n.js', '/renderer.js', '/web-bridge.js', '/app-logo.svg']) assert.equal((await request(file, { headers: { Cookie: cookie } })).status, 200, file);
+  for (const file of ['/styles.css', '/core.js', '/columns.js', '/csv.js', '/i18n.js', '/renderer.js', '/web-bridge.js', '/app-logo.svg']) assert.equal((await request(file, { headers: { Cookie: cookie } })).status, 200, file);
   for (const file of ['/main.js', '/package.json', '/web-server.js', '/data/workspace.json', '/..%2fmain.js', '/%2e%2e/main.js', '/runtime/browser-access-token']) assert.equal((await request(file, { headers: { Cookie: cookie } })).status, 404, file);
 });
 

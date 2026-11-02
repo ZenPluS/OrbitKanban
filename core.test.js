@@ -434,7 +434,7 @@ test('organization exports contain only the requested parts as independent copie
   assert.deepEqual(sections(files.data), ['data']);
   assert.deepEqual(sections(files.organization), ['themes', 'settings', 'data']);
   assert.deepEqual(files.themes.themes, { themeId: organization.data.settings.themeId, themes: organization.data.settings.themes });
-  assert.deepEqual(Object.keys(files.settings.settings).sort(), ['fontSizes', 'highlights', 'hoursPerDay', 'language', 'logo', 'portalUrlTemplate', 'savedViews', 'statuses', 'tabNames', 'tags', 'taskColumns', 'urgencies']);
+  assert.deepEqual(Object.keys(files.settings.settings).sort(), ['fontSizes', 'highlights', 'hoursPerDay', 'issueColumns', 'issueFields', 'language', 'logo', 'portalUrlTemplate', 'savedViews', 'statuses', 'tabNames', 'tags', 'taskColumns', 'taskFields', 'urgencies']);
   assert.deepEqual(files.settings.settings.highlights, organization.data.settings.highlights);
   assert.deepEqual(files.data.data.highlights, organization.data.settings.highlights);
   assert.deepEqual(files.settings.settings.fontSizes, defaultFontSizes());

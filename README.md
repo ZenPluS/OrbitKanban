@@ -1,6 +1,6 @@
 # OrbitKanban — workspace portable
 
-App desktop locale per Windows 10/11 a 64 bit, **versione 2.15.0**. Nessun account, server esterno o collegamento a Internet necessario per l'uso. **Il nome dell'app è sempre OrbitKanban e non è configurabile.** Tutte le impostazioni del workspace appartengono alla singola organizzazione. Mentre l'app è aperta puoi usarla anche **dal browser dello stesso PC**, con più organizzazioni aperte contemporaneamente in schede diverse.
+App desktop locale per Windows 10/11 a 64 bit, **versione 2.16.0**. Nessun account, server esterno o collegamento a Internet necessario per l'uso. **Il nome dell'app è sempre OrbitKanban e non è configurabile.** Tutte le impostazioni del workspace appartengono alla singola organizzazione. Mentre l'app è aperta puoi usarla anche **dal browser dello stesso PC**, con più organizzazioni aperte contemporaneamente in schede diverse.
 
 ## Avvio e condivisione
 
@@ -145,7 +145,7 @@ Catalogo e assegnazioni restano locali, separati per organizzazione e sincronizz
 
 Dalla **2.9.0** l'app segnala i possibili duplicati usando come chiave l'**incident**, confrontato come i codici portale: senza distinzione tra maiuscole e minuscole e ignorando gli spazi esterni. Le associazioni senza incident (solo problem) non sono mai considerate duplicate. Il controllo è solo una segnalazione: nulla viene bloccato, unito o eliminato automaticamente, e il formato dell'archivio non cambia, quindi funziona subito anche sugli archivi esistenti.
 
-- **Issue collegate**: un'associazione è un possibile duplicato quando il suo incident compare in più righe. Le righe coinvolte hanno l'incident evidenziato in ambra (⧉) con l'elenco delle altre righe nel suggerimento; cliccandolo la lista mostra solo le associazioni con quell'incident. Il filtro **Duplicati** mostra tutte le associazioni coinvolte. Le righe che ripetono esattamente codice portale, incident e problem di un'altra sono marcate **identica**: il pulsante **Rimuovi identiche** le elimina dopo conferma, lasciando la prima di ogni gruppo; incident e problem delle attività non cambiano.
+- **Issue collegate**: un'associazione è un possibile duplicato quando il suo incident compare in più righe. Le righe coinvolte hanno l'incident evidenziato in ambra (⧉) con l'elenco delle altre righe nel suggerimento; cliccandolo la lista mostra solo le associazioni con quell'incident. Il filtro **Duplicati** mostra tutte le associazioni coinvolte. Le righe che ripetono esattamente codice portale, incident, problem e valori personalizzati di un'altra sono marcate **identica**: il pulsante **Rimuovi identiche** le elimina dopo conferma, lasciando la prima di ogni gruppo; incident e problem delle attività non cambiano.
 - **Attività**: un'attività è un possibile duplicato quando un suo incident è collegato, tramite le associazioni, anche ad altre attività (con codice portale diverso o uguale). La riga riceve il segnale ⧉ nella colonna azioni e l'incident evidenziato nella colonna Incident; cliccandoli la lista mostra le attività che lo condividono. Il filtro **Duplicati** include anche le attività **nascoste**, così un duplicato già rilasciato non sfugge.
 - La barra laterale mostra sull'icona di **Attività** e **Issue collegate** un contatore ambra degli elementi coinvolti.
 - Durante l'inserimento o la modifica, la finestra dell'attività (al cambio del codice portale) e quella dell'associazione (al cambio di codice, incident o problem) avvisano subito se si sta creando un duplicato, indicando con quali righe; il salvataggio resta comunque possibile.
@@ -169,6 +169,56 @@ Gli evidenziatori si gestiscono in **Impostazioni → Evidenziatori**: nome, col
 Le colonne della lista si scelgono con il pulsante **▥ Colonne** nella barra della lista o in **Impostazioni → Colonne della lista**: spunta le colonne da mostrare e cambiane l'ordine trascinandole o con le frecce; **Ripristina predefinite** torna alla disposizione iniziale. Oltre alle colonne di sempre sono disponibili, inizialmente nascoste, **Link portale**, con l'indirizzo cliccabile, ed **Evidenziazione**, ordinabile in base all'ordine degli evidenziatori. Nascondere una colonna non cancella i dati e la colonna delle azioni resta sempre presente; se le nascondi tutte, il codice portale torna visibile. La disposizione è salvata per organizzazione.
 
 Ogni data ha un colore deterministico condiviso tra lista e milestone: lo stesso giorno mantiene lo stesso colore, indipendentemente dallo stato e dalla posizione. Non è un indicatore di scadenza.
+
+## Filtri per colonna e colonne personalizzate
+
+Dalla **2.16.0**, ogni intestazione delle liste **Attività** e **Issue collegate** ha il pulsante **▽ Filtra colonna**:
+
+- testo, descrizione, note e link: ricerca **Contiene**, senza distinzione tra maiuscole e minuscole;
+- numeri, effort e date: intervallo **Da / A**, con estremi inclusi; l'effort si filtra in ore;
+- stati, urgenze, evidenziatori, tag e altri elenchi: selezione di uno o più valori; basta che la cella contenga una delle scelte;
+- tutte le colonne: celle vuote, valorizzate oppure entrambe. **Solo vuote** ignora gli altri criteri della stessa colonna.
+
+I filtri di colonne diverse si combinano con **AND**, insieme alla ricerca e ai filtri già presenti. La barra sopra la tabella mostra i filtri attivi, anche se la colonna viene nascosta; puoi modificarli, rimuoverne uno o premere **Azzera filtri colonne**. Restano passando tra i tab, ma si azzerano cambiando organizzazione o ripristinando l'archivio. Le **viste salvate** delle attività conservano anche i filtri per colonna.
+
+In **Impostazioni → Colonne personalizzate** puoi aggiungere fino a **30 colonne per ciascuna lista**, indipendenti per organizzazione:
+
+| Tipo | Valore |
+| --- | --- |
+| Testo / Testo formattato | Testo semplice o rich text |
+| Numero | Numero intero o decimale, anche negativo |
+| Data | Data di calendario, con colore deterministico |
+| Elenco a scelta singola / multipla | Opzioni configurate una per riga |
+| Link | Indirizzo HTTP/HTTPS cliccabile |
+| Effort (ore) | Numero di ore non negativo |
+| Sì / No | Sì, no oppure non compilato |
+
+Il tipo si sceglie alla creazione e non cambia successivamente, per proteggere i dati. Nomi (massimo 60 caratteri), opzioni e ordine sono modificabili; nomi e opzioni devono essere univoci senza distinzione di maiuscole. Gli elenchi accettano fino a 100 opzioni: non si può rimuovere un'opzione ancora utilizzata senza prima aggiornare le righe interessate.
+
+I valori si compilano nelle finestre di modifica di attività e issue, sono ricercabili e vengono salvati insieme all'archivio. Le colonne si mostrano, nascondono e riordinano con **▥ Colonne** su entrambe le liste. Nelle attività, numero, data, effort, sì/no ed elenco singolo sono anche ordinabili. Eliminare una definizione richiede conferma e rimuove i suoi valori soltanto con **Salva impostazioni**; la modifica è annullabile. La modifica multipla dei campi standard conserva i valori personalizzati.
+
+Schemi e valori viaggiano nei backup, nei file dell'organizzazione e nell'export dei soli dati. In importazione, colonne con lo stesso nome e tipo vengono riutilizzate; tipi diversi con lo stesso nome producono un errore. Gli archivi precedenti si aprono senza perdere dati. Non usare versioni precedenti alla 2.16.0 per modificare archivi che contengono colonne personalizzate.
+
+## Importazione CSV
+
+Il pulsante **Importa CSV** nelle due liste aggiunge righe all'organizzazione attiva, senza sostituire o aggiornare implicitamente quelle esistenti:
+
+1. Scegli un file `.csv` o `.tsv` (massimo **16 MB**, **100 colonne**, **10.000 righe dati**).
+2. Verifica separatore (automatico, virgola, punto e virgola o tab), codifica (**UTF-8**, **Windows-1252** o **UTF-16 LE**) e presenza della riga di intestazioni.
+3. Mappa ogni colonna sul campo desiderato, standard o personalizzato; **Non importare** la ignora. I nomi comuni italiani/inglesi sono riconosciuti automaticamente. Lo stesso campo non può essere mappato due volte.
+4. Controlla l'anteprima delle prime dieci righe valide e gli errori per riga/colonna. **Nessun dato viene salvato finché tutti gli errori non sono risolti.**
+5. Premi **Importa righe**. L'intera importazione si può annullare con `Ctrl+Z`.
+
+È obbligatorio mappare e compilare il **codice portale**; nelle issue serve anche almeno un **incident** o **problem**. Questi ultimi sono calcolati nelle attività: importarli dalla lista **Issue collegate** con lo stesso codice portale. I possibili duplicati restano segnalati, non vengono cancellati automaticamente; associazioni con valori personalizzati diversi non sono considerate identiche dalla funzione di pulizia.
+
+- Date: `AAAA-MM-GG` oppure `GG/MM/AAAA`, con calendario valido.
+- Numeri: punto o virgola decimale, **senza separatori delle migliaia**. Giorni e ore dell'effort standard vengono sommati usando le ore/giorno dell'organizzazione.
+- Sì/no: `sì`, `no`, `yes`, `true`, `false`, `1`, `0`.
+- Stati, urgenze, evidenziatori e tag: nome o identificativo del catalogo. Scelte multiple e tag sono separati da `|`.
+- Configura prima opzioni e colonne personalizzate; valori mancanti o ambigui nei cataloghi vengono segnalati.
+- Campi non mappati o vuoti mantengono i valori iniziali: stato iniziale, urgenza predefinita, progressivo automatico, visibilità normale e testi vuoti.
+- Le celle tra virgolette possono contenere separatori, virgolette raddoppiate e ritorni a capo; le righe completamente vuote sono ignorate. Una riga con un numero di celle diverso dalle intestazioni viene segnalata.
+- Descrizioni e note sono importate come **testo**, preservando gli a capo: eventuale HTML non viene eseguito. Le righe indicate negli errori sono numerate a partire dalla prima riga dati, escluse intestazioni e righe vuote.
 
 ## Riordino con trascinamento
 
@@ -201,18 +251,20 @@ Anche nella vista **Milestone** ogni tappa ha il pulsante ✎ in alto a destra, 
 Dalla **2.10.0** il pulsante **⤓ Excel**, presente nell'intestazione di tutte e quattro le viste e nella barra della selezione, esporta la situazione attuale in una cartella di lavoro `.xlsx` apribile con Excel, LibreOffice o Google Fogli. Il file è generato direttamente dall'app, senza componenti aggiuntivi né collegamento a Internet. Nella finestra di esportazione scegli:
 
 - **Attività da esportare**: come mostrate nella lista (con filtri e ordinamento attuali), tutte comprese le nascoste, oppure solo quelle selezionate;
-- **Colonne del foglio attività**: quelle visibili nella lista, nello stesso ordine, oppure tutte;
+- **Colonne dei fogli attività e issue**: quelle visibili nelle rispettive liste, nello stesso ordine, oppure tutte, incluse le personalizzate;
 - **Fogli** da includere.
 
 I fogli disponibili, con i nomi dei tab dell'organizzazione:
 
 - **Riepilogo**: organizzazione, data di esportazione, versione dell'app, filtri e ordinamento usati, totali (attività, nascoste, effort in giorni e in ore, release pianificate, da pianificare, prossima release, in evidenza, con incident duplicato) e la ripartizione per stato e per urgenza con conteggi, ore e percentuali.
 - **Attività**: una riga per attività con le colonne scelte. Il codice portale e il link sono collegamenti cliccabili; l'effort compare sia nel formato giorni/ore sia come numero di ore; le release date sono vere date di Excel colorate come nell'app (stessa data, stesso colore); stati, urgenze ed evidenziazioni mantengono i loro colori e le righe evidenziate sono colorate. Gli incident duplicati sono segnalati in ambra e le attività nascoste in corsivo grigio, con la colonna **Nascosta**. Intestazione e codice restano bloccati scorrendo e i filtri di Excel sono già attivi.
-- **Issue collegate**: tutte le associazioni, con il numero di attività collegate e l'indicazione dei duplicati (identica o stesso incident).
+- **Issue collegate**: con **Come mostrate nella lista** rispetta ricerca e filtri delle issue; le altre opzioni esportano tutte le associazioni. Comprende le colonne scelte, il numero di attività collegate e l'indicazione dei duplicati (identica o stesso incident).
 - **Milestone**: una riga per release in ordine di data con stato (passata, prossima, futura), numero di attività, ore, effort, conteggio per stato e codici. La prossima release è evidenziata in giallo; in fondo le attività da pianificare.
 - **Kanban**: una colonna per stato, nell'ordine degli stati, con codice e descrizione delle attività.
 
 Il nome proposto è `OrbitKanban-<organizzazione>-situazione-<data>.xlsx` (in inglese `situation`). Nell'app desktop scegli dove salvarlo; dal browser viene scaricato come un normale file. L'esportazione non modifica i dati e non cambia il formato dell'archivio.
+
+Le colonne personalizzate mantengono numeri e date come celle Excel tipizzate, link cliccabili, scelte multiple leggibili e testo formattato convertito in testo con a capo. Il riepilogo riporta anche i filtri per colonna delle due liste.
 
 ## Backup automatici
 
@@ -256,6 +308,8 @@ Il rich text supporta grassetto, corsivo, sottolineato ed elenchi. Contenuti att
 ## Sviluppo e build
 
 Richiede Node.js con npm soltanto per sviluppare o ricostruire il pacchetto. Il destinatario dell'eseguibile non deve installare Node.js.
+
+La **2.16.0** aggiunge filtri per colonna, schemi personalizzati per attività e issue e importazione CSV con mappatura, anteprima e validazione atomica. `columns.js` condivide schemi e filtri tra Node e interfaccia; `csv.js` contiene parser e conversioni senza dipendenze aggiuntive. I rispettivi test unitari e lo smoke test verificano anche persistenza, viste salvate, annullamento dell'importazione ed Excel.
 
 ```powershell
 npm ci
