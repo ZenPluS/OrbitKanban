@@ -8,6 +8,108 @@ const key = value => value.trim().toLocaleLowerCase();
 const fieldsOf = (settings, kind) => settings[kind === 'tasks' ? 'taskFields' : 'issueFields'] === undefined ? [] : settings[kind === 'tasks' ? 'taskFields' : 'issueFields'];
 const validDate = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
 const choices = field => field.options.map(option => typeof option === 'string' ? { id: option, name: option, color: '#a392ff' } : { ...option });
+const BUILTIN_FIELDS = {
+  tasks: [
+    { id: 'sequence', name: 'Sequence', type: 'number', property: 'sequence', sort: 'sequence', empty: 0 },
+    { id: 'code', name: 'Portal code', type: 'text', property: 'code', sort: 'code', empty: '' },
+    { id: 'link', name: 'Portal link', type: 'url', property: 'url', visible: false, empty: '' },
+    { id: 'description', name: 'Description', type: 'richtext', property: 'description', empty: '' },
+    { id: 'urgency', name: 'Urgency', type: 'select', property: 'urgencyId', catalog: 'urgencies', sort: 'urgencyId', empty: '' },
+    { id: 'status', name: 'Status', type: 'select', property: 'statusId', catalog: 'statuses', sort: 'statusId', empty: '' },
+    { id: 'highlight', name: 'Highlight', type: 'select', property: 'highlightId', catalog: 'highlights', sort: 'highlightId', visible: false, empty: '' },
+    { id: 'tags', name: 'Tags', type: 'multiselect', property: 'tagIds', catalog: 'tags', empty: [] },
+    { id: 'effort', name: 'Effort', type: 'effort', property: 'effortHours', sort: 'effortHours', empty: 0 },
+    { id: 'incident', name: 'Incident', type: 'text' },
+    { id: 'problem', name: 'Problem', type: 'text' },
+    { id: 'releaseDate', name: 'Release date', type: 'date', property: 'releaseDate', sort: 'releaseDate', empty: '' },
+    { id: 'notes', name: 'Notes', type: 'richtext', property: 'notes', empty: '' }
+  ],
+  issues: [
+    { id: 'code', name: 'Portal code', type: 'text', property: 'code', empty: '' },
+    { id: 'incident', name: 'Incident', type: 'text', property: 'incident', empty: '' },
+    { id: 'problem', name: 'Problem', type: 'text', property: 'problem', empty: '' },
+    { id: 'linked', name: 'Link', type: 'number' }
+  ]
+};
+const deletedKey = kind => kind === 'tasks' ? 'deletedTaskColumns' : 'deletedIssueColumns';
+const deletedOf = (settings, kind) => settings[deletedKey(kind)] || [];
+const hasColumn = (settings, kind, id) => BUILTIN_FIELDS[kind].some(field => field.id === id)
+  ? !deletedOf(settings, kind).includes(id) : fieldsOf(settings, kind).some(field => field.id === id);
+const schemaOf = (settings, kind) => [
+  ...BUILTIN_FIELDS[kind].filter(field => hasColumn(settings, kind, field.id)).map(field => ({ ...field, builtin: true, options: field.catalog ? settings[field.catalog] || [] : [] })),
+  ...fieldsOf(settings, kind)
+];
+const valueOf = (record, field) => field.builtin ? record[field.property] : record.customFields?.[field.id];
+function setValue(record, field, value) {
+  if (field.builtin) record[field.property] = value;
+  else (record.customFields ||= {})[field.id] = value;
+}
+const defaultColumns = (kind, fields = []) => [...BUILTIN_FIELDS[kind].map(field => ({ id: field.id, visible: field.visible !== false })), ...fields.map(field => ({ id: field.id, visible: true }))];
+const listColumns = (settings, kind, input = settings[kind === 'tasks' ? 'taskColumns' : 'issueColumns']) =>
+  normalizeColumns(input, defaultColumns(kind), fieldsOf(settings, kind), deletedOf(settings, kind));
+const sortKeys = settings => schemaOf(settings, 'tasks').map(field => field.builtin ? field.sort : ['number', 'date', 'effort', 'boolean', 'select'].includes(field.type) ? field.id : undefined).filter(Boolean);
+const defaultSort = settings => {
+  const keys = sortKeys(settings), key = keys.includes('releaseDate') ? 'releaseDate' : keys[0];
+  return key ? [{ key, direction: 'asc' }] : [];
+};
+function validateDeleted(settings) {
+  for (const kind of ['tasks', 'issues']) {
+    const deleted = settings[deletedKey(kind)];
+    assert(deleted === undefined || Array.isArray(deleted) && new Set(deleted).size === deleted.length && deleted.every(id => BUILTIN_FIELDS[kind].some(field => field.id === id)), "Invalid deleted columns.");
+  }
+}
+function cleanViews(settings) {
+  const ids = listColumns(settings, 'tasks').map(column => column.id), keys = sortKeys(settings);
+  for (const view of settings.savedViews || []) {
+    view.columns = view.columns.filter(column => ids.includes(column.id));
+    if (ids.length && !view.columns.some(column => column.visible)) {
+      if (!view.columns.length) view.columns = listColumns(settings, 'tasks');
+      else view.columns[0].visible = true;
+    }
+    view.sort = view.sort.filter(entry => keys.includes(entry.key));
+    if (!view.sort.length) view.sort = defaultSort(settings);
+    if (!hasColumn(settings, 'tasks', 'status')) view.statusFilter = '';
+    if (!hasColumn(settings, 'tasks', 'highlight')) view.highlightFilter = '';
+    if (view.columnFilters) view.columnFilters = Object.fromEntries(Object.entries(view.columnFilters).filter(([id]) => ids.includes(id)));
+  }
+}
+function removeColumn(settings, kind, id) {
+  assert(hasColumn(settings, kind, id), "This column no longer exists.");
+  if (BUILTIN_FIELDS[kind].some(field => field.id === id)) (settings[deletedKey(kind)] ||= []).push(id);
+  else {
+    const key = kind === 'tasks' ? 'taskFields' : 'issueFields';
+    settings[key] = fieldsOf(settings, kind).filter(field => field.id !== id);
+  }
+  settings[kind === 'tasks' ? 'taskColumns' : 'issueColumns'] = listColumns(settings, kind);
+  cleanViews(settings);
+}
+function cleanData(data) {
+  const settings = data.settings;
+  for (const kind of ['tasks', 'issues']) {
+    const fields = schemaOf(settings, kind), customIds = new Set(fieldsOf(settings, kind).map(field => field.id));
+    const removed = BUILTIN_FIELDS[kind].filter(field => field.property && !hasColumn(settings, kind, field.id));
+    const catalogs = fields.filter(field => ['select', 'multiselect'].includes(field.type)).map(field => ({ field, known: new Set(choices(field).map(option => option.id)) }));
+    for (const record of data[kind]) {
+      for (const field of removed) record[field.property] = structuredClone(field.empty);
+      if (record.customFields) record.customFields = Object.fromEntries(Object.entries(record.customFields).filter(([id]) => customIds.has(id)));
+      for (const { field, known } of catalogs) {
+        const value = valueOf(record, field);
+        if (value !== undefined) setValue(record, field, Array.isArray(value) ? value.filter(id => known.has(id)) : known.has(value) ? value : '');
+      }
+    }
+    settings[kind === 'tasks' ? 'taskColumns' : 'issueColumns'] = listColumns(settings, kind);
+  }
+  cleanViews(settings);
+  for (const view of settings.savedViews || []) {
+    if (!settings.statuses.some(option => option.id === view.statusFilter)) view.statusFilter = '';
+    if (!['__any', '__none'].includes(view.highlightFilter) && !(settings.highlights || []).some(option => option.id === view.highlightFilter)) view.highlightFilter = '';
+    for (const field of schemaOf(settings, 'tasks').filter(field => ['select', 'multiselect'].includes(field.type))) {
+      const filter = view.columnFilters?.[field.id], known = new Set(choices(field).map(option => option.id));
+      if (filter) filter.values = filter.values.filter(id => id === EMPTY_VALUE || known.has(id));
+    }
+  }
+  return data;
+}
 function validateFields(fields) {
   assert(Array.isArray(fields) && fields.length <= FIELD_LIMIT, "Invalid custom column list.");
   const ids = new Set(), names = new Set();
@@ -45,6 +147,9 @@ function validateCustomData(data) {
     const fields = validateFields(fieldsOf(data.settings, kind)), known = new Map(fields.map(field => [field.id, field]));
     const options = new Map(fields.map(field => [field.id, new Set(choices(field).map(option => option.id))]));
     for (const record of data[kind]) {
+      for (const field of BUILTIN_FIELDS[kind]) if (field.property && deletedOf(data.settings, kind).includes(field.id)) {
+        assert(record[field.property] === undefined || JSON.stringify(record[field.property]) === JSON.stringify(field.empty), "Deleted columns cannot contain values. Reopen the editor.");
+      }
       if (record.customFields === undefined) continue;
       assert(ownObject(record.customFields), "Invalid custom column values.");
       for (const [id, value] of Object.entries(record.customFields)) {
@@ -54,8 +159,8 @@ function validateCustomData(data) {
     }
   }
 }
-function normalizeColumns(columns, defaults, fields = []) {
-  const all = [...defaults, ...fields.map(field => ({ id: field.id, visible: true }))], ids = all.map(column => column.id);
+function normalizeColumns(columns, defaults, fields = [], deleted = []) {
+  const all = [...defaults.filter(column => !deleted.includes(column.id)), ...fields.map(field => ({ id: field.id, visible: true }))], ids = all.map(column => column.id);
   if (!Array.isArray(columns)) return all;
   const result = [], seen = new Set();
   for (const column of columns) {
@@ -68,11 +173,10 @@ function normalizeColumns(columns, defaults, fields = []) {
     result.splice(previous ? result.findIndex(item => item.id === previous) + 1 : 0, 0, { ...column });
     seen.add(column.id);
   });
-  if (!result.some(column => column.visible)) (result.find(column => column.id === 'code') || result[0]).visible = true;
+  if (result.length && !result.some(column => column.visible)) (result.find(column => column.id === 'code') || result[0]).visible = true;
   return result;
 }
-const issueDefaults = () => ['code', 'incident', 'problem', 'linked'].map(id => ({ id, visible: true }));
-const normalizeIssueColumns = (columns, fields = []) => normalizeColumns(columns, issueDefaults(), fields);
+const normalizeIssueColumns = (columns, fields = [], deleted = []) => normalizeColumns(columns, defaultColumns('issues'), fields, deleted);
 // Filter value that selects the cells without a value, next to the real values of the column.
 const EMPTY_VALUE = '__empty__';
 const FILTER_VALUES_MAX = 1000;
@@ -147,7 +251,7 @@ function remapValues(values, mapping, valueMappings = new Map(), filters = false
   }));
 }
 const valuesKey = values => JSON.stringify(Object.entries(values || {}).sort(([a], [b]) => a.localeCompare(b)));
-const api = { TYPES, FIELD_LIMIT, EMPTY_VALUE, FILTER_VALUES_MAX, fieldsOf, choices, validateFields, validateValue, validateCustomData, normalizeColumns, normalizeIssueColumns, validDate, validFilters, emptyFilter, activeFilter, matchesFilter, mergeFields, remapValues, valuesKey };
+const api = { TYPES, FIELD_LIMIT, EMPTY_VALUE, FILTER_VALUES_MAX, BUILTIN_FIELDS, deletedKey, deletedOf, hasColumn, schemaOf, valueOf, setValue, defaultColumns, listColumns, sortKeys, defaultSort, validateDeleted, cleanViews, removeColumn, cleanData, fieldsOf, choices, validateFields, validateValue, validateCustomData, normalizeColumns, normalizeIssueColumns, validDate, validFilters, emptyFilter, activeFilter, matchesFilter, mergeFields, remapValues, valuesKey };
 if (typeof module !== 'undefined') module.exports = api;
 else globalThis.OrbitaColumns = api;
 })();

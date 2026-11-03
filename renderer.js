@@ -1,11 +1,23 @@
 'use strict';
-const { APP_NAME, validateData, matchIssues, findDuplicates, sortTasks, dateColor, themeFromImage, themeFromLogo, onAccentColor, iconPalette, iconInk, defaultThemes, normalizeUrl, isWebUrl, validPortalTemplate, hasPortalPlaceholder, portalUrl, parseOrganizationFile, applyOrganizationImport, importedOrganizationData, uniqueOrganizationName, FONT_SIZE_PARTS, FONT_SIZE_STEP, defaultFontSizes, clampFontSize, HIGHLIGHT_LIMIT, defaultTaskColumns, normalizeTaskColumns, TAG_LIMIT, TAG_NAME_MAX, today, nextReleaseDate, situationFileName } = window.OrbitaCore;
+const { APP_NAME, validateData, matchIssues: matchAllIssues, findDuplicates, sortTasks, dateColor, themeFromImage, themeFromLogo, onAccentColor, iconPalette, iconInk, defaultThemes, normalizeUrl, isWebUrl, validPortalTemplate, hasPortalPlaceholder, portalUrl, parseOrganizationFile, applyOrganizationImport, importedOrganizationData, uniqueOrganizationName, FONT_SIZE_PARTS, FONT_SIZE_STEP, defaultFontSizes, clampFontSize, HIGHLIGHT_LIMIT, defaultTaskColumns, TAG_LIMIT, TAG_NAME_MAX, today, nextReleaseDate, situationFileName } = window.OrbitaCore;
 const $ = selector => document.querySelector(selector);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const uid = () => crypto.randomUUID();
 const { reorderTaskSequences, indexIssues } = window.OrbitaCore;
 const { FONT_FAMILIES, DEFAULT_FONT_FAMILY } = window.OrbitaCore;
 const CustomColumns = window.OrbitaColumns, Csv = window.OrbitaCsv;
+const hasColumn = (id, kind = 'tasks', settings = data.settings) => CustomColumns.hasColumn(settings, kind, id);
+const configuredColumns = (kind = 'tasks', settings = data.settings, input) => CustomColumns.listColumns(settings, kind, input);
+const unassignedOption = () => ({ id: '', name: t("Unassigned"), color: '#929bb2', highlight: false });
+const statusOf = task => hasColumn('status') && data.settings.statuses.find(option => option.id === task.statusId) || unassignedOption();
+const urgencyOf = task => hasColumn('urgency') && data.settings.urgencies.find(option => option.id === task.urgencyId) || unassignedOption();
+const workflowStatuses = () => hasColumn('status') ? [...data.settings.statuses, ...(data.tasks.some(task => !task.statusId) ? [unassignedOption()] : [])] : [];
+function matchIssues(task, issues) {
+  const links = matchAllIssues(task, issues);
+  if (!hasColumn('incident')) links.incidents = [];
+  if (!hasColumn('problem')) links.problems = [];
+  return links;
+}
 let columnFilters = { tasks: {}, issues: {} }, issueSearch = '';
 let data, dataFolder, view = 0, search = '', showHidden = false, duplicatesOnly = false, issueDuplicatesOnly = false, statusFilter = '', highlightFilter = '', highlighter = '', sort = [{ key: 'releaseDate', direction: 'asc' }];
 let settingsDraft, settingsBase, saving = false, organizationBusy = false, organizations = [], activeOrganizationId, lastOpenedLink = '';
@@ -214,9 +226,9 @@ function optionList(items, selected, all = '') {
   return (all ? `<option value="">${esc(t(all))}</option>` : '') + items.map(x => `<option value="${esc(x.id)}" ${x.id === selected ? 'selected' : ''}>${esc(x.name)}</option>`).join('');
 }
 function visibleTasks() { return data.tasks.filter(t => !t.hidden); }
-const highlightsOf = () => data.settings.highlights || [];
+const highlightsOf = () => hasColumn('highlight') ? data.settings.highlights || [] : [];
 const highlightOf = task => task.highlightId ? highlightsOf().find(h => h.id === task.highlightId) : undefined;
-const tagsOf = task => (data.settings.tags || []).filter(tag => task.tagIds?.includes(tag.id));
+const tagsOf = task => (hasColumn('tags') ? data.settings.tags || [] : []).filter(tag => task.tagIds?.includes(tag.id));
 function tagChips(task) { return `<span class="tag-chips">${tagsOf(task).map(tag => pill(tag.name, tag.color, 'tag-pill')).join('')}</span>`; }
 function tagPicker(task) {
   const tags = data.settings.tags || [];
@@ -302,8 +314,13 @@ function matchesHighlightFilter(task) {
   if (highlightFilter === '__none') return !highlightOf(task);
   return task.highlightId === highlightFilter;
 }
-const duplicatesOf = () => findDuplicates(data.tasks, data.issues);
-const taskLabel = task => `#${task.sequence} ${task.code}${task.hidden ? ` (${t("hidden")})` : ''}`;
+const duplicatesOf = () => {
+  const duplicates = findDuplicates(data.tasks, data.issues);
+  if (!hasColumn('incident')) duplicates.tasks.clear();
+  return duplicates;
+};
+const recordLabel = (record, kind = 'tasks') => hasColumn('code', kind) && record.code || (kind === 'tasks' && hasColumn('description') && plain(record.description)) || `${t(kind === 'tasks' ? "Task" : "Issue")} ${record.id.slice(0, 8)}`;
+const taskLabel = task => `${hasColumn('sequence') ? '#' + task.sequence + ' ' : ''}${recordLabel(task)}${task.hidden ? ` (${t("hidden")})` : ''}`;
 // One line per duplicated incident, naming the other tasks or associations that share it.
 function taskDuplicateLines(taskId, groups) {
   return groups.map(group => fillText("{0} is also linked to: {1}", group.incident, group.taskIds.filter(id => id !== taskId).map(id => taskLabel(data.tasks.find(task => task.id === id))).join(', ')));
@@ -315,7 +332,7 @@ function issueDuplicateLine(issueId, group, issues = data.issues) {
 function filteredTasks(duplicates = duplicatesOf(), issues = search || Object.keys(columnFilters.tasks).length ? indexIssues(data.issues) : data.issues) {
   const needle = search.toLowerCase();
   return data.tasks.filter(t => (duplicatesOnly ? duplicates.tasks.has(t.id) : showHidden || !t.hidden) && (!statusFilter || t.statusId === statusFilter) && matchesHighlightFilter(t) && passesColumnFilters(t, 'tasks', issues) && (
-    !search || [t.code, String(t.sequence), plain(t.description), plain(t.notes), highlightOf(t)?.name || '', ...tagsOf(t).map(tag => tag.name), ...Object.values(matchIssues(t, issues)).flat(), ...customSearchValues(t, 'tasks')].some(v => v.toLowerCase().includes(needle))
+    !search || searchableValues(t, 'tasks', issues).some(value => value.toLocaleLowerCase().includes(needle))
   ));
 }
 const themeExtrasCache = new Map();
@@ -405,12 +422,16 @@ function render() {
 function adoptSnapshot(snapshot) {
   if (activeOrganizationId !== snapshot.activeOrganizationId) { columnFilters = { tasks: {}, issues: {} }; issueSearch = ''; }
   data = validateData(snapshot.data);
+  if (!hasColumn('status')) statusFilter = '';
+  if (!hasColumn('highlight')) { highlightFilter = ''; highlighter = ''; pendingMarks.clear(); }
+  sort = sort.filter(entry => CustomColumns.sortKeys(data.settings).includes(entry.key));
+  if (!sort.length) sort = CustomColumns.defaultSort(data.settings);
   for (const kind of ['tasks', 'issues']) columnFilters[kind] = Object.fromEntries(Object.entries(columnFilters[kind]).filter(([id]) => columnDef(id, kind)));
-  for (const kind of ['tasks', 'issues']) for (const field of CustomColumns.fieldsOf(data.settings, kind).filter(field => ['select', 'multiselect'].includes(field.type))) {
+  for (const kind of ['tasks', 'issues']) for (const field of CustomColumns.schemaOf(data.settings, kind).filter(field => ['select', 'multiselect'].includes(field.type))) {
     const filter = columnFilters[kind][field.id];
     if (filter) {
       const known = CustomColumns.choices(field).map(option => option.id);
-      filter.values = filter.values.filter(value => known.includes(value));
+      filter.values = filter.values.filter(value => value === CustomColumns.EMPTY_VALUE || known.includes(value));
       if (!CustomColumns.activeFilter(filter)) delete columnFilters[kind][field.id];
     }
   }
@@ -548,26 +569,27 @@ const settingsTabs = [
   { id: 'organizations', group: "Organization", icon: 'building', label: "Organizations", panel: 'organizations-panel', keys: [] },
   { id: 'themes', group: "Appearance", icon: 'palette', label: "Themes & atmosphere", panel: 'themes-panel', keys: ['themes', 'themeId'] },
   { id: 'fonts', group: "Appearance", icon: 'font', label: "Font and text size", panel: 'font-size-panel', keys: ['fontSizes', 'fontFamily'] },
-  { id: 'statuses', group: "Workflow", icon: 'list', label: "Workflow statuses", panel: 'statuses-panel', keys: ['statuses'] },
-  { id: 'urgencies', group: "Workflow", icon: 'flame', label: "Urgency levels", panel: 'urgencies-panel', keys: ['urgencies'] },
-  { id: 'highlights', group: "Workflow", icon: 'highlighter', label: "Highlighters", panel: 'highlights-panel', keys: ['highlights'] },
-  { id: 'tags', group: "Workflow", icon: 'tag', label: 'Tags', panel: 'tags-panel', keys: ['tags'] },
   { id: 'columns', group: "Workflow", icon: 'columns', label: "List columns", panel: 'columns-panel', keys: ['taskColumns'] },
-  { id: 'custom-columns', group: "Workflow", icon: 'column-plus', label: "Custom columns", panel: 'custom-columns-panel', keys: ['taskFields', 'issueFields', 'issueColumns'] },
+  { id: 'custom-columns', group: "Workflow", icon: 'column-plus', label: "Column management", panel: 'custom-columns-panel', keys: ['taskFields', 'issueFields', 'taskColumns', 'issueColumns', 'deletedTaskColumns', 'deletedIssueColumns'] },
   { id: 'transfer', group: "Data & access", icon: 'transfer', label: "Export and import organization", panel: 'transfer-panel', keys: [] },
   { id: 'storage', group: "Data & access", icon: 'database', label: "Data that travels with you", panel: 'storage-panel', keys: [] },
   { id: 'browser', group: "Data & access", icon: 'globe', label: "Browser access", panel: 'browser-panel', keys: [] }
 ];
 function choiceSettingsTabs() {
-  return ['tasks', 'issues'].flatMap((kind, index) => CustomColumns.fieldsOf(settingsDraft || data.settings, kind).filter(field => ['select', 'multiselect'].includes(field.type)).map(field => ({
-    id: `choice-${kind}-${field.id}`, panel: `choice-${kind}-${field.id}-panel`, group: "Column labels", icon: 'tag', family: 'violet',
-    label: `${field.name} · ${data.settings.tabNames[index]}`, field, kind, custom: true, keys: [kind === 'tasks' ? 'taskFields' : 'issueFields']
-  })));
+  return ['tasks', 'issues'].flatMap((kind, index) => CustomColumns.schemaOf(settingsDraft || data.settings, kind).filter(field => ['select', 'multiselect'].includes(field.type)).map(field => {
+    const id = field.catalog || `choice-${kind}-${field.id}`;
+    return { id, panel: `${id}-panel`, group: "Column labels", icon: 'tag', family: 'violet',
+      label: `${field.builtin ? t(field.name) : field.name} · ${(settingsDraft || data.settings).tabNames[index]}`,
+      field, kind, custom: true, keys: [field.catalog || (kind === 'tasks' ? 'taskFields' : 'issueFields')] };
+  }));
 }
-const allSettingsTabs = () => [...settingsTabs, ...choiceSettingsTabs()];
+const allSettingsTabs = () => [
+  ...settingsTabs.filter(tab => tab.group !== "Data & access" && (tab.id !== 'portal' || hasColumn('link', 'tasks', settingsDraft || data.settings))),
+  ...choiceSettingsTabs(), ...settingsTabs.filter(tab => tab.group === "Data & access")
+];
 // Ordered: the first matching pattern decides which settings tab holds the field to fix.
 // Validation messages are English source text, except those the store localizes in the organization language, so the patterns also list the Italian wording.
-const settingsErrorTabs = [[/custom columns?|column options|column names and identifiers|colonn[ae] personalizzat|opzioni della colonna|nomi e identificativi delle colonne/i, 'custom-columns'], [/\btags?\b/i, 'tags'], [/evidenziatori|highlighter/i, 'highlights'], [/colonne della lista|list columns/i, 'columns'], [/link portale|portal link/i, 'portal'], [/dimensioni del testo|text sizes|\bfont\b/i, 'fonts'], [/\b(?:temi|tema|themes?)\b/i, 'themes'], [/urgen/i, 'urgencies'], [/\b(?:stati|status|statuses)\b/i, 'statuses'], [/\b(?:lingua|language)\b/i, 'languages'], [/organizzazione|organization|\btab\b|ore per giorno|hours per day|logo/i, 'identity']];
+const settingsErrorTabs = [[/custom columns?|deleted columns|columns changed|colonne eliminate|colonne modificate|column options|column names and identifiers|colonn[ae] personalizzat|opzioni della colonna|nomi e identificativi delle colonne/i, 'custom-columns'], [/\btags?\b/i, 'tags'], [/evidenziatori|highlighter/i, 'highlights'], [/colonne della lista|list columns/i, 'columns'], [/link portale|portal link/i, 'portal'], [/dimensioni del testo|text sizes|\bfont\b/i, 'fonts'], [/\b(?:temi|tema|themes?)\b/i, 'themes'], [/urgen/i, 'urgencies'], [/\b(?:stati|status|statuses)\b/i, 'statuses'], [/\b(?:lingua|language)\b/i, 'languages'], [/organizzazione|organization|\btab\b|ore per giorno|hours per day|logo/i, 'identity']];
 const settingsErrorTab = message => settingsErrorTabs.find(([pattern]) => pattern.test(String(message)))?.[1];
 function settingsNav() {
   const tabs = allSettingsTabs(), groups = [...new Set(tabs.map(tab => tab.group))];
@@ -575,6 +597,7 @@ function settingsNav() {
 }
 function showSettingsTab(id, reveal = false) {
   const tabs = allSettingsTabs(), selected = tabs.find(tab => tab.id === id) || settingsTabs[0];
+  document.querySelectorAll('.settings-section').forEach(panel => { panel.hidden = true; });
   settingsTab = selected.id;
   try { sessionStorage.setItem('orbitkanban.settingsTab', selected.id); } catch {}
   for (const tab of tabs) {
@@ -615,7 +638,7 @@ function refreshSettingsState() {
   banner.hidden = !changed;
   const savedName = organizations.find(o => o.id === activeOrganizationId)?.name;
   const tabs = allSettingsTabs();
-  const dirty = changed ? tabs.filter(tab => tab.custom ? JSON.stringify(tab.field) !== JSON.stringify(CustomColumns.fieldsOf(data.settings, tab.kind).find(field => field.id === tab.field.id)) : tab.keys.some(key => JSON.stringify(settingsDraft[key]) !== JSON.stringify(data.settings[key])) || (tab.id === 'custom-columns' && pendingCustomColumns().length > 0) || (tab.id === 'identity' && $('#organization-name').value.trim() !== savedName)) : [];
+  const dirty = changed ? tabs.filter(tab => tab.custom ? JSON.stringify(tab.field) !== JSON.stringify(CustomColumns.schemaOf(data.settings, tab.kind).find(field => field.id === tab.field.id)) : tab.keys.some(key => JSON.stringify(settingsDraft[key]) !== JSON.stringify(data.settings[key])) || (tab.id === 'custom-columns' && pendingCustomColumns().length > 0) || (tab.id === 'identity' && $('#organization-name').value.trim() !== savedName)) : [];
   for (const tab of tabs) {
     const dot = document.querySelector(`#settings-tab-${tab.id} .settings-tab-dot`);
     if (dot) dot.hidden = !dirty.includes(tab);
@@ -636,41 +659,18 @@ async function saveSettings() {
       fields.push(newCustomField(form));
       CustomColumns.validateFields(fields);
     }
-    settings.taskColumns = normalizeTaskColumns(settings.taskColumns, settings.taskFields);
-    settings.issueColumns = CustomColumns.normalizeIssueColumns(settings.issueColumns, settings.issueFields);
+    settings.taskColumns = configuredColumns('tasks', settings);
+    settings.issueColumns = configuredColumns('issues', settings);
     const organizationName = $('#organization-name').value.trim();
     if (!organizationName || organizationName.length > 100) throw new Error(t("Invalid organization name."));
     await commit(next => {
-      for (const key of ['taskFields', 'issueFields']) {
+      for (const key of ['taskFields', 'issueFields', 'deletedTaskColumns', 'deletedIssueColumns']) {
         if (JSON.stringify(next.settings[key]) !== JSON.stringify(settingsBase[key]) && JSON.stringify(next.settings[key]) !== JSON.stringify(settings[key])) {
-          throw new Error(t("Custom columns changed in another window. Discard the settings changes and try again: saved data has not been overwritten."));
+          throw new Error(t("Columns changed in another window. Discard the settings changes and try again: saved data has not been overwritten."));
         }
       }
       next.settings = structuredClone(settings);
-      const known = new Set((settings.highlights || []).map(h => h.id));
-      for (const task of next.tasks) if (task.highlightId && !known.has(task.highlightId)) task.highlightId = '';
-      const tags = new Set((settings.tags || []).map(tag => tag.id));
-      for (const task of next.tasks) task.tagIds = (task.tagIds || []).filter(id => tags.has(id));
-      for (const kind of ['tasks', 'issues']) {
-        const ids = new Set(CustomColumns.fieldsOf(settings, kind).map(field => field.id));
-        for (const record of next[kind]) if (record.customFields) record.customFields = Object.fromEntries(Object.entries(record.customFields).filter(([id]) => ids.has(id)));
-        for (const field of CustomColumns.fieldsOf(settings, kind).filter(field => ['select', 'multiselect'].includes(field.type))) {
-          const known = CustomColumns.choices(field).map(option => option.id);
-          for (const record of next[kind]) {
-            const value = record.customFields?.[field.id];
-            if (value !== undefined) record.customFields[field.id] = Array.isArray(value) ? value.filter(id => known.includes(id)) : known.includes(value) ? value : '';
-          }
-          const clean = filters => { if (filters?.[field.id]) filters[field.id].values = filters[field.id].values.filter(id => known.includes(id)); };
-          if (kind === 'tasks') for (const saved of next.settings.savedViews || []) clean(saved.columnFilters);
-        }
-      }
-      const columnIds = normalizeTaskColumns(settings.taskColumns, settings.taskFields).map(column => column.id);
-      for (const saved of next.settings.savedViews || []) {
-        saved.columns = normalizeTaskColumns(saved.columns, settings.taskFields);
-        saved.sort = saved.sort.filter(entry => !entry.key.startsWith('custom-') || columnIds.includes(entry.key));
-        if (!saved.sort.length) saved.sort = [{ key: 'releaseDate', direction: 'asc' }];
-        if (saved.columnFilters) saved.columnFilters = Object.fromEntries(Object.entries(saved.columnFilters).filter(([id]) => columnIds.includes(id)));
-      }
+      CustomColumns.cleanData(next);
     }, organizationName);
     statusFilter = '';
     activeSavedViewId = '';
@@ -786,6 +786,7 @@ const taskColumnDefs = {
 const issueColumnDefs = { code: { name: "Portal code" }, incident: { name: 'Incident' }, problem: { name: 'Problem' }, linked: { name: "Link", type: 'number' } };
 const fieldTypeNames = { text: "Text", richtext: "Rich text", number: "Number", date: "Date", select: "Single choice", multiselect: "Multiple choice", url: 'Link', effort: "Effort (hours)", boolean: "Yes / No" };
 function columnDef(id, kind = 'tasks', settings = data.settings) {
+  if (!hasColumn(id, kind, settings)) return undefined;
   const base = (kind === 'tasks' ? taskColumnDefs : issueColumnDefs)[id];
   if (base) return base;
   const field = CustomColumns.fieldsOf(settings, kind).find(field => field.id === id);
@@ -795,8 +796,8 @@ function columnName(id, kind = 'tasks') {
   const def = columnDef(id, kind);
   return def?.field ? def.name : t(def?.name || id);
 }
-const shownColumns = () => normalizeTaskColumns(data.settings.taskColumns, data.settings.taskFields).filter(column => column.visible).map(column => column.id);
-const shownIssueColumns = () => CustomColumns.normalizeIssueColumns(data.settings.issueColumns, data.settings.issueFields).filter(column => column.visible).map(column => column.id);
+const shownColumns = () => configuredColumns().filter(column => column.visible).map(column => column.id);
+const shownIssueColumns = () => configuredColumns('issues').filter(column => column.visible).map(column => column.id);
 function customText(value, field) {
   if (value === undefined || value === null || value === '') return '';
   if (field.type === 'richtext') return plain(value);
@@ -806,7 +807,14 @@ function customText(value, field) {
   if (['select', 'multiselect'].includes(field.type)) return CustomColumns.choices(field).filter(option => Array.isArray(value) ? value.includes(option.id) : value === option.id).map(option => option.name).join(', ');
   return Array.isArray(value) ? value.join(', ') : String(value);
 }
-function customSearchValues(record, kind) { return CustomColumns.fieldsOf(data.settings, kind).map(field => customText(record.customFields?.[field.id], field)); }
+function searchableValues(record, kind, context) {
+  return CustomColumns.schemaOf(data.settings, kind).flatMap(field => {
+    const value = field.builtin ? columnValue(record, field.id, kind, context) : record.customFields?.[field.id];
+    if (value === undefined || value === null || value === '') return [];
+    if (field.type === 'date') return [String(value), formatDate(value)];
+    return [customText(value, field)];
+  });
+}
 function choiceButton(record, field, kind, values = record.customFields?.[field.id] || []) {
   const chips = CustomColumns.choices(field).filter(option => values.includes(option.id)).map(option => pill(option.name, option.color, 'tag-pill')).join('');
   return `<button type="button" class="task-tags-button" data-choice-picker="${esc(`${kind}:${record.id}:${field.id}`)}" data-choice-kind="${kind}" data-choice-record="${esc(record.id)}" data-choice-field="${field.id}" aria-haspopup="dialog" aria-expanded="false" aria-label="${esc(field.name)}"><span class="tag-chips">${chips || `<span class="muted">+ ${esc(field.name)}</span>`}</span>${ico('chevron-down')}</button>`;
@@ -971,9 +979,9 @@ function renderTasks() {
   if (highlightFilter && !['__any', '__none'].includes(highlightFilter) && !highlights.some(h => h.id === highlightFilter)) highlightFilter = '';
   if (highlighter && highlighter !== 'erase' && !highlights.some(h => h.id === highlighter)) highlighter = '';
   if (highlighter === 'erase' && !highlights.length) highlighter = '';
-  const sortable = [...columns.map(id => columnDef(id).sort).filter(Boolean), 'sequence'];
+  const sortable = [...columns.map(id => columnDef(id).sort).filter(Boolean), ...(hasColumn('sequence') ? ['sequence'] : [])];
   sort = sort.filter(s => sortable.includes(s.key));
-  if (!sort.length) sort = [{ key: 'releaseDate', direction: 'asc' }];
+  if (!sort.length) sort = CustomColumns.defaultSort(data.settings);
   const highlightOptions = [['', "All highlights"], ['__any', "Highlighted only"], ['__none', "Not highlighted"]].map(([value, label]) => `<option value="${value}" ${value === highlightFilter ? 'selected' : ''}>${esc(t(label))}</option>`).join('') +
     highlights.map(h => `<option value="${esc(h.id)}" ${h.id === highlightFilter ? 'selected' : ''}>● ${esc(h.name)}</option>`).join('');
   const savedViewOptions = `<option value="">${esc(t("Choose a view…"))}</option>` + (savedViews.length ? `<optgroup label="${esc(t("Saved views"))}">${savedViews.map(saved => `<option value="${esc(saved.id)}" ${saved.id === activeSavedViewId ? 'selected' : ''}>${esc(saved.name)}</option>`).join('')}</optgroup>` : '') + releaseViewOptions();
@@ -1034,11 +1042,20 @@ function renderTasks() {
   $('#bulk-edit').onclick = () => bulkDialog([...selectedTasks]);
   $('#bulk-excel').onclick = () => excelDialog({ scope: 'selected' });
   $('#bulk-clear').onclick = () => clearSelection();
+  if (!hasColumn('status')) $('#status-filter').remove();
+  if (!hasColumn('highlight')) $('#highlight-filter').remove();
+  if (!hasColumn('releaseDate')) $('#reset-sort').remove();
+  if (!hasColumn('incident') || !hasColumn('code') || !hasColumn('incident', 'issues') || !hasColumn('code', 'issues')) $('#duplicates-only').closest('label').hidden = true;
+  const statCards = document.querySelectorAll('.stats > .stat');
+  statCards[1].hidden = !hasColumn('releaseDate');
+  statCards[2].hidden = !hasColumn('effort');
+  statCards[3].hidden = !hasColumn('highlight') && !hasColumn('status');
 }
 // Every release date gets a ready-made view; ids are "release:<date>" ("release:" for tasks without a date) and are never stored.
 const RELEASE_VIEW = 'release:';
 function releaseViewGroups() {
   const counts = new Map();
+  if (!hasColumn('releaseDate')) return { upcoming: [], past: [], counts, unassigned: 0 };
   let unassigned = 0;
   for (const task of data.tasks) {
     if (task.hidden && !showHidden) continue;
@@ -1075,7 +1092,7 @@ function clearActiveSavedView() {
 function savedViewSnapshot(name, id = uid()) {
   return {
     id, name: name.trim(), search, statusFilter, highlightFilter, showHidden, duplicatesOnly,
-    sort: structuredClone(sort), columns: normalizeTaskColumns(data.settings.taskColumns, data.settings.taskFields), columnFilters: structuredClone(columnFilters.tasks)
+    sort: structuredClone(sort), columns: configuredColumns(), columnFilters: structuredClone(columnFilters.tasks)
   };
 }
 function savedViewSummary(saved) {
@@ -1111,8 +1128,8 @@ async function saveSavedView(name, existingId = '') {
 async function applySavedView(id) {
   const saved = (data.settings.savedViews || []).find(item => item.id === id);
   if (!saved) throw new Error(t("The saved view no longer exists."));
-  const columns = normalizeTaskColumns(saved.columns, data.settings.taskFields);
-  if (JSON.stringify(columns) !== JSON.stringify(normalizeTaskColumns(data.settings.taskColumns, data.settings.taskFields))) {
+  const columns = configuredColumns('tasks', data.settings, saved.columns);
+  if (JSON.stringify(columns) !== JSON.stringify(configuredColumns())) {
     await commit(next => { next.settings.taskColumns = structuredClone(columns); });
   }
   search = saved.search;
@@ -1184,17 +1201,17 @@ function taskCell(column, task, status, urgency, links, duplicateGroups = []) {
 function drawTaskRows() {
   const duplicates = duplicatesOf(), issues = indexIssues(data.issues), tasks = sortedRows(filteredTasks(duplicates, issues)), columns = shownColumns();
   $('#task-rows').innerHTML = tasks.map(task => {
-    const status = data.settings.statuses.find(s => s.id === task.statusId), urgency = data.settings.urgencies.find(s => s.id === task.urgencyId);
+    const status = statusOf(task), urgency = urgencyOf(task);
     const links = matchIssues(task, issues), mark = highlightOf(task), duplicateGroups = duplicates.tasks.get(task.id) || [];
     const classes = [status.highlight ? 'highlighted' : '', mark ? 'marked' : '', task.hidden ? 'hidden-row' : '', duplicateGroups.length ? 'duplicate-row' : '', selectedTasks.has(task.id) ? 'selected' : ''].filter(Boolean).join(' ');
     const markLabel = mark ? fillText("Highlight: {0}", mark.name) : t("Highlight row");
     const duplicateLabel = duplicateGroups.length ? [t("Possible duplicate"), ...taskDuplicateLines(task.id, duplicateGroups)].join('\n') : '';
     const duplicateFlag = duplicateGroups.length ? `<button type="button" class="icon-button dup-flag" data-dup-incident="${esc(duplicateGroups[0].incident)}" title="${esc(duplicateLabel + '\n' + t("Click to see only the tasks involved."))}" aria-label="${esc(duplicateLabel.replaceAll('\n', '. '))}">${ico('copy')}</button>` : '';
-    const selectLabel = fillText("Select {0}", task.code);
+    const selectLabel = fillText("Select {0}", recordLabel(task));
     return `<tr data-task-row="${esc(task.id)}" title="${esc(t("Double-click the row to edit."))}" class="${classes}" style="--row-color:${status.color}${mark ? `;--mark:${mark.color}` : ''}"><td class="select-cell"><label class="select-hit" title="${esc(selectLabel + '\n' + t("Shift + click to select a range."))}"><input type="checkbox" data-select-task="${esc(task.id)}" ${selectedTasks.has(task.id) ? 'checked' : ''} aria-label="${esc(selectLabel)}"></label></td>${columns.map(column => taskCell(column, task, status, urgency, links, duplicateGroups)).join('')}<td class="row-actions">${duplicateFlag}<button type="button" class="icon-button mark-button ${mark ? 'is-marked' : ''}" data-mark-task="${esc(task.id)}" title="${esc(markLabel)}" aria-label="${esc(markLabel)}" aria-haspopup="menu" aria-expanded="false"><i class="mark-dot"></i></button><button class="icon-button" data-toggle-task="${task.id}" title="${esc(t(task.hidden ? "Show task" : "Hide task"))}">${ico(task.hidden ? 'eye' : 'eye-off')}</button><button class="icon-button" data-edit-task="${task.id}" title="${esc(t("Edit task"))}">${ico('more')}</button></td></tr>`;
   }).join('') || `<tr><td colspan="${columns.length + 2}" class="empty">${esc(t("No tasks found. Create a new task or change the filters."))}</td></tr>`;
-  document.querySelectorAll('#task-rows .select-cell').forEach((cell, index) => cell.insertAdjacentHTML('afterbegin', dragHandle(tasks[index].code)));
-  sortable($('#task-rows'), 'tr[data-task-row]', async (from, to) => {
+  if (hasColumn('sequence')) document.querySelectorAll('#task-rows .select-cell').forEach((cell, index) => cell.insertAdjacentHTML('afterbegin', dragHandle(recordLabel(tasks[index]))));
+  if (hasColumn('sequence')) sortable($('#task-rows'), 'tr[data-task-row]', async (from, to) => {
     try {
       await commit(next => reorderTaskSequences(next.tasks, tasks.map(task => task.id), from, to));
       sort = [{ key: 'sequence', direction: 'asc' }];
@@ -1215,6 +1232,7 @@ function drawTaskRows() {
     await commit(next => { const task = next.tasks.find(t => t.id === id); if (task) task.hidden = hidden; }); rerenderPreservingView();
   }));
   document.querySelectorAll('[data-mark-task]').forEach(b => b.onclick = () => openMarkMenu(b));
+  if (!hasColumn('highlight')) document.querySelectorAll('[data-mark-task]').forEach(button => button.remove());
   document.querySelectorAll('#task-rows [data-dup-incident]').forEach(b => b.onclick = () => showTaskDuplicates(b.dataset.dupIncident));
 }
 // Lists every task sharing the incident, hidden ones included, so duplicates can be compared side by side.
@@ -1293,8 +1311,8 @@ function bulkDialog(ids, context = '') {
   const keep = `<option value="">${esc(t("— Keep unchanged —"))}</option>`;
   const statuses = settings.statuses.filter(status => tasks.some(task => task.statusId === status.id));
   const items = tasks.map(task => {
-    const status = settings.statuses.find(s => s.id === task.statusId);
-    return `<label class="bulk-item ${task.hidden ? 'is-hidden' : ''}"><input type="checkbox" name="taskIds" value="${esc(task.id)}" data-status="${esc(task.statusId)}" checked><strong>${esc(task.code)}</strong><span class="bulk-desc">${esc(plain(task.description) || t("No description"))}</span>${pill(status.name, status.color)}<span class="bulk-date" style="--date:${task.releaseDate ? dateColor(task.releaseDate) : '#929bb2'}">${ico('calendar')}${formatDate(task.releaseDate)}</span></label>`;
+    const status = statusOf(task);
+    return `<label class="bulk-item ${task.hidden ? 'is-hidden' : ''}"><input type="checkbox" name="taskIds" value="${esc(task.id)}" data-status="${esc(task.statusId)}" checked><strong>${esc(recordLabel(task))}</strong><span class="bulk-desc">${esc(plain(task.description) || t("No description"))}</span>${pill(status.name, status.color)}<span class="bulk-date" style="--date:${task.releaseDate ? dateColor(task.releaseDate) : '#929bb2'}">${ico('calendar')}${formatDate(task.releaseDate)}</span></label>`;
   }).join('');
   const tagRows = tags.map(tag => `<label class="bulk-tag">${pill(tag.name, tag.color, 'tag-pill')}<select name="tag:${esc(tag.id)}" aria-label="${esc(fillText('Tag {0}', tag.name))}"><option value="">—</option><option value="add">${esc(t("＋ Add"))}</option><option value="remove">${esc(t("− Remove"))}</option></select></label>`).join('');
   openModal(ui`<form id="bulk-form" novalidate><div class="modal-heading"><div><div class="eyebrow">${esc(data.settings.tabNames[0])}</div><h2>${esc(t("Bulk edit"))}</h2></div><button type="button" class="icon-button" data-close aria-label="Close">${ico('close')}</button></div>${context ? `<p class="section-description">${esc(context)}</p>` : ''}
@@ -1309,15 +1327,22 @@ function bulkDialog(ids, context = '') {
     </div><p class="bulk-summary" id="bulk-summary" aria-live="polite"></p>
     <div class="modal-actions"><button type="button" class="button danger" id="bulk-delete">Delete…</button><span class="spacer"></span><button type="button" class="button" data-close>Cancel</button><button type="submit" class="button primary" id="bulk-apply">Apply</button></div></form>`);
   const form = $('#bulk-form'), boxes = [...form.querySelectorAll('input[name="taskIds"]')];
+  for (const [id, name] of [['status', 'statusId'], ['urgency', 'urgencyId'], ['highlight', 'highlightId'], ['releaseDate', 'releaseMode']]) {
+    if (!hasColumn(id)) form.elements[name].closest('.field').remove();
+  }
+  if (!hasColumn('tags')) form.querySelector('.bulk-tags')?.remove();
+  if (!hasColumn('releaseDate')) form.querySelectorAll('.bulk-date').forEach(element => element.remove());
+  if (!hasColumn('status')) form.querySelectorAll('.bulk-item .pill, [data-bulk-status]').forEach(element => element.remove());
+  if (!hasColumn('description')) form.querySelectorAll('.bulk-desc').forEach(element => element.remove());
   const chosen = () => new Set(boxes.filter(box => box.checked).map(box => box.value));
   const summarize = () => {
-    const ids = chosen(), mode = form.elements.releaseMode.value;
+    const ids = chosen(), mode = form.elements.releaseMode?.value;
     let pending = 0;
     try { pending = bulkPlan(new FormData(form)).steps.length; } catch { pending = 1; }
-    form.elements.releaseDate.hidden = mode !== 'set';
-    form.elements.shiftDays.hidden = mode !== 'shift';
+    if (form.elements.releaseDate) form.elements.releaseDate.hidden = mode !== 'set';
+    if (form.elements.shiftDays) form.elements.shiftDays.hidden = mode !== 'shift';
     const dated = tasks.filter(task => ids.has(task.id) && task.releaseDate).length;
-    $('#bulk-release-hint').textContent = mode === 'shift' ? fillText("Only tasks with a date: {0} of {1}.", dated, ids.size) : '';
+    if ($('#bulk-release-hint')) $('#bulk-release-hint').textContent = mode === 'shift' ? fillText("Only tasks with a date: {0} of {1}.", dated, ids.size) : '';
     $('#bulk-summary').textContent = !ids.size ? t("Select at least one task.") : pending ? fillText("Changes will be applied to {0}.", plural(ids.size, "tasks")) : fillText("{0} ready: choose what to change.", plural(ids.size, "tasks"));
     $('#bulk-apply').disabled = !ids.size || !pending;
     $('#bulk-delete').disabled = !ids.size;
@@ -1372,6 +1397,7 @@ function openSettingsTab(id) {
 function drawHighlighter() {
   const bar = $('.highlighter-bar');
   if (!bar) return;
+  if (!hasColumn('highlight')) { bar.hidden = true; bar.innerHTML = ''; return; }
   const highlights = highlightsOf(), active = highlights.find(h => h.id === highlighter);
   const hint = highlighter === 'erase' ? t("Eraser active: click rows to remove their highlight. Press Esc to finish.")
     : active ? fillText("Highlighter “{0}” active: click rows to color them, click again to remove the color. Press Esc to finish.", active.name)
@@ -1636,11 +1662,11 @@ function columnEditor(container, columns, kind = 'tasks', settings = data.settin
   draw();
 }
 function columnsDialog(kind = 'tasks') {
-  const columns = kind === 'tasks' ? normalizeTaskColumns(data.settings.taskColumns, data.settings.taskFields) : CustomColumns.normalizeIssueColumns(data.settings.issueColumns, data.settings.issueFields);
+  const columns = configuredColumns(kind);
   openModal(`<div class="modal-heading"><div><div class="eyebrow">${esc(t("TASK"))}</div><h2>${esc(t("List columns"))}</h2></div><button type="button" class="icon-button" data-close aria-label="${esc(t("Close"))}">${ico('close')}</button></div><p class="section-description">${esc(t("Tick the columns to show and drag them (or use the arrows) to change their order. Hiding a column does not delete any data."))}</p><div id="columns-dialog-editor"></div><div class="modal-actions"><button type="button" class="button" id="columns-default">${esc(t("Restore defaults"))}</button><span class="spacer"></span><button type="button" class="button" data-close>${esc(t("Cancel"))}</button><button type="button" class="button primary" id="columns-apply">${esc(t("Apply"))}</button></div>`);
   const container = $('#columns-dialog-editor');
   columnEditor(container, columns, kind);
-  $('#columns-default').onclick = () => { columns.splice(0, columns.length, ...(kind === 'tasks' ? defaultTaskColumns(data.settings.taskFields) : CustomColumns.normalizeIssueColumns(undefined, data.settings.issueFields))); columnEditor(container, columns, kind); };
+  $('#columns-default').onclick = () => { columns.splice(0, columns.length, ...configuredColumns(kind, data.settings, [])); columnEditor(container, columns, kind); };
   $('#columns-apply').onclick = action(async () => {
     await commit(next => { next.settings[kind === 'tasks' ? 'taskColumns' : 'issueColumns'] = structuredClone(columns); });
     clearActiveSavedView();
@@ -1661,17 +1687,15 @@ function globalSearchResults(query) {
   const results = [], issues = indexIssues(data.issues);
   for (const task of data.tasks) {
     const links = matchIssues(task, issues), status = data.settings.statuses.find(item => item.id === task.statusId)?.name || '';
-    const urgency = data.settings.urgencies.find(item => item.id === task.urgencyId)?.name || '';
-    const mark = highlightOf(task)?.name || '', tags = tagsOf(task).map(tag => tag.name);
-    const fields = [task.code, String(task.sequence), plain(task.description), plain(task.notes), task.releaseDate, formatDate(task.releaseDate), status, urgency, mark, ...tags, ...Object.values(links).flat(), ...customSearchValues(task, 'tasks')];
+    const fields = searchableValues(task, 'tasks', issues);
     if (!fields.some(value => String(value || '').toLocaleLowerCase().includes(needle))) continue;
-    const detail = [task.releaseDate ? formatDate(task.releaseDate) : t("Unscheduled"), status, links.incidents.length && `INC ${links.incidents.join(', ')}`, links.problems.length && `PRB ${links.problems.join(', ')}`, task.hidden && t("Hidden")].filter(Boolean).join(' · ');
-    results.push({ kind: 'task', id: task.id, title: task.code, detail, subtitle: plain(task.description) });
+    const detail = [hasColumn('releaseDate') && (task.releaseDate ? formatDate(task.releaseDate) : t("Unscheduled")), hasColumn('status') && status, links.incidents.length && `INC ${links.incidents.join(', ')}`, links.problems.length && `PRB ${links.problems.join(', ')}`, task.hidden && t("Hidden")].filter(Boolean).join(' · ');
+    results.push({ kind: 'task', id: task.id, title: recordLabel(task), detail, subtitle: hasColumn('description') ? plain(task.description) : '' });
     if (results.length === 40) return results;
   }
   for (const issue of data.issues) {
-    if (![issue.code, issue.incident, issue.problem, ...customSearchValues(issue, 'issues')].some(value => value.toLocaleLowerCase().includes(needle))) continue;
-    results.push({ kind: 'issue', id: issue.id, title: issue.code, detail: [issue.incident && `INC ${issue.incident}`, issue.problem && `PRB ${issue.problem}`].filter(Boolean).join(' · '), subtitle: '' });
+    if (!searchableValues(issue, 'issues', linkedCounts()).some(value => value.toLocaleLowerCase().includes(needle))) continue;
+    results.push({ kind: 'issue', id: issue.id, title: recordLabel(issue, 'issues'), detail: [issue.incident && `INC ${issue.incident}`, issue.problem && `PRB ${issue.problem}`].filter(Boolean).join(' · '), subtitle: '' });
     if (results.length === 40) return results;
   }
   return results;
@@ -1825,18 +1849,26 @@ async function csvImportDialog(file, kind) {
   });
   parse();
 }
+function pruneColumnEditors(form, kind) {
+  for (const field of CustomColumns.BUILTIN_FIELDS[kind]) {
+    if (hasColumn(field.id, kind)) continue;
+    const names = field.id === 'effort' ? ['days', 'hours'] : [field.property];
+    for (const name of names) if (name) form.querySelector(`[name="${name}"]`)?.closest('.field')?.remove();
+    if (field.type === 'richtext') form.querySelector(`#${field.id}-editor`)?.closest('.field')?.remove();
+  }
+}
 function taskDialog(existing) {
   const t = existing || {
     id: uid(), code: '', sequence: Math.max(0, ...data.tasks.map(t => t.sequence)) + 1, url: '', description: '',
-    statusId: data.settings.statuses[0].id, urgencyId: data.settings.urgencies[Math.min(2, data.settings.urgencies.length - 1)].id,
+    statusId: hasColumn('status') ? data.settings.statuses[0]?.id || '' : '', urgencyId: hasColumn('urgency') ? data.settings.urgencies[Math.min(2, data.settings.urgencies.length - 1)]?.id || '' : '',
     effortHours: 0, releaseDate: '', notes: '', hidden: false, highlightId: '', tagIds: []
   };
   const days = Math.floor(t.effortHours / data.settings.hoursPerDay), hours = Math.round((t.effortHours - days * data.settings.hoursPerDay) * 100) / 100;
   openModal(ui`<form id="task-form"><div class="modal-heading"><div><div class="eyebrow">TASK</div><h2>${tr(existing ? "Edit task" : "A new direction")}</h2></div><button type="button" class="icon-button" data-close aria-label="Close">${ico('close')}</button></div><div class="task-edit-layout"><div class="form-grid task-edit-fields">
-    <label class="field">Portal code *<input name="code" required maxlength="200" value="${esc(t.code)}" placeholder="es. PRJ-1042"></label>
+    <label class="field">Portal code<input name="code" maxlength="200" value="${esc(t.code)}" placeholder="es. PRJ-1042"></label>
     <label class="field">Sequence *<input name="sequence" type="number" min="0" step="1" required value="${t.sequence}"></label>
-    <label class="field">Urgency<select name="urgencyId">${optionList(data.settings.urgencies, t.urgencyId)}</select></label>
-    <label class="field">Status<select name="statusId">${optionList(data.settings.statuses, t.statusId)}</select></label>
+    <label class="field">Urgency<select name="urgencyId">${optionList(data.settings.urgencies, t.urgencyId, "Unassigned")}</select></label>
+    <label class="field">Status<select name="statusId">${optionList(data.settings.statuses, t.statusId, "Unassigned")}</select></label>
     <label class="field">Release date<input name="releaseDate" type="date" value="${esc(t.releaseDate)}"></label>
     <label class="field" title="Colors the row in the task list. Colors are managed in Settings › Highlighters.">Highlight<select name="highlightId">${optionList(highlightsOf(), currentMark(t), "No highlight")}</select></label>
     <label class="field"><span class="task-effort-label">Effort in days <small>${esc(fillText("1 day = {0} hours", data.settings.hoursPerDay))}</small></span><input name="days" type="number" min="0" step="0.01" value="${days}"></label>
@@ -1850,16 +1882,23 @@ function taskDialog(existing) {
     ${editor('notes-editor', "Notes", t.notes)}
     </div></div><div class="modal-actions">${existing ? ui`<button type="button" class="button danger" id="delete-task">Delete</button>` : ''}<span class="spacer"></span><button type="button" class="button" data-close>Cancel</button><button type="submit" class="button primary">Save task</button></div></form>`);
   const form = $('#task-form');
+  pruneColumnEditors(form, 'tasks');
+  if (!$('.task-edit-text .field')) $('.task-edit-text').remove();
+  if (!hasColumn('code') || !hasColumn('code', 'issues') || !['incident', 'problem'].some(id => hasColumn(id) && hasColumn(id, 'issues'))) $('#match-preview').remove();
   const updateMatches = () => {
-    const code = form.elements.code.value, links = matchIssues({ code }, data.issues);
+    if (!$('#match-preview')) return;
+    const code = form.elements.code?.value || '', links = matchIssues({ code }, data.issues);
+    if (!hasColumn('incident') || !hasColumn('incident', 'issues')) links.incidents = [];
+    if (!hasColumn('problem') || !hasColumn('problem', 'issues')) links.problems = [];
     const groups = findDuplicates([...data.tasks.filter(task => task.id !== t.id), { ...t, code }], data.issues).tasks.get(t.id) || [];
     $('#match-preview').classList.toggle('has-duplicates', groups.length > 0);
-    $('#match-preview').innerHTML = ui`<span>${ico('link')}Automatic link by portal code</span><div>Incident: <strong>${esc(links.incidents.join(', ') || '—')}</strong> &nbsp; Problem: <strong>${esc(links.problems.join(', ') || '—')}</strong></div>` +
+    $('#match-preview').innerHTML = ui`<span>${ico('link')}Automatic link by portal code</span>` + `<div>${hasColumn('incident') && hasColumn('incident', 'issues') ? `Incident: <strong>${esc(links.incidents.join(', ') || '—')}</strong>` : ''} ${hasColumn('problem') && hasColumn('problem', 'issues') ? `Problem: <strong>${esc(links.problems.join(', ') || '—')}</strong>` : ''}</div>` +
       (groups.length ? `<p class="duplicate-warning"><strong>${ico('copy')}${esc(tr("Possible duplicate"))}</strong>${taskDuplicateLines(t.id, groups).map(line => `<span>${esc(line)}</span>`).join('')}</p>` : '');
   };
-  form.elements.code.oninput = updateMatches; updateMatches(); wireEditors();
-  const generatedLink = () => portalUrl({ code: form.elements.code.value, url: '' }, data.settings);
+  form.elements.code?.addEventListener('input', updateMatches); updateMatches(); wireEditors();
+  const generatedLink = () => portalUrl({ code: form.elements.code?.value || '', url: '' }, data.settings);
   const updateLink = () => {
+    if (!form.elements.url) return;
     const override = normalizeUrl(form.elements.url.value), generated = generatedLink(), effective = override || generated;
     form.elements.url.placeholder = generated || tr("https://portal.company.com/browse/PRJ-1042");
     $('#portal-link-preview').innerHTML = !effective
@@ -1868,8 +1907,8 @@ function taskDialog(existing) {
         ? `${esc(tr(override ? "Specific link" : "Link generated from the organization template"))}: <a class="portal-link" href="${esc(effective)}" data-open-url>${esc(effective)}${ico('external')}</a>`
         : `<span class="portal-error">${esc(tr("The link must start with http:// or https://."))}</span>`;
   };
-  form.elements.code.addEventListener('input', updateLink);
-  form.elements.url.oninput = updateLink; updateLink();
+  form.elements.code?.addEventListener('input', updateLink);
+  form.elements.url?.addEventListener('input', updateLink); updateLink();
   form.onsubmit = action(async event => {
     event.preventDefault();
     const fields = new FormData(form);
@@ -1877,9 +1916,9 @@ function taskDialog(existing) {
     if (url && !isWebUrl(url)) throw new Error("The link must start with http:// or https://.");
     if (url === generatedLink()) url = '';
     const item = {
-      ...t, code: fields.get('code').trim(), sequence: Number(fields.get('sequence')), url,
-      description: sanitize($('#description-editor').innerHTML), notes: sanitize($('#notes-editor').innerHTML),
-      urgencyId: fields.get('urgencyId'), statusId: fields.get('statusId'), releaseDate: fields.get('releaseDate'),
+      ...t, code: (fields.get('code') || '').trim(), sequence: Number(fields.get('sequence')), url,
+      description: sanitize($('#description-editor')?.innerHTML || ''), notes: sanitize($('#notes-editor')?.innerHTML || ''),
+      urgencyId: fields.get('urgencyId') || '', statusId: fields.get('statusId') || '', releaseDate: fields.get('releaseDate') || '',
       effortHours: Math.round((Number(fields.get('days')) * data.settings.hoursPerDay + Number(fields.get('hours'))) * 100) / 100,
       hidden: fields.has('hidden'), highlightId: fields.get('highlightId') || '', customFields: readCustomEditors(form, 'tasks')
     };
@@ -1901,12 +1940,12 @@ function confirmDialog(title, message, callback) {
 }
 function linkedCounts() {
   const counts = new Map();
-  for (const task of data.tasks) { const code = task.code.trim().toUpperCase(); counts.set(code, (counts.get(code) || 0) + 1); }
+  for (const task of data.tasks) { const code = task.code.trim().toUpperCase(); if (code) counts.set(code, (counts.get(code) || 0) + 1); }
   return counts;
 }
 function filteredIssues(query = issueSearch, duplicates = duplicatesOf(), counts = linkedCounts()) {
   return data.issues.filter(issue => (!issueDuplicatesOnly || duplicates.issues.has(issue.id)) &&
-    (!query || [issue.code, issue.incident, issue.problem, ...customSearchValues(issue, 'issues')].some(value => value.toLocaleLowerCase().includes(query.toLocaleLowerCase()))) &&
+    (!query || searchableValues(issue, 'issues', counts).some(value => value.toLocaleLowerCase().includes(query.toLocaleLowerCase()))) &&
     passesColumnFilters(issue, 'issues', counts));
 }
 function renderIssues() {
@@ -1951,25 +1990,26 @@ function renderIssues() {
 function issueDialog(existing) {
   const issue = existing || { id: uid(), code: '', incident: '', problem: '' };
   openModal(ui`<form id="issue-form"><div class="modal-heading"><h2>${t(existing ? "Edit association" : "New association")}</h2><button class="icon-button" type="button" data-close aria-label="Close">${ico('close')}</button></div><div class="form-grid">
-    <label class="field full">Portal code *<input name="code" required value="${esc(issue.code)}" list="task-codes"><datalist id="task-codes">${[...new Set(data.tasks.map(t => t.code))].map(code => `<option value="${esc(code)}">`).join('')}</datalist></label>
+    <label class="field full">Portal code<input name="code" value="${esc(issue.code)}" list="task-codes"><datalist id="task-codes">${[...new Set(data.tasks.map(t => t.code).filter(Boolean))].map(code => `<option value="${esc(code)}">`).join('')}</datalist></label>
     <label class="field">Incident<input name="incident" value="${esc(issue.incident)}" placeholder="INC-00001"></label><label class="field">Problem<input name="problem" value="${esc(issue.problem)}" placeholder="PRB-00001"></label>
     <p class="duplicate-warning full" id="issue-duplicate" hidden></p>
     ${customEditors('issues', issue)}
-    <p class="muted full">Specify at least an incident or a problem. Codes can be reused across associations.</p></div><div class="modal-actions">${existing ? ui`<button type="button" class="button danger" id="delete-issue">Delete</button>` : ''}<span class="spacer"></span><button type="button" class="button" data-close>Cancel</button><button class="button primary" type="submit">Save association</button></div></form>`);
+    </div><div class="modal-actions">${existing ? ui`<button type="button" class="button danger" id="delete-issue">Delete</button>` : ''}<span class="spacer"></span><button type="button" class="button" data-close>Cancel</button><button class="button primary" type="submit">Save association</button></div></form>`);
   const form = $('#issue-form');
+  pruneColumnEditors(form, 'issues');
   // Warns while typing when the incident is already in another association; saving stays possible.
   const updateDuplicate = () => {
-    const draft = { id: issue.id, code: form.elements.code.value, incident: form.elements.incident.value, problem: form.elements.problem.value };
+    const draft = { id: issue.id, code: form.elements.code?.value || '', incident: form.elements.incident?.value || '', problem: form.elements.problem?.value || '' };
     const issues = [...data.issues.filter(i => i.id !== issue.id), draft], result = findDuplicates(data.tasks, issues), group = result.issues.get(issue.id);
     $('#issue-duplicate').hidden = !group;
     $('#issue-duplicate').innerHTML = group ? `<strong>${ico('copy')}${esc(t(result.identical.includes(issue.id) ? "An identical association already exists" : "Incident already present"))}</strong><span>${esc(issueDuplicateLine(issue.id, group, issues))}</span><span>${esc(t("You can still save: the association will be flagged as a duplicate."))}</span>` : '';
   };
-  for (const name of ['code', 'incident', 'problem']) form.elements[name].addEventListener('input', updateDuplicate);
+  for (const name of ['code', 'incident', 'problem']) form.elements[name]?.addEventListener('input', updateDuplicate);
   updateDuplicate(); wireEditors();
   $('#issue-form').onsubmit = action(async e => {
     e.preventDefault();
     const fields = new FormData(e.target);
-    const item = { ...issue, id: issue.id, code: fields.get('code').trim(), incident: fields.get('incident').trim(), problem: fields.get('problem').trim(), customFields: readCustomEditors(form, 'issues') };
+    const item = { ...issue, id: issue.id, code: (fields.get('code') || '').trim(), incident: (fields.get('incident') || '').trim(), problem: (fields.get('problem') || '').trim(), customFields: readCustomEditors(form, 'issues') };
     await commit(next => {
       const index = next.issues.findIndex(i => i.id === item.id);
       if (index < 0) next.issues.push(item); else next.issues[index] = item;
@@ -1981,10 +2021,15 @@ function issueDialog(existing) {
   });
 }
 function miniTask(t, readOnly = false) {
-  const status = data.settings.statuses.find(s => s.id === t.statusId), urgency = data.settings.urgencies.find(s => s.id === t.urgencyId), mark = highlightOf(t);
-  return `<article class="task-card ${t.hidden ? 'is-hidden' : ''} ${mark ? 'is-marked' : ''}" style="--card-color:${status.color}${mark ? `;--mark:${mark.color}` : ''}"><div class="card-top">${readOnly ? `<strong class="code-label">${esc(t.code)}</strong>` : `<button class="code-link" data-card="${t.id}">${esc(t.code)}</button>`}${portalAnchor(portalUrl(t, data.settings), t.code, 'external-link card-portal-link')}<span class="card-sequence">${t.hidden ? `<span class="hidden-badge" title="${esc(tr("Hidden from the task list"))}">${ico('eye-off')}${tr("Hidden in list")}</span>` : ''}#${t.sequence}</span></div><div class="card-title">${esc(plain(t.description) || tr("No description"))}</div><div class="card-meta">${pill(urgency.name, urgency.color)}<span>${effort(t.effortHours)}</span>${mark ? `<span class="mark-chip" title="${esc(tr("Highlight"))}">${esc(mark.name)}</span>` : ''}</div><div class="card-bottom"><span style="color:${t.releaseDate ? dateColor(t.releaseDate) : 'inherit'}">${ico('calendar')}${formatDate(t.releaseDate)}</span>${!readOnly ? pill(status.name, status.color) : ''}</div></article>`;
+  const status = statusOf(t), urgency = urgencyOf(t), mark = highlightOf(t), label = recordLabel(t);
+  return `<article class="task-card ${t.hidden ? 'is-hidden' : ''} ${mark ? 'is-marked' : ''}" style="--card-color:${status.color}${mark ? `;--mark:${mark.color}` : ''}"><div class="card-top">${readOnly ? `<strong class="code-label">${esc(label)}</strong>` : `<button class="code-link" data-card="${t.id}">${esc(label)}</button>`}${portalAnchor(portalUrl(t, data.settings), label, 'external-link card-portal-link')}<span class="card-sequence">${t.hidden ? `<span class="hidden-badge" title="${esc(tr("Hidden from the task list"))}">${ico('eye-off')}${tr("Hidden in list")}</span>` : ''}${hasColumn('sequence') ? '#' + t.sequence : ''}</span></div>${hasColumn('description') ? `<div class="card-title">${esc(plain(t.description) || tr("No description"))}</div>` : ''}<div class="card-meta">${hasColumn('urgency') ? pill(urgency.name, urgency.color) : ''}${hasColumn('effort') ? `<span>${effort(t.effortHours)}</span>` : ''}${mark ? `<span class="mark-chip" title="${esc(tr("Highlight"))}">${esc(mark.name)}</span>` : ''}</div><div class="card-bottom">${hasColumn('releaseDate') ? `<span style="color:${t.releaseDate ? dateColor(t.releaseDate) : 'inherit'}">${ico('calendar')}${formatDate(t.releaseDate)}</span>` : ''}${!readOnly && hasColumn('status') ? pill(status.name, status.color) : ''}</div></article>`;
+}
+function unavailableColumnView(index, id) {
+  $('#content').innerHTML = heading(data.settings.tabNames[index], '') + `<section class="panel empty"><p>${esc(fillText("This view needs the {0} column. Restore it in Column management.", t(taskColumnDefs[id].name)))}</p><button class="button" id="restore-view-column">${esc(t("Column management"))}</button></section>`;
+  $('#restore-view-column').onclick = () => openSettingsTab('custom-columns');
 }
 function renderMilestones() {
+  if (!hasColumn('releaseDate')) { unavailableColumnView(2, 'releaseDate'); return; }
   const tasks = data.tasks, dates = [...new Set(tasks.map(t => t.releaseDate).filter(Boolean))].sort();
   milestoneDay = today();
   const nextDate = nextReleaseDate(tasks, milestoneDay), nextLabel = nextDate === milestoneDay ? "Today's release" : "Next release";
@@ -1993,7 +2038,7 @@ function renderMilestones() {
   $('#content').innerHTML = heading(data.settings.tabNames[2], "Every release is a milestone. Dates and tasks stay automatically aligned.", ui`<span class="view-label">${dates.filter(Boolean).length} milestones · ${tasks.length} tasks</span>` + shortcut + excelButton()) +
     ui`<div class="milestone-shell"><div class="milestone-scroll"><div class="milestone-track">${dates.map((date, index) => {
       const group = tasks.filter(t => t.releaseDate === date), color = date ? dateColor(date) : '#929bb2', isNext = Boolean(nextDate && date === nextDate);
-      return ui`<section class="milestone-column ${isNext ? 'is-next-release' : ''}" data-release-date="${esc(date)}" ${isNext ? 'id="next-release-milestone" aria-current="step"' : ''} style="--milestone:${color}"><div class="timeline-label"><span>${date ? ui`MILESTONE ${String(index + 1).padStart(2, '0')}` : 'BACKLOG'}</span>${isNext ? `<span class="next-release-badge">${esc(t(nextLabel))}</span>` : ''}</div><div class="timeline-line"><span>${ico('diamond')}</span></div><div class="milestone-heading"><h2>${formatDate(date)}</h2><span>${group.length} tasks · ${effort(group.reduce((sum, t) => sum + t.effortHours, 0))}</span><button type="button" class="icon-button milestone-bulk" data-bulk-release="${esc(date)}" title="${esc(t("Bulk edit the tasks of this milestone"))}" aria-label="${esc(t("Bulk edit the tasks of this milestone"))}">${ico('edit')}</button></div><div class="milestone-cards">${sortedRows(group).map(t => miniTask(t)).join('')}</div></section>`;
+      return ui`<section class="milestone-column ${isNext ? 'is-next-release' : ''}" data-release-date="${esc(date)}" ${isNext ? 'id="next-release-milestone" aria-current="step"' : ''} style="--milestone:${color}"><div class="timeline-label"><span>${date ? ui`MILESTONE ${String(index + 1).padStart(2, '0')}` : 'BACKLOG'}</span>${isNext ? `<span class="next-release-badge">${esc(t(nextLabel))}</span>` : ''}</div><div class="timeline-line"><span>${ico('diamond')}</span></div><div class="milestone-heading"><h2>${formatDate(date)}</h2><span>${group.length} tasks${hasColumn('effort') ? ' · ' + effort(group.reduce((sum, t) => sum + t.effortHours, 0)) : ''}</span><button type="button" class="icon-button milestone-bulk" data-bulk-release="${esc(date)}" title="${esc(t("Bulk edit the tasks of this milestone"))}" aria-label="${esc(t("Bulk edit the tasks of this milestone"))}">${ico('edit')}</button></div><div class="milestone-cards">${sortedRows(group).map(t => miniTask(t)).join('')}</div></section>`;
     }).join('') || ui`<div class="empty">Add tasks and release dates to build your roadmap.</div>`}</div></div></div><div class="hint"><span>${ico('arrows-h')}</span> Scroll horizontally to explore releases and vertically to see all tasks. The same date has the same color in every view.</div>`;
   document.querySelectorAll('[data-card]').forEach(b => b.onclick = () => taskDialog(data.tasks.find(t => t.id === b.dataset.card)));
   document.querySelectorAll('[data-bulk-release]').forEach(button => button.onclick = () => {
@@ -2017,9 +2062,10 @@ function refreshMilestoneDate() {
 setInterval(refreshMilestoneDate, 60000);
 document.addEventListener('visibilitychange', refreshMilestoneDate);
 function renderKanban() {
+  if (!hasColumn('status')) { unavailableColumnView(3, 'status'); return; }
   const tasks = data.tasks;
   $('#content').innerHTML = heading(data.settings.tabNames[3], "A read-only view, always aligned with your tasks. One space for every status.", ui`<span class="readonly-badge">${ico('lock')}Read only</span>` + excelButton()) +
-    ui`<div class="kanban-scroll"><div class="kanban-board">${data.settings.statuses.map(status => {
+    ui`<div class="kanban-scroll"><div class="kanban-board">${workflowStatuses().map(status => {
       const items = sortTasks(tasks.filter(t => t.statusId === status.id));
       return `<section class="kanban-column" style="--column:${status.color}"><div class="kanban-heading"><span><i></i>${esc(status.name)}</span><b>${items.length}</b></div><div class="kanban-cards">${items.map(t => miniTask(t, true)).join('') || ui`<div class="kanban-empty">Room for upcoming tasks</div>`}</div></section>`;
     }).join('')}</div></div><div class="hint"><span>${ico('lock')}</span> To change a status, use the task list. Configure column order in settings.</div>`;
@@ -2091,7 +2137,8 @@ async function situationWorkbook(options, now = new Date()) {
   const header = { bold: true, color: '#ffffff', fill: '#2d3142', vertical: 'center', border: '#2d3142' }, grid = '#d9dce6', muted = '#7a8099';
   const section = text => [{ v: text, style: { bold: true, size: 12, color: '#2d3142', border: { color: '#2d3142', style: 'medium', sides: ['bottom'] } } }];
   const hours = list => list.reduce((sum, task) => sum + task.effortHours, 0);
-  const statusOf = task => settings.statuses.find(s => s.id === task.statusId), urgencyOf = task => settings.urgencies.find(s => s.id === task.urgencyId);
+  const statuses = workflowStatuses(), urgencies = hasColumn('urgency') ? [...settings.urgencies, ...(tasks.some(task => !task.urgencyId) ? [unassignedOption()] : [])] : [];
+  if (wanted.has('milestones') && !hasColumn('releaseDate') || wanted.has('kanban') && !hasColumn('status')) throw new Error(t("Selected views need deleted columns. Restore the columns or choose other sheets."));
   const nextDate = nextReleaseDate(tasks, today());
   const sheets = [];
   if (wanted.has('summary')) {
@@ -2115,18 +2162,19 @@ async function situationWorkbook(options, now = new Date()) {
       [label("Columns"), t(options.columns === 'all' ? "All columns" : "Columns visible in the list")],
       [], section(t("Totals")),
       [label("Tasks"), tasks.length], [label("Of which hidden"), hidden],
-      [label("Total effort"), total ? effort(total) : '—'], [label("Effort (hours)"), total],
-      [label("Planned releases"), new Set(dated.map(task => task.releaseDate)).size], [label("Unscheduled"), tasks.length - dated.length],
-      [label("Next release"), nextDate ? { v: nextDate, type: 'date', style: { horizontal: 'left', bold: true } } : '—', nextDate ? plural(tasks.filter(task => task.releaseDate === nextDate).length, "tasks") : ''],
-      [label("Highlighted"), highlighted], [label("With a duplicate incident"), duplicated],
-      [], ...breakdown("Status", settings.statuses, task => task.statusId),
-      [], ...breakdown("Urgency", settings.urgencies, task => task.urgencyId)
+      ...(hasColumn('effort') ? [[label("Total effort"), total ? effort(total) : '—'], [label("Effort (hours)"), total]] : []),
+      ...(hasColumn('releaseDate') ? [[label("Planned releases"), new Set(dated.map(task => task.releaseDate)).size], [label("Unscheduled"), tasks.length - dated.length],
+        [label("Next release"), nextDate ? { v: nextDate, type: 'date', style: { horizontal: 'left', bold: true } } : '—', nextDate ? plural(tasks.filter(task => task.releaseDate === nextDate).length, "tasks") : '']] : []),
+      ...(hasColumn('highlight') || hasColumn('status') ? [[label("Highlighted"), highlighted]] : []),
+      ...(hasColumn('incident') ? [[label("With a duplicate incident"), duplicated]] : []),
+      ...(hasColumn('status') ? [[], ...breakdown("Status", statuses, task => task.statusId)] : []),
+      ...(hasColumn('urgency') ? [[], ...breakdown("Urgency", urgencies, task => task.urgencyId)] : [])
     ];
     sheets.push({ name: t("Summary"), columns: [{ width: 26 }, { width: 30 }, { width: 14 }, { width: 14 }, { width: 9 }], rows, gridLines: false, tabColor: '#2d3142', merges: [{ row: 0, col: 0, cols: 5 }] });
   }
   if (wanted.has('tasks')) {
     const issues = indexIssues(data.issues);
-    const ids = options.columns === 'all' ? normalizeTaskColumns(settings.taskColumns, settings.taskFields).map(column => column.id) : shownColumns();
+    const ids = options.columns === 'all' ? configuredColumns().map(column => column.id) : shownColumns();
     const widths = { sequence: 7, code: 16, link: 40, description: 56, urgency: 14, status: 18, highlight: 18, tags: 22, effort: 11, incident: 18, problem: 18, releaseDate: 14, notes: 48 };
     const defs = ids.flatMap(id => id === 'effort' ? [{ id, name: t('Effort'), width: 11 }, { id: 'effortHours', name: t("Effort (hours)"), width: 11 }] : [{ id, name: columnDef(id).field ? columnDef(id).name : t(columnDef(id).name), width: widths[id] || 24 }]);
     if (tasks.some(task => task.hidden)) defs.push({ id: 'hidden', name: t("Hidden"), width: 11 });
@@ -2162,10 +2210,10 @@ async function situationWorkbook(options, now = new Date()) {
   }
   if (wanted.has('issues')) {
     const identical = new Set(duplicates.identical), cell = { border: grid, vertical: 'top' };
-    const ids = options.columns === 'all' ? CustomColumns.normalizeIssueColumns(settings.issueColumns, settings.issueFields).map(column => column.id) : shownIssueColumns();
+    const ids = options.columns === 'all' ? configuredColumns('issues').map(column => column.id) : shownIssueColumns();
     const rows = [[...ids.map(id => ({ v: columnDef(id, 'issues').field ? columnDef(id, 'issues').name : t(id === 'linked' ? "Linked tasks" : columnDef(id, 'issues').name), style: header })), { v: t("Duplicate"), style: header }],
       ...(options.scope === 'view' ? filteredIssues() : data.issues).map(issue => {
-        const linked = data.tasks.filter(task => task.code.trim().toUpperCase() === issue.code.trim().toUpperCase()), task = linked[0], url = task ? portalUrl(task, settings) : '', group = duplicates.issues.get(issue.id);
+        const linked = data.tasks.filter(task => task.code.trim() && task.code.trim().toUpperCase() === issue.code.trim().toUpperCase()), task = linked[0], url = task ? portalUrl(task, settings) : '', group = duplicates.issues.get(issue.id);
         const values = { code: { v: issue.code, link: url, style: { ...cell, bold: true } }, incident: { v: issue.incident, style: { ...cell, ...(group && { fill: tint('#f2b94a', 0.45) }) } }, problem: { v: issue.problem, style: cell }, linked: { v: linked.length, style: cell } };
         return [...ids.map(id => values[id] || customSpreadsheetCell(issue, columnDef(id, 'issues').field, cell)), { v: group ? t(identical.has(issue.id) ? "identical" : "Yes") : '', style: { ...cell, horizontal: 'center' } }];
       })];
@@ -2174,28 +2222,29 @@ async function situationWorkbook(options, now = new Date()) {
   if (wanted.has('milestones')) {
     const dates = [...new Set(tasks.map(task => task.releaseDate).filter(Boolean))].sort(), day = today();
     if (tasks.some(task => !task.releaseDate)) dates.push('');
-    const rows = [["Milestone", 'Release date', 'Release', "Tasks", "Hours", 'Effort'].map(text => ({ v: t(text), style: header })).concat(settings.statuses.map(status => ({ v: status.name, style: { ...header, fill: tint(status.color, 0.55), color: '#1d2030', wrap: true } })), { v: t("Codes"), style: header })];
+    const rows = [["Milestone", 'Release date', 'Release', "Tasks", "Hours", 'Effort'].map(text => ({ v: t(text), style: header })).concat(statuses.map(status => ({ v: status.name, style: { ...header, fill: tint(status.color, 0.55), color: '#1d2030', wrap: true } })), { v: t("Codes"), style: header })];
     dates.forEach((date, index) => {
       const group = tasks.filter(task => task.releaseDate === date), next = Boolean(date && date === nextDate), fill = next ? '#fff1c2' : '';
       const state = !date ? t("Unscheduled") : next ? t(date === day ? "Today's release" : "Next release") : t(date < day ? "Past" : "Upcoming");
       const cell = { border: grid, vertical: 'top', ...(fill && { fill }), ...(next && { bold: true }) };
       rows.push([{ v: date ? index + 1 : '—', style: { ...cell, horizontal: 'center' } }, date ? { v: date, type: 'date', style: { ...cell, fill: fill || tint(dateColor(date), 0.5), horizontal: 'center' } } : { v: t("Unscheduled"), style: { ...cell, italic: true } }, { v: state, style: cell }, { v: group.length, style: cell }, { v: hours(group), style: cell }, { v: hours(group) ? effort(hours(group)) : '', style: cell },
-        ...settings.statuses.map(status => ({ v: group.filter(task => task.statusId === status.id).length || '', style: { ...cell, horizontal: 'center' } })), { v: sortedRows(group).map(task => task.code).join(', '), style: { ...cell, wrap: true } }]);
+        ...statuses.map(status => ({ v: group.filter(task => task.statusId === status.id).length || '', style: { ...cell, horizontal: 'center' } })), { v: sortedRows(group).map(task => task.code).join(', '), style: { ...cell, wrap: true } }]);
     });
-    sheets.push({ name: settings.tabNames[2], columns: [{ width: 8 }, { width: 14 }, { width: 17 }, { width: 10 }, { width: 9 }, { width: 11 }, ...settings.statuses.map(() => ({ width: 12 })), { width: 60 }], rows, freeze: { row: 1, col: 2 } });
+    const included = (_, index) => (hasColumn('effort') || ![4, 5].includes(index)) && (hasColumn('code') || index !== 6 + statuses.length);
+    sheets.push({ name: settings.tabNames[2], columns: [{ width: 8 }, { width: 14 }, { width: 17 }, { width: 10 }, { width: 9 }, { width: 11 }, ...statuses.map(() => ({ width: 12 })), { width: 60 }].filter(included), rows: rows.map(row => row.filter(included)), freeze: { row: 1, col: 2 } });
   }
   if (wanted.has('kanban')) {
-    const columns = settings.statuses.map(status => sortTasks(tasks.filter(task => task.statusId === status.id)));
-    const rows = [settings.statuses.map((status, i) => ({ v: `${status.name} (${columns[i].length})`, style: { bold: true, fill: tint(status.color, 0.45), border: { color: hexColor(status.color), style: 'medium', sides: ['bottom'] }, horizontal: 'center' } }))];
+    const columns = statuses.map(status => sortTasks(tasks.filter(task => task.statusId === status.id)));
+    const rows = [statuses.map((status, i) => ({ v: `${status.name} (${columns[i].length})`, style: { bold: true, fill: tint(status.color, 0.45), border: { color: hexColor(status.color), style: 'medium', sides: ['bottom'] }, horizontal: 'center' } }))];
     for (let r = 0; r < Math.max(0, ...columns.map(list => list.length)); r++) {
       rows.push(columns.map((list, i) => {
         const task = list[r];
         if (!task) return '';
         const text = plain(task.description), url = portalUrl(task, settings);
-        return { v: `${task.code}${text ? ` · ${text.length > 90 ? text.slice(0, 89) + '…' : text}` : ''}`, link: url, style: { wrap: true, vertical: 'top', border: grid, fill: tint(settings.statuses[i].color, 0.12), ...(task.hidden ? { italic: true, color: muted } : url ? {} : { color: '#1d2030' }) } };
+        return { v: `${recordLabel(task)}${text ? ` · ${text.length > 90 ? text.slice(0, 89) + '…' : text}` : ''}`, link: url, style: { wrap: true, vertical: 'top', border: grid, fill: tint(statuses[i].color, 0.12), ...(task.hidden ? { italic: true, color: muted } : url ? {} : { color: '#1d2030' }) } };
       }));
     }
-    sheets.push({ name: settings.tabNames[3], columns: settings.statuses.map(() => ({ width: 34 })), rows, freeze: { row: 1 } });
+    sheets.push({ name: settings.tabNames[3], columns: statuses.map(() => ({ width: 34 })), rows, freeze: { row: 1 } });
   }
   return window.OrbitaXlsx.buildWorkbook({ title: `${APP_NAME} · ${organization}`, creator: APP_NAME, application: APP_NAME, created: now, sheets });
 }
@@ -2208,14 +2257,15 @@ async function exportExcel(options) {
 }
 function excelDialog(preset = {}) {
   const selected = data.tasks.filter(task => selectedTasks.has(task.id)).length, choices = { ...excelChoices, ...preset };
+  const enabledSheet = id => id !== 'milestones' && id !== 'kanban' || hasColumn(id === 'milestones' ? 'releaseDate' : 'status');
   if (choices.scope === 'selected' && !selected) choices.scope = 'view';
-  const columns = normalizeTaskColumns(data.settings.taskColumns, data.settings.taskFields);
+  const columns = configuredColumns();
   const radio = (name, value, title, detail, disabled = false) => `<label class="choice-card ${disabled ? 'is-disabled' : ''}"><input type="radio" name="${name}" value="${value}" ${choices[name] === value ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span><strong>${esc(t(title))}</strong><small>${esc(detail)}</small></span></label>`;
-  const sheetCards = EXCEL_SHEETS.map(([id, name, detail]) => `<label class="choice-card"><input type="checkbox" name="sheets" value="${id}" ${choices.sheets.includes(id) ? 'checked' : ''}><span><strong>${esc(typeof name === 'number' ? data.settings.tabNames[name] : t(name))}</strong><small>${esc(t(detail))}</small></span></label>`).join('');
+  const sheetCards = EXCEL_SHEETS.map(([id, name, detail]) => `<label class="choice-card ${enabledSheet(id) ? '' : 'is-disabled'}"><input type="checkbox" name="sheets" value="${id}" ${choices.sheets.includes(id) && enabledSheet(id) ? 'checked' : ''} ${enabledSheet(id) ? '' : 'disabled'}><span><strong>${esc(typeof name === 'number' ? data.settings.tabNames[name] : t(name))}</strong><small>${esc(t(enabledSheet(id) ? detail : "Restore the required column to export this view."))}</small></span></label>`).join('');
   openModal(ui`<form id="excel-form" novalidate><div class="modal-heading"><div><div class="eyebrow">EXCEL</div><h2>Export to Excel</h2></div><button type="button" class="icon-button" data-close aria-label="Close">${ico('close')}</button></div>
     <p class="section-description">Create an .xlsx workbook. Summary, milestones and kanban follow the selected tasks. “As shown” also applies issue filters; the other options export all issues.</p>
     <fieldset class="excel-group"><legend>Tasks to export</legend><div class="choice-grid">${radio('scope', 'view', "As shown in the list", fillText("{0} · current filters and sorting", plural(filteredTasks().length, "tasks")))}${radio('scope', 'all', "All tasks", fillText("{0}, hidden ones included", plural(data.tasks.length, "tasks")))}${radio('scope', 'selected', "Selected only", selected ? fillText("{0} selected", selected) : t("No task selected"), !selected)}</div></fieldset>
-    <fieldset class="excel-group"><legend>Task and issue sheet columns</legend><div class="choice-grid">${radio('columns', 'visible', "Columns visible in the list", fillText("Tasks: {0} · Issues: {1}", shownColumns().length, shownIssueColumns().length))}${radio('columns', 'all', "All columns", fillText("Tasks: {0} · Issues: {1}", columns.length, CustomColumns.normalizeIssueColumns(data.settings.issueColumns, data.settings.issueFields).length))}</div></fieldset>
+    <fieldset class="excel-group"><legend>Task and issue sheet columns</legend><div class="choice-grid">${radio('columns', 'visible', "Columns visible in the list", fillText("Tasks: {0} · Issues: {1}", shownColumns().length, shownIssueColumns().length))}${radio('columns', 'all', "All columns", fillText("Tasks: {0} · Issues: {1}", columns.length, configuredColumns('issues').length))}</div></fieldset>
     <fieldset class="excel-group"><legend>Sheets</legend><div class="choice-grid sheets">${sheetCards}</div></fieldset>
     <div class="modal-actions"><span class="spacer"></span><button type="button" class="button" data-close>Cancel</button><button type="submit" class="button primary" id="excel-save">${ico('excel')}${esc(t("Export"))}</button></div></form>`);
   const form = $('#excel-form');
@@ -2349,11 +2399,11 @@ function sampleTask() {
   const { statuses, urgencies } = data.settings;
   return data.tasks.find(task => task.releaseDate && !task.hidden && plain(task.description)) || data.tasks.find(task => task.releaseDate) || data.tasks[0] || {
     id: 'font-sample', code: 'PRJ-1042', sequence: 1, url: '', description: t("Example: prepare the release and update the documentation."), notes: '',
-    releaseDate: new Date().toLocaleDateString('en-CA'), statusId: statuses[Math.min(1, statuses.length - 1)].id, urgencyId: urgencies[0].id, effortHours: 12, hidden: false
+    releaseDate: new Date().toLocaleDateString('en-CA'), statusId: statuses[Math.min(1, statuses.length - 1)]?.id || '', urgencyId: urgencies[0]?.id || '', effortHours: 12, hidden: false
   };
 }
 function fontSample(id, task) {
-  const settings = data.settings, status = settings.statuses.find(s => s.id === task.statusId) || settings.statuses[0];
+  const settings = data.settings, status = statusOf(task);
   const color = task.releaseDate ? dateColor(task.releaseDate) : '#929bb2', group = data.tasks.includes(task) ? data.tasks.filter(item => item.releaseDate === task.releaseDate) : [task];
   const samples = {
     base: () => ui`<div class="sample-stack"><div class="stat"><span>Visible tasks <span class="stat-icon">${ico('tasks')}</span></span><strong>${visibleTasks().length}<small>in your workspace</small></strong></div><div class="sample-actions"><span class="button primary">${ico('plus')}New task</span><span class="button">Save settings</span></div></div>`,
@@ -2456,27 +2506,29 @@ function newCustomField(form) {
   return { id: `custom-${uid()}`, name: values.get('name').trim(), type, options: ['select', 'multiselect'].includes(type) ? [{ id: uid(), name: `${t("Option")} 1`, color: '#a392ff' }] : [] };
 }
 function customColumnsPanel() {
-  return `<section class="panel settings-section" id="custom-columns-panel"><h2>${esc(t("Custom columns"))}</h2><p class="section-description">${esc(t("Up to 30 columns per list. Choose the type when creating a column; its name, options and order remain editable. Save settings to apply."))}</p><p class="section-description">${esc(t("Save settings also includes new columns entered below. Use Add column to configure labels and colors immediately or prepare more columns before saving."))}</p>${['tasks', 'issues'].map((kind, index) => `<section class="custom-schema"><h3>${esc(data.settings.tabNames[index])}</h3><div id="custom-definitions-${kind}"></div><form class="custom-add-form" data-add-field="${kind}"><label class="field">${esc(t("Column name"))}<input name="name" maxlength="60" required></label><label class="field">${esc(t("Type"))}<select name="type">${Object.entries(fieldTypeNames).map(([type, name]) => `<option value="${type}">${esc(t(name))}</option>`).join('')}</select></label><button type="submit" class="button">${esc(t("Add column"))}</button></form></section>`).join('')}<h3>${esc(t("Visible issue columns"))}</h3><div id="issue-columns-editor"></div></section>`;
+  return `<section class="panel settings-section" id="custom-columns-panel"><h2>${esc(t("Column management"))}</h2><p class="section-description">${esc(t("Default and custom columns share the same controls. Deleting a column removes its values and related controls when settings are saved. Hiding only changes the table."))}</p><p class="section-description">${esc(t("Up to 30 custom columns per list. Deleted default columns can be restored below, without their old values."))}</p><p class="section-description">${esc(t("Save settings also includes new columns entered below. Use Add column to configure labels and colors immediately or prepare more columns before saving."))}</p>${['tasks', 'issues'].map((kind, index) => `<section class="custom-schema"><h3>${esc(data.settings.tabNames[index])}</h3><div id="custom-definitions-${kind}"></div><div id="restore-columns-${kind}" class="storage-actions"></div><form class="custom-add-form" data-add-field="${kind}"><label class="field">${esc(t("Column name"))}<input name="name" maxlength="60" required></label><label class="field">${esc(t("Type"))}<select name="type">${Object.entries(fieldTypeNames).map(([type, name]) => `<option value="${type}">${esc(t(name))}</option>`).join('')}</select></label><button type="submit" class="button">${esc(t("Add column"))}</button></form></section>`).join('')}<h3>${esc(t("Visible issue columns"))}</h3><div id="issue-columns-editor"></div></section>`;
 }
 function refreshChoiceSettings() {
   let panels = $('#choice-settings-panels');
   if (!panels) { panels = document.createElement('div'); panels.id = 'choice-settings-panels'; $('.settings-panels').append(panels); }
-  panels.innerHTML = choiceSettingsTabs().map(tab => `<section class="panel settings-section" id="${tab.panel}"><h2>${esc(tab.field.name)}</h2><p class="section-description">${esc(t("Manage labels, colors and order just like Tags. Deleted labels are removed from rows only when settings are saved."))}</p><div id="${tab.id}-list"></div><button type="button" class="button" data-add-choice="${tab.id}">+ ${esc(t("Add label"))}</button></section>`).join('');
+  panels.innerHTML = choiceSettingsTabs().map(tab => `<section class="panel settings-section" id="${tab.panel}"><h2>${esc(tab.label)}</h2><p class="section-description">${esc(t("Manage labels, colors and order. Deleted labels are removed from rows when settings are saved; single choices become unassigned."))}</p>${tab.field.id === 'status' && tab.field.builtin ? `<p class="section-description">${esc(t("This order becomes the kanban order. Use the star to highlight tasks with this status."))}</p>` : ''}<div id="${tab.id}-list"></div><button type="button" class="button" data-add-choice="${tab.id}" ${tab.field.builtin ? `data-add-option="${tab.id}"` : ''}>${ico('plus')}${esc(t("Add label"))}</button></section>`).join('');
   $('.settings-nav').outerHTML = settingsNav();
   document.querySelectorAll('[data-add-choice]').forEach(button => button.onclick = () => {
-    const list = optionCatalog(button.dataset.addChoice);
-    if (list.length >= 100) { notify("Invalid column options.", true); return; }
+    const tab = choiceSettingsTabs().find(tab => tab.id === button.dataset.addChoice), list = optionCatalog(tab.id);
+    if (list.length >= (tab.id === 'highlights' ? HIGHLIGHT_LIMIT : TAG_LIMIT)) { notify("Invalid column options.", true); return; }
     let index = 1;
     while (list.some(option => option.name.trim().toLocaleLowerCase() === `${t("Option")} ${index}`.toLocaleLowerCase())) index++;
-    list.push({ id: uid(), name: `${t("Option")} ${index}`, color: '#a392ff' });
+    const color = highlightPalette.find(color => !list.some(option => option.color.toLowerCase() === color)) || '#a392ff';
+    list.push({ id: uid(), name: `${t("Option")} ${index}`, color, ...(tab.id === 'statuses' ? { highlight: false } : {}) });
     drawOptionLists(); refreshSettingsState();
   });
   drawOptionLists(); showSettingsTab(settingsTab); refreshSettingsState();
 }
 function wireCustomColumns() {
   const syncColumns = () => {
-    settingsDraft.taskColumns = normalizeTaskColumns(settingsDraft.taskColumns, settingsDraft.taskFields);
-    settingsDraft.issueColumns = CustomColumns.normalizeIssueColumns(settingsDraft.issueColumns, settingsDraft.issueFields);
+    settingsDraft.taskColumns = configuredColumns('tasks', settingsDraft);
+    settingsDraft.issueColumns = configuredColumns('issues', settingsDraft);
+    $('#hours-per-day').closest('.field').hidden = !['tasks', 'issues'].some(kind => CustomColumns.schemaOf(settingsDraft, kind).some(field => field.type === 'effort'));
     columnEditor($('#columns-editor'), settingsDraft.taskColumns, 'tasks', settingsDraft);
     columnEditor($('#issue-columns-editor'), settingsDraft.issueColumns, 'issues', settingsDraft);
     refreshChoiceSettings();
@@ -2485,22 +2537,30 @@ function wireCustomColumns() {
   for (const kind of ['tasks', 'issues']) {
     const key = kind === 'tasks' ? 'taskFields' : 'issueFields', columnKey = kind === 'tasks' ? 'taskColumns' : 'issueColumns', container = $(`#custom-definitions-${kind}`);
     const draw = () => {
-      container.innerHTML = settingsDraft[key].map(field => `<article class="custom-definition" data-field-id="${field.id}">${dragHandle(field.name)}<div class="custom-definition-fields"><label class="field">${esc(t("Column name"))}<input data-field-name maxlength="60" value="${esc(field.name)}"></label><span class="muted">${esc(t(fieldTypeNames[field.type]))}</span>${['select', 'multiselect'].includes(field.type) ? `<button type="button" class="button small" data-goto-settings-tab="choice-${kind}-${field.id}">${esc(t("Manage labels and colors"))}</button>` : ''}</div><button type="button" class="button small danger" data-delete-field>${esc(t("Delete"))}</button></article>`).join('');
+      const schema = CustomColumns.schemaOf(settingsDraft, kind);
+      container.innerHTML = configuredColumns(kind, settingsDraft).map(column => {
+        const field = schema.find(field => field.id === column.id), name = field.builtin ? t(field.name) : field.name;
+        return `<article class="custom-definition" data-field-id="${field.id}" ${field.builtin ? 'data-builtin' : ''}>${dragHandle(name)}<div class="custom-definition-fields">${field.builtin ? `<strong>${esc(name)}</strong>` : `<label class="field">${esc(t("Column name"))}<input data-field-name maxlength="60" value="${esc(name)}"></label>`}<span class="muted">${esc(t(fieldTypeNames[field.type]))}</span>${['select', 'multiselect'].includes(field.type) ? `<button type="button" class="button small" data-goto-settings-tab="${field.catalog || `choice-${kind}-${field.id}`}">${esc(t("Manage labels and colors"))}</button>` : ''}</div><button type="button" class="button small danger" data-delete-field>${esc(t("Delete"))}</button></article>`;
+      }).join('');
       container.querySelectorAll('[data-field-id]').forEach(row => {
-        const field = settingsDraft[key].find(field => field.id === row.dataset.fieldId);
-        row.querySelector('[data-field-name]').oninput = event => { field.name = event.target.value; syncColumns(); };
-        row.querySelector('[data-delete-field]').onclick = () => confirmDialog("Delete the custom column?", t("Column values will be deleted when settings are saved.") + ` (${field.name})`, async () => {
-          settingsDraft[key] = settingsDraft[key].filter(item => item.id !== field.id);
-          settingsDraft[columnKey] = settingsDraft[columnKey].filter(column => column.id !== field.id);
+        const field = schema.find(field => field.id === row.dataset.fieldId), input = row.querySelector('[data-field-name]');
+        if (input) input.oninput = event => { field.name = event.target.value; syncColumns(); };
+        row.querySelector('[data-delete-field]').onclick = () => confirmDialog("Delete this column?", t("Column values will be deleted when settings are saved.") + ` (${field.builtin ? t(field.name) : field.name})`, async () => {
+          CustomColumns.removeColumn(settingsDraft, kind, field.id);
           draw(); syncColumns();
         });
       });
       sortable(container, '.custom-definition', (from, to) => {
-        settingsDraft[key].splice(to, 0, ...settingsDraft[key].splice(from, 1));
-        const ordered = settingsDraft[key].map(field => field.id), visibility = new Map(settingsDraft[columnKey].map(column => [column.id, column.visible]));
-        let index = 0;
-        settingsDraft[columnKey] = settingsDraft[columnKey].map(column => column.id.startsWith('custom-') ? { id: ordered[index++], visible: visibility.get(ordered[index - 1]) } : column);
+        settingsDraft[columnKey].splice(to, 0, ...settingsDraft[columnKey].splice(from, 1));
+        settingsDraft[key].sort((a, b) => settingsDraft[columnKey].findIndex(column => column.id === a.id) - settingsDraft[columnKey].findIndex(column => column.id === b.id));
         draw(); syncColumns();
+      });
+      const restore = $(`#restore-columns-${kind}`);
+      restore.innerHTML = CustomColumns.BUILTIN_FIELDS[kind].filter(field => !hasColumn(field.id, kind, settingsDraft)).map(field => `<button type="button" class="button small" data-restore-column="${field.id}">${ico('reset')}${esc(t("Restore column") + ': ' + t(field.name))}</button>`).join('');
+      restore.querySelectorAll('[data-restore-column]').forEach(button => button.onclick = () => {
+        const deletedKey = CustomColumns.deletedKey(kind);
+        settingsDraft[deletedKey] = settingsDraft[deletedKey].filter(id => id !== button.dataset.restoreColumn);
+        syncColumns(); draw();
       });
     };
     const form = document.querySelector(`[data-add-field="${kind}"]`);
@@ -2508,12 +2568,11 @@ function wireCustomColumns() {
       event.preventDefault();
       const field = newCustomField(form);
       CustomColumns.validateFields([...settingsDraft[key], field]);
-      settingsDraft[key].push(field); form.reset(); draw(); syncColumns();
+      settingsDraft[key].push(field); form.reset(); syncColumns(); draw();
     });
     draw();
   }
-  columnEditor($('#issue-columns-editor'), settingsDraft.issueColumns, 'issues', settingsDraft);
-  refreshChoiceSettings();
+  syncColumns();
 }
 function renderSettings() {
   settingsDraft = structuredClone(data.settings);
@@ -2521,8 +2580,8 @@ function renderSettings() {
   settingsDraft.highlights ??= [];
   settingsDraft.tags ??= [];
   settingsDraft.taskFields ??= []; settingsDraft.issueFields ??= [];
-  settingsDraft.taskColumns = normalizeTaskColumns(settingsDraft.taskColumns, settingsDraft.taskFields);
-  settingsDraft.issueColumns = CustomColumns.normalizeIssueColumns(settingsDraft.issueColumns, settingsDraft.issueFields);
+  settingsDraft.taskColumns = configuredColumns('tasks', settingsDraft);
+  settingsDraft.issueColumns = configuredColumns('issues', settingsDraft);
   const organization = organizations.find(o => o.id === activeOrganizationId);
   $('#content').innerHTML = '<div id="settings-page">' + heading(t("Settings"), "Names, workflows and colors. Configure your workspace and take it anywhere.", ui`<button class="button primary" id="save-settings">Save settings</button>`) +
     ui`<div class="unsaved-banner" id="unsaved-banner" role="status" aria-live="polite" hidden><span class="unsaved-icon" aria-hidden="true">${ico('warning')}</span><div class="unsaved-text"><strong>You have unsaved settings.</strong> Changes, including the previewed theme and text sizes, take effect only when you save. If you leave without saving, the previous configuration remains.<span class="unsaved-where" id="unsaved-where"></span></div><div class="unsaved-actions"><button type="button" class="button small" id="discard-settings">Discard changes</button><button type="button" class="button primary small" id="save-settings-inline">Save</button></div></div><div class="info-banner"><strong>${APP_NAME}</strong> · Organization configuration: <strong>${esc(organization.name)}</strong><br>All settings below apply only to the selected organization.</div>
@@ -2535,17 +2594,13 @@ function renderSettings() {
     <div class="full logo-settings"><h3>Organization logo</h3><div id="logo-preview"></div><label class="field">Upload logo and generate theme<input id="logo-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp"></label><p class="muted">The logo and theme belong only to this organization and travel with the archive.</p><button class="button small" id="remove-logo" type="button">Remove logo</button><output id="logo-result" aria-live="polite"></output></div></div></section>
     <section class="panel settings-section full" id="languages-panel"><h2>Language & translations</h2><p class="section-description">Choose the language of this organization. Translations are plain JSON files: you can add more without changing the app.</p><div class="form-grid"><label class="field">Interface language<select id="language">${languageOptions(data.settings.language)}</select><small>Language is saved per organization. Custom names and content are not translated.</small></label><p class="language-missing" id="language-missing" role="status" hidden>This language is not installed on this PC: texts are shown in English.</p></div><div id="languages-details"></div></section>
     <section class="panel settings-section" id="themes-panel"><div class="themes-heading"><div><h2>Themes & atmosphere</h2><p class="section-description">Choose a palette or create your own.</p></div><button class="button" id="add-theme">${ico('plus')}Create theme</button></div><div class="themes-layout"><div class="theme-browser"><div class="theme-toolbar"><label class="theme-search"><span aria-hidden="true">${ico('search')}</span><input type="search" id="theme-search" placeholder="Search themes…" aria-label="Search themes" autocomplete="off" spellcheck="false" value="${esc(themeQuery)}"></label><span class="theme-count" id="theme-count" aria-live="polite"></span></div><div class="theme-gallery" id="theme-list"></div></div><div class="theme-editor-panel" id="theme-editor"></div></div></section>${fontSizePanel()}
-    <section class="panel settings-section" id="statuses-panel"><h2>Workflow statuses</h2><p class="section-description">This order becomes the kanban order. Turn on ★ to automatically highlight every row with that status; to color single rows use the Highlighters.</p><div id="statuses-list"></div><button class="button" data-add-option="statuses">${ico('plus')}Add status</button></section>
-    <section class="panel settings-section" id="urgencies-panel"><h2>Urgency levels</h2><p class="section-description">Define priorities and their order.</p><div id="urgencies-list"></div><button class="button" data-add-option="urgencies">${ico('plus')}Add urgency</button></section>
-    <section class="panel settings-section" id="highlights-panel"><h2>Highlighters</h2><p class="section-description">Colors to highlight single rows of the task list, regardless of their status. In the list use the Highlighter bar above the table, the ● dot at the end of each row or the Highlight field of the task form.</p><div id="highlights-list"></div><button class="button" data-add-option="highlights">${ico('plus')}Add color</button><p class="muted">Deleting a color removes the highlight from the rows that use it. This order is also used to sort the Highlight column.</p></section>
-    <section class="panel settings-section" id="tags-panel"><h2>Tags</h2><p class="section-description">Create this organization's tags, choose names and colors, and set their display order. Each task can have multiple tags.</p><div id="tags-list"></div><button class="button" data-add-option="tags">${ico('plus')}Add tag</button><p class="muted">${esc(fillText("Up to {0} tags, with unique names of up to {1} characters.", TAG_LIMIT, TAG_NAME_MAX))}</p><p class="muted">Deleting a tag and saving removes it from tasks using it, including hidden tasks. Tasks and other tags are not deleted.</p></section>
     <section class="panel settings-section" id="columns-panel"><h2>List columns</h2><p class="section-description">Choose which columns the task list shows and in what order. Hiding a column does not delete any data. You can also do this with the “Columns” button above the table.</p><div id="columns-editor"></div><button type="button" class="button" id="reset-columns">${ico('reset')}Restore default columns</button></section>${customColumnsPanel()}
     <section class="panel settings-section full" id="browser-panel"><h2>Browser access</h2><p class="section-description">While OrbitKanban is open you can also work from a browser on this PC, with different organizations in separate tabs. Changes sync in real time between the app and the tabs.</p><code class="data-path" id="browser-url">${esc(browserUrl || t("Not available"))}</code><div class="storage-actions"><button class="button" id="browser-open" ${browserUrl ? '' : 'disabled'}>${ico('globe')}${t(browserMode() ? "Open in new tab" : "Open in browser")}</button><button class="button" id="browser-copy" ${browserUrl ? '' : 'disabled'}>${t(browserMode() ? "Copy address" : "Copy access link")}</button></div><p class="muted">${t(browserMode() ? "You are using OrbitKanban from the browser: the app on the PC must stay open. Each tab can show a different organization." : "Reachable only from this computer (127.0.0.1) and protected by a personal key: the access link contains the key, do not share it. Closing the app disconnects the browser tabs.")}</p></section>
     ${transferPanel()}<section class="panel settings-section full" id="storage-panel"><div class="storage-heading"><div><h2>Data that travels with you</h2><p class="section-description">Local JSON archive with an automatic copy of the previous save.</p></div><span class="readonly-badge">100% LOCAL</span></div><code class="data-path">${esc(dataFolder)}</code><div class="storage-actions"><button class="button" id="export-data">${ico('export')}Export backup</button><button class="button" id="import-data">${ico('import')}Import backup</button><button class="button" id="open-folder">Open data folder</button><span class="spacer"></span><button class="button danger" id="clear-data">Clear tasks and issues</button></div><div class="backup-section"><div class="storage-heading"><div><h3>Automatic backups</h3><p class="section-description">One copy per day, kept in the data folder for the last 14 days. You can restore one without losing the current archive: the standard .bak backup is created first.</p></div><button type="button" class="button small" id="refresh-backups">Refresh backups</button></div><p id="backup-status" class="muted" role="status" aria-live="polite"></p><div id="backup-list"></div></div><p class="muted">To share the app, close it and copy the executable together with the data folder. Do not run copies using the same data folder at the same time.</p></section></div></div></div>`;
       showSettingsTab(settingsTab); wireSettingsNav();
       drawOptionLists(); drawThemes(); drawLogoPreview(); wireOrganizationCreation(); drawPortalPreview(); wireFontSizes(); wireLanguages();
       columnEditor($('#columns-editor'), settingsDraft.taskColumns, 'tasks', settingsDraft);
-      $('#reset-columns').onclick = () => { settingsDraft.taskColumns.splice(0, settingsDraft.taskColumns.length, ...defaultTaskColumns(settingsDraft.taskFields)); columnEditor($('#columns-editor'), settingsDraft.taskColumns, 'tasks', settingsDraft); };
+      $('#reset-columns').onclick = () => { settingsDraft.taskColumns.splice(0, settingsDraft.taskColumns.length, ...configuredColumns('tasks', settingsDraft, [])); columnEditor($('#columns-editor'), settingsDraft.taskColumns, 'tasks', settingsDraft); };
       wireCustomColumns();
       $('#theme-search').oninput = event => { themeQuery = event.target.value; drawThemeChoices(); };
   $('#portal-url-template').oninput = drawPortalPreview;
@@ -2575,26 +2630,6 @@ function renderSettings() {
     finally { logoFile.disabled = false; logoFile.value = ''; }
   });
   $('#remove-logo').onclick = () => { settingsDraft.logo = ''; drawLogoPreview(); logoResult.textContent = ''; };
-  document.querySelectorAll('[data-add-option]').forEach(b => b.onclick = () => {
-    if (b.dataset.addOption === 'tags') {
-      if (settingsDraft.tags.length >= TAG_LIMIT) { notify(fillText("You can define up to {0} tags.", TAG_LIMIT), true); return; }
-      const base = t("New tag"), names = new Set(settingsDraft.tags.map(tag => tag.name.trim().toLowerCase()));
-      let name = base;
-      for (let suffix = 2; names.has(name.toLowerCase()); suffix++) name = `${base} ${suffix}`;
-      settingsDraft.tags.push({ id: uid(), name, color: highlightPalette[settingsDraft.tags.length % highlightPalette.length] });
-      drawOptionLists();
-      return;
-    }
-    if (b.dataset.addOption === 'highlights') {
-      if (settingsDraft.highlights.length >= HIGHLIGHT_LIMIT) { notify(fillText("You can define at most {0} colors.", HIGHLIGHT_LIMIT), true); return; }
-      const used = new Set(settingsDraft.highlights.map(h => h.color.toLowerCase()));
-      settingsDraft.highlights.push({ id: uid(), name: t("New color"), color: highlightPalette.find(color => !used.has(color)) || '#a392ff' });
-      drawOptionLists();
-      return;
-    }
-    settingsDraft[b.dataset.addOption].push({ id: uid(), name: t(b.dataset.addOption === 'statuses' ? "New status" : "New urgency"), color: '#a392ff', ...(b.dataset.addOption === 'statuses' ? { highlight: false } : {}) });
-    drawOptionLists();
-  });
   $('#save-settings').onclick = $('#save-settings-inline').onclick = action(async () => {
     await saveSettings(); rerenderPreservingView(); notify("Settings saved.");
   });
@@ -2719,26 +2754,26 @@ async function processLogo(file) {
 const highlightPalette = ['#f2c94c', '#f0647a', '#5aa9f6', '#4fcf8f', '#b18cff', '#ff9f5a', '#3fd0c9', '#ff7ac6', '#9ccc65', '#7986cb', '#e57373', '#4db6ac', '#ffd54f', '#ba68c8', '#90a4ae', '#a1887f'];
 function optionCatalog(key) {
   const custom = choiceSettingsTabs().find(tab => tab.id === key);
-  return custom ? custom.field.options : settingsDraft[key];
+  if (!custom) throw new Error(t("This column no longer exists."));
+  return custom.field.options;
 }
 function setOptionCatalog(key, list) {
   const custom = choiceSettingsTabs().find(tab => tab.id === key);
-  if (custom) custom.field.options = list; else settingsDraft[key] = list;
+  if (custom?.field.catalog) settingsDraft[custom.field.catalog] = list;
+  else if (custom) custom.field.options = list;
+  else throw new Error(t("This column no longer exists."));
 }
 function drawOptionLists() {
-  for (const key of ['statuses', 'urgencies', 'highlights', 'tags', ...choiceSettingsTabs().map(tab => tab.id)]) {
-    const custom = choiceSettingsTabs().find(tab => tab.id === key), list = optionCatalog(key);
+  for (const custom of choiceSettingsTabs()) {
+    const key = custom.id, list = optionCatalog(key);
     if (!document.getElementById(`${key}-list`)) continue;
-    const optional = custom || key === 'highlights' || key === 'tags';
     const usage = id => {
-      const count = custom ? data[custom.kind].filter(row => { const value = row.customFields?.[custom.field.id]; return Array.isArray(value) ? value.includes(id) : value === id; }).length : data.tasks.filter(task => key === 'tags' ? task.tagIds?.includes(id) : task.highlightId === id).length;
-      return `<span class="option-usage" title="${esc(t(custom ? "Rows with this label" : key === 'tags' ? "Tasks with this tag" : "Rows with this color"))}">${custom ? count : esc(plural(count, "tasks"))}</span>`;
+      const count = data[custom.kind].filter(row => { const value = CustomColumns.valueOf(row, custom.field); return Array.isArray(value) ? value.includes(id) : value === id; }).length;
+      return `<span class="option-usage" title="${esc(t("Rows with this label"))}">${count}</span>`;
     };
-    document.getElementById(`${key}-list`).innerHTML = list.map((item, index) => ui`<div class="option-row">${dragHandle(item.name)}<span class="order-number">${String(index + 1).padStart(2, '0')}</span><input type="color" aria-label="Color ${esc(item.name)}" data-color="${key}:${esc(item.id)}" value="${item.color}"><input class="option-name" aria-label="Option name" ${optional ? 'maxlength="60"' : ''} data-option-name="${key}:${esc(item.id)}" value="${esc(item.name)}">${optional ? usage(item.id) : ''}${key === 'statuses' ? ui`<button class="icon-button star ${item.highlight ? 'selected' : ''}" data-highlight="${esc(item.id)}" title="Highlight tasks with this status" aria-pressed="${item.highlight}">${ico(item.highlight ? 'star' : 'star-line')}</button>` : ''}<button class="icon-button" data-move="${key}:${esc(item.id)}:-1" ${index === 0 ? 'disabled' : ''} title="Move up">${ico('arrow-up')}</button><button class="icon-button" data-move="${key}:${esc(item.id)}:1" ${index === list.length - 1 ? 'disabled' : ''} title="Move down">${ico('arrow-down')}</button><button class="icon-button delete-option" data-remove="${key}:${esc(item.id)}" title="Delete option">${ico('close')}</button></div>`).join('') || (optional ? `<p class="muted option-empty">${esc(t(custom ? "No labels. Add one to get started." : key === 'tags' ? "No tags: add one to categorize tasks." : "No colors yet: add one to use the highlighter."))}</p>` : '');
-    const add = document.querySelector(`[data-add-option="${key}"]`);
-    if (optional && add) add.disabled = settingsDraft[key].length >= (key === 'tags' ? TAG_LIMIT : HIGHLIGHT_LIMIT);
+    document.getElementById(`${key}-list`).innerHTML = list.map((item, index) => ui`<div class="option-row">${dragHandle(item.name)}<span class="order-number">${String(index + 1).padStart(2, '0')}</span><input type="color" aria-label="Color ${esc(item.name)}" data-color="${key}:${esc(item.id)}" value="${item.color}"><input class="option-name" aria-label="Option name" maxlength="60" data-option-name="${key}:${esc(item.id)}" value="${esc(item.name)}">${usage(item.id)}${key === 'statuses' ? ui`<button class="icon-button star ${item.highlight ? 'selected' : ''}" data-highlight="${esc(item.id)}" title="Highlight tasks with this status" aria-pressed="${item.highlight}">${ico(item.highlight ? 'star' : 'star-line')}</button>` : ''}<button class="icon-button" data-move="${key}:${esc(item.id)}:-1" ${index === 0 ? 'disabled' : ''} title="Move up">${ico('arrow-up')}</button><button class="icon-button" data-move="${key}:${esc(item.id)}:1" ${index === list.length - 1 ? 'disabled' : ''} title="Move down">${ico('arrow-down')}</button><button class="icon-button delete-option" data-remove="${key}:${esc(item.id)}" title="Delete option">${ico('close')}</button></div>`).join('') || `<p class="muted option-empty">${esc(t("No labels. Add one to get started."))}</p>`;
     const choiceAdd = document.querySelector(`[data-add-choice="${key}"]`);
-    if (choiceAdd) choiceAdd.disabled = list.length >= 100;
+    if (choiceAdd) choiceAdd.disabled = list.length >= (key === 'highlights' ? HIGHLIGHT_LIMIT : TAG_LIMIT);
     sortable(document.getElementById(`${key}-list`), '.option-row', (from, to) => { list.splice(to, 0, ...list.splice(from, 1)); drawOptionLists(); refreshSettingsState(); });
   }
   function optionId(value) { const [key, ...parts] = value.split(':'); return [key, parts.join(':')]; }
@@ -2754,11 +2789,7 @@ function drawOptionLists() {
   });
   document.querySelectorAll('[data-remove]').forEach(b => b.onclick = () => {
     const [key, id] = optionId(b.dataset.remove);
-    if (key === 'highlights' || key === 'tags' || key.startsWith('choice-')) { setOptionCatalog(key, optionCatalog(key).filter(x => x.id !== id)); drawOptionLists(); refreshSettingsState(); return; }
-    const field = key === 'statuses' ? 'statusId' : 'urgencyId';
-    if (settingsDraft[key].length === 1) { notify("At least one option must remain.", true); return; }
-    if (data.tasks.some(t => t[field] === id)) { notify("This option is used by tasks, including hidden ones. Reassign them before deleting it.", true); return; }
-    settingsDraft[key] = settingsDraft[key].filter(x => x.id !== id); drawOptionLists();
+    setOptionCatalog(key, optionCatalog(key).filter(x => x.id !== id)); drawOptionLists(); refreshSettingsState();
   });
 }
 const themeFields = [['background', "Background"], ['surface', "Surfaces"], ['text', "Text"], ['accent', "Accent"]];
@@ -2955,6 +2986,66 @@ window.runSmokeTests = async () => {
   check($('#modal').clientWidth < editWidth, 'Other dialogs keep a compact layout');
   $('#modal').close();
   {
+    const baseline = structuredClone(data), taskId = data.tasks.find(task => !task.hidden).id, issueId = data.issues[0].id;
+    view = 4; render(); showSettingsTab('custom-columns');
+    check(['tasks', 'issues'].every(kind => document.querySelectorAll(`#custom-definitions-${kind} [data-delete-field]`).length === CustomColumns.BUILTIN_FIELDS[kind].length), 'Every default column has the same delete action as custom columns');
+    const deleteField = async (kind, id) => {
+      $(`#custom-definitions-${kind} [data-field-id="${id}"] [data-delete-field]`).click();
+      $('#confirm-action').click(); await waitFor(() => !$('#modal').open);
+    };
+    await deleteField('tasks', 'tags');
+    check(!$('#settings-tab-tags') && !$('#tags-panel') && data.settings.taskColumns.some(column => column.id === 'tags'), 'Deleting a default column hides its settings in the draft without changing saved data');
+    $('#discard-settings').click(); showSettingsTab('custom-columns');
+    check($('#settings-tab-tags') && hasColumn('tags'), 'Discard restores the default column and its settings');
+    const usedStatus = data.tasks.find(task => task.id === taskId).statusId;
+    showSettingsTab('statuses');
+    $(`[data-remove="statuses:${usedStatus}"]`).click();
+    await saveSettings();
+    check(data.tasks.find(task => task.id === taskId).statusId === '' && !(await workspaceApi.load()).data.settings.statuses.some(option => option.id === usedStatus), 'Deleting a used built-in choice clears assignments just like a custom choice');
+    view = 0; render(); taskDialog(data.tasks.find(task => task.id === taskId));
+    check($('#task-form [name="statusId"]').value === '', 'An unassigned built-in choice stays empty in the editor');
+    $('#modal').close();
+    view = 3; render();
+    check(document.querySelectorAll('.task-card').length === data.tasks.length, 'Deleting a status label never loses tasks from kanban');
+    await commit(baseline); view = 4; render(); showSettingsTab('custom-columns');
+    for (const kind of ['tasks', 'issues']) for (const field of CustomColumns.BUILTIN_FIELDS[kind]) await deleteField(kind, field.id);
+    check(!$('#settings-tab-statuses') && !$('#settings-tab-urgencies') && !$('#settings-tab-highlights') && !$('#settings-tab-tags') && !$('#settings-tab-portal') && $('#hours-per-day').closest('.field').hidden, 'All deleted-column settings disappear, including portal and effort configuration');
+    await saveSettings();
+    const stored = (await workspaceApi.load()).data;
+    check(['tasks', 'issues'].every(kind => !configuredColumns(kind).length && CustomColumns.deletedOf(stored.settings, kind).length === CustomColumns.BUILTIN_FIELDS[kind].length) && stored.tasks.length === baseline.tasks.length && stored.issues.length === baseline.issues.length, 'Empty schemas persist without deleting tasks or issues');
+    view = 0; render();
+    check(!document.querySelector('.activity-table th[data-column]') && !$('#status-filter') && !$('#highlight-filter') && !$('#reset-sort') && !document.querySelector('[data-mark-task]') && !document.querySelector('#task-rows [data-drag-handle]') && !releaseViewIds().length, 'Tables with no data columns keep row actions and omit dependent filters, highlighters and dragging');
+    taskDialog(data.tasks.find(task => task.id === taskId));
+    check(!$('#task-form input[name="code"]') && !$('#task-form select[name="statusId"]') && !$('#description-editor') && !$('#notes-editor') && !$('#match-preview'), 'Task editor excludes deleted fields and derived links');
+    $('#task-form').requestSubmit(); await waitFor(() => !saving && !$('#modal').open);
+    taskDialog();
+    $('#task-form').requestSubmit(); await waitFor(() => !saving && !$('#modal').open);
+    check(data.tasks.length === baseline.tasks.length + 1 && data.tasks.at(-1).code === '' && data.tasks.at(-1).statusId === '', 'New tasks can be saved without default columns');
+    bulkDialog([taskId]);
+    check(!$('#bulk-form [name="statusId"]') && !$('#bulk-form [name="releaseMode"]') && !$('#bulk-form [name="highlightId"]'), 'Bulk edit excludes deleted-column controls');
+    $('#bulk-form').elements.hidden.value = 'hide';
+    $('#bulk-form').requestSubmit(); await waitFor(() => !saving && !$('#modal').open);
+    view = 1; render(); issueDialog(data.issues.find(issue => issue.id === issueId));
+    check(!$('#issue-form input[name="code"]') && !$('#issue-form input[name="incident"]') && !$('#issue-form input[name="problem"]'), 'Issue editor excludes all removed default fields');
+    $('#issue-form').requestSubmit(); await waitFor(() => !saving && !$('#modal').open);
+    view = 2; render(); check($('#restore-view-column') && !$('.milestone-track'), 'Milestones explain their missing release-date dependency');
+    view = 3; render(); check($('#restore-view-column') && !$('.kanban-board'), 'Kanban explains its missing status dependency');
+    excelDialog();
+    check($('#excel-form [value="milestones"]').disabled && $('#excel-form [value="kanban"]').disabled, 'Export disables sheets whose required columns were deleted');
+    $('#modal').close();
+    const workbook = await situationWorkbook({ scope: 'all', columns: 'all', sheets: ['summary', 'tasks', 'issues'] });
+    check(workbook.byteLength > 0, 'Excel export handles empty schemas without reviving deleted columns');
+    view = 4; render(); showSettingsTab('custom-columns');
+    for (const kind of ['tasks', 'issues']) for (const field of CustomColumns.BUILTIN_FIELDS[kind]) $(`#restore-columns-${kind} [data-restore-column="${field.id}"]`).click();
+    await saveSettings();
+    check(hasColumn('code') && hasColumn('status') && data.tasks.every(task => !task.code && !task.statusId && !task.releaseDate) && data.issues.every(issue => !issue.code && !issue.incident), 'Explicit restoration restores definitions and settings, never deleted values');
+    view = 3; render();
+    check([...document.querySelectorAll('.kanban-column')].some(column => column.querySelector('.kanban-heading span').textContent === t("Unassigned")) && document.querySelectorAll('.task-card').length === data.tasks.length, 'Unassigned tasks remain visible after restoring Status');
+    await commit(baseline);
+    columnFilters = { tasks: {}, issues: {} }; search = ''; statusFilter = ''; highlightFilter = ''; highlighter = ''; sort = CustomColumns.defaultSort(data.settings);
+    selectedTasks.clear(); clearHistory(activeOrganizationId); view = 0; render();
+  }
+  {
     const baseline = structuredClone(data), editedId = data.tasks.find(task => !task.hidden).id;
     view = 4; render(); showSettingsTab('custom-columns');
     for (const kind of ['tasks', 'issues']) {
@@ -2995,7 +3086,7 @@ window.runSmokeTests = async () => {
       }
     }
     check(settingsDraft.taskFields.length === 9 && settingsDraft.issueFields.length === 4 && !$('#unsaved-banner').hidden && document.querySelectorAll('.custom-definition select').length === 0, 'All nine types can be added, types stay fixed, and changes remain unsaved');
-    check(choiceSettingsTabs().length === 4 && document.querySelectorAll('#choice-settings-panels .option-row').length === 8, 'Dynamic labels and colors section appears for each select column');
+    check(choiceSettingsTabs().length === 8 && document.querySelectorAll('#choice-settings-panels [id^="choice-"] .option-row').length === 8 && ['statuses', 'urgencies', 'tags', 'highlights'].every(key => $(`#choice-settings-panels #${key}-panel`)), 'Built-in and custom choices share dynamic labels and colors sections');
     $('#save-settings').click();
     await waitFor(() => !saving && data.settings.taskFields.length === 9);
     const taskFields = Object.fromEntries(data.settings.taskFields.map(field => [field.type, field]));
@@ -3177,7 +3268,7 @@ window.runSmokeTests = async () => {
     external.data.tasks[0].customFields = { 'custom-remote': 'Keep this value' };
     await workspaceApi.save(external.data, activeOrganizationId, undefined, external.revision);
     let conflictRejected = false;
-    try { await saveSettings(); } catch (error) { conflictRejected = error.message === t("Custom columns changed in another window. Discard the settings changes and try again: saved data has not been overwritten."); }
+    try { await saveSettings(); } catch (error) { conflictRejected = error.message === t("Columns changed in another window. Discard the settings changes and try again: saved data has not been overwritten."); }
     const protectedData = (await workspaceApi.load()).data;
     check(conflictRejected && protectedData.settings.taskFields.some(field => field.id === 'custom-remote') && protectedData.tasks[0].customFields['custom-remote'] === 'Keep this value', 'Stale draft does not delete columns or values saved by another window');
     adoptSnapshot(await workspaceApi.load());
@@ -3798,8 +3889,8 @@ window.runSmokeTests = async () => {
   $('.highlighter-bar [data-manage-highlights]').click();
   check(view === 4 && settingsTab === 'highlights' && !$('#highlights-panel').hidden, "Manage colors opens the Highlighters tab");
   view = 4; render();
-  const visibleSettingsPanels = () => settingsTabs.filter(tab => !$(`#${tab.panel}`).hidden).map(tab => tab.id);
-  check(document.querySelectorAll('.settings-nav .settings-tab').length === settingsTabs.length && settingsTabs.every(tab => $(`#${tab.panel}`) && $(`#settings-tab-${tab.id}`).getAttribute('aria-controls') === tab.panel) && visibleSettingsPanels().length === 1, "Settings are divided into tabs with only one panel visible");
+  const visibleSettingsPanels = () => allSettingsTabs().filter(tab => !$(`#${tab.panel}`).hidden).map(tab => tab.id);
+  check(document.querySelectorAll('.settings-nav .settings-tab').length === allSettingsTabs().length && allSettingsTabs().every(tab => $(`#${tab.panel}`) && $(`#settings-tab-${tab.id}`).getAttribute('aria-controls') === tab.panel) && visibleSettingsPanels().length === 1, "Settings are divided into tabs with only one panel visible");
   $('[data-settings-tab="themes"]').click();
   check(visibleSettingsPanels().join() === 'themes' && $('#settings-tab-themes').getAttribute('aria-current') === 'true' && !$('#settings-tab-identity').hasAttribute('aria-current') && settingsTab === 'themes', "Themes tab can be selected from navigation");
   render();

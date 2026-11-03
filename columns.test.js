@@ -2,9 +2,127 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const C = require('./columns');
-const { baseData, validateData, migrateArchive, organizationExport, parseOrganizationFile, applyOrganizationImport, normalizeTaskColumns, findDuplicates } = require('./core');
+const { baseData, validateData, migrateArchive, organizationExport, parseOrganizationFile, applyOrganizationImport, importedOrganizationData, normalizeTaskColumns, findDuplicates, matchIssues, indexIssues } = require('./core');
 const field = (type, name = type) => ({ id: `custom-${type}`, name, type, options: ['select', 'multiselect'].includes(type) ? ['One', 'Two'] : [] });
 const task = data => ({ id: 't', code: 'A', sequence: 1, url: '', description: '', notes: '', releaseDate: '', statusId: data.settings.statuses[0].id, urgencyId: data.settings.urgencies[0].id, effortHours: 0, hidden: false });
+
+test('every default column can be deleted without returning on reload or organization import', () => {
+  for (const kind of ['tasks', 'issues']) for (const field of C.BUILTIN_FIELDS[kind]) {
+    const data = baseData();
+    data.tasks = [task(data)];
+    data.issues = [{ id: 'i', code: 'A', incident: 'INC', problem: 'PRB' }];
+    C.removeColumn(data.settings, kind, field.id);
+    C.cleanData(data);
+    validateData(data);
+    assert.ok(!C.listColumns(data.settings, kind).some(column => column.id === field.id));
+    if (field.property) assert.deepEqual(data[kind][0][field.property], field.empty);
+    const restored = migrateArchive(data).organizations[0].data;
+    assert.ok(!C.hasColumn(restored.settings, kind, field.id));
+    const imported = importedOrganizationData(parseOrganizationFile(organizationExport({ name: 'Source', data }, 'organization')), { settings: true, data: true });
+    assert.ok(!C.hasColumn(imported.settings, kind, field.id));
+    restored.settings[C.deletedKey(kind)] = [];
+    C.cleanData(restored);
+    validateData(restored);
+    assert.ok(C.hasColumn(restored.settings, kind, field.id));
+    if (field.property) assert.deepEqual(restored[kind][0][field.property], field.empty);
+  }
+});
+test('zero-column schemas, unassigned choices and empty restored fields remain editable', () => {
+  const data = baseData();
+  data.tasks = [task(data)]; data.issues = [{ id: 'i', code: 'A', incident: 'INC', problem: '' }];
+  for (const kind of ['tasks', 'issues']) for (const field of C.BUILTIN_FIELDS[kind]) C.removeColumn(data.settings, kind, field.id);
+  C.cleanData(data); validateData(data);
+  assert.deepEqual(C.listColumns(data.settings, 'tasks'), []);
+  assert.deepEqual(C.listColumns(data.settings, 'issues'), []);
+  assert.deepEqual(C.defaultSort(data.settings), []);
+  assert.equal(data.tasks.length, 1);
+  for (const kind of ['tasks', 'issues']) data.settings[C.deletedKey(kind)] = [];
+  C.cleanData(data); validateData(data);
+  assert.equal(data.tasks[0].code, '');
+  data.settings.statuses = []; data.settings.urgencies = [];
+  validateData(data);
+});
+test('deleted columns clean saved filters, sort keys and visibility without changing unrelated view preferences', () => {
+  const data = baseData(), settings = data.settings;
+  settings.savedViews = [{ id: 'v', name: 'View', search: 'keep', statusFilter: settings.statuses[0].id, highlightFilter: '__any', showHidden: true, duplicatesOnly: false,
+    columns: [{ id: 'code', visible: true }, { id: 'releaseDate', visible: true }], sort: [{ key: 'releaseDate', direction: 'asc' }],
+    columnFilters: { releaseDate: { ...C.emptyFilter(), values: ['2030-01-01'] } } }];
+  for (const id of ['releaseDate', 'status', 'highlight']) C.removeColumn(settings, 'tasks', id);
+  C.cleanData(data); validateData(data);
+  const view = settings.savedViews[0];
+  assert.deepEqual(view.columns, [{ id: 'code', visible: true }]);
+  assert.deepEqual(view.columnFilters, {});
+  assert.equal(view.statusFilter, ''); assert.equal(view.highlightFilter, '');
+  assert.equal(view.search, 'keep'); assert.equal(view.showHidden, true);
+  assert.ok(view.sort.every(entry => C.sortKeys(settings).includes(entry.key)));
+});
+test('built-in and custom choices use the same schema and clear removed assignments on save', () => {
+  const data = baseData(), settings = data.settings;
+  settings.tags = [{ id: 'tag', name: 'Tag', color: '#123456' }];
+  settings.taskFields = [field('select'), field('multiselect')];
+  data.tasks = [{ ...task(data), tagIds: ['tag'], customFields: { 'custom-select': 'One', 'custom-multiselect': ['One', 'Two'] } }];
+  const schema = C.schemaOf(settings, 'tasks');
+  for (const id of ['status', 'urgency', 'tags', 'custom-select', 'custom-multiselect']) {
+    const descriptor = schema.find(field => field.id === id);
+    assert.ok(['select', 'multiselect'].includes(descriptor.type));
+    assert.ok(C.choices(descriptor).length);
+  }
+  settings.statuses = []; settings.urgencies = []; settings.tags = [];
+  settings.taskFields.forEach(field => { field.options = ['Two']; });
+  C.cleanData(data); validateData(data);
+  assert.equal(data.tasks[0].statusId, ''); assert.equal(data.tasks[0].urgencyId, '');
+  assert.deepEqual(data.tasks[0].tagIds, []);
+  assert.equal(data.tasks[0].customFields['custom-select'], '');
+  assert.deepEqual(data.tasks[0].customFields['custom-multiselect'], ['Two']);
+});
+test('deleted-column metadata travels with data-only files and never revives a target schema', () => {
+  const source = baseData();
+  source.tasks = [task(source)];
+  C.removeColumn(source.settings, 'tasks', 'code'); C.cleanData(source);
+  const file = parseOrganizationFile(organizationExport({ name: 'Source', data: source }, 'data'));
+  const created = importedOrganizationData(file, { data: true });
+  assert.ok(!C.hasColumn(created.settings, 'tasks', 'code'));
+  const target = baseData();
+  C.removeColumn(target.settings, 'tasks', 'status'); C.cleanData(target);
+  const imported = applyOrganizationImport(target, file, { data: true });
+  assert.ok(!C.hasColumn(imported.settings, 'tasks', 'status'));
+  assert.ok(C.hasColumn(imported.settings, 'tasks', 'code'));
+  assert.equal(imported.tasks[0].statusId, '');
+});
+test('invalid deletion metadata and stale writes to removed fields are rejected', () => {
+  for (const value of [null, {}, ['unknown'], ['code', 'code'], ['custom-text'], ['__proto__']]) {
+    const data = baseData(); data.settings.deletedTaskColumns = value;
+    assert.throws(() => validateData(data), /deleted columns/i);
+    const file = organizationExport({ name: 'Source', data: baseData() }, 'data');
+    file.data.deletedIssueColumns = value;
+    assert.throws(() => parseOrganizationFile(file), /deleted columns/i);
+  }
+  const data = baseData(); data.tasks = [task(data)];
+  C.removeColumn(data.settings, 'tasks', 'code');
+  assert.throws(() => validateData(data), /deleted columns cannot contain values/i);
+});
+test('empty deleted portal codes cannot match tasks or produce duplicate task links', () => {
+  const tasks = [{ id: 'a', code: '' }, { id: 'b', code: '' }], issues = [{ id: 'i', code: '', incident: 'INC', problem: 'PRB' }];
+  assert.deepEqual(matchIssues(tasks[0], issues), { incidents: [], problems: [] });
+  assert.deepEqual(matchIssues(tasks[0], indexIssues(issues)), { incidents: [], problems: [] });
+  assert.equal(findDuplicates(tasks, issues).tasks.size, 0);
+});
+test('CSV destinations and required mappings follow the existing schema', () => {
+  const csv = require('./csv'), data = baseData();
+  for (const kind of ['tasks', 'issues']) {
+    for (const field of C.BUILTIN_FIELDS[kind]) C.removeColumn(data.settings, kind, field.id);
+    data.settings[kind === 'tasks' ? 'taskFields' : 'issueFields'] = [field('text')];
+  }
+  C.cleanData(data);
+  for (const kind of ['tasks', 'issues']) {
+    assert.ok(!csv.destinations(data, kind).some(field => field.id === 'code'));
+    const result = csv.prepareImport(data, kind, [['Only custom data']], ['custom-text']);
+    assert.equal(result.errorCount, 0);
+    assert.equal(result.records[0].customFields['custom-text'], 'Only custom data');
+    assert.equal(result.records[0].code, '');
+    assert.throws(() => csv.prepareImport(data, kind, [['A']], ['code']), /column mapping/i);
+  }
+});
 
 test('custom field types validate real values, including zero, false and blank cells', () => {
   const values = { text: 'Text', richtext: '<p>Text</p>', number: -2.5, date: '2028-02-29', select: 'One', multiselect: ['One', 'Two'], url: 'https://example.com', effort: 0, boolean: false };

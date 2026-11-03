@@ -2516,6 +2516,14 @@ td.custom-cell > span {
   gap: 8px;
   min-width: 0;
 }
+.custom-definition[data-builtin] { align-items: center; }
+.custom-definition[data-builtin] .custom-definition-fields {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+.custom-definition[data-builtin] .custom-definition-fields > strong { min-width: 130px; }
 .custom-definition textarea {
   background: var(--surface);
   color: var(--text);
@@ -2811,6 +2819,7 @@ footer button,
 .task-tags-button > .tag-chips,
 .task-tags-button > .muted { flex: 1 1 auto; min-width: 0; }
 .task-tags-button > .ico { width: calc(14px * var(--fs)); height: calc(14px * var(--fs)); color: var(--muted); }
+.task-edit-layout:not(:has(.task-edit-text)) { grid-template-columns: 1fr; }
 /* Control sizes: buttons, icon buttons, toolbar fields and top-bar controls share one height scale */
 .button {
   min-height: calc(36px * var(--fs));

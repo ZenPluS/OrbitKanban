@@ -1,6 +1,6 @@
 # OrbitKanban — workspace portable
 
-App desktop locale per Windows 10/11 a 64 bit, **versione 2.21.0**. Nessun account, server esterno o collegamento a Internet necessario per l'uso. **Il nome dell'app è sempre OrbitKanban e non è configurabile.** Tutte le impostazioni del workspace appartengono alla singola organizzazione. Mentre l'app è aperta puoi usarla anche **dal browser dello stesso PC**, con più organizzazioni aperte contemporaneamente in schede diverse.
+App desktop locale per Windows 10/11 a 64 bit, **versione 2.22.0**. Nessun account, server esterno o collegamento a Internet necessario per l'uso. **Il nome dell'app è sempre OrbitKanban e non è configurabile.** Tutte le impostazioni del workspace appartengono alla singola organizzazione. Mentre l'app è aperta puoi usarla anche **dal browser dello stesso PC**, con più organizzazioni aperte contemporaneamente in schede diverse.
 
 ## Avvio e condivisione
 
@@ -186,7 +186,7 @@ Il filtro di una colonna data elenca, ciascuna con il suo colore e il numero di 
 
 I filtri di colonne diverse si combinano con **AND**, insieme alla ricerca e ai filtri già presenti. La barra sopra la tabella mostra i filtri attivi con un breve riepilogo dei valori scelti, anche se la colonna viene nascosta; puoi modificarli, rimuoverne uno o premere **Azzera filtri colonne**. Restano passando tra i tab, ma si azzerano cambiando organizzazione o ripristinando l'archivio. Le **viste salvate** delle attività conservano anche i filtri per colonna.
 
-In **Impostazioni → Colonne personalizzate** puoi aggiungere fino a **30 colonne per ciascuna lista**, indipendenti per organizzazione:
+In **Impostazioni → Gestione colonne** puoi gestire le colonne predefinite e aggiungere fino a **30 colonne personalizzate per ciascuna lista**, indipendenti per organizzazione:
 
 | Tipo | Valore |
 | --- | --- |
@@ -210,6 +210,21 @@ I valori si compilano nelle finestre di modifica di attività e issue, sono rice
 
 Schemi e valori viaggiano nei backup, nei file dell'organizzazione e nell'export dei soli dati. In importazione, colonne con lo stesso nome e tipo vengono riutilizzate; tipi diversi con lo stesso nome producono un errore. Gli archivi precedenti si aprono senza perdere dati. Non usare versioni precedenti alla 2.17.0 per modificare archivi aggiornati con le etichette colorate.
 
+### Colonne predefinite eliminabili e impostazioni unificate
+
+Dalla **2.22.0**, tutte le colonne predefinite di **Attività** e **Issue collegate** sono eliminabili da **Gestione colonne**, esattamente come quelle personalizzate. Le impostazioni restano specifiche della singola organizzazione.
+
+- **Elimina** richiede conferma e prepara la rimozione; solo **Salva impostazioni** cancella i valori. **Annulla modifiche** ripristina la configurazione precedente. Nascondere una colonna dal selettore **Colonne**, invece, conserva sempre i dati e i relativi editor.
+- Le colonne eliminate non tornano al riavvio, applicando una vista salvata o ripristinando l'ordine della tabella. **Ripristina colonna**, disponibile nella gestione della lista, recupera una definizione predefinita e il suo catalogo, **non i valori cancellati**.
+- Stati, urgenze, evidenziazioni, tag e scelte personalizzate hanno lo **stesso editor** sotto **Etichette delle colonne**: nomi, colori, conteggio degli utilizzi, trascinamento, frecce e cancellazione. Le schede compaiono solo per le colonne esistenti, anche se nascoste nella tabella. Per Stato resta disponibile la stella dell'evidenziazione automatica.
+- Eliminare un'etichetta e salvare toglie quella selezione dalle righe, comprese le nascoste. Le scelte singole diventano **Non assegnata**; nelle multiple restano le altre etichette. Anche Stato e Urgenza possono avere un catalogo vuoto. La kanban include una colonna per le attività senza stato quando necessario.
+- Eliminare un campo rimuove i relativi controlli da moduli, modifica multipla, filtri, ricerca ed Excel. Le viste salvate vengono ripulite senza eliminare la vista. La configurazione del portale compare solo se esiste **Link portale**; le ore per giorno solo se rimane almeno un campo effort, anche personalizzato.
+- Senza **Release date**, le viste automatiche per release e la timeline non sono disponibili; senza **Stato**, non lo è la kanban. Le viste mostrano un messaggio con il collegamento alla gestione colonne e i relativi fogli Excel sono disabilitati. Senza **Progressivo**, il trascinamento delle attività non è disponibile.
+- È possibile eliminare tutte le colonne: righe e azioni di modifica restano disponibili. I campi ripristinati possono restare vuoti; codice portale, incident e problem non sono più obbligatori nei moduli manuali. I codici vuoti non generano collegamenti tra attività e issue.
+- Backup ed esportazioni conservano le eliminazioni. Importare **impostazioni** applica lo schema importato; importare **solo dati** in un'organizzazione esistente conserva le sue eliminazioni e scarta i valori dei campi rimossi. Una nuova organizzazione creata dai soli dati eredita anche le colonne eliminate della sorgente.
+
+Gli archivi precedenti conservano tutte le colonne e i valori esistenti. Dopo aver usato le eliminazioni o le scelte senza assegnazione, usa **OrbitKanban 2.22.0 o successivo** per aprire o modificare l'archivio.
+
 ## Importazione CSV
 
 Il pulsante **Importa CSV** nelle due liste aggiunge righe all'organizzazione attiva, senza sostituire o aggiornare implicitamente quelle esistenti:
@@ -220,7 +235,7 @@ Il pulsante **Importa CSV** nelle due liste aggiunge righe all'organizzazione at
 4. Controlla l'anteprima delle prime dieci righe valide e gli errori per riga/colonna. **Nessun dato viene salvato finché tutti gli errori non sono risolti.**
 5. Premi **Importa righe**. L'intera importazione si può annullare con `Ctrl+Z`.
 
-È obbligatorio mappare e compilare il **codice portale**; nelle issue serve anche almeno un **incident** o **problem**. Questi ultimi sono calcolati nelle attività: importarli dalla lista **Issue collegate** con lo stesso codice portale. I possibili duplicati restano segnalati, non vengono cancellati automaticamente; associazioni con valori personalizzati diversi non sono considerate identiche dalla funzione di pulizia.
+Il CSV propone solo colonne esistenti e richiede almeno una destinazione. È obbligatorio mappare e compilare il **codice portale** se la colonna esiste; nelle issue serve anche almeno un **incident** o **problem** se una delle due colonne esiste. Eliminandole puoi importare anche solo campi personalizzati. Incident e problem sono calcolati nelle attività: importarli dalla lista **Issue collegate** con lo stesso codice portale. I possibili duplicati restano segnalati, non vengono cancellati automaticamente; associazioni con valori personalizzati diversi non sono considerate identiche dalla funzione di pulizia.
 
 - Date: `AAAA-MM-GG` oppure `GG/MM/AAAA`, con calendario valido.
 - Numeri: punto o virgola decimale, **senza separatori delle migliaia**. Giorni e ore dell'effort standard vengono sommati usando le ore/giorno dell'organizzazione.
@@ -287,7 +302,7 @@ Le impostazioni sono organizzate in **schede**: a sinistra un menu raggruppa le 
 
 - Nome dell'organizzazione e nomi dei quattro tab; il nome dell'app rimane OrbitKanban.
 - **Lingua & traduzioni**: lingua dell'organizzazione, elenco delle lingue disponibili, cartella delle lingue con il modello inglese, ricarica dei file e segnalazione dei file non validi (vedi [Lingue e traduzioni](#lingue-e-traduzioni)).
-- Stati e urgenze: nomi, colori, aggiunta, eliminazione e riordino con trascinamento o frecce. Un'opzione usata da un'attività, anche nascosta, non può essere eliminata: riassegna prima le attività.
+- Stati e urgenze, quando le colonne esistono: nomi, colori, aggiunta, eliminazione e riordino con lo stesso editor delle scelte personalizzate, in **Etichette delle colonne**. Eliminare un'opzione usata e salvare lascia senza assegnazione le attività interessate, comprese le nascoste.
 - La stella accanto a uno stato abilita l'evidenziazione automatica delle relative righe.
 - **Evidenziatori** e **Colonne della lista**: colori per evidenziare singole righe e colonne visibili della lista, con il loro ordine (vedi [Evidenziatori e colonne della lista](#evidenziatori-e-colonne-della-lista)).
 - **Tags**: catalogo di etichette con nome, colore e ordine, assegnabili in selezione multipla alle attività (vedi [Tags delle attività](#tags-delle-attività)).

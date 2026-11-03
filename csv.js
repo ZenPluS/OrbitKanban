@@ -55,7 +55,8 @@ function destinations(data, kind) {
     { id: 'highlightId', name: "Highlight", type: 'select', options: options(s.highlights || []) },
     { id: 'tagIds', name: 'Tags', type: 'multiselect', options: options(s.tags || []) }, { id: 'hidden', name: "Hidden", type: 'boolean' }
   ] : ['code', 'incident', 'problem'].map((id, i) => ({ id, name: ["Portal code", 'Incident', 'Problem'][i], type: 'text' }));
-  return [...base, ...C.fieldsOf(s, kind).map(field => ({ ...field, custom: true, options: C.choices(field).map(option => ({ ...option, value: option.id })) }))];
+  const columnId = id => ({ url: 'link', statusId: 'status', urgencyId: 'urgency', highlightId: 'highlight', tagIds: 'tags', effortHours: 'effort', effortDays: 'effort' })[id] || id;
+  return [...base.filter(field => field.id === 'hidden' || C.hasColumn(s, kind, columnId(field.id))), ...C.fieldsOf(s, kind).map(field => ({ ...field, custom: true, options: C.choices(field).map(option => ({ ...option, value: option.id })) }))];
 }
 // Italian headers stay as aliases so CSV files made with the Italian interface still map automatically.
 const aliases = {
@@ -114,7 +115,9 @@ function prepareImport(data, kind, rows, mapping) {
   assert(Array.isArray(mapping) && Array.isArray(rows), "Invalid or duplicate column mapping.");
   const mapped = mapping.filter(Boolean);
   assert(rows.length > 0 && rows.length <= MAX_ROWS, "Select a CSV with at least one data row and up to 10000 rows.");
-  assert(mapped.includes('code') && (kind === 'tasks' || mapped.includes('incident') || mapped.includes('problem')), "Map the portal code and, for issues, at least incident or problem.");
+  assert(mapped.length > 0, "Map at least one existing column.");
+  assert((!C.hasColumn(data.settings, kind, 'code') || mapped.includes('code')) &&
+    (kind === 'tasks' || !['incident', 'problem'].some(id => C.hasColumn(data.settings, kind, id)) || mapped.includes('incident') || mapped.includes('problem')), "Map the portal code and, for issues, at least incident or problem.");
   assert(new Set(mapped).size === mapped.length && mapped.every(id => byId.has(id)), "Invalid or duplicate column mapping.");
   const records = [], errors = [];
   let errorCount = 0, sequence = data.tasks.reduce((max, task) => Math.max(max, task.sequence), 0);
@@ -123,8 +126,8 @@ function prepareImport(data, kind, rows, mapping) {
     const before = errorCount;
     if (row.length !== mapping.length) { error(rowIndex + 1, '', "The cell count does not match the file columns."); return; }
     const record = kind === 'tasks' ? {
-      id: globalThis.crypto.randomUUID(), code: '', sequence: ++sequence, url: '', description: '', notes: '', statusId: data.settings.statuses[0].id,
-      urgencyId: data.settings.urgencies[Math.min(2, data.settings.urgencies.length - 1)].id, effortHours: 0, releaseDate: '', highlightId: '', hidden: false, tagIds: []
+      id: globalThis.crypto.randomUUID(), code: '', sequence: C.hasColumn(data.settings, kind, 'sequence') ? ++sequence : 0, url: '', description: '', notes: '', statusId: C.hasColumn(data.settings, kind, 'status') ? data.settings.statuses[0]?.id || '' : '',
+      urgencyId: C.hasColumn(data.settings, kind, 'urgency') ? data.settings.urgencies[Math.min(2, data.settings.urgencies.length - 1)]?.id || '' : '', effortHours: 0, releaseDate: '', highlightId: '', hidden: false, tagIds: []
     } : { id: globalThis.crypto.randomUUID(), code: '', incident: '', problem: '' };
     let days = 0;
     mapping.forEach((id, index) => {
@@ -140,8 +143,8 @@ function prepareImport(data, kind, rows, mapping) {
         else record[id] = value;
       } catch (failure) { error(rowIndex + 1, field.name, failure.message, field.custom); }
     });
-    if (!record.code) error(rowIndex + 1, "Portal code", "Enter the portal code.");
-    if (kind === 'issues' && !record.incident && !record.problem) error(rowIndex + 1, '', "Enter at least an incident or problem.");
+    if (C.hasColumn(data.settings, kind, 'code') && !record.code) error(rowIndex + 1, "Portal code", "Enter the portal code.");
+    if (kind === 'issues' && ['incident', 'problem'].some(id => C.hasColumn(data.settings, kind, id)) && !record.incident && !record.problem) error(rowIndex + 1, '', "Enter at least an incident or problem.");
     if (kind === 'tasks') {
       record.effortHours = Math.round((record.effortHours + days * data.settings.hoursPerDay) * 100) / 100;
       if (!Number.isFinite(record.effortHours) || !Number.isSafeInteger(record.sequence)) error(rowIndex + 1, '', "Number out of range.");
