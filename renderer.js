@@ -4139,6 +4139,14 @@ window.runSmokeTests = async () => {
   check(accent() === previewTheme.accent && document.documentElement.style.getPropertyValue('--background') === previewTheme.background, 'Selected theme is immediately applied in the preview');
   if (customTitleBar()) check(windowChromeSent.background === previewTheme.background && windowChromeSent.text === previewTheme.text, 'Title bar updated with the theme preview');
   check(!$('#unsaved-banner').hidden && data.settings.themeId !== previewTheme.id, 'Unsaved settings warning appears without saving the theme');
+  const swatchGallery = $('#theme-list'), previousGalleryStyle = swatchGallery.style.cssText;
+  swatchGallery.style.gridTemplateColumns = '152px';
+  swatchGallery.style.setProperty('--fs', '0.8');
+  const selectedCard = $('.theme-choice.chosen'), cardBounds = selectedCard.getBoundingClientRect();
+  const swatchBounds = [...selectedCard.querySelectorAll('.theme-swatches i')].map(dot => dot.getBoundingClientRect());
+  check(Math.abs(cardBounds.width - 152) < 0.1 && swatchBounds.length === 4 && swatchBounds.every(dot => Math.abs(dot.width - 12) < 0.1 && Math.abs(dot.height - 12) < 0.1), 'Selected theme keeps four circular 12px swatches at the narrowest compact gallery width');
+  check(swatchBounds.every(dot => dot.left >= cardBounds.left && dot.right <= cardBounds.right) && swatchBounds.at(-1).right <= selectedCard.querySelector('.theme-check').getBoundingClientRect().left, 'Fixed-size theme swatches stay inside the card without overlapping the selection mark');
+  swatchGallery.style.cssText = previousGalleryStyle;
   check(!$('#settings-tab-themes .settings-tab-dot').hidden && settingsTabs.filter(tab => !$(`#settings-tab-${tab.id} .settings-tab-dot`).hidden).length === 1 && $('#unsaved-where').textContent.includes(t("Themes & atmosphere")) && $('#unsaved-where [data-goto-settings-tab="themes"]'), 'Modified tab is flagged in navigation and in the warning');
   showSettingsTab('identity');
   $('#unsaved-where [data-goto-settings-tab="themes"]').click();

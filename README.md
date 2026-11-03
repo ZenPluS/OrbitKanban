@@ -1,6 +1,6 @@
 # OrbitKanban — workspace portable
 
-App desktop locale per Windows 10/11 a 64 bit, **versione 2.23.0**. Nessun account, server esterno o collegamento a Internet necessario per l'uso. **Il nome dell'app è sempre OrbitKanban e non è configurabile.** Tutte le impostazioni del workspace appartengono alla singola organizzazione. Mentre l'app è aperta puoi usarla anche **dal browser dello stesso PC**, con più organizzazioni aperte contemporaneamente in schede diverse.
+App desktop locale per Windows 10/11 a 64 bit, **versione 2.23.1**. Nessun account, server esterno o collegamento a Internet necessario per l'uso. **Il nome dell'app è sempre OrbitKanban e non è configurabile.** Tutte le impostazioni del workspace appartengono alla singola organizzazione. Mentre l'app è aperta puoi usarla anche **dal browser dello stesso PC**, con più organizzazioni aperte contemporaneamente in schede diverse.
 
 ## Avvio e condivisione
 
@@ -315,6 +315,8 @@ Le impostazioni sono organizzate in **schede**: a sinistra un menu raggruppa le 
 - “Svuota attività e issue” elimina anche gli esempi iniziali, mantenendo impostazioni e temi.
 
 ### Selettore colori integrato
+
+La **2.23.1** corregge i pallini della galleria temi: restano circolari anche nel tema selezionato, con testo compatto e finestra a schermo intero, senza sovrapporsi alla spunta.
 
 Dalla **2.23.0**, tutti i colori delle etichette (predefinite e personalizzate, per attività e issue) e dei quattro campi del tema usano lo **stesso selettore personalizzato**, al posto della finestra di sistema. Sfondo, bordi, pulsanti e font seguono l'app, anche nel browser e senza connessione.
 
