@@ -1,5 +1,5 @@
 'use strict';
-const { APP_NAME, validateData, matchIssues, findDuplicates, sortTasks, dateColor, extractThemePalette, themeFromLogo, defaultThemes, normalizeUrl, isWebUrl, validPortalTemplate, hasPortalPlaceholder, portalUrl, parseOrganizationFile, applyOrganizationImport, importedOrganizationData, uniqueOrganizationName, FONT_SIZE_PARTS, FONT_SIZE_STEP, defaultFontSizes, clampFontSize, HIGHLIGHT_LIMIT, defaultTaskColumns, normalizeTaskColumns, TAG_LIMIT, TAG_NAME_MAX, today, nextReleaseDate, situationFileName } = window.OrbitaCore;
+const { APP_NAME, validateData, matchIssues, findDuplicates, sortTasks, dateColor, themeFromImage, themeFromLogo, onAccentColor, iconPalette, iconInk, defaultThemes, normalizeUrl, isWebUrl, validPortalTemplate, hasPortalPlaceholder, portalUrl, parseOrganizationFile, applyOrganizationImport, importedOrganizationData, uniqueOrganizationName, FONT_SIZE_PARTS, FONT_SIZE_STEP, defaultFontSizes, clampFontSize, HIGHLIGHT_LIMIT, defaultTaskColumns, normalizeTaskColumns, TAG_LIMIT, TAG_NAME_MAX, today, nextReleaseDate, situationFileName } = window.OrbitaCore;
 const $ = selector => document.querySelector(selector);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const uid = () => crypto.randomUUID();
@@ -31,7 +31,8 @@ const ui = (strings, ...values) => window.OrbitaI18n.translateTemplate(strings, 
 const locale = () => window.OrbitaI18n.locale(currentLanguage());
 const term = text => window.OrbitaI18n.term(text, currentLanguage());
 const plural = (count, key) => window.OrbitaI18n.plural(count, key, currentLanguage());
-const icons = ['▤', '⌘', '◈', '▥'];
+const ico = (name, family) => window.OrbitaIcons.icon(name, family);
+const icons = ['tasks', 'link', 'flag', 'kanban'].map(name => ico(name));
 const plainCache = new Map();
 const PLAIN_CACHE_LIMIT = 4096, PLAIN_CACHE_CHARS = 4_000_000;
 let plainCacheChars = 0;
@@ -185,7 +186,7 @@ async function commit(change, organizationName) {
 function action(handler) { return async event => { try { await handler(event); } catch (error) { notify(error.message, true); } }; }
 const openPortal = action(async url => { lastOpenedLink = await workspaceApi.openLink(url); });
 function portalAnchor(url, code, className = 'external-link') {
-  return url ? `<a class="${className}" href="${esc(url)}" data-open-url title="${esc(t("Open in the default browser") + ': ' + url)}" aria-label="${esc(t("Open portal") + ' ' + code)}">↗</a>` : '';
+  return url ? `<a class="${className}" href="${esc(url)}" data-open-url title="${esc(t("Open in the default browser") + ': ' + url)}" aria-label="${esc(t("Open portal") + ' ' + code)}">${ico('external')}</a>` : '';
 }
 document.addEventListener('click', event => {
   const link = event.target.closest('a[data-open-url]');
@@ -317,8 +318,25 @@ function filteredTasks(duplicates = duplicatesOf(), issues = search || Object.ke
     !search || [t.code, String(t.sequence), plain(t.description), plain(t.notes), highlightOf(t)?.name || '', ...tagsOf(t).map(tag => tag.name), ...Object.values(matchIssues(t, issues)).flat(), ...customSearchValues(t, 'tasks')].some(v => v.toLowerCase().includes(needle))
   ));
 }
+const themeExtrasCache = new Map();
+// Readable label color on accent fills and per-theme icon gradients, computed once per color combination.
+function themeExtras(theme) {
+  const key = [theme.background, theme.surface, theme.text, theme.accent].join();
+  if (!themeExtrasCache.has(key)) {
+    if (themeExtrasCache.size > 200) themeExtrasCache.clear();
+    const properties = { '--on-accent': onAccentColor(theme) };
+    for (const [family, stops] of Object.entries(iconPalette(theme))) {
+      stops.forEach((stop, i) => { properties[`--ig-${family}-${i + 1}`] = stop; });
+      properties[`--ig-${family}-ink`] = iconInk(stops);
+    }
+    themeExtrasCache.set(key, properties);
+  }
+  return themeExtrasCache.get(key);
+}
 function paintTheme(theme) {
-  for (const key of ['background', 'surface', 'text', 'accent']) document.documentElement.style.setProperty(`--${key}`, theme[key]);
+  const style = document.documentElement.style;
+  for (const key of ['background', 'surface', 'text', 'accent']) style.setProperty(`--${key}`, theme[key]);
+  for (const [property, value] of Object.entries(themeExtras(theme))) style.setProperty(property, value);
   const rgb = theme.background.slice(1).match(/.{2}/g).map(value => parseInt(value, 16));
   document.documentElement.style.colorScheme = (rgb[0] * 299 + rgb[1] * 587 + rgb[2] * 114) / 1000 > 150 ? 'light' : 'dark';
   windowChromeColors = { background: theme.background, text: theme.text };
@@ -408,11 +426,11 @@ function renderChrome() {
   document.documentElement.lang = data.settings.language;
   $('.brand small').textContent = t("YOUR PERSONAL WORKSPACE");
   $('.workspace-label').innerHTML = ui`WORKSPACE <span>LOCAL</span>`;
-  $('#settings-button').innerHTML = ui`<span class="nav-icon">⚙</span> Settings`;
+  $('#settings-button').innerHTML = ui`<span class="nav-icon">${ico('settings')}</span> Settings`;
   $('.local-card strong').textContent = t("Only on your device");
   $('.local-card small').textContent = t("Your data. Always with you.");
   $('footer>span').innerHTML = ui`<i class="connection-dot"></i> No cloud. No account. Everything under control.`;
-  $('#folder-button').textContent = t("Open data folder") + ' ↗';
+  $('#folder-button').innerHTML = `${ico('folder')}<span>${esc(t("Open data folder"))}</span>`;
   $('#global-search-label').textContent = t("Search");
   $('#global-search').title = t("Search OrbitKanban (Ctrl+K)");
   renderConnectionStatus();
@@ -420,7 +438,7 @@ function renderChrome() {
   $('.organization-switcher label').textContent = t("Organization");
   $('#manage-organizations').textContent = t("Manage organizations");
   $('#organization-select').innerHTML = organizations.map(o => `<option value="${esc(o.id)}" ${o.id === activeOrganizationId ? 'selected' : ''}>${esc(o.name)}</option>`).join('');
-  $('#open-browser').textContent = t(browserMode() ? "Open in new tab" : "Open in browser") + ' ↗';
+  $('#open-browser').innerHTML = `${ico('globe')}<span>${esc(t(browserMode() ? "Open in new tab" : "Open in browser"))}</span>`;
   $('#open-browser').disabled = !browserUrl;
   $('.version').innerHTML = `${browserMode() ? 'BROWSER' : 'PORTABLE'} EDITION <span id="app-version">${esc(appVersion ? `v${appVersion}` : '')}</span>`;
   updateHistoryButtons();
@@ -524,25 +542,25 @@ function settingsChanged() {
   return pendingCustomColumns().length > 0 || JSON.stringify(collectSettings()) !== JSON.stringify(data.settings) || $('#organization-name').value.trim() !== organizations.find(o => o.id === activeOrganizationId).name;
 }
 const settingsTabs = [
-  { id: 'identity', group: "Organization", icon: '◉', label: "Identity & navigation", panel: 'identity-panel', keys: ['tabNames', 'hoursPerDay', 'logo'] },
-  { id: 'languages', group: "Organization", icon: '文', label: "Language & translations", panel: 'languages-panel', keys: ['language'] },
-  { id: 'portal', group: "Organization", icon: '⇗', label: "Portal link", panel: 'portal-panel', keys: ['portalUrlTemplate'] },
-  { id: 'organizations', group: "Organization", icon: '⌂', label: "Organizations", panel: 'organizations-panel', keys: [] },
-  { id: 'themes', group: "Appearance", icon: '◐', label: "Themes & atmosphere", panel: 'themes-panel', keys: ['themes', 'themeId'] },
-  { id: 'fonts', group: "Appearance", icon: 'Aa', label: "Font and text size", panel: 'font-size-panel', keys: ['fontSizes', 'fontFamily'] },
-  { id: 'statuses', group: "Workflow", icon: '☰', label: "Workflow statuses", panel: 'statuses-panel', keys: ['statuses'] },
-  { id: 'urgencies', group: "Workflow", icon: '⚑', label: "Urgency levels", panel: 'urgencies-panel', keys: ['urgencies'] },
-  { id: 'highlights', group: "Workflow", icon: '✎', label: "Highlighters", panel: 'highlights-panel', keys: ['highlights'] },
-  { id: 'tags', group: "Workflow", icon: '#', label: 'Tags', panel: 'tags-panel', keys: ['tags'] },
-  { id: 'columns', group: "Workflow", icon: '▥', label: "List columns", panel: 'columns-panel', keys: ['taskColumns'] },
-  { id: 'custom-columns', group: "Workflow", icon: '＋', label: "Custom columns", panel: 'custom-columns-panel', keys: ['taskFields', 'issueFields', 'issueColumns'] },
-  { id: 'transfer', group: "Data & access", icon: '⇅', label: "Export and import organization", panel: 'transfer-panel', keys: [] },
-  { id: 'storage', group: "Data & access", icon: '▣', label: "Data that travels with you", panel: 'storage-panel', keys: [] },
-  { id: 'browser', group: "Data & access", icon: '◍', label: "Browser access", panel: 'browser-panel', keys: [] }
+  { id: 'identity', group: "Organization", icon: 'id', label: "Identity & navigation", panel: 'identity-panel', keys: ['tabNames', 'hoursPerDay', 'logo'] },
+  { id: 'languages', group: "Organization", icon: 'translate', label: "Language & translations", panel: 'languages-panel', keys: ['language'] },
+  { id: 'portal', group: "Organization", icon: 'portal', label: "Portal link", panel: 'portal-panel', keys: ['portalUrlTemplate'] },
+  { id: 'organizations', group: "Organization", icon: 'building', label: "Organizations", panel: 'organizations-panel', keys: [] },
+  { id: 'themes', group: "Appearance", icon: 'palette', label: "Themes & atmosphere", panel: 'themes-panel', keys: ['themes', 'themeId'] },
+  { id: 'fonts', group: "Appearance", icon: 'font', label: "Font and text size", panel: 'font-size-panel', keys: ['fontSizes', 'fontFamily'] },
+  { id: 'statuses', group: "Workflow", icon: 'list', label: "Workflow statuses", panel: 'statuses-panel', keys: ['statuses'] },
+  { id: 'urgencies', group: "Workflow", icon: 'flame', label: "Urgency levels", panel: 'urgencies-panel', keys: ['urgencies'] },
+  { id: 'highlights', group: "Workflow", icon: 'highlighter', label: "Highlighters", panel: 'highlights-panel', keys: ['highlights'] },
+  { id: 'tags', group: "Workflow", icon: 'tag', label: 'Tags', panel: 'tags-panel', keys: ['tags'] },
+  { id: 'columns', group: "Workflow", icon: 'columns', label: "List columns", panel: 'columns-panel', keys: ['taskColumns'] },
+  { id: 'custom-columns', group: "Workflow", icon: 'column-plus', label: "Custom columns", panel: 'custom-columns-panel', keys: ['taskFields', 'issueFields', 'issueColumns'] },
+  { id: 'transfer', group: "Data & access", icon: 'transfer', label: "Export and import organization", panel: 'transfer-panel', keys: [] },
+  { id: 'storage', group: "Data & access", icon: 'database', label: "Data that travels with you", panel: 'storage-panel', keys: [] },
+  { id: 'browser', group: "Data & access", icon: 'globe', label: "Browser access", panel: 'browser-panel', keys: [] }
 ];
 function choiceSettingsTabs() {
   return ['tasks', 'issues'].flatMap((kind, index) => CustomColumns.fieldsOf(settingsDraft || data.settings, kind).filter(field => ['select', 'multiselect'].includes(field.type)).map(field => ({
-    id: `choice-${kind}-${field.id}`, panel: `choice-${kind}-${field.id}-panel`, group: "Column labels", icon: '#',
+    id: `choice-${kind}-${field.id}`, panel: `choice-${kind}-${field.id}-panel`, group: "Column labels", icon: 'tag', family: 'violet',
     label: `${field.name} · ${data.settings.tabNames[index]}`, field, kind, custom: true, keys: [kind === 'tasks' ? 'taskFields' : 'issueFields']
   })));
 }
@@ -553,7 +571,7 @@ const settingsErrorTabs = [[/custom columns?|column options|column names and ide
 const settingsErrorTab = message => settingsErrorTabs.find(([pattern]) => pattern.test(String(message)))?.[1];
 function settingsNav() {
   const tabs = allSettingsTabs(), groups = [...new Set(tabs.map(tab => tab.group))];
-  return `<nav class="settings-nav" aria-label="${esc(t("Settings sections"))}">${groups.map((group, index) => `<div class="settings-nav-group" role="group" aria-labelledby="settings-group-${index}"><span class="settings-nav-label" id="settings-group-${index}">${esc(t(group))}</span>${tabs.filter(tab => tab.group === group).map(tab => `<button type="button" class="settings-tab" id="settings-tab-${tab.id}" data-settings-tab="${tab.id}" aria-controls="${tab.panel}"><span class="settings-tab-icon" aria-hidden="true">${tab.icon}</span><span class="settings-tab-text">${esc(tab.custom ? tab.label : t(tab.label))}</span><span class="settings-tab-dot" role="img" aria-label="${esc(t("Unsaved changes"))}" title="${esc(t("Unsaved changes"))}" hidden></span></button>`).join('')}</div>`).join('')}</nav>`;
+  return `<nav class="settings-nav" aria-label="${esc(t("Settings sections"))}">${groups.map((group, index) => `<div class="settings-nav-group" role="group" aria-labelledby="settings-group-${index}"><span class="settings-nav-label" id="settings-group-${index}">${esc(t(group))}</span>${tabs.filter(tab => tab.group === group).map(tab => `<button type="button" class="settings-tab" id="settings-tab-${tab.id}" data-settings-tab="${tab.id}" aria-controls="${tab.panel}"><span class="settings-tab-icon" aria-hidden="true">${ico(tab.icon, tab.family)}</span><span class="settings-tab-text">${esc(tab.custom ? tab.label : t(tab.label))}</span><span class="settings-tab-dot" role="img" aria-label="${esc(t("Unsaved changes"))}" title="${esc(t("Unsaved changes"))}" hidden></span></button>`).join('')}</div>`).join('')}</nav>`;
 }
 function showSettingsTab(id, reveal = false) {
   const tabs = allSettingsTabs(), selected = tabs.find(tab => tab.id === id) || settingsTabs[0];
@@ -748,7 +766,7 @@ function stats() {
   const releases = new Set(tasks.map(t => t.releaseDate).filter(Boolean));
   const hours = tasks.reduce((sum, t) => sum + t.effortHours, 0);
   const highlighted = tasks.filter(t => highlightOf(t) || data.settings.statuses.find(s => s.id === t.statusId)?.highlight).length;
-  return ui`<div class="stats"><div class="stat"><span>Visible tasks <span class="stat-icon">▤</span></span><strong>${tasks.length}<small>in your workspace</small></strong></div><div class="stat"><span>Planned releases <span class="stat-icon mint">◈</span></span><strong>${releases.size}<small>upcoming destinations</small></strong></div><div class="stat"><span>Total effort <span class="stat-icon peach">◷</span></span><strong title="${hours.toLocaleString(locale())} total hours">${effort(hours)}<small>${hours.toLocaleString(locale())} total hours</small></strong></div><div class="stat"><span>Highlighted <span class="stat-icon pink">⚑</span></span><strong>${highlighted}<small>keep an eye on these</small></strong></div></div>`;
+  return ui`<div class="stats"><div class="stat"><span>Visible tasks <span class="stat-icon">${ico('tasks')}</span></span><strong>${tasks.length}<small>in your workspace</small></strong></div><div class="stat"><span>Planned releases <span class="stat-icon mint">${ico('diamond')}</span></span><strong>${releases.size}<small>upcoming destinations</small></strong></div><div class="stat"><span>Total effort <span class="stat-icon peach">${ico('clock')}</span></span><strong title="${hours.toLocaleString(locale())} total hours">${effort(hours)}<small>${hours.toLocaleString(locale())} total hours</small></strong></div><div class="stat"><span>Highlighted <span class="stat-icon pink">${ico('flame')}</span></span><strong>${highlighted}<small>keep an eye on these</small></strong></div></div>`;
 }
 const taskColumnDefs = {
   sequence: { name: "Sequence", header: '#', sort: 'sequence' },
@@ -791,7 +809,7 @@ function customText(value, field) {
 function customSearchValues(record, kind) { return CustomColumns.fieldsOf(data.settings, kind).map(field => customText(record.customFields?.[field.id], field)); }
 function choiceButton(record, field, kind, values = record.customFields?.[field.id] || []) {
   const chips = CustomColumns.choices(field).filter(option => values.includes(option.id)).map(option => pill(option.name, option.color, 'tag-pill')).join('');
-  return `<button type="button" class="task-tags-button" data-choice-picker="${esc(`${kind}:${record.id}:${field.id}`)}" data-choice-kind="${kind}" data-choice-record="${esc(record.id)}" data-choice-field="${field.id}" aria-haspopup="dialog" aria-expanded="false" aria-label="${esc(field.name)}"><span class="tag-chips">${chips || `<span class="muted">+ ${esc(field.name)}</span>`}</span><span aria-hidden="true"> ▾</span></button>`;
+  return `<button type="button" class="task-tags-button" data-choice-picker="${esc(`${kind}:${record.id}:${field.id}`)}" data-choice-kind="${kind}" data-choice-record="${esc(record.id)}" data-choice-field="${field.id}" aria-haspopup="dialog" aria-expanded="false" aria-label="${esc(field.name)}"><span class="tag-chips">${chips || `<span class="muted">+ ${esc(field.name)}</span>`}</span>${ico('chevron-down')}</button>`;
 }
 function wireChoicePickers() {
   document.querySelectorAll('[data-choice-picker]').forEach(button => button.onclick = () => {
@@ -819,7 +837,7 @@ function customCell(record, field, kind = 'tasks') {
   const value = record.customFields?.[field.id], text = customText(value, field);
   if (field.type === 'multiselect') return `<td class="tags-cell custom-cell">${choiceButton(record, field, kind)}</td>`;
   if (field.type === 'select') { const option = CustomColumns.choices(field).find(option => option.id === value); return `<td class="custom-cell">${option ? pill(option.name, option.color, 'tag-pill') : '—'}</td>`; }
-  const html = field.type === 'url' && value ? `<a href="${esc(value)}" data-open-url>${esc(value)} ↗</a>` :
+  const html = field.type === 'url' && value ? `<a href="${esc(value)}" data-open-url>${esc(value)}${ico('external')}</a>` :
     field.type === 'date' && value ? `<span class="date-pill" style="--date:${dateColor(value)}">${esc(text)}</span>` : esc(text || '—');
   return `<td class="custom-cell" title="${esc(text)}"><span>${html}</span></td>`;
 }
@@ -842,13 +860,13 @@ function passesColumnFilters(record, kind, context) {
 }
 function filterHeader(id, kind) {
   const active = CustomColumns.activeFilter(columnFilters[kind][id]);
-  return `<button type="button" class="column-filter-button ${active ? 'active' : ''}" data-filter-column="${esc(id)}" aria-haspopup="dialog" aria-label="${esc(t("Filter column") + ': ' + columnName(id, kind))}" title="${esc(t("Filter column"))}">▽</button>`;
+  return `<button type="button" class="column-filter-button ${active ? 'active' : ''}" data-filter-column="${esc(id)}" aria-haspopup="dialog" aria-label="${esc(t("Filter column") + ': ' + columnName(id, kind))}" title="${esc(t("Filter column"))}">${ico('filter')}</button>`;
 }
 function columnFilterBar(kind) {
   const ids = Object.keys(columnFilters[kind]);
   return ids.length ? `<div class="column-filter-bar">${ids.map(id => {
     const summary = filterSummary(id, kind, columnFilters[kind][id]), short = summary.length > 48 ? `${summary.slice(0, 47)}…` : summary;
-    return `<button class="button small" data-filter-column="${esc(id)}" title="${esc(`${columnName(id, kind)}: ${summary}`)}">${esc(columnName(id, kind))}${short ? `: <span class="filter-summary">${esc(short)}</span>` : ''} ▾</button>`;
+    return `<button class="button small" data-filter-column="${esc(id)}" title="${esc(`${columnName(id, kind)}: ${summary}`)}">${esc(columnName(id, kind))}${short ? `: <span class="filter-summary">${esc(short)}</span>` : ''}${ico('chevron-down')}</button>`;
   }).join('')}<button class="button small subtle" data-clear-column-filters>${esc(t("Clear column filters"))}</button></div>` : '';
 }
 // Readable text of one column filter, shared by the filter bar and the Excel summary.
@@ -887,7 +905,7 @@ function dateFilterFields(filter, choices) {
   const min = onlyEmpty ? '' : filter.min, max = onlyEmpty ? '' : filter.max;
   const dates = [...new Set([...choices.dates, ...filter.values.filter(value => value !== empty)])].sort();
   const bounds = [...new Set([...choices.dates, min, max].filter(Boolean))].sort();
-  const option = (value, label, color, count) => `<label class="date-filter-option"><input type="checkbox" name="values" value="${esc(value)}" ${checked.has(value) ? 'checked' : ''}><span class="date-pill" style="--date:${color}">◷ ${esc(label)}</span><span class="tiny-count">${count}</span></label>`;
+  const option = (value, label, color, count) => `<label class="date-filter-option"><input type="checkbox" name="values" value="${esc(value)}" ${checked.has(value) ? 'checked' : ''}><span class="date-pill" style="--date:${color}">${ico('calendar')}${esc(label)}</span><span class="tiny-count">${count}</span></label>`;
   const bound = (name, selected) => `<select name="${name}"><option value="">—</option>${bounds.map(date => `<option value="${date}" ${date === selected ? 'selected' : ''}>${esc(formatDate(date))}</option>`).join('')}</select>`;
   return `<fieldset class="field full filter-options date-filter-options"><legend>${esc(t("Dates in the list"))}</legend>
       <div class="filter-option-tools"><button type="button" class="button small" data-check-dates="all">${esc(t("Select all"))}</button><button type="button" class="button small subtle" data-check-dates="none">${esc(t("Deselect all"))}</button></div>
@@ -962,11 +980,11 @@ function renderTasks() {
   const headers = columns.map(id => {
     const def = columnDef(id), label = esc(def.header || (def.field ? def.name : t(def.name))), current = def.sort && sort.find(s => s.key === def.sort);
     const title = def.header ? ` title="${esc(t(def.name))}"` : '';
-    return `<th data-column="${id}"${title}><div class="column-heading">${def.sort ? ui`<button data-sort="${def.sort}" title="Click to sort; Shift+click for multi-column sorting">${label} <span>${current ? (current.direction === 'asc' ? '↑' : '↓') + (sort.length > 1 ? sort.indexOf(current) + 1 : '') : '↕'}</span></button>` : `<span>${label}</span>`}${filterHeader(id, 'tasks')}</div></th>`;
+    return `<th data-column="${id}"${title}><div class="column-heading">${def.sort ? ui`<button data-sort="${def.sort}" title="Click to sort; Shift+click for multi-column sorting">${label} <span>${current ? ico(current.direction === 'asc' ? 'arrow-up' : 'arrow-down') + (sort.length > 1 ? sort.indexOf(current) + 1 : '') : ico('sort')}</span></button>` : `<span>${label}</span>`}${filterHeader(id, 'tasks')}</div></th>`;
   }).join('');
   $('#content').innerHTML = heading(data.settings.tabNames[0], "All tasks, one direction. Plan your work and focus on upcoming releases.",
-    csvButton('tasks') + excelButton() + ui`<button class="button primary" id="new-task">＋ New task</button>`) + stats() +
-    ui`<section class="panel"><div class="table-toolbar"><div class="search-wrap"><span>⌕</span><input id="search" aria-label="Search tasks" placeholder="Search code, description, incident…" value="${esc(search)}"></div><div class="filters"><select id="status-filter" aria-label="Filter status">${optionList(data.settings.statuses, statusFilter, "All statuses")}</select><select id="highlight-filter" aria-label="Filter by highlight">${highlightOptions}</select><label class="toggle-label"><input id="show-hidden" type="checkbox" ${showHidden ? 'checked' : ''}> Hidden <span class="tiny-count">${hidden}</span></label><label class="toggle-label duplicate-toggle ${duplicateCount ? 'has-duplicates' : ''}" title="Show only tasks whose incident is also linked to other tasks, hidden ones included"><input id="duplicates-only" type="checkbox" ${duplicatesOnly ? 'checked' : ''} ${duplicateCount ? '' : 'disabled'}> Duplicates <span class="tiny-count">${duplicateCount}</span></label><div class="saved-view-tools"><select id="saved-view-select" aria-label="Load a saved view">${savedViewOptions}</select><button type="button" class="button subtle" id="saved-view-manage" aria-haspopup="dialog">Views</button></div><button class="button subtle" id="columns-button" aria-haspopup="dialog" title="Choose which columns to show and in what order">▥ Columns</button><button class="button subtle" id="reset-sort" title="Reset to ascending release date">↕ Release</button></div></div><div class="highlighter-bar"></div><div class="table-scroll"><table class="activity-table"><thead><tr><th class="select-col"><input type="checkbox" id="select-all" aria-label="Select all shown tasks" title="Select all shown tasks"></th>${headers}<th><span class="sr-only">Actions</span></th></tr></thead><tbody id="task-rows"></tbody></table></div><div class="table-footer"><span id="row-count"></span><span id="footer-hint">Shift + click a column for multi-column sorting</span><div class="bulk-bar" id="bulk-bar" role="toolbar" aria-label="Actions on the selected tasks" hidden><strong id="bulk-count"></strong><button type="button" class="button small primary" id="bulk-edit">✎ Bulk edit…</button><button type="button" class="button small" id="bulk-excel">⤓ Export to Excel</button><button type="button" class="button small subtle" id="bulk-clear">Deselect</button></div></div></section><div class="hint"><span>✧</span> One archive, four perspectives. Issues, milestones and kanban update automatically.</div>`;
+    csvButton('tasks') + excelButton() + ui`<button class="button primary" id="new-task">${ico('plus')}New task</button>`) + stats() +
+    ui`<section class="panel"><div class="table-toolbar"><div class="search-wrap"><span>${ico('search')}</span><input id="search" aria-label="Search tasks" placeholder="Search code, description, incident…" value="${esc(search)}"></div><div class="filters"><select id="status-filter" aria-label="Filter status">${optionList(data.settings.statuses, statusFilter, "All statuses")}</select><select id="highlight-filter" aria-label="Filter by highlight">${highlightOptions}</select><label class="toggle-label"><input id="show-hidden" type="checkbox" ${showHidden ? 'checked' : ''}> Hidden <span class="tiny-count">${hidden}</span></label><label class="toggle-label duplicate-toggle ${duplicateCount ? 'has-duplicates' : ''}" title="Show only tasks whose incident is also linked to other tasks, hidden ones included"><input id="duplicates-only" type="checkbox" ${duplicatesOnly ? 'checked' : ''} ${duplicateCount ? '' : 'disabled'}> Duplicates <span class="tiny-count">${duplicateCount}</span></label><div class="saved-view-tools"><select id="saved-view-select" aria-label="Load a saved view">${savedViewOptions}</select><button type="button" class="button subtle" id="saved-view-manage" aria-haspopup="dialog">Views</button></div><button class="button subtle" id="columns-button" aria-haspopup="dialog" title="Choose which columns to show and in what order">${ico('columns')}Columns</button><button class="button subtle" id="reset-sort" title="Reset to ascending release date">${ico('sort')}Release</button></div></div><div class="highlighter-bar"></div><div class="table-scroll"><table class="activity-table"><thead><tr><th class="select-col"><input type="checkbox" id="select-all" aria-label="Select all shown tasks" title="Select all shown tasks"></th>${headers}<th><span class="sr-only">Actions</span></th></tr></thead><tbody id="task-rows"></tbody></table></div><div class="table-footer"><span id="row-count"></span><span id="footer-hint">Shift + click a column for multi-column sorting</span><div class="bulk-bar" id="bulk-bar" role="toolbar" aria-label="Actions on the selected tasks" hidden><strong id="bulk-count"></strong><button type="button" class="button small primary" id="bulk-edit">${ico('edit')}Bulk edit…</button><button type="button" class="button small" id="bulk-excel">${ico('excel')}Export to Excel</button><button type="button" class="button small subtle" id="bulk-clear">Deselect</button></div></div></section><div class="hint"><span>${ico('sparkle')}</span> One archive, four perspectives. Issues, milestones and kanban update automatically.</div>`;
   drawHighlighter();
   drawTaskRows();
   $('.table-scroll').insertAdjacentHTML('beforebegin', columnFilterBar('tasks'));
@@ -1113,10 +1131,10 @@ function renderSavedViewList() {
   const list = $('#saved-view-list');
   if (!list) return;
   const savedViews = data.settings.savedViews || [];
-  list.innerHTML = savedViews.length ? savedViews.map(saved => `<article class="saved-view-item"><div class="saved-view-info"><strong>${esc(saved.name)}</strong><small>${esc(savedViewSummary(saved))}</small></div><button type="button" class="button small primary" data-view-action="apply" data-view-id="${esc(saved.id)}">${esc(t("Open"))}</button><button type="button" class="button small" data-view-action="update" data-view-id="${esc(saved.id)}">${esc(t("Update"))}</button><button type="button" class="button small danger" data-view-action="delete" data-view-id="${esc(saved.id)}" aria-label="${esc(fillText("Delete view {0}", saved.name))}">✕</button></article>`).join('') : `<p class="backup-empty">${esc(t("You have not saved any views yet."))}</p>`;
+  list.innerHTML = savedViews.length ? savedViews.map(saved => `<article class="saved-view-item"><div class="saved-view-info"><strong>${esc(saved.name)}</strong><small>${esc(savedViewSummary(saved))}</small></div><button type="button" class="button small primary" data-view-action="apply" data-view-id="${esc(saved.id)}">${esc(t("Open"))}</button><button type="button" class="button small" data-view-action="update" data-view-id="${esc(saved.id)}">${esc(t("Update"))}</button><button type="button" class="button small danger" data-view-action="delete" data-view-id="${esc(saved.id)}" aria-label="${esc(fillText("Delete view {0}", saved.name))}">${ico('close')}</button></article>`).join('') : `<p class="backup-empty">${esc(t("You have not saved any views yet."))}</p>`;
 }
 function openSavedViews() {
-  openModal(ui`<div class="modal-heading"><div><div class="eyebrow">${esc(t("TASK"))}</div><h2>${esc(t("Saved views"))}</h2></div><button type="button" class="icon-button" data-close aria-label="Close">✕</button></div><p class="section-description">${esc(t("Save filters, sorting and columns to reapply them in one click. Views belong to this organization only."))}</p><p class="filter-note">${esc(t("A view for every release date is created automatically: you find them in the views menu, under “Upcoming releases” and “Past releases”."))}</p><form id="saved-view-form" class="form-grid"><label class="field full">${esc(t("View name"))}<input name="name" maxlength="60" required autocomplete="off" placeholder="${esc(t("e.g. Next release"))}"></label><div class="modal-actions full"><span class="spacer"></span><button type="submit" class="button primary">${esc(t("Save current view"))}</button></div></form><div class="saved-view-list" id="saved-view-list"></div>`);
+  openModal(ui`<div class="modal-heading"><div><div class="eyebrow">${esc(t("TASK"))}</div><h2>${esc(t("Saved views"))}</h2></div><button type="button" class="icon-button" data-close aria-label="Close">${ico('close')}</button></div><p class="section-description">${esc(t("Save filters, sorting and columns to reapply them in one click. Views belong to this organization only."))}</p><p class="filter-note">${esc(t("A view for every release date is created automatically: you find them in the views menu, under “Upcoming releases” and “Past releases”."))}</p><form id="saved-view-form" class="form-grid"><label class="field full">${esc(t("View name"))}<input name="name" maxlength="60" required autocomplete="off" placeholder="${esc(t("e.g. Next release"))}"></label><div class="modal-actions full"><span class="spacer"></span><button type="submit" class="button primary">${esc(t("Save current view"))}</button></div></form><div class="saved-view-list" id="saved-view-list"></div>`);
   const form = $('#saved-view-form');
   form.onsubmit = action(async event => { event.preventDefault(); await saveSavedView(new FormData(form).get('name')); });
   $('#saved-view-list').onclick = action(async event => {
@@ -1148,17 +1166,17 @@ function taskCell(column, task, status, urgency, links, duplicateGroups = []) {
     case 'urgency': return `<td>${pill(urgency.name, urgency.color)}</td>`;
     case 'status': return `<td>${pill(status.name, status.color, 'status-pill')}</td>`;
     case 'highlight': { const mark = highlightOf(task); return `<td>${mark ? pill(mark.name, mark.color, 'mark-pill') : none}</td>`; }
-    case 'tags': return `<td class="tags-cell"><button type="button" class="task-tags-button" data-task-tags="${esc(task.id)}" aria-haspopup="dialog" aria-expanded="false" aria-label="${esc(t("Edit tags"))}" title="${esc(t("Edit tags"))}">${tagsOf(task).length ? tagChips(task) : `<span class="muted">+ ${esc(t('Tags'))}</span>`}<span aria-hidden="true"> ▾</span></button></td>`;
+    case 'tags': return `<td class="tags-cell"><button type="button" class="task-tags-button" data-task-tags="${esc(task.id)}" aria-haspopup="dialog" aria-expanded="false" aria-label="${esc(t("Edit tags"))}" title="${esc(t("Edit tags"))}">${tagsOf(task).length ? tagChips(task) : `<span class="muted">+ ${esc(t('Tags'))}</span>`}${ico('chevron-down')}</button></td>`;
     case 'effort': return `<td class="effort-cell">${effort(task.effortHours)}</td>`;
     case 'incident': {
       const groups = new Map(duplicateGroups.map(group => [group.key, group]));
       return `<td class="references">${links.incidents.map(incident => {
         const group = groups.get(incident.trim().toUpperCase());
-        return group ? `<button type="button" class="dup-ref" data-dup-incident="${esc(group.incident)}" title="${esc(taskDuplicateLines(task.id, [group])[0] + '\n' + t("Click to see only the tasks involved."))}">⧉ ${esc(incident)}</button>` : esc(incident);
+        return group ? `<button type="button" class="dup-ref" data-dup-incident="${esc(group.incident)}" title="${esc(taskDuplicateLines(task.id, [group])[0] + '\n' + t("Click to see only the tasks involved."))}">${ico('copy')}${esc(incident)}</button>` : esc(incident);
       }).join('<br>') || none}</td>`;
     }
     case 'problem': return `<td class="references">${links.problems.map(esc).join('<br>') || none}</td>`;
-    case 'releaseDate': return `<td><span class="date-pill" style="--date:${task.releaseDate ? dateColor(task.releaseDate) : '#929bb2'}">◷ ${formatDate(task.releaseDate)}</span></td>`;
+    case 'releaseDate': return `<td><span class="date-pill" style="--date:${task.releaseDate ? dateColor(task.releaseDate) : '#929bb2'}">${ico('calendar')}${formatDate(task.releaseDate)}</span></td>`;
     case 'notes': return `<td class="notes-col"><button class="description-cell notes-cell" data-edit-task="${task.id}" title="${esc(plain(task.notes) || t("Add notes"))}">${esc(plain(task.notes) || t("Add notes"))}</button></td>`;
     default: return columnDef(column)?.field ? customCell(task, columnDef(column).field) : '<td></td>';
   }
@@ -1171,9 +1189,9 @@ function drawTaskRows() {
     const classes = [status.highlight ? 'highlighted' : '', mark ? 'marked' : '', task.hidden ? 'hidden-row' : '', duplicateGroups.length ? 'duplicate-row' : '', selectedTasks.has(task.id) ? 'selected' : ''].filter(Boolean).join(' ');
     const markLabel = mark ? fillText("Highlight: {0}", mark.name) : t("Highlight row");
     const duplicateLabel = duplicateGroups.length ? [t("Possible duplicate"), ...taskDuplicateLines(task.id, duplicateGroups)].join('\n') : '';
-    const duplicateFlag = duplicateGroups.length ? `<button type="button" class="icon-button dup-flag" data-dup-incident="${esc(duplicateGroups[0].incident)}" title="${esc(duplicateLabel + '\n' + t("Click to see only the tasks involved."))}" aria-label="${esc(duplicateLabel.replaceAll('\n', '. '))}">⧉</button>` : '';
+    const duplicateFlag = duplicateGroups.length ? `<button type="button" class="icon-button dup-flag" data-dup-incident="${esc(duplicateGroups[0].incident)}" title="${esc(duplicateLabel + '\n' + t("Click to see only the tasks involved."))}" aria-label="${esc(duplicateLabel.replaceAll('\n', '. '))}">${ico('copy')}</button>` : '';
     const selectLabel = fillText("Select {0}", task.code);
-    return `<tr data-task-row="${esc(task.id)}" title="${esc(t("Double-click the row to edit."))}" class="${classes}" style="--row-color:${status.color}${mark ? `;--mark:${mark.color}` : ''}"><td class="select-cell"><label class="select-hit" title="${esc(selectLabel + '\n' + t("Shift + click to select a range."))}"><input type="checkbox" data-select-task="${esc(task.id)}" ${selectedTasks.has(task.id) ? 'checked' : ''} aria-label="${esc(selectLabel)}"></label></td>${columns.map(column => taskCell(column, task, status, urgency, links, duplicateGroups)).join('')}<td class="row-actions">${duplicateFlag}<button type="button" class="icon-button mark-button ${mark ? 'is-marked' : ''}" data-mark-task="${esc(task.id)}" title="${esc(markLabel)}" aria-label="${esc(markLabel)}" aria-haspopup="menu" aria-expanded="false"><i class="mark-dot"></i></button><button class="icon-button" data-toggle-task="${task.id}" title="${esc(t(task.hidden ? "Show task" : "Hide task"))}">${task.hidden ? '◉' : '◌'}</button><button class="icon-button" data-edit-task="${task.id}" title="${esc(t("Edit task"))}">⋯</button></td></tr>`;
+    return `<tr data-task-row="${esc(task.id)}" title="${esc(t("Double-click the row to edit."))}" class="${classes}" style="--row-color:${status.color}${mark ? `;--mark:${mark.color}` : ''}"><td class="select-cell"><label class="select-hit" title="${esc(selectLabel + '\n' + t("Shift + click to select a range."))}"><input type="checkbox" data-select-task="${esc(task.id)}" ${selectedTasks.has(task.id) ? 'checked' : ''} aria-label="${esc(selectLabel)}"></label></td>${columns.map(column => taskCell(column, task, status, urgency, links, duplicateGroups)).join('')}<td class="row-actions">${duplicateFlag}<button type="button" class="icon-button mark-button ${mark ? 'is-marked' : ''}" data-mark-task="${esc(task.id)}" title="${esc(markLabel)}" aria-label="${esc(markLabel)}" aria-haspopup="menu" aria-expanded="false"><i class="mark-dot"></i></button><button class="icon-button" data-toggle-task="${task.id}" title="${esc(t(task.hidden ? "Show task" : "Hide task"))}">${ico(task.hidden ? 'eye' : 'eye-off')}</button><button class="icon-button" data-edit-task="${task.id}" title="${esc(t("Edit task"))}">${ico('more')}</button></td></tr>`;
   }).join('') || `<tr><td colspan="${columns.length + 2}" class="empty">${esc(t("No tasks found. Create a new task or change the filters."))}</td></tr>`;
   document.querySelectorAll('#task-rows .select-cell').forEach((cell, index) => cell.insertAdjacentHTML('afterbegin', dragHandle(tasks[index].code)));
   sortable($('#task-rows'), 'tr[data-task-row]', async (from, to) => {
@@ -1276,10 +1294,10 @@ function bulkDialog(ids, context = '') {
   const statuses = settings.statuses.filter(status => tasks.some(task => task.statusId === status.id));
   const items = tasks.map(task => {
     const status = settings.statuses.find(s => s.id === task.statusId);
-    return `<label class="bulk-item ${task.hidden ? 'is-hidden' : ''}"><input type="checkbox" name="taskIds" value="${esc(task.id)}" data-status="${esc(task.statusId)}" checked><strong>${esc(task.code)}</strong><span class="bulk-desc">${esc(plain(task.description) || t("No description"))}</span>${pill(status.name, status.color)}<span class="bulk-date" style="--date:${task.releaseDate ? dateColor(task.releaseDate) : '#929bb2'}">◷ ${formatDate(task.releaseDate)}</span></label>`;
+    return `<label class="bulk-item ${task.hidden ? 'is-hidden' : ''}"><input type="checkbox" name="taskIds" value="${esc(task.id)}" data-status="${esc(task.statusId)}" checked><strong>${esc(task.code)}</strong><span class="bulk-desc">${esc(plain(task.description) || t("No description"))}</span>${pill(status.name, status.color)}<span class="bulk-date" style="--date:${task.releaseDate ? dateColor(task.releaseDate) : '#929bb2'}">${ico('calendar')}${formatDate(task.releaseDate)}</span></label>`;
   }).join('');
   const tagRows = tags.map(tag => `<label class="bulk-tag">${pill(tag.name, tag.color, 'tag-pill')}<select name="tag:${esc(tag.id)}" aria-label="${esc(fillText('Tag {0}', tag.name))}"><option value="">—</option><option value="add">${esc(t("＋ Add"))}</option><option value="remove">${esc(t("− Remove"))}</option></select></label>`).join('');
-  openModal(ui`<form id="bulk-form" novalidate><div class="modal-heading"><div><div class="eyebrow">${esc(data.settings.tabNames[0])}</div><h2>${esc(t("Bulk edit"))}</h2></div><button type="button" class="icon-button" data-close aria-label="Close">✕</button></div>${context ? `<p class="section-description">${esc(context)}</p>` : ''}
+  openModal(ui`<form id="bulk-form" novalidate><div class="modal-heading"><div><div class="eyebrow">${esc(data.settings.tabNames[0])}</div><h2>${esc(t("Bulk edit"))}</h2></div><button type="button" class="icon-button" data-close aria-label="Close">${ico('close')}</button></div>${context ? `<p class="section-description">${esc(context)}</p>` : ''}
     <section class="bulk-targets" aria-labelledby="bulk-targets-title"><div class="bulk-targets-head"><strong id="bulk-targets-title">Tasks involved</strong><span class="bulk-quick">${statuses.length > 1 ? statuses.map(status => `<button type="button" class="bulk-status-chip" data-bulk-status="${esc(status.id)}" style="--pill:${esc(status.color)}" title="${esc(fillText("Select only: {0}", status.name))}">${esc(status.name)}</button>`).join('') : ''}<button type="button" class="unsaved-link" data-bulk-all="1">Select all</button><button type="button" class="unsaved-link" data-bulk-all="0">Deselect all</button></span></div><div class="bulk-list">${items}</div></section>
     <div class="form-grid bulk-fields">
       <label class="field">Status<select name="statusId">${keep}${optionList(settings.statuses, '')}</select></label>
@@ -1362,7 +1380,7 @@ function drawHighlighter() {
   bar.setAttribute('role', 'toolbar');
   bar.setAttribute('aria-label', t("Highlighter"));
   bar.title = hint;
-  bar.innerHTML = `<span class="highlighter-label"><span aria-hidden="true">✎</span> ${esc(t("Highlighter"))}</span><div class="highlighter-swatches">${highlights.map(h => `<button type="button" class="highlighter-swatch" data-highlighter="${esc(h.id)}" style="--mark:${h.color}" aria-pressed="${h.id === highlighter}" title="${esc(h.name)}"><i aria-hidden="true"></i><span>${esc(h.name)}</span></button>`).join('')}${highlights.length ? `<button type="button" class="highlighter-swatch eraser" data-highlighter="erase" aria-pressed="${highlighter === 'erase'}" title="${esc(t("Remove the highlight from rows"))}"><span aria-hidden="true">⌫</span><span>${esc(t("Eraser"))}</span></button>` : ''}</div><span class="highlighter-hint" aria-live="polite">${esc(hint)}</span><button type="button" class="unsaved-link highlighter-manage" data-manage-highlights>${esc(t("Manage colors"))}</button>`;
+  bar.innerHTML = `<span class="highlighter-label">${ico('highlighter')} ${esc(t("Highlighter"))}</span><div class="highlighter-swatches">${highlights.map(h => `<button type="button" class="highlighter-swatch" data-highlighter="${esc(h.id)}" style="--mark:${h.color}" aria-pressed="${h.id === highlighter}" title="${esc(h.name)}"><i aria-hidden="true"></i><span>${esc(h.name)}</span></button>`).join('')}${highlights.length ? `<button type="button" class="highlighter-swatch eraser" data-highlighter="erase" aria-pressed="${highlighter === 'erase'}" title="${esc(t("Remove the highlight from rows"))}">${ico('eraser')}<span>${esc(t("Eraser"))}</span></button>` : ''}</div><span class="highlighter-hint" aria-live="polite">${esc(hint)}</span><button type="button" class="unsaved-link highlighter-manage" data-manage-highlights>${esc(t("Manage colors"))}</button>`;
   const table = $('.activity-table');
   table?.classList.toggle('painting', Boolean(highlighter));
   table?.style.setProperty('--paint', active ? active.color : 'var(--muted)');
@@ -1426,7 +1444,7 @@ function openMarkMenu(button) {
   const task = data.tasks.find(item => item.id === id);
   if (!task) return;
   const current = currentMark(task);
-  const item = (value, label, swatch) => `<button type="button" role="menuitemradio" aria-checked="${value === current}" class="mark-choice" data-mark-choice="${esc(value)}">${swatch}<span>${esc(label)}</span>${value === current ? '<b aria-hidden="true">✓</b>' : ''}</button>`;
+  const item = (value, label, swatch) => `<button type="button" role="menuitemradio" aria-checked="${value === current}" class="mark-choice" data-mark-choice="${esc(value)}">${swatch}<span>${esc(label)}</span>${value === current ? `<b aria-hidden="true">${ico('check')}</b>` : ''}</button>`;
   const menu = document.createElement('div');
   menu.id = 'mark-menu';
   menu.className = 'mark-menu';
@@ -1435,7 +1453,7 @@ function openMarkMenu(button) {
   menu.setAttribute('aria-label', fillText("Highlight {0}", task.code));
   menu.innerHTML = highlightsOf().map(h => item(h.id, h.name, `<i class="mark-swatch" style="--mark:${h.color}"></i>`)).join('') +
     item('', t("No highlight"), '<i class="mark-swatch none"></i>') +
-    `<hr><button type="button" role="menuitem" class="mark-choice" data-manage-highlights><i class="mark-swatch manage" aria-hidden="true">⚙</i><span>${esc(t("Manage colors…"))}</span></button>`;
+    `<hr><button type="button" role="menuitem" class="mark-choice" data-manage-highlights><i class="mark-swatch manage" aria-hidden="true">${ico('gear')}</i><span>${esc(t("Manage colors…"))}</span></button>`;
   document.body.append(menu);
   const rect = button.getBoundingClientRect(), width = menu.offsetWidth, height = menu.offsetHeight;
   menu.style.left = `${Math.max(8, Math.min(rect.right - width, innerWidth - width - 8))}px`;
@@ -1596,7 +1614,7 @@ function columnEditor(container, columns, kind = 'tasks', settings = data.settin
   const draw = focus => {
     container.innerHTML = `<ol class="column-editor">${columns.map((column, index) => {
       const def = columnDef(column.id, kind, settings), name = def.field ? def.name : t(def.name);
-      return `<li class="column-row ${column.visible ? '' : 'is-off'}">${dragHandle(name)}<span class="order-number">${String(index + 1).padStart(2, '0')}</span><label class="column-toggle"><input type="checkbox" data-column-visible="${column.id}" ${column.visible ? 'checked' : ''}><span>${esc(name)}</span></label>${def.sort ? `<span class="column-tag" title="${esc(t("Click the header to sort"))}">↕ ${esc(t("Sortable"))}</span>` : ''}<button type="button" class="icon-button" data-column-move="${column.id}:-1" ${index === 0 ? 'disabled' : ''} title="${esc(t("Move up"))}" aria-label="${esc(`${t("Move up")}: ${name}`)}">↑</button><button type="button" class="icon-button" data-column-move="${column.id}:1" ${index === columns.length - 1 ? 'disabled' : ''} title="${esc(t("Move down"))}" aria-label="${esc(`${t("Move down")}: ${name}`)}">↓</button></li>`;
+      return `<li class="column-row ${column.visible ? '' : 'is-off'}">${dragHandle(name)}<span class="order-number">${String(index + 1).padStart(2, '0')}</span><label class="column-toggle"><input type="checkbox" data-column-visible="${column.id}" ${column.visible ? 'checked' : ''}><span>${esc(name)}</span></label>${def.sort ? `<span class="column-tag" title="${esc(t("Click the header to sort"))}">${ico('sort')}${esc(t("Sortable"))}</span>` : ''}<button type="button" class="icon-button" data-column-move="${column.id}:-1" ${index === 0 ? 'disabled' : ''} title="${esc(t("Move up"))}" aria-label="${esc(`${t("Move up")}: ${name}`)}">${ico('arrow-up')}</button><button type="button" class="icon-button" data-column-move="${column.id}:1" ${index === columns.length - 1 ? 'disabled' : ''} title="${esc(t("Move down"))}" aria-label="${esc(`${t("Move down")}: ${name}`)}">${ico('arrow-down')}</button></li>`;
     }).join('')}</ol>`;
     container.querySelectorAll('[data-column-visible]').forEach(input => input.onchange = () => {
       const column = columns.find(item => item.id === input.dataset.columnVisible);
@@ -1619,7 +1637,7 @@ function columnEditor(container, columns, kind = 'tasks', settings = data.settin
 }
 function columnsDialog(kind = 'tasks') {
   const columns = kind === 'tasks' ? normalizeTaskColumns(data.settings.taskColumns, data.settings.taskFields) : CustomColumns.normalizeIssueColumns(data.settings.issueColumns, data.settings.issueFields);
-  openModal(`<div class="modal-heading"><div><div class="eyebrow">${esc(t("TASK"))}</div><h2>${esc(t("List columns"))}</h2></div><button type="button" class="icon-button" data-close aria-label="${esc(t("Close"))}">✕</button></div><p class="section-description">${esc(t("Tick the columns to show and drag them (or use the arrows) to change their order. Hiding a column does not delete any data."))}</p><div id="columns-dialog-editor"></div><div class="modal-actions"><button type="button" class="button" id="columns-default">${esc(t("Restore defaults"))}</button><span class="spacer"></span><button type="button" class="button" data-close>${esc(t("Cancel"))}</button><button type="button" class="button primary" id="columns-apply">${esc(t("Apply"))}</button></div>`);
+  openModal(`<div class="modal-heading"><div><div class="eyebrow">${esc(t("TASK"))}</div><h2>${esc(t("List columns"))}</h2></div><button type="button" class="icon-button" data-close aria-label="${esc(t("Close"))}">${ico('close')}</button></div><p class="section-description">${esc(t("Tick the columns to show and drag them (or use the arrows) to change their order. Hiding a column does not delete any data."))}</p><div id="columns-dialog-editor"></div><div class="modal-actions"><button type="button" class="button" id="columns-default">${esc(t("Restore defaults"))}</button><span class="spacer"></span><button type="button" class="button" data-close>${esc(t("Cancel"))}</button><button type="button" class="button primary" id="columns-apply">${esc(t("Apply"))}</button></div>`);
   const container = $('#columns-dialog-editor');
   columnEditor(container, columns, kind);
   $('#columns-default').onclick = () => { columns.splice(0, columns.length, ...(kind === 'tasks' ? defaultTaskColumns(data.settings.taskFields) : CustomColumns.normalizeIssueColumns(undefined, data.settings.issueFields))); columnEditor(container, columns, kind); };
@@ -1659,7 +1677,7 @@ function globalSearchResults(query) {
   return results;
 }
 function openGlobalSearch(initial = '') {
-  openModal(ui`<div class="modal-heading"><div><div class="eyebrow">${esc(t("GLOBAL SEARCH"))}</div><h2>${esc(t("Search OrbitKanban"))}</h2></div><button type="button" class="icon-button" data-close aria-label="Close">✕</button></div><label class="global-search-field"><span aria-hidden="true">⌕</span><input id="global-search-input" type="search" autocomplete="off" placeholder="${esc(t("Code, incident, problem, release date…"))}" aria-label="${esc(t("Search tasks and issues"))}"><kbd>Esc</kbd></label><div class="global-search-results" id="global-search-results" role="listbox" aria-label="${esc(t("Search results"))}"></div>`);
+  openModal(ui`<div class="modal-heading"><div><div class="eyebrow">${esc(t("GLOBAL SEARCH"))}</div><h2>${esc(t("Search OrbitKanban"))}</h2></div><button type="button" class="icon-button" data-close aria-label="Close">${ico('close')}</button></div><label class="global-search-field"><span aria-hidden="true">${ico('search')}</span><input id="global-search-input" type="search" autocomplete="off" placeholder="${esc(t("Code, incident, problem, release date…"))}" aria-label="${esc(t("Search tasks and issues"))}"><kbd>Esc</kbd></label><div class="global-search-results" id="global-search-results" role="listbox" aria-label="${esc(t("Search results"))}"></div>`);
   const input = $('#global-search-input'), list = $('#global-search-results');
   const draw = () => {
     const results = globalSearchResults(input.value);
@@ -1747,7 +1765,7 @@ async function csvImportDialog(file, kind) {
   if (file.size > Csv.MAX_BYTES) throw new Error(t("The CSV exceeds the 16 MB limit."));
   const buffer = await file.arrayBuffer(), fields = Csv.destinations(data, kind);
   let rows = [], mapping = [], preview;
-  openModal(`<form id="csv-import-form"><div class="modal-heading"><div><div class="eyebrow">CSV · ${esc(data.settings.tabNames[kind === 'tasks' ? 0 : 1])}</div><h2>${esc(t("Import CSV"))}</h2></div><button type="button" class="icon-button" data-close aria-label="${esc(t("Close"))}">✕</button></div><p>${esc(file.name)}</p>
+  openModal(`<form id="csv-import-form"><div class="modal-heading"><div><div class="eyebrow">CSV · ${esc(data.settings.tabNames[kind === 'tasks' ? 0 : 1])}</div><h2>${esc(t("Import CSV"))}</h2></div><button type="button" class="icon-button" data-close aria-label="${esc(t("Close"))}">${ico('close')}</button></div><p>${esc(file.name)}</p>
     <p class="section-description">${esc(t("Rows will be added without overwriting existing ones. Duplicates will be flagged as usual."))}</p>
     <div class="csv-options"><label class="field">${esc(t("Delimiter"))}<select id="csv-separator"><option value="">${esc(t("Automatic"))}</option><option value=";">;</option><option value=",">,</option><option value="tab">Tab</option></select></label><label class="field">${esc(t("Encoding"))}<select id="csv-encoding"><option value="utf-8">UTF-8</option><option value="windows-1252">Windows-1252 (Excel)</option><option value="utf-16le">UTF-16 LE</option></select></label><label class="checkbox-field"><input id="csv-header" type="checkbox" checked> ${esc(t("First row contains headers"))}</label></div>
     <p class="muted">${esc(t("Dates: YYYY-MM-DD or DD/MM/YYYY. Numbers: decimal point or comma. Multiple choices and tags: separate with |. Configure catalogs and custom columns first."))}</p>
@@ -1814,7 +1832,7 @@ function taskDialog(existing) {
     effortHours: 0, releaseDate: '', notes: '', hidden: false, highlightId: '', tagIds: []
   };
   const days = Math.floor(t.effortHours / data.settings.hoursPerDay), hours = Math.round((t.effortHours - days * data.settings.hoursPerDay) * 100) / 100;
-  openModal(ui`<form id="task-form"><div class="modal-heading"><div><div class="eyebrow">TASK</div><h2>${tr(existing ? "Edit task" : "A new direction")}</h2></div><button type="button" class="icon-button" data-close aria-label="Close">✕</button></div><div class="task-edit-layout"><div class="form-grid task-edit-fields">
+  openModal(ui`<form id="task-form"><div class="modal-heading"><div><div class="eyebrow">TASK</div><h2>${tr(existing ? "Edit task" : "A new direction")}</h2></div><button type="button" class="icon-button" data-close aria-label="Close">${ico('close')}</button></div><div class="task-edit-layout"><div class="form-grid task-edit-fields">
     <label class="field">Portal code *<input name="code" required maxlength="200" value="${esc(t.code)}" placeholder="es. PRJ-1042"></label>
     <label class="field">Sequence *<input name="sequence" type="number" min="0" step="1" required value="${t.sequence}"></label>
     <label class="field">Urgency<select name="urgencyId">${optionList(data.settings.urgencies, t.urgencyId)}</select></label>
@@ -1836,8 +1854,8 @@ function taskDialog(existing) {
     const code = form.elements.code.value, links = matchIssues({ code }, data.issues);
     const groups = findDuplicates([...data.tasks.filter(task => task.id !== t.id), { ...t, code }], data.issues).tasks.get(t.id) || [];
     $('#match-preview').classList.toggle('has-duplicates', groups.length > 0);
-    $('#match-preview').innerHTML = ui`<span>⌘ Automatic link by portal code</span><div>Incident: <strong>${esc(links.incidents.join(', ') || '—')}</strong> &nbsp; Problem: <strong>${esc(links.problems.join(', ') || '—')}</strong></div>` +
-      (groups.length ? `<p class="duplicate-warning"><strong>⧉ ${esc(tr("Possible duplicate"))}</strong>${taskDuplicateLines(t.id, groups).map(line => `<span>${esc(line)}</span>`).join('')}</p>` : '');
+    $('#match-preview').innerHTML = ui`<span>${ico('link')}Automatic link by portal code</span><div>Incident: <strong>${esc(links.incidents.join(', ') || '—')}</strong> &nbsp; Problem: <strong>${esc(links.problems.join(', ') || '—')}</strong></div>` +
+      (groups.length ? `<p class="duplicate-warning"><strong>${ico('copy')}${esc(tr("Possible duplicate"))}</strong>${taskDuplicateLines(t.id, groups).map(line => `<span>${esc(line)}</span>`).join('')}</p>` : '');
   };
   form.elements.code.oninput = updateMatches; updateMatches(); wireEditors();
   const generatedLink = () => portalUrl({ code: form.elements.code.value, url: '' }, data.settings);
@@ -1847,7 +1865,7 @@ function taskDialog(existing) {
     $('#portal-link-preview').innerHTML = !effective
       ? esc(tr(data.settings.portalUrlTemplate ? "Enter the portal code to generate the link." : "No link: set the link template in the organization settings or enter a specific link."))
       : isWebUrl(effective)
-        ? `${esc(tr(override ? "Specific link" : "Link generated from the organization template"))}: <a class="portal-link" href="${esc(effective)}" data-open-url>${esc(effective)} ↗</a>`
+        ? `${esc(tr(override ? "Specific link" : "Link generated from the organization template"))}: <a class="portal-link" href="${esc(effective)}" data-open-url>${esc(effective)}${ico('external')}</a>`
         : `<span class="portal-error">${esc(tr("The link must start with http:// or https://."))}</span>`;
   };
   form.elements.code.addEventListener('input', updateLink);
@@ -1894,8 +1912,8 @@ function filteredIssues(query = issueSearch, duplicates = duplicatesOf(), counts
 function renderIssues() {
   const duplicates = duplicatesOf(), duplicateCount = duplicates.issues.size, identicalIds = new Set(duplicates.identical), columns = shownIssueColumns(), counts = linkedCounts();
   if (issueDuplicatesOnly && !duplicateCount) issueDuplicatesOnly = false;
-  $('#content').innerHTML = heading(data.settings.tabNames[1], "Connect work to its origin. Multiple incidents can share the same problem.", csvButton('issues') + excelButton() + ui`<button class="button primary" id="new-issue">＋ New association</button>`) +
-    ui`<div class="info-banner">⌘ &nbsp; Incidents and problems are automatically linked to tasks with the same portal code, regardless of letter case.</div><section class="panel"><div class="table-toolbar"><strong id="issue-count">${data.issues.length} associations</strong><div class="filters"><input id="issue-search" class="issue-search" value="${esc(issueSearch)}" placeholder="Search code, incident or problem…" aria-label="Search associations"><label class="toggle-label duplicate-toggle ${duplicateCount ? 'has-duplicates' : ''}" title="Show only associations whose incident appears in more than one row"><input id="issue-duplicates-only" type="checkbox" ${issueDuplicatesOnly ? 'checked' : ''} ${duplicateCount ? '' : 'disabled'}> Duplicates <span class="tiny-count">${duplicateCount}</span></label><button class="button subtle" id="issue-columns-button">▥ Columns</button>${identicalIds.size ? ui`<button class="button subtle" id="remove-identical" title="Delete associations with the same portal code, incident and problem as another one, keeping the first">Remove identical <span class="tiny-count">${identicalIds.size}</span></button>` : ''}</div></div>${columnFilterBar('issues')}<div class="table-scroll"><table><thead><tr>${columns.map(id => `<th data-column="${esc(id)}"><div class="column-heading"><span>${esc(columnDef(id, 'issues').field ? columnDef(id, 'issues').name : t(columnDef(id, 'issues').name))}</span>${filterHeader(id, 'issues')}</div></th>`).join('')}<th>Actions</th></tr></thead><tbody id="issue-rows"></tbody></table></div></section>`;
+  $('#content').innerHTML = heading(data.settings.tabNames[1], "Connect work to its origin. Multiple incidents can share the same problem.", csvButton('issues') + excelButton() + ui`<button class="button primary" id="new-issue">${ico('plus')}New association</button>`) +
+    ui`<div class="info-banner">${ico('link')}Incidents and problems are automatically linked to tasks with the same portal code, regardless of letter case.</div><section class="panel"><div class="table-toolbar"><strong id="issue-count">${data.issues.length} associations</strong><div class="filters"><input id="issue-search" class="issue-search" value="${esc(issueSearch)}" placeholder="Search code, incident or problem…" aria-label="Search associations"><label class="toggle-label duplicate-toggle ${duplicateCount ? 'has-duplicates' : ''}" title="Show only associations whose incident appears in more than one row"><input id="issue-duplicates-only" type="checkbox" ${issueDuplicatesOnly ? 'checked' : ''} ${duplicateCount ? '' : 'disabled'}> Duplicates <span class="tiny-count">${duplicateCount}</span></label><button class="button subtle" id="issue-columns-button">${ico('columns')}Columns</button>${identicalIds.size ? ui`<button class="button subtle" id="remove-identical" title="Delete associations with the same portal code, incident and problem as another one, keeping the first">Remove identical <span class="tiny-count">${identicalIds.size}</span></button>` : ''}</div></div>${columnFilterBar('issues')}<div class="table-scroll"><table><thead><tr>${columns.map(id => `<th data-column="${esc(id)}"><div class="column-heading"><span>${esc(columnDef(id, 'issues').field ? columnDef(id, 'issues').name : t(columnDef(id, 'issues').name))}</span>${filterHeader(id, 'issues')}</div></th>`).join('')}<th>Actions</th></tr></thead><tbody id="issue-rows"></tbody></table></div></section>`;
   function rows(query = $('#issue-search').value) {
     issueSearch = query;
     const issues = filteredIssues(query, duplicates, counts);
@@ -1903,8 +1921,8 @@ function renderIssues() {
     $('#issue-rows').innerHTML = issues.map(i => {
       const count = counts.get(i.code.trim().toUpperCase()) || 0, group = duplicates.issues.get(i.id);
       const identical = identicalIds.has(i.id) ? `<span class="dup-note" title="${esc(t("Same portal code, incident and problem as another association."))}">${esc(t("identical"))}</span>` : '';
-      const incident = group ? `<button type="button" class="dup-ref" data-dup-issue="${esc(group.incident)}" title="${esc(issueDuplicateLine(i.id, group) + '\n' + t("Click to see only the associations involved."))}">⧉ ${esc(i.incident)}</button>${identical}` : esc(i.incident) || '—';
-      const cells = { code: `<td><button class="code-link" data-issue="${i.id}">${esc(i.code)}</button></td>`, incident: `<td>${incident}</td>`, problem: `<td>${pill(i.problem || '—', '#9d8de8')}</td>`, linked: `<td><span class="${count ? 'linked' : 'muted'}">${count ? ui`↗ ${count} linked tasks` : t("Waiting for a task")}</span></td>` };
+      const incident = group ? `<button type="button" class="dup-ref" data-dup-issue="${esc(group.incident)}" title="${esc(issueDuplicateLine(i.id, group) + '\n' + t("Click to see only the associations involved."))}">${ico('copy')}${esc(i.incident)}</button>${identical}` : esc(i.incident) || '—';
+      const cells = { code: `<td><button class="code-link" data-issue="${i.id}">${esc(i.code)}</button></td>`, incident: `<td>${incident}</td>`, problem: `<td>${pill(i.problem || '—', '#9d8de8')}</td>`, linked: `<td><span class="${count ? 'linked' : 'muted'}">${count ? ui`${ico('link')}${count} linked tasks` : t("Waiting for a task")}</span></td>` };
       return ui`<tr data-issue-row="${esc(i.id)}" class="${group ? 'duplicate-row' : ''}" title="Double-click the row to edit.">${columns.map(id => cells[id] || customCell(i, columnDef(id, 'issues').field, 'issues')).join('')}<td><button class="button small" data-issue="${i.id}">Edit</button></td></tr>`;
     }).join('') || ui`<tr><td colspan="${columns.length + 1}" class="empty">No associations. Add a portal code with an incident and/or problem.</td></tr>`;
     wireChoicePickers();
@@ -1932,7 +1950,7 @@ function renderIssues() {
 }
 function issueDialog(existing) {
   const issue = existing || { id: uid(), code: '', incident: '', problem: '' };
-  openModal(ui`<form id="issue-form"><div class="modal-heading"><h2>${t(existing ? "Edit association" : "New association")}</h2><button class="icon-button" type="button" data-close aria-label="Close">✕</button></div><div class="form-grid">
+  openModal(ui`<form id="issue-form"><div class="modal-heading"><h2>${t(existing ? "Edit association" : "New association")}</h2><button class="icon-button" type="button" data-close aria-label="Close">${ico('close')}</button></div><div class="form-grid">
     <label class="field full">Portal code *<input name="code" required value="${esc(issue.code)}" list="task-codes"><datalist id="task-codes">${[...new Set(data.tasks.map(t => t.code))].map(code => `<option value="${esc(code)}">`).join('')}</datalist></label>
     <label class="field">Incident<input name="incident" value="${esc(issue.incident)}" placeholder="INC-00001"></label><label class="field">Problem<input name="problem" value="${esc(issue.problem)}" placeholder="PRB-00001"></label>
     <p class="duplicate-warning full" id="issue-duplicate" hidden></p>
@@ -1944,7 +1962,7 @@ function issueDialog(existing) {
     const draft = { id: issue.id, code: form.elements.code.value, incident: form.elements.incident.value, problem: form.elements.problem.value };
     const issues = [...data.issues.filter(i => i.id !== issue.id), draft], result = findDuplicates(data.tasks, issues), group = result.issues.get(issue.id);
     $('#issue-duplicate').hidden = !group;
-    $('#issue-duplicate').innerHTML = group ? `<strong>⧉ ${esc(t(result.identical.includes(issue.id) ? "An identical association already exists" : "Incident already present"))}</strong><span>${esc(issueDuplicateLine(issue.id, group, issues))}</span><span>${esc(t("You can still save: the association will be flagged as a duplicate."))}</span>` : '';
+    $('#issue-duplicate').innerHTML = group ? `<strong>${ico('copy')}${esc(t(result.identical.includes(issue.id) ? "An identical association already exists" : "Incident already present"))}</strong><span>${esc(issueDuplicateLine(issue.id, group, issues))}</span><span>${esc(t("You can still save: the association will be flagged as a duplicate."))}</span>` : '';
   };
   for (const name of ['code', 'incident', 'problem']) form.elements[name].addEventListener('input', updateDuplicate);
   updateDuplicate(); wireEditors();
@@ -1964,7 +1982,7 @@ function issueDialog(existing) {
 }
 function miniTask(t, readOnly = false) {
   const status = data.settings.statuses.find(s => s.id === t.statusId), urgency = data.settings.urgencies.find(s => s.id === t.urgencyId), mark = highlightOf(t);
-  return `<article class="task-card ${t.hidden ? 'is-hidden' : ''} ${mark ? 'is-marked' : ''}" style="--card-color:${status.color}${mark ? `;--mark:${mark.color}` : ''}"><div class="card-top">${readOnly ? `<strong class="code-label">${esc(t.code)}</strong>` : `<button class="code-link" data-card="${t.id}">${esc(t.code)}</button>`}${portalAnchor(portalUrl(t, data.settings), t.code, 'external-link card-portal-link')}<span class="card-sequence">${t.hidden ? `<span class="hidden-badge" title="${esc(tr("Hidden from the task list"))}">◌ ${tr("Hidden in list")}</span>` : ''}#${t.sequence}</span></div><div class="card-title">${esc(plain(t.description) || tr("No description"))}</div><div class="card-meta">${pill(urgency.name, urgency.color)}<span>${effort(t.effortHours)}</span>${mark ? `<span class="mark-chip" title="${esc(tr("Highlight"))}">${esc(mark.name)}</span>` : ''}</div><div class="card-bottom"><span style="color:${t.releaseDate ? dateColor(t.releaseDate) : 'inherit'}">◷ ${formatDate(t.releaseDate)}</span>${!readOnly ? pill(status.name, status.color) : ''}</div></article>`;
+  return `<article class="task-card ${t.hidden ? 'is-hidden' : ''} ${mark ? 'is-marked' : ''}" style="--card-color:${status.color}${mark ? `;--mark:${mark.color}` : ''}"><div class="card-top">${readOnly ? `<strong class="code-label">${esc(t.code)}</strong>` : `<button class="code-link" data-card="${t.id}">${esc(t.code)}</button>`}${portalAnchor(portalUrl(t, data.settings), t.code, 'external-link card-portal-link')}<span class="card-sequence">${t.hidden ? `<span class="hidden-badge" title="${esc(tr("Hidden from the task list"))}">${ico('eye-off')}${tr("Hidden in list")}</span>` : ''}#${t.sequence}</span></div><div class="card-title">${esc(plain(t.description) || tr("No description"))}</div><div class="card-meta">${pill(urgency.name, urgency.color)}<span>${effort(t.effortHours)}</span>${mark ? `<span class="mark-chip" title="${esc(tr("Highlight"))}">${esc(mark.name)}</span>` : ''}</div><div class="card-bottom"><span style="color:${t.releaseDate ? dateColor(t.releaseDate) : 'inherit'}">${ico('calendar')}${formatDate(t.releaseDate)}</span>${!readOnly ? pill(status.name, status.color) : ''}</div></article>`;
 }
 function renderMilestones() {
   const tasks = data.tasks, dates = [...new Set(tasks.map(t => t.releaseDate).filter(Boolean))].sort();
@@ -1975,8 +1993,8 @@ function renderMilestones() {
   $('#content').innerHTML = heading(data.settings.tabNames[2], "Every release is a milestone. Dates and tasks stay automatically aligned.", ui`<span class="view-label">${dates.filter(Boolean).length} milestones · ${tasks.length} tasks</span>` + shortcut + excelButton()) +
     ui`<div class="milestone-shell"><div class="milestone-scroll"><div class="milestone-track">${dates.map((date, index) => {
       const group = tasks.filter(t => t.releaseDate === date), color = date ? dateColor(date) : '#929bb2', isNext = Boolean(nextDate && date === nextDate);
-      return ui`<section class="milestone-column ${isNext ? 'is-next-release' : ''}" data-release-date="${esc(date)}" ${isNext ? 'id="next-release-milestone" aria-current="step"' : ''} style="--milestone:${color}"><div class="timeline-label"><span>${date ? ui`MILESTONE ${String(index + 1).padStart(2, '0')}` : 'BACKLOG'}</span>${isNext ? `<span class="next-release-badge">${esc(t(nextLabel))}</span>` : ''}</div><div class="timeline-line"><span>◆</span></div><div class="milestone-heading"><h2>${formatDate(date)}</h2><span>${group.length} tasks · ${effort(group.reduce((sum, t) => sum + t.effortHours, 0))}</span><button type="button" class="icon-button milestone-bulk" data-bulk-release="${esc(date)}" title="${esc(t("Bulk edit the tasks of this milestone"))}" aria-label="${esc(t("Bulk edit the tasks of this milestone"))}">✎</button></div><div class="milestone-cards">${sortedRows(group).map(t => miniTask(t)).join('')}</div></section>`;
-    }).join('') || ui`<div class="empty">Add tasks and release dates to build your roadmap.</div>`}</div></div></div><div class="hint">↔ Scroll horizontally to explore releases and vertically to see all tasks. The same date has the same color in every view.</div>`;
+      return ui`<section class="milestone-column ${isNext ? 'is-next-release' : ''}" data-release-date="${esc(date)}" ${isNext ? 'id="next-release-milestone" aria-current="step"' : ''} style="--milestone:${color}"><div class="timeline-label"><span>${date ? ui`MILESTONE ${String(index + 1).padStart(2, '0')}` : 'BACKLOG'}</span>${isNext ? `<span class="next-release-badge">${esc(t(nextLabel))}</span>` : ''}</div><div class="timeline-line"><span>${ico('diamond')}</span></div><div class="milestone-heading"><h2>${formatDate(date)}</h2><span>${group.length} tasks · ${effort(group.reduce((sum, t) => sum + t.effortHours, 0))}</span><button type="button" class="icon-button milestone-bulk" data-bulk-release="${esc(date)}" title="${esc(t("Bulk edit the tasks of this milestone"))}" aria-label="${esc(t("Bulk edit the tasks of this milestone"))}">${ico('edit')}</button></div><div class="milestone-cards">${sortedRows(group).map(t => miniTask(t)).join('')}</div></section>`;
+    }).join('') || ui`<div class="empty">Add tasks and release dates to build your roadmap.</div>`}</div></div></div><div class="hint"><span>${ico('arrows-h')}</span> Scroll horizontally to explore releases and vertically to see all tasks. The same date has the same color in every view.</div>`;
   document.querySelectorAll('[data-card]').forEach(b => b.onclick = () => taskDialog(data.tasks.find(t => t.id === b.dataset.card)));
   document.querySelectorAll('[data-bulk-release]').forEach(button => button.onclick = () => {
     const date = button.dataset.bulkRelease;
@@ -2000,14 +2018,14 @@ setInterval(refreshMilestoneDate, 60000);
 document.addEventListener('visibilitychange', refreshMilestoneDate);
 function renderKanban() {
   const tasks = data.tasks;
-  $('#content').innerHTML = heading(data.settings.tabNames[3], "A read-only view, always aligned with your tasks. One space for every status.", ui`<span class="readonly-badge">◈ Read only</span>` + excelButton()) +
+  $('#content').innerHTML = heading(data.settings.tabNames[3], "A read-only view, always aligned with your tasks. One space for every status.", ui`<span class="readonly-badge">${ico('lock')}Read only</span>` + excelButton()) +
     ui`<div class="kanban-scroll"><div class="kanban-board">${data.settings.statuses.map(status => {
       const items = sortTasks(tasks.filter(t => t.statusId === status.id));
       return `<section class="kanban-column" style="--column:${status.color}"><div class="kanban-heading"><span><i></i>${esc(status.name)}</span><b>${items.length}</b></div><div class="kanban-cards">${items.map(t => miniTask(t, true)).join('') || ui`<div class="kanban-empty">Room for upcoming tasks</div>`}</div></section>`;
-    }).join('')}</div></div><div class="hint">◈ To change a status, use the task list. Configure column order in settings.</div>`;
+    }).join('')}</div></div><div class="hint"><span>${ico('lock')}</span> To change a status, use the task list. Configure column order in settings.</div>`;
 }
 // ---- Excel export of the current situation ----
-const excelButton = () => `<button type="button" class="button excel-button" data-excel-export title="${esc(t("Export the current situation to an Excel file"))}">⤓ Excel</button>`;
+const excelButton = () => `<button type="button" class="button excel-button" data-excel-export title="${esc(t("Export the current situation to an Excel file"))}">${ico('excel')}Excel</button>`;
 document.addEventListener('click', event => { if (data && event.target.closest('[data-excel-export]')) excelDialog(); });
 let colorProbe;
 // Any CSS color (including the hsl() used for release dates) as #rrggbb, which is what Excel needs.
@@ -2194,12 +2212,12 @@ function excelDialog(preset = {}) {
   const columns = normalizeTaskColumns(data.settings.taskColumns, data.settings.taskFields);
   const radio = (name, value, title, detail, disabled = false) => `<label class="choice-card ${disabled ? 'is-disabled' : ''}"><input type="radio" name="${name}" value="${value}" ${choices[name] === value ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span><strong>${esc(t(title))}</strong><small>${esc(detail)}</small></span></label>`;
   const sheetCards = EXCEL_SHEETS.map(([id, name, detail]) => `<label class="choice-card"><input type="checkbox" name="sheets" value="${id}" ${choices.sheets.includes(id) ? 'checked' : ''}><span><strong>${esc(typeof name === 'number' ? data.settings.tabNames[name] : t(name))}</strong><small>${esc(t(detail))}</small></span></label>`).join('');
-  openModal(ui`<form id="excel-form" novalidate><div class="modal-heading"><div><div class="eyebrow">EXCEL</div><h2>Export to Excel</h2></div><button type="button" class="icon-button" data-close aria-label="Close">✕</button></div>
+  openModal(ui`<form id="excel-form" novalidate><div class="modal-heading"><div><div class="eyebrow">EXCEL</div><h2>Export to Excel</h2></div><button type="button" class="icon-button" data-close aria-label="Close">${ico('close')}</button></div>
     <p class="section-description">Create an .xlsx workbook. Summary, milestones and kanban follow the selected tasks. “As shown” also applies issue filters; the other options export all issues.</p>
     <fieldset class="excel-group"><legend>Tasks to export</legend><div class="choice-grid">${radio('scope', 'view', "As shown in the list", fillText("{0} · current filters and sorting", plural(filteredTasks().length, "tasks")))}${radio('scope', 'all', "All tasks", fillText("{0}, hidden ones included", plural(data.tasks.length, "tasks")))}${radio('scope', 'selected', "Selected only", selected ? fillText("{0} selected", selected) : t("No task selected"), !selected)}</div></fieldset>
     <fieldset class="excel-group"><legend>Task and issue sheet columns</legend><div class="choice-grid">${radio('columns', 'visible', "Columns visible in the list", fillText("Tasks: {0} · Issues: {1}", shownColumns().length, shownIssueColumns().length))}${radio('columns', 'all', "All columns", fillText("Tasks: {0} · Issues: {1}", columns.length, CustomColumns.normalizeIssueColumns(data.settings.issueColumns, data.settings.issueFields).length))}</div></fieldset>
     <fieldset class="excel-group"><legend>Sheets</legend><div class="choice-grid sheets">${sheetCards}</div></fieldset>
-    <div class="modal-actions"><span class="spacer"></span><button type="button" class="button" data-close>Cancel</button><button type="submit" class="button primary" id="excel-save">⤓ Export</button></div></form>`);
+    <div class="modal-actions"><span class="spacer"></span><button type="button" class="button" data-close>Cancel</button><button type="submit" class="button primary" id="excel-save">${ico('excel')}${esc(t("Export"))}</button></div></form>`);
   const form = $('#excel-form');
   form.onsubmit = action(async event => {
     event.preventDefault();
@@ -2213,7 +2231,7 @@ function excelDialog(preset = {}) {
     } finally { if (form.isConnected) $('#excel-save').disabled = false; }
   });
 }
-const exportKinds = [['themes', '◐', "Export themes"], ['settings', '⚙', "Export settings"], ['data', '▤', "Export data"], ['organization', '◈', "Export everything"]];
+const exportKinds = [['themes', 'palette', "Export themes"], ['settings', 'settings', "Export settings"], ['data', 'tasks', "Export data"], ['organization', 'database', "Export everything"]];
 const exportedMessages = { themes: "Themes exported:", settings: "Settings exported:", data: "Data exported:", organization: "Organization exported:" };
 const importKindNames = { themes: "Themes", settings: "Settings", data: "Data", organization: "Full organization" };
 const fillText = (text, ...values) => values.reduce((result, value, index) => result.replaceAll(`{${index}}`, value), t(text));
@@ -2225,8 +2243,8 @@ function transferPanel() {
     data: `${plural(data.tasks.length, "tasks")} · ${plural(data.issues.length, 'issue')}`,
     organization: t("Themes, settings and data in a single file")
   };
-  const cards = exportKinds.map(([kind, icon, label]) => `<button type="button" class="transfer-card" data-export-kind="${kind}"><span class="transfer-icon" aria-hidden="true">${icon}</span><span class="transfer-text"><strong>${t(label)}</strong><small>${details[kind]}</small></span></button>`).join('');
-  return ui`<section class="panel settings-section full" id="transfer-panel"><div class="storage-heading"><div><h2>Export and import organization</h2><p class="section-description">Save this organization’s themes, settings and data as separate files, to share them or import them again here or into another copy of OrbitKanban.</p></div><span class="readonly-badge">JSON FILES</span></div><div class="transfer-grid">${cards}</div><div class="storage-actions"><button type="button" class="button primary" id="import-organization">↙ Import from file…</button><input type="file" id="organization-file" accept=".json,application/json" hidden><span class="transfer-hint">Choose a file exported by OrbitKanban: before applying it you can decide which parts to import and where.</span></div></section>`;
+  const cards = exportKinds.map(([kind, icon, label]) => `<button type="button" class="transfer-card" data-export-kind="${kind}"><span class="transfer-icon" aria-hidden="true">${ico(icon)}</span><span class="transfer-text"><strong>${t(label)}</strong><small>${details[kind]}</small></span></button>`).join('');
+  return ui`<section class="panel settings-section full" id="transfer-panel"><div class="storage-heading"><div><h2>Export and import organization</h2><p class="section-description">Save this organization’s themes, settings and data as separate files, to share them or import them again here or into another copy of OrbitKanban.</p></div><span class="readonly-badge">JSON FILES</span></div><div class="transfer-grid">${cards}</div><div class="storage-actions"><button type="button" class="button primary" id="import-organization">${ico('import')}${esc(t("Import from file"))}…</button><input type="file" id="organization-file" accept=".json,application/json" hidden><span class="transfer-hint">Choose a file exported by OrbitKanban: before applying it you can decide which parts to import and where.</span></div></section>`;
 }
 function wireTransfer() {
   document.querySelectorAll('[data-export-kind]').forEach(button => {
@@ -2266,7 +2284,7 @@ function organizationImportDialog(file) {
   ].filter(Boolean).join('');
   const destinations = radio('destination', 'current', "Into this organization", esc(current.name), !toNew) + radio('destination', 'new', "Into a new organization", esc(t("The current organization is left unchanged.")), toNew);
   const suggestedName = uniqueOrganizationName(file.organization.name, organizations.map(o => o.name), t("Imported organization"));
-  openModal(ui`<form id="organization-import-form"><div class="modal-heading"><div><div class="eyebrow">IMPORT</div><h2>Import from file</h2></div><button type="button" class="icon-button" data-close aria-label="Close">✕</button></div><div class="import-source"><span class="import-kind">${esc(t(importKindNames[file.kind]))}</span><span>${origin}</span></div><fieldset class="import-parts"><legend>What to import</legend>${parts}</fieldset><fieldset class="import-target"><legend>Where to import</legend><div class="import-destinations">${destinations}</div><label class="field" id="import-name-field">New organization name<input name="name" maxlength="100" required value="${esc(suggestedName)}"></label></fieldset><ul class="import-notes" id="import-notes" aria-live="polite"></ul><div class="modal-actions"><span class="spacer"></span><button type="button" class="button" data-close>Cancel</button><button type="submit" class="button primary" id="confirm-import">Import</button></div></form>`);
+  openModal(ui`<form id="organization-import-form"><div class="modal-heading"><div><div class="eyebrow">IMPORT</div><h2>Import from file</h2></div><button type="button" class="icon-button" data-close aria-label="Close">${ico('close')}</button></div><div class="import-source"><span class="import-kind">${esc(t(importKindNames[file.kind]))}</span><span>${origin}</span></div><fieldset class="import-parts"><legend>What to import</legend>${parts}</fieldset><fieldset class="import-target"><legend>Where to import</legend><div class="import-destinations">${destinations}</div><label class="field" id="import-name-field">New organization name<input name="name" maxlength="100" required value="${esc(suggestedName)}"></label></fieldset><ul class="import-notes" id="import-notes" aria-live="polite"></ul><div class="modal-actions"><span class="spacer"></span><button type="button" class="button" data-close>Cancel</button><button type="submit" class="button primary" id="confirm-import">Import</button></div></form>`);
   const form = $('#organization-import-form'), fields = form.elements;
   const selected = name => Boolean(fields[name]?.checked);
   let logoChoice = false;
@@ -2338,13 +2356,13 @@ function fontSample(id, task) {
   const settings = data.settings, status = settings.statuses.find(s => s.id === task.statusId) || settings.statuses[0];
   const color = task.releaseDate ? dateColor(task.releaseDate) : '#929bb2', group = data.tasks.includes(task) ? data.tasks.filter(item => item.releaseDate === task.releaseDate) : [task];
   const samples = {
-    base: () => ui`<div class="sample-stack"><div class="stat"><span>Visible tasks <span class="stat-icon">▤</span></span><strong>${visibleTasks().length}<small>in your workspace</small></strong></div><div class="sample-actions"><span class="button primary">＋ New task</span><span class="button">Save settings</span></div></div>`,
+    base: () => ui`<div class="sample-stack"><div class="stat"><span>Visible tasks <span class="stat-icon">${ico('tasks')}</span></span><strong>${visibleTasks().length}<small>in your workspace</small></strong></div><div class="sample-actions"><span class="button primary">${ico('plus')}New task</span><span class="button">Save settings</span></div></div>`,
     sidebar: () => [0, 1, 2].map(i => `<div class="nav-button ${i ? '' : 'active'}"><span class="nav-icon">${icons[i]}</span><span>${esc(settings.tabNames[i])}</span>${i ? '' : `<span class="nav-count">${visibleTasks().length}</span>`}</div>`).join(''),
     headings: () => heading(settings.tabNames[0], "All tasks, one direction. Plan your work and focus on upcoming releases."),
-    tables: () => ui`<table><thead><tr><th>Portal code</th><th>Description</th><th>Release date</th></tr></thead><tbody><tr><td><span class="code-link">${esc(task.code)}</span></td><td><span class="description-cell">${esc(plain(task.description) || tr("No description"))}</span></td><td><span class="date-pill" style="--date:${color}">◷ ${formatDate(task.releaseDate)}</span></td></tr></tbody></table>`,
-    milestones: () => ui`<div style="--milestone:${color}"><div class="timeline-label">MILESTONE ${'01'}</div><div class="timeline-line"><span>◆</span></div><div class="milestone-heading"><h2>${formatDate(task.releaseDate)}</h2><span>${group.length} tasks · ${effort(group.reduce((sum, item) => sum + item.effortHours, 0))}</span></div><div class="milestone-cards">${miniTask(task)}</div></div>`,
+    tables: () => ui`<table><thead><tr><th>Portal code</th><th>Description</th><th>Release date</th></tr></thead><tbody><tr><td><span class="code-link">${esc(task.code)}</span></td><td><span class="description-cell">${esc(plain(task.description) || tr("No description"))}</span></td><td><span class="date-pill" style="--date:${color}">${ico('calendar')}${formatDate(task.releaseDate)}</span></td></tr></tbody></table>`,
+    milestones: () => ui`<div style="--milestone:${color}"><div class="timeline-label">MILESTONE ${'01'}</div><div class="timeline-line"><span>${ico('diamond')}</span></div><div class="milestone-heading"><h2>${formatDate(task.releaseDate)}</h2><span>${group.length} tasks · ${effort(group.reduce((sum, item) => sum + item.effortHours, 0))}</span></div><div class="milestone-cards">${miniTask(task)}</div></div>`,
     kanban: () => `<div class="kanban-column" style="--column:${status.color}"><div class="kanban-heading"><span><i></i>${esc(status.name)}</span><b>${data.tasks.filter(item => item.statusId === status.id).length}</b></div><div class="kanban-cards">${miniTask(task, true)}</div></div>`,
-    dialogs: () => ui`<div class="sample-dialog"><div class="modal-heading"><div><div class="eyebrow">TASK</div><h2>Edit task</h2></div><span class="icon-button">✕</span></div><label class="field">Portal code<input value="${esc(task.code)}" readonly tabindex="-1"></label><div class="modal-actions"><span class="spacer"></span><span class="button">Cancel</span><span class="button primary">Save task</span></div></div>`
+    dialogs: () => ui`<div class="sample-dialog"><div class="modal-heading"><div><div class="eyebrow">TASK</div><h2>Edit task</h2></div><span class="icon-button">${ico('close')}</span></div><label class="field">Portal code<input value="${esc(task.code)}" readonly tabindex="-1"></label><div class="modal-actions"><span class="spacer"></span><span class="button">Cancel</span><span class="button primary">Save task</span></div></div>`
   };
   return samples[id]();
 }
@@ -2354,7 +2372,7 @@ function fontSizePanel() {
   const presets = fontPresets.map(([value, name]) => `<button type="button" class="button small font-preset" data-font-preset="${value}" aria-pressed="false">${esc(t(name))} <small>${value}%</small></button>`).join('');
   const cards = FONT_SIZE_PARTS.map(({ id, min, max }) => {
     const [name, description] = fontSizeLabels[id], value = sizes[id] ?? 100, reset = t("Reset to 100%");
-    return `<div class="font-size-card" data-font-card="${id}"><div class="font-size-title"><label for="font-size-${id}">${esc(t(name))}</label><small id="font-size-${id}-hint">${esc(t(description))}</small></div><div class="font-size-control"><span class="font-size-limit" aria-hidden="true">${min}%</span><input type="range" id="font-size-${id}" data-font-size="${id}" min="${min}" max="${max}" step="${FONT_SIZE_STEP}" value="${value}" aria-describedby="font-size-${id}-hint"><span class="font-size-limit" aria-hidden="true">${max}%</span><output class="font-size-value" id="font-size-${id}-value" for="font-size-${id}">${value}%</output><button type="button" class="icon-button font-size-reset" data-font-reset="${id}" title="${esc(reset)}" aria-label="${esc(`${reset}: ${t(name)}`)}">↺</button></div><div class="font-sample" data-part="${id}" inert aria-hidden="true">${fontSample(id, task)}</div></div>`;
+    return `<div class="font-size-card" data-font-card="${id}"><div class="font-size-title"><label for="font-size-${id}">${esc(t(name))}</label><small id="font-size-${id}-hint">${esc(t(description))}</small></div><div class="font-size-control"><span class="font-size-limit" aria-hidden="true">${min}%</span><input type="range" id="font-size-${id}" data-font-size="${id}" min="${min}" max="${max}" step="${FONT_SIZE_STEP}" value="${value}" aria-describedby="font-size-${id}-hint"><span class="font-size-limit" aria-hidden="true">${max}%</span><output class="font-size-value" id="font-size-${id}-value" for="font-size-${id}">${value}%</output><button type="button" class="icon-button font-size-reset" data-font-reset="${id}" title="${esc(reset)}" aria-label="${esc(`${reset}: ${t(name)}`)}">${ico('reset')}</button></div><div class="font-sample" data-part="${id}" inert aria-hidden="true">${fontSample(id, task)}</div></div>`;
   }).join('');
   return ui`<section class="panel settings-section full" id="font-size-panel"><label class="field font-family-field"><span>${esc(t("Interface font"))}</span><select id="font-family">${families}</select><small>${esc(t("Instant preview; save to keep your choice. Bundled fonts work offline on every PC. System fonts, such as Aptos, must be installed locally; an alternative is used when unavailable."))}</small></label><div class="font-size-heading"><div><h2>Text size</h2><p class="section-description">Adjust the text of each part of the app: the preview applies instantly across the whole interface, save to keep it. Minimums and maximums keep everything readable and tidy.</p></div><div class="font-presets" role="group" aria-label="Presets">${presets}</div></div><div class="font-size-grid">${cards}<div class="font-size-card font-size-notes"><h3>Good to know</h3><ul><li>100% is the recommended size; presets adjust every part at once.</li><li>Each part has a minimum and a maximum, in 5% steps: the interface always stays usable.</li><li>Sizes apply only to this organization and are included in the settings export.</li></ul></div></div></section>`;
 }
@@ -2507,7 +2525,7 @@ function renderSettings() {
   settingsDraft.issueColumns = CustomColumns.normalizeIssueColumns(settingsDraft.issueColumns, settingsDraft.issueFields);
   const organization = organizations.find(o => o.id === activeOrganizationId);
   $('#content').innerHTML = '<div id="settings-page">' + heading(t("Settings"), "Names, workflows and colors. Configure your workspace and take it anywhere.", ui`<button class="button primary" id="save-settings">Save settings</button>`) +
-    ui`<div class="unsaved-banner" id="unsaved-banner" role="status" aria-live="polite" hidden><span class="unsaved-icon" aria-hidden="true">⚠</span><div class="unsaved-text"><strong>You have unsaved settings.</strong> Changes, including the previewed theme and text sizes, take effect only when you save. If you leave without saving, the previous configuration remains.<span class="unsaved-where" id="unsaved-where"></span></div><div class="unsaved-actions"><button type="button" class="button small" id="discard-settings">Discard changes</button><button type="button" class="button primary small" id="save-settings-inline">Save</button></div></div><div class="info-banner"><strong>${APP_NAME}</strong> · Organization configuration: <strong>${esc(organization.name)}</strong><br>All settings below apply only to the selected organization.</div>
+    ui`<div class="unsaved-banner" id="unsaved-banner" role="status" aria-live="polite" hidden><span class="unsaved-icon" aria-hidden="true">${ico('warning')}</span><div class="unsaved-text"><strong>You have unsaved settings.</strong> Changes, including the previewed theme and text sizes, take effect only when you save. If you leave without saving, the previous configuration remains.<span class="unsaved-where" id="unsaved-where"></span></div><div class="unsaved-actions"><button type="button" class="button small" id="discard-settings">Discard changes</button><button type="button" class="button primary small" id="save-settings-inline">Save</button></div></div><div class="info-banner"><strong>${APP_NAME}</strong> · Organization configuration: <strong>${esc(organization.name)}</strong><br>All settings below apply only to the selected organization.</div>
     <div class="settings-layout">${settingsNav()}<div class="settings-panels"><section class="panel settings-section full" id="organizations-panel"><h2>Organizations</h2><p class="section-description">Data and settings are isolated per organization. Your selection is saved automatically.</p>
     <details id="create-organization-section"><summary>New organization</summary><form id="create-organization"><div class="form-grid"><label class="field">Organization name<input name="name" required maxlength="100"></label><label class="field">Interface language<select name="language">${languageOptions(data.settings.language)}</select></label><label class="field full checkbox-field demo-field"><input type="checkbox" name="demo"><span>Include demo data<small>Biweekly milestones since January 2025 with sample tasks, issues, notes and hidden rows.</small></span></label><div class="field full"><label for="create-logo-file">New organization logo</label><input id="create-logo-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp"><small>Choose a logo during creation: it will be stored with the organization and automatically generate its theme.</small><div id="create-logo-preview"></div><output id="create-logo-result" aria-live="polite"></output><button type="button" class="button small" id="clear-create-logo">Remove logo</button></div></div><div class="organization-actions"><button class="button primary" type="submit">Create organization</button></div></form></details>
     <button class="button danger small" id="delete-organization" ${organizations.length === 1 ? 'disabled' : ''}>Delete organization</button></section>
@@ -2516,14 +2534,14 @@ function renderSettings() {
     <label class="field">Hours per effort day<input id="hours-per-day" type="number" min="0.01" max="24" step="0.01" value="${data.settings.hoursPerDay}"><small>Changes the display in days. Previously recorded hours stay the same.</small></label>
     <div class="full logo-settings"><h3>Organization logo</h3><div id="logo-preview"></div><label class="field">Upload logo and generate theme<input id="logo-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp"></label><p class="muted">The logo and theme belong only to this organization and travel with the archive.</p><button class="button small" id="remove-logo" type="button">Remove logo</button><output id="logo-result" aria-live="polite"></output></div></div></section>
     <section class="panel settings-section full" id="languages-panel"><h2>Language & translations</h2><p class="section-description">Choose the language of this organization. Translations are plain JSON files: you can add more without changing the app.</p><div class="form-grid"><label class="field">Interface language<select id="language">${languageOptions(data.settings.language)}</select><small>Language is saved per organization. Custom names and content are not translated.</small></label><p class="language-missing" id="language-missing" role="status" hidden>This language is not installed on this PC: texts are shown in English.</p></div><div id="languages-details"></div></section>
-    <section class="panel settings-section" id="themes-panel"><div class="themes-heading"><div><h2>Themes & atmosphere</h2><p class="section-description">Choose a palette or create your own.</p></div><button class="button" id="add-theme">＋ Create theme</button></div><div class="themes-layout"><div class="theme-browser"><div class="theme-toolbar"><label class="theme-search"><span aria-hidden="true">⌕</span><input type="search" id="theme-search" placeholder="Search themes…" aria-label="Search themes" autocomplete="off" spellcheck="false" value="${esc(themeQuery)}"></label><span class="theme-count" id="theme-count" aria-live="polite"></span></div><div class="theme-gallery" id="theme-list"></div></div><div class="theme-editor-panel" id="theme-editor"></div></div></section>${fontSizePanel()}
-    <section class="panel settings-section" id="statuses-panel"><h2>Workflow statuses</h2><p class="section-description">This order becomes the kanban order. Turn on ★ to automatically highlight every row with that status; to color single rows use the Highlighters.</p><div id="statuses-list"></div><button class="button" data-add-option="statuses">＋ Add status</button></section>
-    <section class="panel settings-section" id="urgencies-panel"><h2>Urgency levels</h2><p class="section-description">Define priorities and their order.</p><div id="urgencies-list"></div><button class="button" data-add-option="urgencies">＋ Add urgency</button></section>
-    <section class="panel settings-section" id="highlights-panel"><h2>Highlighters</h2><p class="section-description">Colors to highlight single rows of the task list, regardless of their status. In the list use the Highlighter bar above the table, the ● dot at the end of each row or the Highlight field of the task form.</p><div id="highlights-list"></div><button class="button" data-add-option="highlights">＋ Add color</button><p class="muted">Deleting a color removes the highlight from the rows that use it. This order is also used to sort the Highlight column.</p></section>
-    <section class="panel settings-section" id="tags-panel"><h2>Tags</h2><p class="section-description">Create this organization's tags, choose names and colors, and set their display order. Each task can have multiple tags.</p><div id="tags-list"></div><button class="button" data-add-option="tags">＋ Add tag</button><p class="muted">${esc(fillText("Up to {0} tags, with unique names of up to {1} characters.", TAG_LIMIT, TAG_NAME_MAX))}</p><p class="muted">Deleting a tag and saving removes it from tasks using it, including hidden tasks. Tasks and other tags are not deleted.</p></section>
-    <section class="panel settings-section" id="columns-panel"><h2>List columns</h2><p class="section-description">Choose which columns the task list shows and in what order. Hiding a column does not delete any data. You can also do this with the “Columns” button above the table.</p><div id="columns-editor"></div><button type="button" class="button" id="reset-columns">↺ Restore default columns</button></section>${customColumnsPanel()}
-    <section class="panel settings-section full" id="browser-panel"><h2>Browser access</h2><p class="section-description">While OrbitKanban is open you can also work from a browser on this PC, with different organizations in separate tabs. Changes sync in real time between the app and the tabs.</p><code class="data-path" id="browser-url">${esc(browserUrl || t("Not available"))}</code><div class="storage-actions"><button class="button" id="browser-open" ${browserUrl ? '' : 'disabled'}>${t(browserMode() ? "Open in new tab" : "Open in browser")} ↗</button><button class="button" id="browser-copy" ${browserUrl ? '' : 'disabled'}>${t(browserMode() ? "Copy address" : "Copy access link")}</button></div><p class="muted">${t(browserMode() ? "You are using OrbitKanban from the browser: the app on the PC must stay open. Each tab can show a different organization." : "Reachable only from this computer (127.0.0.1) and protected by a personal key: the access link contains the key, do not share it. Closing the app disconnects the browser tabs.")}</p></section>
-    ${transferPanel()}<section class="panel settings-section full" id="storage-panel"><div class="storage-heading"><div><h2>Data that travels with you</h2><p class="section-description">Local JSON archive with an automatic copy of the previous save.</p></div><span class="readonly-badge">100% LOCAL</span></div><code class="data-path">${esc(dataFolder)}</code><div class="storage-actions"><button class="button" id="export-data">↗ Export backup</button><button class="button" id="import-data">↙ Import backup</button><button class="button" id="open-folder">Open data folder</button><span class="spacer"></span><button class="button danger" id="clear-data">Clear tasks and issues</button></div><div class="backup-section"><div class="storage-heading"><div><h3>Automatic backups</h3><p class="section-description">One copy per day, kept in the data folder for the last 14 days. You can restore one without losing the current archive: the standard .bak backup is created first.</p></div><button type="button" class="button small" id="refresh-backups">Refresh backups</button></div><p id="backup-status" class="muted" role="status" aria-live="polite"></p><div id="backup-list"></div></div><p class="muted">To share the app, close it and copy the executable together with the data folder. Do not run copies using the same data folder at the same time.</p></section></div></div></div>`;
+    <section class="panel settings-section" id="themes-panel"><div class="themes-heading"><div><h2>Themes & atmosphere</h2><p class="section-description">Choose a palette or create your own.</p></div><button class="button" id="add-theme">${ico('plus')}Create theme</button></div><div class="themes-layout"><div class="theme-browser"><div class="theme-toolbar"><label class="theme-search"><span aria-hidden="true">${ico('search')}</span><input type="search" id="theme-search" placeholder="Search themes…" aria-label="Search themes" autocomplete="off" spellcheck="false" value="${esc(themeQuery)}"></label><span class="theme-count" id="theme-count" aria-live="polite"></span></div><div class="theme-gallery" id="theme-list"></div></div><div class="theme-editor-panel" id="theme-editor"></div></div></section>${fontSizePanel()}
+    <section class="panel settings-section" id="statuses-panel"><h2>Workflow statuses</h2><p class="section-description">This order becomes the kanban order. Turn on ★ to automatically highlight every row with that status; to color single rows use the Highlighters.</p><div id="statuses-list"></div><button class="button" data-add-option="statuses">${ico('plus')}Add status</button></section>
+    <section class="panel settings-section" id="urgencies-panel"><h2>Urgency levels</h2><p class="section-description">Define priorities and their order.</p><div id="urgencies-list"></div><button class="button" data-add-option="urgencies">${ico('plus')}Add urgency</button></section>
+    <section class="panel settings-section" id="highlights-panel"><h2>Highlighters</h2><p class="section-description">Colors to highlight single rows of the task list, regardless of their status. In the list use the Highlighter bar above the table, the ● dot at the end of each row or the Highlight field of the task form.</p><div id="highlights-list"></div><button class="button" data-add-option="highlights">${ico('plus')}Add color</button><p class="muted">Deleting a color removes the highlight from the rows that use it. This order is also used to sort the Highlight column.</p></section>
+    <section class="panel settings-section" id="tags-panel"><h2>Tags</h2><p class="section-description">Create this organization's tags, choose names and colors, and set their display order. Each task can have multiple tags.</p><div id="tags-list"></div><button class="button" data-add-option="tags">${ico('plus')}Add tag</button><p class="muted">${esc(fillText("Up to {0} tags, with unique names of up to {1} characters.", TAG_LIMIT, TAG_NAME_MAX))}</p><p class="muted">Deleting a tag and saving removes it from tasks using it, including hidden tasks. Tasks and other tags are not deleted.</p></section>
+    <section class="panel settings-section" id="columns-panel"><h2>List columns</h2><p class="section-description">Choose which columns the task list shows and in what order. Hiding a column does not delete any data. You can also do this with the “Columns” button above the table.</p><div id="columns-editor"></div><button type="button" class="button" id="reset-columns">${ico('reset')}Restore default columns</button></section>${customColumnsPanel()}
+    <section class="panel settings-section full" id="browser-panel"><h2>Browser access</h2><p class="section-description">While OrbitKanban is open you can also work from a browser on this PC, with different organizations in separate tabs. Changes sync in real time between the app and the tabs.</p><code class="data-path" id="browser-url">${esc(browserUrl || t("Not available"))}</code><div class="storage-actions"><button class="button" id="browser-open" ${browserUrl ? '' : 'disabled'}>${ico('globe')}${t(browserMode() ? "Open in new tab" : "Open in browser")}</button><button class="button" id="browser-copy" ${browserUrl ? '' : 'disabled'}>${t(browserMode() ? "Copy address" : "Copy access link")}</button></div><p class="muted">${t(browserMode() ? "You are using OrbitKanban from the browser: the app on the PC must stay open. Each tab can show a different organization." : "Reachable only from this computer (127.0.0.1) and protected by a personal key: the access link contains the key, do not share it. Closing the app disconnects the browser tabs.")}</p></section>
+    ${transferPanel()}<section class="panel settings-section full" id="storage-panel"><div class="storage-heading"><div><h2>Data that travels with you</h2><p class="section-description">Local JSON archive with an automatic copy of the previous save.</p></div><span class="readonly-badge">100% LOCAL</span></div><code class="data-path">${esc(dataFolder)}</code><div class="storage-actions"><button class="button" id="export-data">${ico('export')}Export backup</button><button class="button" id="import-data">${ico('import')}Import backup</button><button class="button" id="open-folder">Open data folder</button><span class="spacer"></span><button class="button danger" id="clear-data">Clear tasks and issues</button></div><div class="backup-section"><div class="storage-heading"><div><h3>Automatic backups</h3><p class="section-description">One copy per day, kept in the data folder for the last 14 days. You can restore one without losing the current archive: the standard .bak backup is created first.</p></div><button type="button" class="button small" id="refresh-backups">Refresh backups</button></div><p id="backup-status" class="muted" role="status" aria-live="polite"></p><div id="backup-list"></div></div><p class="muted">To share the app, close it and copy the executable together with the data folder. Do not run copies using the same data folder at the same time.</p></section></div></div></div>`;
       showSettingsTab(settingsTab); wireSettingsNav();
       drawOptionLists(); drawThemes(); drawLogoPreview(); wireOrganizationCreation(); drawPortalPreview(); wireFontSizes(); wireLanguages();
       columnEditor($('#columns-editor'), settingsDraft.taskColumns, 'tasks', settingsDraft);
@@ -2648,7 +2666,7 @@ function drawLanguages() {
   const languages = languageInfo.languages.map(language => `<li><span class="language-name">${esc(language.name)}</span><code>${esc(language.code)}</code><span class="language-source ${esc(language.source)}">${esc(t(languageSources[language.source] || languageSources['built-in']))}</span></li>`).join('');
   const errors = languageInfo.errors.length ? `<div class="language-errors" role="alert"><h3>${esc(t("Ignored language files"))}</h3><ul>${languageInfo.errors.map(error => `<li><code>${esc(error.file || '—')}</code> ${esc(t(error.message))}</li>`).join('')}</ul></div>` : '';
   const folder = languageInfo.folder ? `<p class="muted language-folder-label">${esc(t("Languages folder"))}</p><code class="data-path" id="languages-folder">${esc(languageInfo.folder)}</code>` : '';
-  details.innerHTML = `<div class="languages-layout"><div><h3>${esc(t("Available languages"))}</h3><ul class="language-list">${languages}</ul></div><div><h3>${esc(t("Add a language"))}</h3><ol class="language-steps">${languageSteps.map(step => `<li>${esc(t(step))}</li>`).join('')}</ol></div></div>${folder}<div class="storage-actions"><button type="button" class="button" id="open-languages-folder">${esc(t("Open languages folder"))} ↗</button><button type="button" class="button" id="reload-languages">${esc(t("Reload languages"))}</button></div>${errors}`;
+  details.innerHTML = `<div class="languages-layout"><div><h3>${esc(t("Available languages"))}</h3><ul class="language-list">${languages}</ul></div><div><h3>${esc(t("Add a language"))}</h3><ol class="language-steps">${languageSteps.map(step => `<li>${esc(t(step))}</li>`).join('')}</ol></div></div>${folder}<div class="storage-actions"><button type="button" class="button" id="open-languages-folder">${ico('folder')}${esc(t("Open languages folder"))}</button><button type="button" class="button" id="reload-languages">${esc(t("Reload languages"))}</button></div>${errors}`;
   $('#open-languages-folder').onclick = action(async () => { await loadLanguages('open-folder'); drawLanguages(); });
   $('#reload-languages').onclick = action(async () => {
     const draftLanguage = $('#language').value, changed = settingsChanged();
@@ -2671,7 +2689,7 @@ function drawPortalPreview() {
   if (!hasPortalPlaceholder(template)) { preview.textContent = t("Add the {code} placeholder where the portal code must be inserted."); return; }
   if (!validPortalTemplate(template)) { preview.textContent = t("Invalid address: use a web address, for example https://jira.company.com/browse/{code}."); return; }
   const url = portalUrl({ code: sample, url: '' }, { portalUrlTemplate: template });
-  preview.innerHTML = `${esc(t("Preview with"))} <strong>${esc(sample)}</strong>: <a class="portal-link" href="${esc(url)}" data-open-url>${esc(url)} ↗</a>`;
+  preview.innerHTML = `${esc(t("Preview with"))} <strong>${esc(sample)}</strong>: <a class="portal-link" href="${esc(url)}" data-open-url>${esc(url)}${ico('external')}</a>`;
 }
 function drawLogoPreview() {
   $('#logo-preview').innerHTML = settingsDraft.logo ? `<img src="${settingsDraft.logo}" alt="${esc(t("Organization logo"))}">` : `<span class="muted">${t("No logo")}</span>`;
@@ -2716,7 +2734,7 @@ function drawOptionLists() {
       const count = custom ? data[custom.kind].filter(row => { const value = row.customFields?.[custom.field.id]; return Array.isArray(value) ? value.includes(id) : value === id; }).length : data.tasks.filter(task => key === 'tags' ? task.tagIds?.includes(id) : task.highlightId === id).length;
       return `<span class="option-usage" title="${esc(t(custom ? "Rows with this label" : key === 'tags' ? "Tasks with this tag" : "Rows with this color"))}">${custom ? count : esc(plural(count, "tasks"))}</span>`;
     };
-    document.getElementById(`${key}-list`).innerHTML = list.map((item, index) => ui`<div class="option-row">${dragHandle(item.name)}<span class="order-number">${String(index + 1).padStart(2, '0')}</span><input type="color" aria-label="Color ${esc(item.name)}" data-color="${key}:${esc(item.id)}" value="${item.color}"><input class="option-name" aria-label="Option name" ${optional ? 'maxlength="60"' : ''} data-option-name="${key}:${esc(item.id)}" value="${esc(item.name)}">${optional ? usage(item.id) : ''}${key === 'statuses' ? ui`<button class="icon-button star ${item.highlight ? 'selected' : ''}" data-highlight="${esc(item.id)}" title="Highlight tasks with this status" aria-pressed="${item.highlight}">★</button>` : ''}<button class="icon-button" data-move="${key}:${esc(item.id)}:-1" ${index === 0 ? 'disabled' : ''} title="Move up">↑</button><button class="icon-button" data-move="${key}:${esc(item.id)}:1" ${index === list.length - 1 ? 'disabled' : ''} title="Move down">↓</button><button class="icon-button delete-option" data-remove="${key}:${esc(item.id)}" title="Delete option">×</button></div>`).join('') || (optional ? `<p class="muted option-empty">${esc(t(custom ? "No labels. Add one to get started." : key === 'tags' ? "No tags: add one to categorize tasks." : "No colors yet: add one to use the highlighter."))}</p>` : '');
+    document.getElementById(`${key}-list`).innerHTML = list.map((item, index) => ui`<div class="option-row">${dragHandle(item.name)}<span class="order-number">${String(index + 1).padStart(2, '0')}</span><input type="color" aria-label="Color ${esc(item.name)}" data-color="${key}:${esc(item.id)}" value="${item.color}"><input class="option-name" aria-label="Option name" ${optional ? 'maxlength="60"' : ''} data-option-name="${key}:${esc(item.id)}" value="${esc(item.name)}">${optional ? usage(item.id) : ''}${key === 'statuses' ? ui`<button class="icon-button star ${item.highlight ? 'selected' : ''}" data-highlight="${esc(item.id)}" title="Highlight tasks with this status" aria-pressed="${item.highlight}">${ico(item.highlight ? 'star' : 'star-line')}</button>` : ''}<button class="icon-button" data-move="${key}:${esc(item.id)}:-1" ${index === 0 ? 'disabled' : ''} title="Move up">${ico('arrow-up')}</button><button class="icon-button" data-move="${key}:${esc(item.id)}:1" ${index === list.length - 1 ? 'disabled' : ''} title="Move down">${ico('arrow-down')}</button><button class="icon-button delete-option" data-remove="${key}:${esc(item.id)}" title="Delete option">${ico('close')}</button></div>`).join('') || (optional ? `<p class="muted option-empty">${esc(t(custom ? "No labels. Add one to get started." : key === 'tags' ? "No tags: add one to categorize tasks." : "No colors yet: add one to use the highlighter."))}</p>` : '');
     const add = document.querySelector(`[data-add-option="${key}"]`);
     if (optional && add) add.disabled = settingsDraft[key].length >= (key === 'tags' ? TAG_LIMIT : HIGHLIGHT_LIMIT);
     const choiceAdd = document.querySelector(`[data-add-choice="${key}"]`);
@@ -2757,7 +2775,7 @@ function drawThemeChoices() {
   $('#theme-count').textContent = query ? `${themes.length} / ${themeCount}` : themeCount;
   $('#theme-list').innerHTML = themes.length ? themes.map(theme => {
     const chosen = theme.id === settingsDraft.themeId, mock = themeFields.map(([key]) => `--mock-${key}:${theme[key]}`).join(';');
-    return `<button type="button" class="theme-choice ${chosen ? 'chosen' : ''}" data-theme="${esc(theme.id)}" aria-pressed="${chosen}" title="${esc(theme.name)}"><span class="theme-mock" style="${mock}" aria-hidden="true"><span class="theme-mock-card"><span class="theme-mock-line"></span><span class="theme-mock-pill"></span></span></span><span class="theme-choice-info"><span class="theme-choice-name">${esc(theme.name)}</span><span class="theme-kind">${esc(t(themeKind(theme)))}</span><span class="theme-swatches">${themeFields.map(([key, label]) => `<i style="background:${theme[key]}" title="${t(label)}: ${theme[key]}" role="img" aria-label="${t(label)}: ${theme[key]}"></i>`).join('')}</span></span>${chosen ? '<span class="theme-check" aria-hidden="true">✓</span>' : ''}</button>`;
+    return `<button type="button" class="theme-choice ${chosen ? 'chosen' : ''}" data-theme="${esc(theme.id)}" aria-pressed="${chosen}" title="${esc(theme.name)}"><span class="theme-mock" style="${mock}" aria-hidden="true"><span class="theme-mock-card"><span class="theme-mock-line"></span><span class="theme-mock-pill"></span></span></span><span class="theme-choice-info"><span class="theme-choice-name">${esc(theme.name)}</span><span class="theme-kind">${esc(t(themeKind(theme)))}</span><span class="theme-swatches">${themeFields.map(([key, label]) => `<i style="background:${theme[key]}" title="${t(label)}: ${theme[key]}" role="img" aria-label="${t(label)}: ${theme[key]}"></i>`).join('')}</span></span>${chosen ? `<span class="theme-check" aria-hidden="true">${ico('check')}</span>` : ''}</button>`;
   }).join('') : `<p class="theme-empty">${esc(t("No theme matches your search."))}</p>`;
   document.querySelectorAll('#theme-list [data-theme]').forEach(b => b.onclick = () => {
     settingsDraft.themeId = b.dataset.theme; drawThemes();
@@ -2793,7 +2811,7 @@ function drawThemes() {
   const theme = settingsDraft.themes.find(t => t.id === settingsDraft.themeId);
   paintTheme(theme);
   $('#theme-editor').innerHTML = ui`<div class="theme-edit"><h3 class="theme-edit-title">Edit theme</h3><label class="field">Theme name<input id="theme-name" value="${esc(theme.name)}"></label><div class="theme-colors">${themeFields.map(([key, label]) => `<label><input type="color" value="${theme[key]}" data-theme-color="${key}">${t(label)}</label>`).join('')}</div>
-    <div class="image-picker"><label class="field">Generate 4 colors from an image<input id="theme-image-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp"></label><p class="muted">Upload an image: background, surfaces, text and accent are extracted and assigned automatically. You can then adjust them with the color controls. Transparency is shown on white.</p><canvas id="theme-image-canvas" hidden role="img" aria-label="Image used to automatically generate the four theme colors"></canvas><label class="field">Optional adjustment: color to sample with a click<select id="theme-image-target">${themeFields.map(([key, label]) => `<option value="${key}">${t(label)}</option>`).join('')}</select></label><output id="theme-image-result" aria-live="polite">The image stays local and is not saved: only colors are stored in the theme.</output></div>
+    <div class="image-picker"><label class="field">Generate 4 colors from an image<input id="theme-image-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp"></label><p class="muted">Upload an image: background, surfaces, text and accent are extracted and assigned automatically. You can then adjust them with the color controls. Transparency is shown on white. Colors are adjusted as little as possible to meet WCAG AA contrast.</p><canvas id="theme-image-canvas" hidden role="img" aria-label="Image used to automatically generate the four theme colors"></canvas><label class="field">Optional adjustment: color to sample with a click<select id="theme-image-target">${themeFields.map(([key, label]) => `<option value="${key}">${t(label)}</option>`).join('')}</select></label><output id="theme-image-result" aria-live="polite">The image stays local and is not saved: only colors are stored in the theme.</output></div>
     <small class="muted">Live preview: the theme is applied to the app immediately. Save settings to keep it, otherwise the previous one remains.</small>${themePresets.has(theme.id) ? ui`<button class="button small" id="reset-theme">Restore built-in theme</button>` : ui`<button class="button small" id="delete-theme">Delete theme</button>`}</div>`;
   $('#theme-name').oninput = e => { theme.name = e.target.value; drawThemeChoices(); };
   document.querySelectorAll('[data-theme-color]').forEach(input => input.oninput = () => { theme[input.dataset.themeColor] = input.value; drawThemeChoices(); paintTheme(theme); });
@@ -2807,13 +2825,16 @@ function drawThemes() {
       if (await loadThemeImage(file, canvas)) {
         const context = canvas.getContext('2d', { willReadFrequently: true });
         if (!context) throw new Error("Cannot extract a palette from this image.");
-        const palette = extractThemePalette(context.getImageData(0, 0, canvas.width, canvas.height).data);
+        const palette = themeFromImage(context.getImageData(0, 0, canvas.width, canvas.height).data);
         for (const [key] of themeFields) {
           theme[key] = palette[key];
           document.querySelector(`[data-theme-color="${key}"]`).value = palette[key];
         }
         drawThemeChoices(); paintTheme(theme); refreshSettingsState();
-        result.textContent = `${file.name} — ${t("four colors assigned automatically.")} ${palette.colorCount < 4 ? t("The image has few distinct colors: some roles share the same color.") + ' ' : ''}${t("Click “Save settings” to keep them.")}`;
+        const contrastNote = palette.adjusted.length
+          ? fillText("Adjusted as little as possible for WCAG AA contrast: {0}.", palette.adjusted.map(role => t(themeFields.find(([key]) => key === role)[1]).toLowerCase()).join(', '))
+          : t("The extracted colors already meet WCAG AA contrast.");
+        result.textContent = `${file.name} — ${t("four colors assigned automatically.")} ${palette.colorCount < 4 ? t("The image has few distinct colors: some roles share the same color.") + ' ' : ''}${contrastNote} ${t("Click “Save settings” to keep them.")}`;
       }
     } catch (error) {
       result.textContent = t(error.message);
@@ -2901,6 +2922,14 @@ window.runSmokeTests = async () => {
   const tableArea = $('.table-scroll').getBoundingClientRect();
   check($('.page-heading').offsetHeight <= 75 && tableArea.top < 330 && tableArea.height >= innerHeight * 0.5 && tableArea.bottom <= $('footer').getBoundingClientRect().top, 'Compact heading leaves at least half the window available for the table');
   check(getComputedStyle($('.page-heading h1')).userSelect === 'none' && getComputedStyle($('#task-rows td')).userSelect === 'none' && getComputedStyle($('#search')).userSelect === 'text', "Interface text is not selectable, while search text is selectable");
+  const boxOf = selector => $(selector).getBoundingClientRect(), heightOf = selector => Math.round(boxOf(selector).height);
+  check(['#global-search', '#redo-button', '#save-status', '.topbar-right .avatar'].every(selector => heightOf(selector) === heightOf('#undo-button')) && Math.round(boxOf('#undo-button').width) === heightOf('#undo-button'), 'Top-bar controls share one height and undo/redo are square');
+  check(heightOf('#new-task') === heightOf('#columns-button') && heightOf('#columns-button') === heightOf('#reset-sort') && heightOf('#reset-sort') === heightOf('#saved-view-manage') && document.querySelectorAll('#task-rows tr:first-child td:last-child .icon-button').length && [...document.querySelectorAll('#task-rows tr:first-child td:last-child .icon-button')].every(button => Math.round(button.getBoundingClientRect().height) === Math.round(button.getBoundingClientRect().width)), 'Page buttons, toolbar buttons and row actions use the shared size scale');
+  const iconSprite = document.getElementById('orbit-icon-sprite');
+  check(iconSprite && window.OrbitaIcons.names().every(name => iconSprite.querySelector(`symbol#i-${name}`)) && document.querySelectorAll('#navigation .nav-icon svg.ico').length === data.settings.tabNames.length && $('#settings-button svg.ico') && $('#new-task svg.ico') && $('#columns-button svg.ico') && !/[▤⌘◈▥⚙⌕↶↷↗＋◉◌⋯▽▾]/.test([...document.querySelectorAll('#navigation button, .topbar button, #content .page-heading button, #content .table-toolbar button, #task-rows td:last-child button')].map(button => button.textContent).join('')), 'Icons come from the shared sprite instead of text glyphs');
+  const rootStyle = getComputedStyle(document.documentElement), hexOf = rgb => '#' + rgb.match(/\d+/g).slice(0, 3).map(n => Number(n).toString(16).padStart(2, '0')).join('');
+  check(getComputedStyle($('#navigation .nav-icon .ico')).getPropertyValue('--ico-front').trim() === 'url(#ig-blue)' && Object.keys(window.OrbitaCore.ICON_FAMILIES).every(family => /^#[0-9a-f]{6}$/i.test(rootStyle.getPropertyValue(`--ig-${family}-1`).trim())), 'Feature icons use per-theme gradient stops');
+  check(window.OrbitaCore.contrastRatio(hexOf(getComputedStyle($('#new-task')).color), hexOf(getComputedStyle($('#new-task')).backgroundColor)) >= 4.5, 'Primary button labels meet WCAG AA contrast on the accent');
   if (customTitleBar()) {
     const overlay = navigator.windowControlsOverlay, area = overlay?.visible ? overlay.getTitlebarAreaRect() : null;
     const controls = area ? innerWidth - area.x - area.width : 0, region = selector => getComputedStyle($(selector)).getPropertyValue('-webkit-app-region');
@@ -3963,24 +3992,35 @@ window.runSmokeTests = async () => {
   document.querySelector('[data-theme-color="accent"]').dispatchEvent(new Event('input'));
   check([...document.querySelectorAll('.theme-swatches')].every(swatches => swatches.children.length === 4), "Theme previews show all four colors");
   check(document.querySelector(`.theme-choice.chosen [aria-label="${t("Accent")}: #ff8844"]`), 'Preview updates immediately from the color picker');
-  const imageSource = document.createElement('canvas');
-  imageSource.width = 40; imageSource.height = 10;
-  const imageContext = imageSource.getContext('2d');
-  for (const [index, color] of ['#101820', '#303848', '#f0f4fc', '#d06090'].entries()) {
-    imageContext.fillStyle = color; imageContext.fillRect(index * 10, 0, 10, 10);
-  }
-  const imageBlob = await new Promise(resolve => imageSource.toBlob(resolve, 'image/png'));
-  const transfer = new DataTransfer();
-  transfer.items.add(new File([imageBlob], 'palette-test.png', { type: 'image/png' }));
-  $('#theme-image-file').files = transfer.files;
-  $('#theme-image-file').dispatchEvent(new Event('change'));
-  await waitFor(() => !$('#theme-image-canvas').hidden && !$('#theme-image-file').disabled);
+  const paletteImage = async colors => {
+    const source = document.createElement('canvas');
+    source.width = colors.length * 10; source.height = 10;
+    const context = source.getContext('2d');
+    for (const [index, color] of colors.entries()) {
+      context.fillStyle = color; context.fillRect(index * 10, 0, 10, 10);
+    }
+    return { source, context, blob: await new Promise(resolve => source.toBlob(resolve, 'image/png')) };
+  };
+  const loadPaletteImage = async (blob, name) => {
+    const transfer = new DataTransfer();
+    transfer.items.add(new File([blob], name, { type: 'image/png' }));
+    $('#theme-image-file').files = transfer.files;
+    $('#theme-image-file').dispatchEvent(new Event('change'));
+    await waitFor(() => !$('#theme-image-canvas').hidden && !$('#theme-image-file').disabled);
+  };
+  const lowContrastColors = ['#1c1c22', '#26262e', '#4a4a55', '#3a2f6a'];
+  await loadPaletteImage((await paletteImage(lowContrastColors)).blob, 'low-contrast.png');
+  const lowContrast = Object.fromEntries(themeFields.map(([key]) => [key, document.querySelector(`[data-theme-color="${key}"]`).value]));
+  const { contrastRatio, WCAG_TEXT_CONTRAST, WCAG_GRAPHIC_CONTRAST } = window.OrbitaCore;
+  check(lowContrastColors.includes(lowContrast.background) && contrastRatio(lowContrast.text, lowContrast.background) >= WCAG_TEXT_CONTRAST && contrastRatio(lowContrast.text, lowContrast.surface) >= WCAG_TEXT_CONTRAST && contrastRatio(lowContrast.accent, lowContrast.background) >= WCAG_GRAPHIC_CONTRAST && $('#theme-image-result').textContent.includes(fillText("Adjusted as little as possible for WCAG AA contrast: {0}.", '').slice(0, -2)), 'Low-contrast image colors are adjusted to WCAG AA and the change is reported');
+  const { source: imageSource, context: imageContext, blob: imageBlob } = await paletteImage(['#101820', '#303848', '#f0f4fc', '#d06090']);
+  await loadPaletteImage(imageBlob, 'palette-test.png');
   const generated = { background: '#101820', surface: '#303848', text: '#f0f4fc', accent: '#d06090' };
   for (const [key, label] of themeFields) {
     check(document.querySelector(`[data-theme-color="${key}"]`).value === generated[key], `Image loading assigns ${key} automatically`);
     check(document.querySelector(`.theme-choice.chosen [aria-label="${t(label)}: ${generated[key]}"]`), `Automatic preview is synchronized for ${key}`);
   }
-  check($('#theme-image-result').textContent.includes(t("four colors assigned automatically.")), 'All four colors are extracted without manual clicks');
+  check($('#theme-image-result').textContent.includes(t("four colors assigned automatically.")) && $('#theme-image-result').textContent.includes(t("The extracted colors already meet WCAG AA contrast.")), 'All four colors are extracted without manual clicks and compliant colors stay unchanged');
   settingsDraft.themes.push({ id: uid(), name: 'Automatic palette', ...generated });
   const canvas = $('#theme-image-canvas');
   const bounds = canvas.getBoundingClientRect();

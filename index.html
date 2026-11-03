@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="fonts/fonts.css">
   <script defer src="columns.js"></script>
   <script defer src="core.js"></script>
+  <script defer src="icons.js"></script>
   <script defer src="i18n.js"></script>
   <script defer src="xlsx.js"></script>
   <script defer src="csv.js"></script>
@@ -18,19 +19,19 @@
 <body>
   <aside class="sidebar">
     <div class="brand"><div class="brand-icon has-logo"><img src="app-logo.svg" alt="OrbitKanban"></div><div><strong id="brand-name">OrbitKanban</strong><small>YOUR PERSONAL WORKSPACE</small></div></div>
-    <div class="organization-switcher"><label for="organization-select">Organization</label><select id="organization-select"></select><button id="manage-organizations" class="button small">Manage organizations</button><button id="open-browser" class="button small">Open in browser ↗</button></div>
+    <div class="organization-switcher"><label for="organization-select">Organization</label><select id="organization-select"></select><button id="manage-organizations" class="button small">Manage organizations</button><button id="open-browser" class="button small">Open in browser</button></div>
     <div class="workspace-label">WORKSPACE <span>LOCAL</span></div>
     <nav id="navigation" aria-label="Main views"></nav>
     <div class="sidebar-bottom">
-      <button id="settings-button" class="nav-button"><span class="nav-icon">⚙</span> Settings</button>
+      <button id="settings-button" class="nav-button"><span class="nav-icon"><svg class="ico ico-slate" aria-hidden="true" focusable="false"><use href="#i-settings"/></svg></span> Settings</button>
       <div class="local-card"><span class="connection-dot"></span><div><strong>Only on your device</strong><small>Your data. Always with you.</small></div></div>
       <div class="version">PORTABLE EDITION <span id="app-version"></span></div>
     </div>
   </aside>
   <main>
-    <header class="topbar"><div><span class="breadcrumb">Workspace</span><span class="separator">/</span><span id="current-tab">Tasks</span></div><div class="topbar-right"><button type="button" class="button subtle topbar-tool global-search-button" id="global-search"><span aria-hidden="true">⌕</span><span id="global-search-label">Search</span><kbd>Ctrl K</kbd></button><button type="button" class="button subtle topbar-tool" id="undo-button" disabled aria-label="Undo (Ctrl+Z)"><span aria-hidden="true">↶</span></button><button type="button" class="button subtle topbar-tool" id="redo-button" disabled aria-label="Redo (Ctrl+Y)"><span aria-hidden="true">↷</span></button><span id="save-status"><i class="connection-dot"></i> Local archive</span><span class="avatar">ME</span></div></header>
+    <header class="topbar"><div><span class="breadcrumb">Workspace</span><span class="separator">/</span><span id="current-tab">Tasks</span></div><div class="topbar-right"><button type="button" class="button subtle topbar-tool global-search-button" id="global-search"><svg class="ico ico-line" aria-hidden="true" focusable="false"><use href="#i-search"/></svg><span id="global-search-label">Search</span><kbd>Ctrl K</kbd></button><button type="button" class="button subtle topbar-tool" id="undo-button" disabled aria-label="Undo (Ctrl+Z)"><svg class="ico ico-line" aria-hidden="true" focusable="false"><use href="#i-undo"/></svg></button><button type="button" class="button subtle topbar-tool" id="redo-button" disabled aria-label="Redo (Ctrl+Y)"><svg class="ico ico-line" aria-hidden="true" focusable="false"><use href="#i-redo"/></svg></button><span id="save-status"><i class="connection-dot"></i> Local archive</span><span class="avatar">ME</span></div></header>
     <div id="content"></div>
-    <footer><span><i class="connection-dot"></i> No cloud. No account. Everything under control.</span><button id="folder-button">Open data folder ↗</button></footer>
+    <footer><span><i class="connection-dot"></i> No cloud. No account. Everything under control.</span><button id="folder-button">Open data folder</button></footer>
   </main>
   <dialog id="modal"><div id="modal-content"></div></dialog>
   <div id="toast" role="status" aria-live="polite"></div>

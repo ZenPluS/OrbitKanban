@@ -15,6 +15,7 @@ const STATIC_FILES = new Map([
   ...fontSources.fonts.flatMap(font => font.files.map(file => [`/fonts/${file.file}`, 'font/woff2'])),
   ['/core.js', 'text/javascript; charset=utf-8'],
   ['/columns.js', 'text/javascript; charset=utf-8'],
+  ['/icons.js', 'text/javascript; charset=utf-8'],
   ['/csv.js', 'text/javascript; charset=utf-8'],
   ['/i18n.js', 'text/javascript; charset=utf-8'],
   ['/xlsx.js', 'text/javascript; charset=utf-8'],

@@ -2731,3 +2731,163 @@ td.custom-cell > span {
     max-width: 160px;
   }
 }
+/* Icons from icons.js: feature icons use per-theme gradients, line icons follow the text color */
+.ico {
+  display: inline-block;
+  flex: none;
+  width: calc(16px * var(--fs));
+  height: calc(16px * var(--fs));
+  vertical-align: -0.2em;
+  overflow: visible;
+}
+.ico-blue { --ico-front: url(#ig-blue); --ico-back: url(#ig-blue); --ico-detail: var(--ig-blue-ink, #fff); }
+.ico-violet { --ico-front: url(#ig-violet); --ico-back: url(#ig-violet); --ico-detail: var(--ig-violet-ink, #fff); }
+.ico-teal { --ico-front: url(#ig-teal); --ico-back: url(#ig-teal); --ico-detail: var(--ig-teal-ink, #fff); }
+.ico-amber { --ico-front: url(#ig-amber); --ico-back: url(#ig-amber); --ico-detail: var(--ig-amber-ink, #fff); }
+.ico-rose { --ico-front: url(#ig-rose); --ico-back: url(#ig-rose); --ico-detail: var(--ig-rose-ink, #fff); }
+.ico-green { --ico-front: url(#ig-green); --ico-back: url(#ig-green); --ico-detail: var(--ig-green-ink, #fff); }
+.ico-slate { --ico-front: url(#ig-slate); --ico-back: url(#ig-slate); --ico-detail: var(--ig-slate-ink, #fff); }
+.ico-accent { --ico-front: url(#ig-accent); --ico-back: url(#ig-accent); --ico-detail: var(--ig-accent-ink, #fff); }
+/* Milestone markers keep the color of their release date */
+.timeline-line .ico { --ico-front: var(--milestone); --ico-back: var(--milestone); --ico-detail: var(--background); --ico-back-op: 0.45; }
+.button.primary .ico:not(.ico-line) { --ico-front: currentColor; --ico-back: currentColor; --ico-detail: var(--accent); }
+.button:not(.primary):hover .ico-line,
+.icon-button:hover .ico-line,
+.icon-button:focus-visible .ico-line { --ico-line: url(#ig-accent); }
+.nav-icon,
+.settings-tab-icon,
+.unsaved-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.nav-icon .ico { width: calc(20px * var(--fs)); height: calc(20px * var(--fs)); }
+.settings-tab-icon .ico { width: calc(18px * var(--fs)); height: calc(18px * var(--fs)); }
+.unsaved-icon .ico { width: calc(20px * var(--fs)); height: calc(20px * var(--fs)); }
+.hint > span { display: inline-flex; }
+.hint > span .ico,
+.info-banner > .ico { width: calc(18px * var(--fs)); height: calc(18px * var(--fs)); }
+.info-banner > .ico { margin-right: 8px; vertical-align: -0.28em; }
+.timeline-line span { display: inline-flex; padding: 0 4px; }
+.timeline-line span .ico { width: calc(20px * var(--fs)); height: calc(20px * var(--fs)); }
+.date-pill .ico,
+.bulk-date .ico,
+.card-bottom .ico,
+.hidden-badge .ico,
+.linked .ico,
+.portal-link .ico { width: 1.15em; height: 1.15em; vertical-align: -0.22em; }
+.date-pill .ico,
+.bulk-date .ico,
+.card-bottom .ico { margin-right: 4px; }
+.mark-swatch.manage .ico { width: 100%; height: 100%; }
+.theme-check .ico { width: calc(16px * var(--fs)); height: calc(16px * var(--fs)); }
+th button span .ico { width: 1.05em; height: 1.05em; vertical-align: -0.18em; }
+.search-wrap > span,
+.theme-search > span,
+.global-search-field > span { display: inline-flex; color: var(--muted); }
+.search-wrap > span .ico,
+.theme-search > span .ico,
+.global-search-field > span .ico { width: calc(18px * var(--fs)); height: calc(18px * var(--fs)); }
+.hidden-badge .ico,
+.linked .ico { margin-right: 3px; }
+a[data-open-url] .ico:last-child { margin-left: 4px; }
+a.external-link .ico:last-child { margin-left: 0; }
+footer button,
+.highlighter-label,
+.column-tag,
+.duplicate-warning strong,
+#match-preview > span:first-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.dup-ref .ico,
+.dup-flag .ico,
+.column-tag .ico,
+.mark-choice b .ico { width: 1.1em; height: 1.1em; }
+.transfer-icon .ico { width: calc(20px * var(--fs)); height: calc(20px * var(--fs)); }
+.icon-button.star:not(.selected) .ico { --ico-line: var(--muted); }
+.task-tags-button { display: flex; align-items: center; gap: 4px; }
+.task-tags-button > .tag-chips,
+.task-tags-button > .muted { flex: 1 1 auto; min-width: 0; }
+.task-tags-button > .ico { width: calc(14px * var(--fs)); height: calc(14px * var(--fs)); color: var(--muted); }
+/* Control sizes: buttons, icon buttons, toolbar fields and top-bar controls share one height scale */
+.button {
+  min-height: calc(36px * var(--fs));
+  padding: calc(5px * var(--fs)) calc(14px * var(--fs));
+  gap: calc(7px * var(--fs));
+  line-height: 1.2;
+}
+.button.small {
+  min-height: calc(30px * var(--fs));
+  padding: calc(4px * var(--fs)) calc(11px * var(--fs));
+  gap: calc(6px * var(--fs));
+}
+.button.primary { color: var(--on-accent, var(--background)); }
+.icon-button,
+.option-row .icon-button,
+.column-row .icon-button,
+.font-size-reset {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: calc(30px * var(--fs));
+  height: calc(30px * var(--fs));
+  padding: 0;
+  border-radius: 7px;
+  font-size: calc(15px * var(--fs));
+  line-height: 1;
+  vertical-align: middle;
+}
+td .icon-button { width: calc(28px * var(--fs)); height: calc(28px * var(--fs)); }
+.icon-button .ico { width: calc(17px * var(--fs)); height: calc(17px * var(--fs)); }
+.icon-button:disabled { opacity: 0.38; }
+.filters select,
+.saved-view-tools select,
+.table-toolbar select {
+  height: calc(36px * var(--fs));
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.view-label,
+.readonly-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(6px * var(--fs));
+  min-height: calc(36px * var(--fs));
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.topbar-right { gap: 8px; }
+.topbar-tool,
+#save-status,
+.topbar-right .avatar {
+  height: calc(32px * var(--fs));
+  min-height: calc(32px * var(--fs));
+}
+.topbar-tool {
+  min-width: calc(32px * var(--fs));
+  padding: 0 calc(10px * var(--fs));
+  border-radius: 8px;
+}
+#undo-button,
+#redo-button { width: calc(32px * var(--fs)); padding: 0; }
+.topbar-tool .ico { width: calc(17px * var(--fs)); height: calc(17px * var(--fs)); }
+#save-status {
+  padding: 0 calc(11px * var(--fs));
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 55%, transparent);
+  white-space: nowrap;
+}
+.topbar-right .avatar {
+  display: inline-grid;
+  place-items: center;
+  width: calc(32px * var(--fs));
+  flex: none;
+  font-size: calc(11px * var(--fs));
+}
+@media (max-width: 1200px) {
+  .topbar-tool { padding-inline: calc(8px * var(--fs)); }
+}

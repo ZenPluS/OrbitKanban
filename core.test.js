@@ -320,6 +320,74 @@ test('monochrome logo themes retain visible text and accent instead of hiding th
     assert.ok(contrast(palette.surface, palette.accent) >= 3);
   }
 });
+const meetsThemeContrast = palette => contrast(palette.text, palette.background) >= 4.5 && contrast(palette.text, palette.surface) >= 4.5
+  && contrast(palette.accent, palette.background) >= 3 && contrast(palette.accent, palette.surface) >= 3;
+const hueOf = color => { const [r, g, b] = color.slice(1).match(/.{2}/g).map(channel => parseInt(channel, 16)); return Math.atan2(Math.sqrt(3) * (g - b), 2 * r - g - b); };
+const hueDistance = (a, b) => Math.abs(Math.atan2(Math.sin(hueOf(a) - hueOf(b)), Math.cos(hueOf(a) - hueOf(b))));
+test('image themes keep colors that already meet WCAG AA unchanged', () => {
+  const { themeFromImage } = require('./core');
+  const palette = themeFromImage(imagePixels(['#101820', '#303848', '#f0f4fc', '#d06090']));
+  assert.deepEqual(palette.adjusted, []);
+  assert.deepEqual({ background: palette.background, surface: palette.surface, text: palette.text, accent: palette.accent }, palette.extracted);
+  assert.deepEqual(palette.extracted, { background: '#101820', surface: '#303848', text: '#f0f4fc', accent: '#d06090' });
+  assert.equal(palette.colorCount, 4);
+});
+test('image themes move text and accent only as much as WCAG AA needs, keeping their hue', () => {
+  const { accessibleThemePalette } = require('./core');
+  const input = { background: '#1a1a2e', surface: '#24243a', text: '#6a6a90', accent: '#5a2a3a' };
+  const { palette, adjusted } = accessibleThemePalette(input);
+  assert.deepEqual(adjusted, ['text', 'accent']);
+  assert.equal(palette.background, input.background);
+  assert.equal(palette.surface, input.surface);
+  assert.ok(meetsThemeContrast(palette));
+  // The smallest change: just over the thresholds, never pushed to pure white.
+  assert.ok(contrast(palette.text, palette.surface) < 4.7, palette.text);
+  assert.ok(Math.min(contrast(palette.accent, palette.background), contrast(palette.accent, palette.surface)) < 3.2, palette.accent);
+  assert.notEqual(palette.text, '#ffffff');
+  assert.ok(hueDistance(palette.text, input.text) < 0.15, palette.text);
+  assert.ok(hueDistance(palette.accent, input.accent) < 0.15, palette.accent);
+  const darkText = accessibleThemePalette({ background: '#f4efe6', surface: '#ffffff', text: '#a08a70', accent: '#2a6cf0' });
+  assert.deepEqual(darkText.adjusted, ['text']);
+  assert.ok(meetsThemeContrast(darkText.palette));
+  assert.ok(Math.min(contrast(darkText.palette.text, darkText.palette.background), contrast(darkText.palette.text, darkText.palette.surface)) < 4.7 && darkText.palette.text !== '#000000');
+});
+test('image themes move the surface when no text color can be read on both background and surface', () => {
+  const { accessibleThemePalette } = require('./core');
+  // Text needs luminance >= 0.31 on #303030 but <= 0.183 on white: no text color satisfies both.
+  const { palette, adjusted } = accessibleThemePalette({ background: '#303030', surface: '#ffffff', text: '#909090', accent: '#ff0000' });
+  assert.equal(palette.background, '#303030');
+  assert.ok(adjusted.includes('surface') && adjusted.includes('text'));
+  assert.ok(meetsThemeContrast(palette), JSON.stringify(palette));
+});
+test('every image palette satisfies WCAG AA, keeps its background and is stable once corrected', () => {
+  const { accessibleThemePalette, themeFromImage } = require('./core');
+  let seed = 7;
+  const random = () => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; };
+  const color = () => '#' + Math.floor(random() * 0x1000000).toString(16).padStart(6, '0');
+  for (let i = 0; i < 400; i++) {
+    const input = { background: color(), surface: color(), text: color(), accent: color() };
+    const { palette } = accessibleThemePalette(input);
+    assert.equal(palette.background, input.background);
+    assert.ok(meetsThemeContrast(palette), JSON.stringify({ input, palette }));
+    assert.deepEqual(accessibleThemePalette(palette).adjusted, []);
+  }
+  for (const single of ['#557799', '#000000', '#ffffff', '#767676']) assert.ok(meetsThemeContrast(themeFromImage(imagePixels([single]))), single);
+});
+test('filled accent buttons and gradient icons stay readable on every built-in theme', () => {
+  const { onAccentColor, iconPalette, ICON_FAMILIES } = require('./core');
+  for (const theme of defaultThemes()) {
+    const label = onAccentColor(theme);
+    assert.ok(contrast(label, theme.accent) >= 4.5, theme.id);
+    const icons = iconPalette(theme);
+    assert.deepEqual(Object.keys(icons).sort(), [...Object.keys(ICON_FAMILIES), 'accent'].sort());
+    for (const [family, stops] of Object.entries(icons)) {
+      assert.equal(stops.length, 2);
+      for (const stop of stops) assert.ok(contrast(stop, theme.background) >= 3 && contrast(stop, theme.surface) >= 3, `${theme.id} ${family} ${stop}`);
+    }
+  }
+  assert.equal(onAccentColor({ background: '#10131c', surface: '#191d2a', text: '#edf0fa', accent: '#a392ff' }), '#10131c');
+  assert.ok(contrast(onAccentColor({ background: '#ffffff', surface: '#f4f4f4', text: '#111111', accent: '#3b82f6' }), '#3b82f6') >= 4.5);
+});
 test('legacy archive migrates without losing task IDs, settings, associations or themes', () => {
   const legacy = initialData();
   legacy.settings.appName = 'Legacy organization';
