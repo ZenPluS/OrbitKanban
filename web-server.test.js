@@ -29,7 +29,7 @@ before(async () => {
   folder = await fs.mkdtemp(path.join(os.tmpdir(), 'orbitkanban-web-'));
   store = createWorkspaceStore({ dataFolder: path.join(folder, 'data'), seed: () => baseData('it'), extras: () => ({ appVersion: '2.0.0-test' }) });
   firstOrg = (await store.load()).activeOrganizationId;
-  secondOrg = (await store.organization('create', { name: 'Seconda', language: 'en' }, firstOrg)).activeOrganizationId;
+  secondOrg = (await store.organization('create', { name: 'Second', language: 'en' }, firstOrg)).activeOrganizationId;
   server = createWebServer({ store, appRoot: __dirname, tokenFolder: path.join(folder, 'runtime'), port: 0 });
   await server.start();
 });
@@ -171,16 +171,16 @@ test('export downloads the archive and invalid bodies return JSON errors', async
 test('organization parts download as separate files and invalid requests are rejected', async () => {
   const exported = await request(`/api/export-organization?org=${encodeURIComponent(secondOrg)}&kind=data`, { headers: api() });
   assert.equal(exported.status, 200);
-  assert.match(exported.headers['content-disposition'], /^attachment; filename="OrbitKanban-seconda-data-\d{4}-\d{2}-\d{2}\.json"$/);
+  assert.match(exported.headers['content-disposition'], /^attachment; filename="OrbitKanban-second-data-\d{4}-\d{2}-\d{2}\.json"$/);
   assert.match(exported.headers['content-type'], /^application\/json/);
   const file = JSON.parse(exported.text);
-  assert.deepEqual([file.format, file.kind, file.appVersion, file.organization.name], ['orbitkanban-organization', 'data', '2.0.0-test', 'Seconda']);
+  assert.deepEqual([file.format, file.kind, file.appVersion, file.organization.name], ['orbitkanban-organization', 'data', '2.0.0-test', 'Second']);
   assert.ok(file.data.tasks.some(t => t.code === 'WEB-1'));
   assert.ok(!('settings' in file) && !('themes' in file));
   const themes = await request(`/api/export-organization?org=${encodeURIComponent(firstOrg)}&kind=themes`, { headers: api() });
   assert.match(themes.headers['content-disposition'], /-temi-\d{4}-\d{2}-\d{2}\.json"$/);
   assert.ok(Array.isArray(JSON.parse(themes.text).themes.themes));
-  assert.equal((await request(`/api/export-organization?org=${encodeURIComponent(firstOrg)}&kind=altro`, { headers: api() })).status, 400);
+  assert.equal((await request(`/api/export-organization?org=${encodeURIComponent(firstOrg)}&kind=other`, { headers: api() })).status, 400);
   const missing = await request('/api/export-organization?org=missing&kind=data', { headers: api() });
   assert.equal(missing.status, 404);
   assert.equal(JSON.parse(missing.text).code, 'missing-organization');
@@ -192,13 +192,13 @@ test('languages are listed for the browser and operations are forwarded to the a
   assert.equal(listed.status, 200);
   const info = JSON.parse(listed.text);
   assert.deepEqual(info.languages.map(({ code, source }) => [code, source]), [['en', 'built-in'], ['it', 'built-in']]);
-  assert.ok(info.packs.find(pack => pack.code === 'en').messages['Salva impostazioni']);
+  assert.ok(info.packs.find(pack => pack.code === 'en').messages['Save settings']);
   assert.equal((await request('/api/languages', { headers: { Cookie: cookie } })).status, 403);
   assert.equal((await request('/api/languages', { headers: { 'X-OrbitKanban': '1' } })).status, 401);
   const operations = [];
   const custom = createWebServer({
     store, appRoot: __dirname, tokenFolder: path.join(folder, 'runtime'), port: 0, language: () => 'en',
-    languages: async operation => { operations.push(operation); if (operation === 'explode') throw new Error('Operazione non supportata.'); return { folder: 'languages', languages: [], packs: [], errors: [] }; }
+    languages: async operation => { operations.push(operation); if (operation === 'explode') throw new Error('Unsupported operation.'); return { folder: 'languages', languages: [], packs: [], errors: [] }; }
   });
   await custom.start();
   try {
@@ -216,7 +216,7 @@ test('languages are listed for the browser and operations are forwarded to the a
     assert.equal((await call('/api/languages', { body: { operation: 'reload' } })).status, 200);
     const failed = await call('/api/languages', { body: { operation: 'explode' } });
     assert.equal(failed.status, 400);
-    assert.equal(JSON.parse(failed.text).error, 'Operazione non supportata.');
+    assert.equal(JSON.parse(failed.text).error, 'Unsupported operation.');
     assert.deepEqual(operations, ['info', 'reload', 'explode']);
     const denied = await new Promise((resolve, reject) => {
       http.get({ host: '127.0.0.1', port: custom.port, path: '/auth?token=wrong', headers: { Host: `127.0.0.1:${custom.port}` } }, res => {

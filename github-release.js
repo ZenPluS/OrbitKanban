@@ -7,7 +7,7 @@ const { parseArgs } = require('node:util');
 
 function repositoryFromRemote(remote) {
   const match = /^(?:https:\/\/github\.com\/|git@github\.com:|ssh:\/\/git@github\.com\/)([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+?)\/?$/.exec(remote);
-  if (!match) throw new Error('Il remoto deve essere un repository github.com HTTPS o SSH, senza credenziali nell’URL.');
+  if (!match) throw new Error('The remote must be an HTTPS or SSH github.com repository without credentials in the URL.');
   return match[1].replace(/\.git$/, '');
 }
 function githubToken() {
@@ -18,13 +18,13 @@ function githubToken() {
     env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'never' }, timeout: 30000
   });
   const password = credential.status === 0 && /^password=(.+)$/m.exec(credential.stdout || '')?.[1].trim();
-  if (!password) throw new Error('Accesso GitHub non disponibile: configura Git Credential Manager oppure GH_TOKEN/GITHUB_TOKEN con accesso in scrittura a Contents. Non salvare token nel repository.');
+  if (!password) throw new Error('GitHub access is unavailable: configure Git Credential Manager or GH_TOKEN/GITHUB_TOKEN with Contents write access. Do not store tokens in the repository.');
   return password;
 }
 function githubClient(token, fetchImpl = fetch) {
   return async (endpoint, { method = 'GET', body, bytes, allow404 = false } = {}) => {
     const url = new URL(endpoint, 'https://api.github.com');
-    if (!['https://api.github.com', 'https://uploads.github.com'].includes(url.origin)) throw new Error('Destinazione API GitHub non consentita.');
+    if (!['https://api.github.com', 'https://uploads.github.com'].includes(url.origin)) throw new Error("The GitHub API destination is not allowed.");
     const response = await fetchImpl(url, {
       method, redirect: 'error', signal: AbortSignal.timeout(bytes ? 300000 : 60000),
       headers: {
@@ -35,13 +35,13 @@ function githubClient(token, fetchImpl = fetch) {
       body: bytes || (body ? JSON.stringify(body) : undefined)
     });
     if (allow404 && response.status === 404) return null;
-    if (!response.ok) throw new Error(`GitHub ${method} ${url.pathname}: HTTP ${response.status}. Verifica autorizzazioni e connessione; la pubblicazione non è completa.`);
+    if (!response.ok) throw new Error(`GitHub ${method} ${url.pathname}: HTTP ${response.status}. Check permissions and connection; the release is incomplete.`);
     return response.status === 204 ? null : response.json();
   };
 }
 async function checkRepository(repo, request) {
   const info = await request(`/repos/${repo}`);
-  if (!info.permissions?.push) throw new Error(`Non hai accesso in scrittura a ${repo}.`);
+  if (!info.permissions?.push) throw new Error(`You do not have write access to ${repo}.`);
   return info;
 }
 async function releaseAssets(repo, releaseId, request) {
@@ -62,12 +62,12 @@ function releaseNotes(body, commit, digest) {
   return start >= 0 && stop >= start ? existing.slice(0, start) + note + existing.slice(stop + end.length) : `${existing.trim()}\n\n${note}`.trim();
 }
 async function publishRelease({ repo, tag, commit, tree, assetPath }, request) {
-  if (!/^v\d+\.\d+\.\d+$/.test(tag) || !/^[a-f0-9]{40,64}$/.test(commit) || !/^[a-f0-9]{40,64}$/.test(tree)) throw new Error('Tag, commit o albero Git non validi.');
-  if (path.basename(assetPath) !== 'OrbitKanban-Portable.exe') throw new Error('Nome dell’eseguibile portable non valido.');
+  if (!/^v\d+\.\d+\.\d+$/.test(tag) || !/^[a-f0-9]{40,64}$/.test(commit) || !/^[a-f0-9]{40,64}$/.test(tree)) throw new Error('Invalid Git tag, commit, or tree.');
+  if (path.basename(assetPath) !== 'OrbitKanban-Portable.exe') throw new Error('Invalid portable executable name.');
   const tagged = await request(`/repos/${repo}/commits/${tag}`);
-  if (tagged.commit?.tree?.sha !== tree) throw new Error(`Il tag ${tag} non contiene i sorgenti testati: incrementa la versione, senza spostare il tag esistente.`);
+  if (tagged.commit?.tree?.sha !== tree) throw new Error(`Tag ${tag} does not contain the tested sources: increment the version instead of moving the existing tag.`);
   const bytes = await fs.readFile(assetPath);
-  if (!bytes.length) throw new Error('Eseguibile vuoto.');
+  if (!bytes.length) throw new Error('The executable is empty.');
   const digest = createHash('sha256').update(bytes).digest('hex');
   const name = path.basename(assetPath), base = `/repos/${repo}/releases`;
   let release = await request(`${base}/tags/${tag}`, { allow404: true });
@@ -79,14 +79,14 @@ async function publishRelease({ repo, tag, commit, tree, assetPath }, request) {
   }
   const existing = (await releaseAssets(repo, release.id, request)).find(asset => asset.name === name);
   if (!verifiedAsset(existing, bytes.length, digest)) {
-    if (release.immutable) throw new Error(`La release ${tag} è immutabile: incrementa la versione per pubblicare questa build.`);
+    if (release.immutable) throw new Error(`Release ${tag} is immutable: increment the version to publish this build.`);
     // Keep the previous download until its replacement has been uploaded and verified.
     const uploadName = `OrbitKanban-Portable-${randomUUID()}.exe`;
     const uploaded = await request(`https://uploads.github.com/repos/${repo}/releases/${release.id}/assets?name=${uploadName}`, { method: 'POST', bytes });
     const verified = await request(`${base}/assets/${uploaded.id}`);
     if (!verifiedAsset(verified, bytes.length, digest)) {
       await request(`${base}/assets/${uploaded.id}`, { method: 'DELETE' });
-      throw new Error('Checksum o dimensione dell’asset GitHub non corrispondenti. Release non completata.');
+      throw new Error('The GitHub asset checksum or size does not match. The release is incomplete.');
     }
     if (existing) await request(`${base}/assets/${existing.id}`, { method: 'DELETE' });
     await request(`${base}/assets/${uploaded.id}`, { method: 'PATCH', body: { name } });
@@ -96,7 +96,7 @@ async function publishRelease({ repo, tag, commit, tree, assetPath }, request) {
   }
   const published = await request(`${base}/tags/${tag}`);
   const finalAsset = (await releaseAssets(repo, published.id, request)).find(asset => asset.name === name);
-  if (published.draft || published.tag_name !== tag || !verifiedAsset(finalAsset, bytes.length, digest)) throw new Error('Release o eseguibile non verificabili dopo la pubblicazione.');
+  if (published.draft || published.tag_name !== tag || !verifiedAsset(finalAsset, bytes.length, digest)) throw new Error('The release or executable could not be verified after publishing.');
   return { url: published.html_url, assetUrl: finalAsset.browser_download_url, sha256: digest };
 }
 async function main() {
@@ -107,9 +107,9 @@ async function main() {
   const repo = repositoryFromRemote(values.remote || '');
   const request = githubClient(githubToken());
   await checkRepository(repo, request);
-  if (values.check) console.log(`Accesso GitHub verificato: ${repo}`);
+  if (values.check) console.log(`GitHub access verified: ${repo}`);
   else {
-    if (!values.asset) throw new Error('Specificare --asset.');
+    if (!values.asset) throw new Error('Specify --asset.');
     console.log(JSON.stringify(await publishRelease({ repo, tag: values.tag, commit: values.commit, tree: values.tree, assetPath: values.asset }, request)));
   }
 }

@@ -51,7 +51,7 @@ app.whenReady().then(async () => {
   const ico = encodeIco(rendered.map(({ size, rgba, png }) => ({ size, rgba: Buffer.from(rgba, 'base64'), png: png && Buffer.from(png, 'base64') })));
   fs.mkdirSync(buildFolder, { recursive: true });
   fs.writeFileSync(outputs.icon, ico);
-  console.log(`Icona eseguibile: app-logo.svg -> ${path.relative(__dirname, outputs.icon)} (${ICON_SIZES.join(', ')} px)`);
+  console.log(`Executable icon: app-logo.svg -> ${path.relative(__dirname, outputs.icon)} (${ICON_SIZES.join(', ')} px)`);
   await win.loadFile(path.join(__dirname, 'splash.html'), { query: { version } });
   const iconData = await win.webContents.executeJavaScript(`(async () => {
     const image = new Image();
@@ -63,9 +63,9 @@ app.whenReady().then(async () => {
     return canvas.toDataURL('image/png');
   })()`);
   const icon = nativeImage.createFromDataURL(iconData);
-  if (icon.isEmpty() || icon.getSize().width !== ICON_SIZE || icon.getSize().height !== ICON_SIZE) throw new Error('Icona applicativa non valida.');
+  if (icon.isEmpty() || icon.getSize().width !== ICON_SIZE || icon.getSize().height !== ICON_SIZE) throw new Error('Invalid application icon.');
   fs.writeFileSync(path.join(__dirname, 'app-logo.png'), icon.toPNG());
-  console.log(`Icona: app-logo.svg -> app-logo.png (${ICON_SIZE}x${ICON_SIZE})`);
+  console.log(`Icon: app-logo.svg -> app-logo.png (${ICON_SIZE}x${ICON_SIZE})`);
   if (process.argv.includes('--icon-only')) {
     win.destroy();
     finish(0);
@@ -80,8 +80,8 @@ app.whenReady().then(async () => {
     return { rect: { x: box.x, y: box.y, width: box.width, height: box.height }, durations: document.getAnimations().map(animation => animation.effect.getComputedTiming().duration) };
   })()`);
   const rect = layout.rect;
-  if (!Object.values(rect).every(Number.isInteger) || rect.width < 16 || rect.height < 2) throw new Error(`Barra di caricamento non allineata ai pixel: ${JSON.stringify(rect)}`);
-  if (layout.durations.length !== 1 || !(layout.durations[0] > 0)) throw new Error(`Attesa una sola animazione nella barra: ${JSON.stringify(layout.durations)}`);
+  if (!Object.values(rect).every(Number.isInteger) || rect.width < 16 || rect.height < 2) throw new Error(`The loading bar is not pixel-aligned: ${JSON.stringify(rect)}`);
+  if (layout.durations.length !== 1 || !(layout.durations[0] > 0)) throw new Error(`Expected exactly one loading-bar animation: ${JSON.stringify(layout.durations)}`);
   const seek = async time => {
     await win.webContents.executeJavaScript(`document.getAnimations().forEach(animation => { animation.pause(); animation.currentTime = ${time}; });
       new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))`);
@@ -90,7 +90,7 @@ app.whenReady().then(async () => {
   const capture = async area => {
     const image = await win.webContents.capturePage(area);
     const size = image.getSize(), expected = area || { width, height };
-    if (image.isEmpty() || size.width !== expected.width || size.height !== expected.height) throw new Error(`Cattura non valida: ${JSON.stringify(size)}`);
+    if (image.isEmpty() || size.width !== expected.width || size.height !== expected.height) throw new Error(`Invalid capture: ${JSON.stringify(size)}`);
     return image;
   };
 
@@ -104,8 +104,8 @@ app.whenReady().then(async () => {
   }
   // The clip covers the bitmap: its first frame must match the bitmap, and the bar has to actually move.
   const still = toRgb(screen.crop(rect).toBitmap(), rect.width, rect.height, SPLASH_BACKGROUND);
-  if (frames[0].some((value, index) => Math.abs(value - still[index]) > 2)) throw new Error('Il primo fotogramma non coincide con la schermata del launcher.');
-  if (new Set(frames.map(frame => Buffer.from(frame).toString('base64'))).size < frameCount / 2) throw new Error('Animazione della barra non catturata.');
+  if (frames[0].some((value, index) => Math.abs(value - still[index]) > 2)) throw new Error('The first frame does not match the launcher screen.');
+  if (new Set(frames.map(frame => Buffer.from(frame).toString('base64'))).size < frameCount / 2) throw new Error('The loading-bar animation was not captured.');
   const { palette, frames: indexed } = quantize(frames);
 
   fs.mkdirSync(buildFolder, { recursive: true });
@@ -125,7 +125,7 @@ app.whenReady().then(async () => {
     }));
     fs.writeFileSync(outputs.clip.replace(/\.avi$/, '.png'), nativeImage.createFromBitmap(sheet, { width: rect.width, height: rect.height * frameCount }).toPNG());
   }
-  console.log(`Launcher: ${path.relative(__dirname, outputs.bitmap)} (${width}×${height}, v${version}), ${path.relative(__dirname, outputs.clip)} (${rect.width}×${rect.height}, ${frameCount} fotogrammi, ${palette.length} colori)`);
+  console.log(`Launcher: ${path.relative(__dirname, outputs.bitmap)} (${width}×${height}, v${version}), ${path.relative(__dirname, outputs.clip)} (${rect.width}×${rect.height}, ${frameCount} frames, ${palette.length} colors)`);
   win.destroy();
   finish(0);
 }).catch(error => {

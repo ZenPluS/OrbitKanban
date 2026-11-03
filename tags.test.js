@@ -35,12 +35,12 @@ test('tag catalogs and task selections reject invalid values and duplicates', ()
   for (const tags of [null, 'tag', [null], [{ ...tag, name: ' ' }], [{ ...tag, color: 'red' }], [{ ...tag, name: 'x'.repeat(TAG_NAME_MAX + 1) }], [tag, tag], [tag, { ...tag, id: 'b', name: ' FRONTEND ' }], Array.from({ length: TAG_LIMIT + 1 }, (_, index) => ({ ...tag, id: `t${index}`, name: `T${index}` }))]) {
     const data = baseData();
     data.settings.tags = tags;
-    assert.throws(() => validateData(data), /Tags non validi|nomi dei tag/);
+    assert.throws(() => validateData(data), /invalid tags|tag names must be unique/i);
   }
   for (const tagIds of [null, 'a', [null], [''], ['a', 'a'], [12], ['x'.repeat(201)]]) {
     const { data } = taggedOrganization();
     data.tasks[0].tagIds = tagIds;
-    assert.throws(() => validateData(data), /Tags attività non validi/);
+    assert.throws(() => validateData(data), /invalid task tags/i);
   }
 });
 test('removing a catalog entry prunes only that tag, including hidden tasks', () => {
@@ -102,6 +102,6 @@ test('a full catalog rejects imports instead of silently losing tag assignments'
   const target = baseData();
   target.settings.tags = Array.from({ length: TAG_LIMIT }, (_, index) => ({ id: `t${index}`, name: `T${index}`, color: '#123456' }));
   const original = structuredClone(target);
-  assert.throws(() => applyOrganizationImport(target, parseOrganizationFile(organizationExport(taggedOrganization(), 'data')), { data: true }), /Troppi tag/);
+  assert.throws(() => applyOrganizationImport(target, parseOrganizationFile(organizationExport(taggedOrganization(), 'data')), { data: true }), /too many tags/i);
   assert.deepEqual(target, original);
 });

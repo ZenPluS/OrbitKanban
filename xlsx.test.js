@@ -41,8 +41,8 @@ test('helpers convert columns, dates, colors and sheet names', () => {
   assert.equal(argb('#a1b2c3'), 'FFA1B2C3');
   assert.equal(argb('fff'), 'FFFFFFFF');
   assert.equal(argb('red'), '');
-  assert.deepEqual(sheetNames(['Attività', 'attività', 'A/B: [x]?*', '', "'quoted'", 'History', 'Un nome davvero molto lungo per un foglio Excel', 'Un nome davvero molto lungo per un foglio Excel']),
-    ['Attività', 'attività (2)', 'A B x', 'Sheet4', 'quoted', 'History (2)', 'Un nome davvero molto lungo per', 'Un nome davvero molto lungo (2)']);
+  assert.deepEqual(sheetNames(['Café', 'café', 'A/B: [x]?*', '', "'quoted'", 'History', 'A really long name for each tab in the Excel workbook', 'A really long name for each tab in the Excel workbook']),
+    ['Café', 'café (2)', 'A B x', 'Sheet4', 'quoted', 'History (2)', 'A really long name for each tab', 'A really long name for each (2)']);
   assert.ok(sheetNames(['x'.repeat(40)])[0].length <= 31);
   assert.equal(cleanText('a\u0000b\u0007c\r\nd\te\uD800f\uDC00g😀'), 'abc\nd\tefg😀');
   assert.equal(crc32(Buffer.from('123456789')), 0xCBF43926);
@@ -50,18 +50,18 @@ test('helpers convert columns, dates, colors and sheet names', () => {
 
 test('workbook is a valid zip package with typed, styled and linked cells', async () => {
   const bytes = await buildWorkbook({
-    title: 'Situazione & <stato>', creator: 'OrbitKanban', created: new Date(2026, 4, 6, 10, 30, 0),
+    title: 'Status & <report>', creator: 'OrbitKanban', created: new Date(2026, 4, 6, 10, 30, 0),
     sheets: [
       {
-        name: 'Attività', columns: [{ width: 10 }, { width: 40 }, {}, { width: 14 }], freeze: { row: 1, col: 1 }, autoFilter: true, tabColor: '#6c5ce7', print: { landscape: true, fitWidth: true },
+        name: 'Tasks', columns: [{ width: 10 }, { width: 40 }, {}, { width: 14 }], freeze: { row: 1, col: 1 }, autoFilter: true, tabColor: '#6c5ce7', print: { landscape: true, fitWidth: true },
         rows: [
-          [{ v: 'Codice', style: { bold: true, fill: '#202432', color: '#ffffff', border: '#cccccc' } }, 'Descrizione', 'Effort (ore)', 'Release'],
-          [{ v: 'PRJ-1', link: 'https://jira.example.com/browse/PRJ-1?a=1&b=2' }, { v: 'Riga 1\nRiga 2 <b>&</b> "ok"', style: { wrap: true, vertical: 'top' } }, 12.5, { v: '2026-01-15', type: 'date', style: { fill: '#ffeeaa' } }],
+          [{ v: 'Code', style: { bold: true, fill: '#202432', color: '#ffffff', border: '#cccccc' } }, 'Description', 'Effort (hours)', 'Release'],
+          [{ v: 'PRJ-1', link: 'https://jira.example.com/browse/PRJ-1?a=1&b=2' }, { v: 'Line 1\nLine 2 <b>&</b> "ok"', style: { wrap: true, vertical: 'top' } }, 12.5, { v: '2026-01-15', type: 'date', style: { fill: '#ffeeaa' } }],
           [{ v: 'PRJ-2', link: 'javascript:alert(1)' }, '', { v: 'n/a', type: 'number' }, { v: '', type: 'date', style: { fill: '#eeeeee' } }],
           { height: 30, cells: [true, false, null, { v: new Date(2026, 4, 6, 10, 30, 0) }] }
         ]
       },
-      { name: 'Attività', merges: [{ row: 0, col: 0, cols: 3 }], gridLines: false, rows: [[{ v: 'Titolo', style: { bold: true, size: 16 } }], [], ['x'.repeat(MAX_CELL_TEXT + 10)]] }
+      { name: 'Tasks', merges: [{ row: 0, col: 0, cols: 3 }], gridLines: false, rows: [[{ v: 'Title', style: { bold: true, size: 16 } }], [], ['x'.repeat(MAX_CELL_TEXT + 10)]] }
     ]
   });
   assert.ok(bytes instanceof Uint8Array);
@@ -76,13 +76,13 @@ test('workbook is a valid zip package with typed, styled and linked cells', asyn
   assert.match(types, /PartName="\/xl\/worksheets\/sheet2\.xml"/);
   assert.match(types, /sharedStrings\+xml/);
   const workbook = files.get('xl/workbook.xml');
-  assert.match(workbook, /<sheet name="Attività" sheetId="1" r:id="rId1"\/><sheet name="Attività \(2\)" sheetId="2" r:id="rId2"\/>/);
-  assert.match(workbook, /<definedName name="_xlnm\._FilterDatabase" localSheetId="0" hidden="1">'Attività'!\$A\$1:\$D\$4<\/definedName>/);
-  assert.match(workbook, /<definedName name="_xlnm\.Print_Titles" localSheetId="0">'Attività'!\$1:\$1<\/definedName>/);
-  assert.match(files.get('docProps/core.xml'), /<dc:title>Situazione &amp; &lt;stato&gt;<\/dc:title>/);
+  assert.match(workbook, /<sheet name="Tasks" sheetId="1" r:id="rId1"\/><sheet name="Tasks \(2\)" sheetId="2" r:id="rId2"\/>/);
+  assert.match(workbook, /<definedName name="_xlnm\._FilterDatabase" localSheetId="0" hidden="1">'Tasks'!\$A\$1:\$D\$4<\/definedName>/);
+  assert.match(workbook, /<definedName name="_xlnm\.Print_Titles" localSheetId="0">'Tasks'!\$1:\$1<\/definedName>/);
+  assert.match(files.get('docProps/core.xml'), /<dc:title>Status &amp; &lt;report&gt;<\/dc:title>/);
 
   const strings = sharedStrings(files);
-  assert.ok(strings.includes('Riga 1\nRiga 2 &lt;b&gt;&amp;&lt;/b&gt; &quot;ok&quot;'));
+  assert.ok(strings.includes('Line 1\nLine 2 &lt;b&gt;&amp;&lt;/b&gt; &quot;ok&quot;'));
   assert.equal(strings.find(text => text.startsWith('xxx')).length, MAX_CELL_TEXT);
   const sheet = files.get('xl/worksheets/sheet1.xml');
   assert.match(sheet, /<sheetPr><tabColor rgb="FF6C5CE7"\/><pageSetUpPr fitToPage="1"\/><\/sheetPr><dimension ref="A1:D4"\/>/);
@@ -118,7 +118,7 @@ test('workbook is a valid zip package with typed, styled and linked cells', asyn
 });
 
 test('workbook requires at least one sheet and strips invalid XML characters', async () => {
-  await assert.rejects(buildWorkbook({ sheets: [] }), /Nessun foglio da esportare/);
+  await assert.rejects(buildWorkbook({ sheets: [] }), /No sheet to export/i);
   const files = unzip(await buildWorkbook({ sheets: [{ name: 'S', rows: [['ok\u0001\uFFFF fine'], [{ v: 'custom', style: { numFmt: '0.0" h"' } }, { v: 3, style: { numFmt: '0.00' } }]] }] }));
   assert.ok(sharedStrings(files).includes('ok fine'));
   assert.match(files.get('xl/styles.xml'), /<numFmts count="1"><numFmt numFmtId="164" formatCode="0\.0&quot; h&quot;"\/><\/numFmts>/);

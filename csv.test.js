@@ -19,21 +19,22 @@ test('CSV preserves multiline quoted cells, escaped quotes, empty cells and the 
   assert.deepEqual(C.parseCsv('\r\n  \ncode,notes\nA,ok').rows, [['code', 'notes'], ['A', 'ok']]);
 });
 test('CSV rejects invalid quotes, empty files, invalid delimiters and configured size limits', () => {
-  for (const text of ['a;"unfinished', 'a;"closed"x', 'a;un"quoted']) assert.throws(() => C.parseCsv(text, ';'), /virgolette/i);
-  for (const text of ['', '\uFEFF\n ; \n']) assert.throws(() => C.parseCsv(text), /vuoto/);
-  assert.throws(() => C.parseCsv('a|b', '|'), /Separatore/);
+  for (const text of ['a;"unfinished', 'a;"closed"x', 'a;un"quoted']) assert.throws(() => C.parseCsv(text, ';'), /quotes|quoted field/i);
+  for (const text of ['', '\uFEFF\n ; \n']) assert.throws(() => C.parseCsv(text), /empty/i);
+  assert.throws(() => C.parseCsv('a|b', '|'), /delimiter/i);
   assert.throws(() => C.parseCsv('x'.repeat(C.MAX_BYTES + 1)), /16 MB/);
-  assert.throws(() => C.parseCsv(Array(101).fill('a').join(';')), /troppe colonne/);
+  assert.throws(() => C.parseCsv(Array(101).fill('a').join(';')), /too many columns/i);
   assert.throws(() => C.parseCsv('code\n' + 'A\n'.repeat(C.MAX_ROWS + 1)), /10000/);
 });
 test('mapping matches localized labels and aliases, leaving ambiguous and repeated destinations unmapped', () => {
   const data = baseData(), fields = C.destinations(data, 'tasks');
   assert.deepEqual(C.suggestMapping(['Issue key', 'DESCRIPTION', 'Priorita', 'Data release', 'Sequence', 'Notes', 'ignored', 'code'], fields),
     ['code', 'description', 'urgencyId', 'releaseDate', 'sequence', 'notes', '', '']);
+  // Italian headers are accepted aliases; "Codice portale" must not map when a custom column already carries that name.
   data.settings.taskFields = [{ id: 'custom-collision', name: 'Codice portale', type: 'text', options: [] }];
   assert.deepEqual(C.suggestMapping(['Codice portale'], C.destinations(data, 'tasks')), ['']);
   assert.ok(!fields.some(field => ['incident', 'problem'].includes(field.id)));
-  assert.throws(() => C.destinations(data, 'other'), /Lista/);
+  assert.throws(() => C.destinations(data, 'other'), /invalid import list/i);
 });
 test('CSV conversion validates numbers, dates, booleans, URLs, catalogs and escaped rich text', () => {
   const convert = (value, type, options = {}) => C.convertCell(value, { type, ...options });
@@ -45,14 +46,14 @@ test('CSV conversion validates numbers, dates, booleans, URLs, catalogs and esca
   assert.equal(convert('example.com/path', 'url'), 'https://example.com/path');
   assert.equal(convert('  ', 'text'), undefined);
   assert.equal(convert('<script>alert("x")</script>\n&', 'richtext'), '<p>&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;<br>&amp;</p>');
-  const options = [{ value: 'a', name: 'Uno' }, { value: 'b', name: 'Due' }];
-  assert.deepEqual(convert('uno | DUE | a', 'multiselect', { options }), ['a', 'b']);
+  const options = [{ value: 'a', name: 'One' }, { value: 'b', name: 'Two' }];
+  assert.deepEqual(convert('one | TWO | a', 'multiselect', { options }), ['a', 'b']);
   for (const [value, type] of [['1,000.5', 'number'], ['NaN', 'number'], ['-1', 'effort'], ['29/2/2027', 'date'], ['31/4/2026', 'date'], ['maybe', 'boolean'], ['javascript:alert(1)', 'url']]) assert.throws(() => convert(value, type));
   assert.throws(() => convert('1.5', 'number', { id: 'sequence' }));
   assert.throws(() => convert('9007199254740993', 'number', { id: 'sequence' }));
   assert.throws(() => convert('Other', 'select', { options }));
-  assert.throws(() => convert('Uno', 'select', { options: [...options, { value: 'c', name: 'UNO' }] }));
-  assert.throws(() => convert('x'.repeat(201), 'text', { id: 'code' }), /200 caratteri/);
+  assert.throws(() => convert('One', 'select', { options: [...options, { value: 'c', name: 'ONE' }] }));
+  assert.throws(() => convert('x'.repeat(201), 'text', { id: 'code' }), /200 characters/i);
 });
 test('task import is append-only, applies defaults, combines effort and allocates sequences without mutation', () => {
   const data = baseData(), before = structuredClone(data);
@@ -73,18 +74,18 @@ test('task import is append-only, applies defaults, combines effort and allocate
 test('custom fields of all types import into tasks and linked issues with catalogs and tags', () => {
   const data = baseData();
   const types = ['text', 'richtext', 'number', 'date', 'select', 'multiselect', 'url', 'effort', 'boolean'];
-  const fields = types.map(type => ({ id: `custom-${type}`, name: type, type, options: ['select', 'multiselect'].includes(type) ? ['Uno', 'Due'] : [] }));
+  const fields = types.map(type => ({ id: `custom-${type}`, name: type, type, options: ['select', 'multiselect'].includes(type) ? ['One', 'Two'] : [] }));
   data.settings.taskFields = fields; data.settings.issueFields = structuredClone(fields);
   data.settings.tags = [{ id: 'tag-a', name: 'Team', color: '#123456' }];
-  const cells = ['custom text', '<b>Literal</b>', '0', '2028-02-29', 'due', 'Uno|Due', 'https://example.com', '1,25', 'no'];
+  const cells = ['custom text', '<b>Literal</b>', '0', '2028-02-29', 'two', 'One|Two', 'https://example.com', '1,25', 'no'];
   for (const kind of ['tasks', 'issues']) {
     const base = kind === 'tasks' ? ['code', 'tagIds'] : ['code', 'incident'];
     const prepared = C.prepareImport(data, kind, [['A', kind === 'tasks' ? 'Team' : 'INC-1', ...cells]], [...base, ...fields.map(field => field.id)]);
     assert.equal(prepared.errorCount, 0);
     assert.equal(prepared.records[0].customFields['custom-number'], 0);
     assert.equal(prepared.records[0].customFields['custom-boolean'], false);
-    assert.equal(prepared.records[0].customFields['custom-select'], 'Due');
-    assert.deepEqual(prepared.records[0].customFields['custom-multiselect'], ['Uno', 'Due']);
+    assert.equal(prepared.records[0].customFields['custom-select'], 'Two');
+    assert.deepEqual(prepared.records[0].customFields['custom-multiselect'], ['One', 'Two']);
     if (kind === 'tasks') assert.deepEqual(prepared.records[0].tagIds, ['tag-a']);
     validateData({ ...data, [kind]: [...data[kind], ...prepared.records] });
   }

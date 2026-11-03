@@ -53,7 +53,7 @@ async function languageOperation(operation = 'info') {
     }
     return languages.info();
   }
-  if (operation !== 'info') throw new Error(message('Operazione non supportata.'));
+  if (operation !== 'info') throw new Error(message("Unsupported operation."));
   return languages.info();
 }
 async function openDataFolder() {
@@ -70,7 +70,7 @@ function handle(channel, handler) {
   ipcMain.handle(channel, async (_, ...args) => {
     try { return await handler(...args); }
     catch (error) {
-      if (!['conflict', 'missing-organization'].includes(error.code)) console.error(`Operazione ${channel} non riuscita:`, error);
+      if (!['conflict', 'missing-organization'].includes(error.code)) console.error(`Operation ${channel} failed:`, error);
       return { __error: true, message: error.message, code: error.code || '' };
     }
   });
@@ -84,12 +84,12 @@ ipcMain.on('window-chrome', (event, request) => {
   try {
     win.setTitleBarOverlay(overlay);
     windowChrome = overlay;
-  } catch (error) { console.error('Barra del titolo non aggiornata:', error); }
+  } catch (error) { console.error('Title bar update failed:', error); }
 });
 handle('save', (data, organizationId, organizationName, revision) => store.save(data, organizationId, organizationName, revision));
 handle('organization', (operation, payload, organizationId) => store.organization(operation, payload, organizationId));
 handle('export', async () => {
-  const result = await dialog.showSaveDialog(win, { defaultPath: path.join(root, `${APP_NAME}-backup.json`), filters: [{ name: message('Archivio JSON'), extensions: ['json'] }] });
+  const result = await dialog.showSaveDialog(win, { defaultPath: path.join(root, `${APP_NAME}-backup.json`), filters: [{ name: message("JSON archive"), extensions: ['json'] }] });
   if (result.canceled) return false;
   await store.exportTo(result.filePath);
   return true;
@@ -99,7 +99,7 @@ handle('export-organization', async (organizationId, kind) => {
   let filePath = path.join(root, 'exports', fileName);
   if (smoke) await fs.mkdir(path.dirname(filePath), { recursive: true });
   else {
-    const result = await dialog.showSaveDialog(win, { defaultPath: path.join(root, fileName), filters: [{ name: message('Esportazione OrbitKanban', organizationId), extensions: ['json'] }] });
+    const result = await dialog.showSaveDialog(win, { defaultPath: path.join(root, fileName), filters: [{ name: message("OrbitKanban export", organizationId), extensions: ['json'] }] });
     if (result.canceled || !result.filePath) return false;
     filePath = result.filePath;
   }
@@ -110,11 +110,11 @@ const SPREADSHEET_LIMIT = 256 * 1024 * 1024;
 handle('export-spreadsheet', async (fileName, bytes) => {
   const name = path.basename(String(fileName ?? '')).replace(/[<>:"/\\|?*\u0000-\u001f]/g, '-');
   const valid = /^[^.].*\.xlsx$/i.test(name) && name.length <= 200 && bytes instanceof Uint8Array && bytes.length > 22 && bytes.length <= SPREADSHEET_LIMIT && bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 3 && bytes[3] === 4;
-  if (!valid) throw new Error(message('File Excel non valido.'));
+  if (!valid) throw new Error(message("Invalid Excel file."));
   let filePath = path.join(root, 'exports', name);
   if (smoke) await fs.mkdir(path.dirname(filePath), { recursive: true });
   else {
-    const result = await dialog.showSaveDialog(win, { defaultPath: path.join(root, name), filters: [{ name: message('Cartella di lavoro Excel'), extensions: ['xlsx'] }] });
+    const result = await dialog.showSaveDialog(win, { defaultPath: path.join(root, name), filters: [{ name: message("Excel workbook"), extensions: ['xlsx'] }] });
     if (result.canceled || !result.filePath) return false;
     filePath = result.filePath;
   }
@@ -122,30 +122,30 @@ handle('export-spreadsheet', async (fileName, bytes) => {
   return { fileName: path.basename(filePath) };
 });
 handle('import', async () => {
-  const result = await dialog.showOpenDialog(win, { properties: ['openFile'], filters: [{ name: message('Archivio JSON'), extensions: ['json'] }] });
+  const result = await dialog.showOpenDialog(win, { properties: ['openFile'], filters: [{ name: message("JSON archive"), extensions: ['json'] }] });
   if (result.canceled) return null;
   const archive = store.parseArchive(await fs.readFile(result.filePaths[0], 'utf8'));
-  const answer = await dialog.showMessageBox(win, { type: 'warning', buttons: [message('Annulla'), message('Sostituisci archivio')], defaultId: 0, cancelId: 0, message: message('Sostituire tutte le organizzazioni, i dati e le impostazioni?'), detail: message('Il precedente archivio sarà conservato in workspace.json.bak.') });
+  const answer = await dialog.showMessageBox(win, { type: 'warning', buttons: [message("Cancel"), message("Replace archive")], defaultId: 0, cancelId: 0, message: message("Replace all organizations, data and settings?"), detail: message("The previous archive will be kept in workspace.json.bak.") });
   if (answer.response !== 1) return null;
   return store.replace(archive);
 });
 handle('backups', (operation = 'list', fileName) => {
   if (operation === 'list') return store.listBackups();
   if (operation === 'restore') return store.restoreBackup(fileName);
-  throw new Error(message('Operazione non supportata.'));
+  throw new Error(message("Unsupported operation."));
 });
 handle('open-link', async url => {
-  if (!isWebUrl(url)) throw new Error('URL non valido.');
+  if (!isWebUrl(url)) throw new Error("Invalid URL.");
   if (!smoke) await shell.openExternal(url);
   return url;
 });
 handle('open-data-folder', openDataFolder);
 handle('languages', languageOperation);
 handle('browser-access', async (operation, organizationId) => {
-  if (!webServer.port) throw new Error(message('L’accesso da browser non è disponibile.'));
+  if (!webServer.port) throw new Error(message("Browser access is not available."));
   if (operation === 'open') { if (!smoke) await shell.openExternal(webServer.authUrl(organizationId)); }
   else if (operation === 'copy') { if (!smoke) clipboard.writeText(webServer.authUrl(organizationId)); }
-  else if (operation !== 'info') throw new Error(message('Operazione non supportata.'));
+  else if (operation !== 'info') throw new Error(message("Unsupported operation."));
   return { url: webServer.url };
 });
 store.on('change', info => { if (win && !win.isDestroyed()) win.webContents.send('workspace-changed', info); });
@@ -160,16 +160,16 @@ else {
   });
   app.whenReady().then(async () => {
     const icon = nativeImage.createFromPath(path.join(__dirname, 'app-logo.png'));
-    if (icon.isEmpty()) throw new Error('Icona applicativa non trovata o non valida. In sviluppo esegui npm run icon.');
+    if (icon.isEmpty()) throw new Error('The application icon is missing or invalid. Run npm run icon during development.');
     if (process.platform === 'win32') app.setAppUserModelId('local.orbita.workspace');
     splash = createSplash({ BrowserWindow, screen, appRoot: __dirname, title: APP_NAME, icon, version: app.getVersion(), show: !smoke });
     try { await languages.reload(); }
-    catch (error) { console.error('Lingue aggiuntive non caricate:', error); }
+    catch (error) { console.error('Additional languages could not be loaded:', error); }
     let settings;
     try { settings = (await store.load()).data.settings; }
-    catch (error) { console.error('Archivio non aperto in anticipo:', error); }
+    catch (error) { console.error('Workspace archive could not be preloaded:', error); }
     try { await webServer.start(); }
-    catch (error) { console.error('Accesso da browser non avviato:', error); }
+    catch (error) { console.error('Browser access did not start:', error); }
     windowChrome = customTitleBar ? titleBarOverlay({ ...themeColors(settings), height: TITLE_BAR_HEIGHT.initial }) : null;
     win = new BrowserWindow({
       width: 1500, height: 960, minWidth: 1050, minHeight: 700, show: false,
@@ -192,15 +192,15 @@ else {
     await win.loadFile('index.html');
     if (smoke) {
       try {
-        if (await appReady !== 'renderer') throw new Error('L’interfaccia non ha segnalato di essere pronta.');
+        if (await appReady !== 'renderer') throw new Error('The interface did not signal that it was ready.');
         let screenState;
         for (let attempt = 0; attempt < 30; attempt++) {
           screenState = await splash.inspect();
           if (screenState.logo && screenState.version.endsWith(app.getVersion())) break;
           await new Promise(resolve => setTimeout(resolve, 100));
         }
-        if (screenState.lang !== 'en' || screenState.status !== SPLASH_STATUS || screenState.version !== `Portable · v${app.getVersion()}` || screenState.busy !== 'true' || !screenState.logo) throw new Error(`Schermata di caricamento non valida: ${JSON.stringify(screenState)}`);
-        if (!screenState.indeterminate || !screenState.animated) throw new Error(`Barra di caricamento non animata: ${JSON.stringify(screenState)}`);
+        if (screenState.lang !== 'en' || screenState.status !== SPLASH_STATUS || screenState.version !== `Portable · v${app.getVersion()}` || screenState.busy !== 'true' || !screenState.logo) throw new Error(`Invalid splash screen: ${JSON.stringify(screenState)}`);
+        if (!screenState.indeterminate || !screenState.animated) throw new Error(`Loading bar is not animated: ${JSON.stringify(screenState)}`);
         const logoData = await win.webContents.executeJavaScript(`(async () => {
           const image = new Image();
           image.src = 'app-logo.svg';
@@ -211,18 +211,18 @@ else {
           return canvas.toDataURL('image/png');
         })()`);
         const iconPixels = icon.toBitmap(), logoPixels = nativeImage.createFromDataURL(logoData).toBitmap();
-        if (!iconPixels.equals(logoPixels)) throw new Error('Il logo applicativo e l’icona della finestra non coincidono.');
+        if (!iconPixels.equals(logoPixels)) throw new Error('The application logo and window icon do not match.');
         splash.close();
-        if (!splash.closed || !win || win.isDestroyed()) throw new Error('Schermata di caricamento non chiusa.');
+        if (!splash.closed || !win || win.isDestroyed()) throw new Error('The splash screen did not close.');
         const splashChecks = [
-          'Logo applicativo e icona della finestra identici, generati dalla stessa immagine',
-          'Schermata di caricamento in inglese con logo e versione',
-          'Schermata di caricamento con barra infinita animata',
-          'Schermata di caricamento chiusa quando l’interfaccia è pronta'
+          'Application logo and window icon use the same source image',
+          'Splash screen shows English, logo, and version',
+          'Splash screen displays an animated indeterminate loading bar',
+          'Splash screen closes when the interface is ready'
         ];
         await new Promise(resolve => setTimeout(resolve, 1200));
         const result = await win.webContents.executeJavaScript('window.runSmokeTests()');
-        if (!result.ok) throw new Error('Smoke test UI fallito');
+        if (!result.ok) throw new Error('UI smoke test failed.');
         result.checks.unshift(...splashChecks);
         if (customTitleBar) {
           await new Promise(resolve => setTimeout(resolve, 100));
@@ -231,30 +231,31 @@ else {
             return { background: style.getPropertyValue('--background'), text: style.getPropertyValue('--text'), height: document.querySelector('.topbar').clientHeight, dimmed: document.querySelector('#modal').open };
           })()`);
           const expected = titleBarOverlay(chrome, win.webContents.getZoomFactor());
-          if (!expected || !windowChrome || ['color', 'symbolColor', 'height'].some(key => windowChrome[key] !== expected[key]) || win.isMenuBarVisible()) throw new Error(`Barra del titolo non allineata al tema: ${JSON.stringify({ windowChrome, expected })}`);
-          result.checks.push('Pulsanti nativi della finestra aggiornati con tema e altezza della barra superiore');
+          if (!expected || !windowChrome || ['color', 'symbolColor', 'height'].some(key => windowChrome[key] !== expected[key]) || win.isMenuBarVisible()) throw new Error(`The title bar does not match the theme: ${JSON.stringify({ windowChrome, expected })}`);
+          result.checks.push('Native window buttons match the theme and top-bar height');
         }
         result.checks.push(...await require('./smoke-web').run({ server: webServer, win }));
+        // Exported file names carry a part localized by the language of the organization, so both the Italian and the English spellings are valid.
         const exportsFolder = path.join(root, 'exports'), exportNames = await fs.readdir(exportsFolder);
         const exportedFiles = await Promise.all(exportNames.filter(name => name.endsWith('.json')).map(async name => ({ name, file: parseOrganizationFile(await fs.readFile(path.join(exportsFolder, name), 'utf8')) })));
         const fullExport = exportedFiles.find(entry => entry.file.kind === 'organization');
-        if (!ORGANIZATION_FILE_KINDS.every(kind => exportedFiles.some(entry => entry.file.kind === kind)) || !exportedFiles.every(entry => /^OrbitKanban-[a-z0-9-]+-(temi|configurazione|dati|organizzazione|themes|settings|data|organization)-\d{4}-\d{2}-\d{2}\.json$/.test(entry.name)) || !fullExport.file.data.tasks.some(task => task.code === 'SMOKE-1') || !fullExport.file.settings.logo.startsWith('data:image/png;base64,')) throw new Error('Esportazioni per organizzazione non valide.');
-        result.checks.push('File esportati per organizzazione scritti su disco e reimportabili');
+        if (!ORGANIZATION_FILE_KINDS.every(kind => exportedFiles.some(entry => entry.file.kind === kind)) || !exportedFiles.every(entry => /^OrbitKanban-[a-z0-9-]+-(temi|configurazione|dati|organizzazione|themes|settings|data|organization)-\d{4}-\d{2}-\d{2}\.json$/.test(entry.name)) || !fullExport.file.data.tasks.some(task => task.code === 'SMOKE-1') || !fullExport.file.settings.logo.startsWith('data:image/png;base64,')) throw new Error('Invalid organization exports.');
+        result.checks.push('Organization exports are saved and can be imported again');
         const spreadsheets = exportNames.filter(name => name.endsWith('.xlsx'));
         const workbook = spreadsheets.length ? await fs.readFile(path.join(exportsFolder, spreadsheets[0])) : Buffer.alloc(0);
-        if (spreadsheets.length !== 1 || !/^OrbitKanban-[a-z0-9-]+-(situazione|situation)-\d{4}-\d{2}-\d{2}\.xlsx$/.test(spreadsheets[0]) || workbook.readUInt32LE(0) !== 0x04034b50 || !workbook.includes('xl/workbook.xml') || workbook.readUInt32LE(workbook.length - 22) !== 0x06054b50) throw new Error(`Esportazione Excel non valida: ${spreadsheets.join(', ')}`);
-        result.checks.push('Esportazione Excel scritta su disco come cartella di lavoro .xlsx');
+        if (spreadsheets.length !== 1 || !/^OrbitKanban-[a-z0-9-]+-(situazione|situation)-\d{4}-\d{2}-\d{2}\.xlsx$/.test(spreadsheets[0]) || workbook.readUInt32LE(0) !== 0x04034b50 || !workbook.includes('xl/workbook.xml') || workbook.readUInt32LE(workbook.length - 22) !== 0x06054b50) throw new Error(`Invalid Excel export: ${spreadsheets.join(', ')}`);
+        result.checks.push('Excel export is saved as a valid .xlsx workbook');
         console.log(JSON.stringify(result, null, 2));
         await store.idle();
         const stored = validateArchive(JSON.parse(await fs.readFile(store.dataFile, 'utf8')));
-        if (!stored.organizations.some(o => o.data.tasks.some(t => t.code === 'SMOKE-1'))) throw new Error('Attività di prova non persistita.');
+        if (!stored.organizations.some(o => o.data.tasks.some(t => t.code === 'SMOKE-1'))) throw new Error('Smoke-test task was not persisted.');
         validateArchive(JSON.parse(await fs.readFile(store.dataFile + '.bak', 'utf8')));
         await fs.writeFile(path.join(root, 'smoke-result.json'), JSON.stringify(result));
         await webServer.close();
         app.exit(0);
       } catch (error) { console.error(error); app.exit(1); }
     }
-  }).catch(error => { splash?.close(); dialog.showErrorBox('Avvio non riuscito', error.message); app.exit(1); });
+  }).catch(error => { splash?.close(); dialog.showErrorBox('Startup failed', error.message); app.exit(1); });
 }
 let quitting = false;
 app.on('before-quit', event => {

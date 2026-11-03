@@ -141,7 +141,7 @@ function cellXml(raw, row, col, context, links) {
 }
 function sheetXml(sheet, index, name, context) {
   const rows = Array.isArray(sheet.rows) ? sheet.rows : [];
-  if (rows.length > MAX_ROWS) throw new Error('Il foglio Excel supera il numero massimo di righe.');
+  if (rows.length > MAX_ROWS) throw new Error("The Excel sheet exceeds the maximum number of rows.");
   const links = [], body = [];
   let width = 0;
   rows.forEach((row, r) => {
@@ -242,7 +242,7 @@ async function zip(entries, date) {
 
 async function buildWorkbook(book) {
   const sheets = Array.isArray(book?.sheets) ? book.sheets : [];
-  if (!sheets.length) throw new Error('Nessun foglio da esportare.');
+  if (!sheets.length) throw new Error("No sheet to export.");
   const created = book.created instanceof Date && !Number.isNaN(book.created.getTime()) ? book.created : new Date();
   const names = sheetNames(sheets.map(sheet => sheet.name)), strings = new Map();
   let stringCount = 0;

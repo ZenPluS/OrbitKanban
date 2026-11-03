@@ -65,9 +65,9 @@ test('GitHub API errors are explicit, tokens stay on trusted hosts and redirects
     return new Response('{"message":"secret-token"}', { status: 403 });
   });
   await assert.rejects(() => request('/repos/owner/repo'), error => /HTTP 403/.test(error.message) && !error.message.includes('secret-token'));
-  await assert.rejects(() => request('https://example.com/steal'), /non consentita/);
+  await assert.rejects(() => request('https://example.com/steal'), /not allowed/i);
   assert.equal(calls, 1);
-  await assert.rejects(() => checkRepository('owner/repo', async () => ({ permissions: { push: false } })), /accesso in scrittura/);
+  await assert.rejects(() => checkRepository('owner/repo', async () => ({ permissions: { push: false } })), /write access/i);
 });
 test('new release stays a draft until the correct executable is uploaded and verified', async t => {
   const f = await fixture(t);
@@ -95,7 +95,7 @@ test('repeating publication reuses matching assets and preserves manual release 
 test('failed or unverified uploads preserve the existing downloadable executable', async t => {
   for (const failure of [{ corrupt: true }, { failUpload: true }]) {
     const f = await fixture(t, { existing: true, ...failure });
-    await assert.rejects(() => publishRelease(f.options, f.request), /Checksum|Upload failed/);
+    await assert.rejects(() => publishRelease(f.options, f.request), /checksum|upload failed/i);
     assert.equal(f.state.assets.find(asset => asset.id === 10).name, 'OrbitKanban-Portable.exe');
     assert.ok(!f.state.calls.some(call => call.method === 'DELETE' && call.pathname.endsWith('/10')));
     assert.equal(f.state.assets.length, 1);
@@ -113,11 +113,11 @@ test('a failed new release can be retried without creating duplicate releases', 
 });
 test('a tag for different sources or an immutable release cannot be overwritten', async t => {
   const f = await fixture(t, { existing: true, wrongTree: true });
-  await assert.rejects(() => publishRelease(f.options, f.request), /sorgenti testati/);
+  await assert.rejects(() => publishRelease(f.options, f.request), /tested sources/i);
   assert.ok(f.state.calls.every(call => call.method === 'GET'));
   f.state.wrongTree = false;
   f.state.release.immutable = true;
-  await assert.rejects(() => publishRelease(f.options, f.request), /immutabile/);
+  await assert.rejects(() => publishRelease(f.options, f.request), /immutable/i);
   assert.ok(f.state.calls.every(call => call.method === 'GET'));
 });
 test('release notes replace only their own generated block', () => {

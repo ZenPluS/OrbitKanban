@@ -1,35 +1,35 @@
 ﻿<#
 .SYNOPSIS
-    Costruisce e testa OrbitKanban e, solo se tutto passa, fa commit, push e release su GitHub.
+    Builds and tests OrbitKanban and, only if everything passes, commits, pushes and publishes a GitHub release.
 
 .DESCRIPTION
-    Sequenza (qualsiasi errore di build o test interrompe lo script prima del commit):
-      1. Controlli Git: ramo attivo, remoto raggiungibile, nessuna operazione in corso, ramo non indietro rispetto
-         al remoto, nessun file da non versionare tra le modifiche (dati, build, dipendenze, eseguibili, file oltre 5 MB).
-      2. npm run check e npm test.
-      3. Smoke test dai sorgenti (npm run smoke).
-      4. Build portable in dist-staging\<versione>, senza toccare l'eseguibile eventualmente aperto in dist,
-         con verifica di versione e icona (identica a build\icon.ico, generata da app-logo.svg) di launcher e app.
-      5. Smoke test dell'app impacchettata (win-unpacked) e del launcher portable, con file temporanei isolati
-         per non interferire con eventuali istanze aperte.
-      6. Copia dell'eseguibile testato in dist\OrbitKanban-Portable.exe, oppure in
-         dist\OrbitKanban-Portable-<versione>.exe se quello è in esecuzione.
-      7. Controllo che i file non siano cambiati durante build e test, commit di tutte le modifiche (vuoto se non ce ne sono),
-         tag v<versione> se la versione è nuova, push atomico e verifica sul remoto.
-      8. Pubblicazione della release GitHub con l'eseguibile portable e verifica SHA-256 dell'asset.
-         Servono credenziali GitHub con accesso Contents in scrittura, da Git Credential Manager o GH_TOKEN/GITHUB_TOKEN.
+    Sequence (any build or test failure stops the script before the commit):
+      1. Git checks: active branch, reachable remote, no operation in progress, branch not behind the remote,
+         no file that must stay unversioned among the changes (data, builds, dependencies, executables, files over 5 MB).
+      2. npm run check and npm test.
+      3. Smoke test from the sources (npm run smoke).
+      4. Portable build in dist-staging\<version>, without touching an executable that may be open in dist,
+         verifying the version and the icon (identical to build\icon.ico, generated from app-logo.svg) of launcher and app.
+      5. Smoke test of the packaged app (win-unpacked) and of the portable launcher, with isolated temporary files
+         so that open instances are not disturbed.
+      6. Copy of the tested executable to dist\OrbitKanban-Portable.exe, or to
+         dist\OrbitKanban-Portable-<version>.exe if the former is running.
+      7. Check that files did not change during build and tests, commit of all changes (empty if there are none),
+         tag v<version> if the version is new, atomic push and verification on the remote.
+      8. GitHub release with the portable executable and SHA-256 verification of the asset.
+         Requires GitHub credentials with Contents write access, from Git Credential Manager or GH_TOKEN/GITHUB_TOKEN.
 
 .PARAMETER Message
-    Oggetto del commit. Predefinito: "OrbitKanban <versione>".
+    Commit subject. Default: "OrbitKanban <version>".
 .PARAMETER Remote
-    Remoto Git su cui pubblicare. Predefinito: origin.
+    Git remote to publish to. Default: origin.
 .PARAMETER NoDeliver
-    Non copia l'eseguibile testato in dist.
+    Does not copy the tested executable to dist.
 .PARAMETER NoCoAuthor
-    Non aggiunge il trailer Co-authored-by di Copilot al messaggio di commit.
+    Does not add the Copilot Co-authored-by trailer to the commit message.
 
 .EXAMPLE
-    pwsh -NoProfile -ExecutionPolicy Bypass -File .\build-and-push.ps1 -Message "Filtro per release date"
+    pwsh -NoProfile -ExecutionPolicy Bypass -File .\build-and-push.ps1 -Message "Release date filter"
 #>
 #Requires -Version 5.1
 
@@ -74,7 +74,7 @@ function Invoke-Native {
     } finally {
         $ErrorActionPreference = $previous
     }
-    if ($code -ne 0 -and -not $AllowFailure) { throw ('Comando non riuscito (codice {0}): {1} {2}' -f $code, $FilePath, ($ArgumentList -join ' ')) }
+    if ($code -ne 0 -and -not $AllowFailure) { throw ('Command failed (exit code {0}): {1} {2}' -f $code, $FilePath, ($ArgumentList -join ' ')) }
     if ($Capture -and $code -eq 0 -and $null -ne $output) { return $output }
 }
 
@@ -116,11 +116,11 @@ function Get-ChangedEntries([string]$Tree) {
 function Assert-PublishableChanges($Entries) {
     $problems = foreach ($entry in $Entries) {
         if ($entry.Status -eq 'D') { continue }
-        if ($entry.Path -match $forbiddenPath) { '{0}: dati, build, dipendenze o eseguibili non vanno versionati' -f $entry.Path; continue }
+        if ($entry.Path -match $forbiddenPath) { '{0}: data, builds, dependencies and executables must not be versioned' -f $entry.Path; continue }
         $size = [long](Invoke-Git 'cat-file', '-s', $entry.Blob)
-        if ($size -gt $maxFileBytes) { '{0}: {1:N1} MB, oltre il limite di {2} MB' -f $entry.Path, ($size / 1MB), ($maxFileBytes / 1MB) }
+        if ($size -gt $maxFileBytes) { '{0}: {1:N1} MB, over the {2} MB limit' -f $entry.Path, ($size / 1MB), ($maxFileBytes / 1MB) }
     }
-    if ($problems) { throw ("Modifiche non pubblicabili:`n  {0}`nRimuovile o aggiungile a .gitignore, poi rilancia lo script." -f ($problems -join "`n  ")) }
+    if ($problems) { throw ("Changes that cannot be published:`n  {0}`nRemove them or add them to .gitignore, then run the script again." -f ($problems -join "`n  ")) }
 }
 
 function Get-RemoteTagCommit([string]$Tag) {
@@ -135,9 +135,9 @@ function Get-RemoteTagCommit([string]$Tag) {
 }
 
 function Assert-ExecutableVersion([string]$Path, [string]$Version) {
-    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { throw "La build non ha prodotto $Path." }
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { throw "The build did not produce $Path." }
     $actual = (Get-Item -LiteralPath $Path).VersionInfo.ProductVersion
-    if ($actual -notmatch ('^{0}(\.0)?$' -f [regex]::Escape($Version))) { throw ("Versione di {0}: '{1}', attesa {2}." -f $Path, $actual, $Version) }
+    if ($actual -notmatch ('^{0}(\.0)?$' -f [regex]::Escape($Version))) { throw ("Version of {0}: '{1}', expected {2}." -f $Path, $actual, $Version) }
 }
 
 function Move-ReplacingFile([string]$Source, [string]$Destination) {
@@ -156,22 +156,22 @@ function Copy-TestedExecutable([string]$Source, [string]$Version) {
     try {
         $running = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Path -and [string]::Equals($_.Path, $target, [StringComparison]::OrdinalIgnoreCase) })
         if ($running.Count -gt 0) {
-            Write-Warning ('{0} è in esecuzione (PID {1}) e non viene sostituito.' -f $target, (($running | ForEach-Object { $_.Id }) -join ', '))
+            Write-Warning ('{0} is running (PID {1}) and will not be replaced.' -f $target, (($running | ForEach-Object { $_.Id }) -join ', '))
         } else {
             try { Move-ReplacingFile $temp $target; $destination = $target }
-            catch { Write-Warning ('Impossibile sostituire {0}: {1}' -f $target, $_.Exception.Message) }
+            catch { Write-Warning ('Cannot replace {0}: {1}' -f $target, $_.Exception.Message) }
         }
         if (-not $destination) {
             Move-ReplacingFile $temp $fallback
             $destination = $fallback
-            Write-Warning ('Eseguibile salvato come {0}: chiudi l''app e rinominalo in OrbitKanban-Portable.exe, oppure rilancia lo script ad app chiusa.' -f $fallback)
+            Write-Warning ('Executable saved as {0}: close the app and rename it to OrbitKanban-Portable.exe, or run the script again with the app closed.' -f $fallback)
         }
     } finally {
         if (Test-Path -LiteralPath $temp) { Remove-Item -LiteralPath $temp -Force }
     }
     $hash = (Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash
-    if ($hash -ne (Get-FileHash -LiteralPath $Source -Algorithm SHA256).Hash) { throw "Copia non integra: $destination." }
-    Write-Host "Eseguibile consegnato: $destination"
+    if ($hash -ne (Get-FileHash -LiteralPath $Source -Algorithm SHA256).Hash) { throw "The copy does not match the source: $destination." }
+    Write-Host "Executable delivered: $destination"
     return [pscustomobject]@{ Path = $destination; Sha256 = $hash }
 }
 
@@ -181,60 +181,60 @@ $tagCreated = $false
 $pushed = $false
 Push-Location -LiteralPath $root
 try {
-    Write-Step 'Controlli preliminari'
+    Write-Step 'Preliminary checks'
     foreach ($tool in 'git', 'node', 'npm.cmd') {
-        if (-not (Get-Command $tool -ErrorAction SilentlyContinue)) { throw "$tool non trovato nel PATH." }
+        if (-not (Get-Command $tool -ErrorAction SilentlyContinue)) { throw "$tool was not found in PATH." }
     }
     $top = Invoke-Git 'rev-parse', '--show-toplevel'
-    if ([IO.Path]::GetFullPath($top).TrimEnd('\') -ne $root) { throw "Lo script deve stare nella radice del repository ($top)." }
+    if ([IO.Path]::GetFullPath($top).TrimEnd('\') -ne $root) { throw "The script must live in the repository root ($top)." }
     $branch = Invoke-Git 'symbolic-ref', '--short', '-q', 'HEAD' -AllowFailure
-    if (-not $branch) { throw 'HEAD non è su un ramo (detached HEAD): passa a un ramo prima di pubblicare.' }
+    if (-not $branch) { throw 'HEAD is not on a branch (detached HEAD): switch to a branch before publishing.' }
     $remoteUrl = Invoke-Git 'remote', 'get-url', $Remote
     $releaseHelper = Join-Path $root 'github-release.js'
     Invoke-Native 'node' @($releaseHelper, '--remote', $remoteUrl, '--check')
     foreach ($marker in 'MERGE_HEAD', 'CHERRY_PICK_HEAD', 'REVERT_HEAD', 'rebase-merge', 'rebase-apply') {
         if (Test-Path -LiteralPath ([IO.Path]::Combine($root, (Invoke-Git 'rev-parse', '--git-path', $marker)))) {
-            throw "Operazione Git in corso ($marker): completala o annullala prima di pubblicare."
+            throw "A Git operation is in progress ($marker): complete or abort it before publishing."
         }
     }
-    if (Invoke-Git 'diff', '--name-only', '--diff-filter=U') { throw 'Ci sono conflitti Git non risolti.' }
+    if (Invoke-Git 'diff', '--name-only', '--diff-filter=U') { throw 'There are unresolved Git conflicts.' }
 
-    Write-Host "Aggiorno i riferimenti da $Remote ($remoteUrl)..."
+    Write-Host "Updating references from $Remote ($remoteUrl)..."
     $null = Invoke-Git 'fetch', '--quiet', '--no-tags', $Remote
     $upstream = "refs/remotes/$Remote/$branch"
     $hasUpstream = [bool](Invoke-Git 'rev-parse', '-q', '--verify', $upstream -AllowFailure)
     if ($hasUpstream) {
         $behind = [int](Invoke-Git 'rev-list', '--count', "HEAD..$upstream")
-        if ($behind -gt 0) { throw ('Il ramo {0} è indietro di {1} commit rispetto a {2}/{0}: integra prima le modifiche remote (git pull --rebase).' -f $branch, $behind, $Remote) }
+        if ($behind -gt 0) { throw ('Branch {0} is {1} commit(s) behind {2}/{0}: integrate the remote changes first (git pull --rebase).' -f $branch, $behind, $Remote) }
     }
 
     $version = [string](Get-Content -LiteralPath (Join-Path $root 'package.json') -Raw | ConvertFrom-Json).version
-    if ($version -notmatch '^\d+\.\d+\.\d+$') { throw "Versione non valida in package.json: '$version'." }
+    if ($version -notmatch '^\d+\.\d+\.\d+$') { throw "Invalid version in package.json: '$version'." }
     $tag = "v$version"
     $testedTree = Get-WorktreeTree
     $changes = @(Get-ChangedEntries $testedTree)
     Assert-PublishableChanges $changes
     $localTag = Invoke-Git 'rev-parse', '-q', '--verify', "refs/tags/$tag^{commit}" -AllowFailure
     $remoteTag = Get-RemoteTagCommit $tag
-    if ($localTag -and $remoteTag -and $localTag -ne $remoteTag) { throw "Il tag locale $tag non corrisponde al remoto: risolvi il conflitto senza sovrascrivere il tag pubblicato." }
+    if ($localTag -and $remoteTag -and $localTag -ne $remoteTag) { throw "The local tag $tag does not match the remote: resolve the conflict without overwriting the published tag." }
     if ($remoteTag) {
         $null = Invoke-Git 'fetch', '--quiet', '--no-tags', $Remote, "refs/tags/$tag"
         $tagTree = Invoke-Git 'rev-parse', 'FETCH_HEAD^{tree}'
     } elseif ($localTag) {
         $tagTree = Invoke-Git 'rev-parse', "$localTag^{tree}"
     } else { $tagTree = $null }
-    if ($tagTree -and $tagTree -ne $testedTree) { throw "Il tag $tag contiene sorgenti diversi: incrementa la versione (npm version patch --no-git-tag-version --ignore-scripts) prima di pubblicare una nuova release." }
-    Write-Host ('Ramo {0}, versione {1}, {2} file modificati.' -f $branch, $version, $changes.Count)
+    if ($tagTree -and $tagTree -ne $testedTree) { throw "Tag $tag contains different sources: bump the version (npm version patch --no-git-tag-version --ignore-scripts) before publishing a new release." }
+    Write-Host ('Branch {0}, version {1}, {2} modified files.' -f $branch, $version, $changes.Count)
     foreach ($entry in $changes) { Write-Host ('  {0} {1}' -f $entry.Status, $entry.Path) }
 
-    Write-Step 'Controllo sintassi e test unitari'
+    Write-Step 'Syntax check and unit tests'
     Invoke-Native 'npm.cmd' @('run', 'check')
     Invoke-Native 'npm.cmd' @('test')
 
-    Write-Step 'Smoke test dai sorgenti'
+    Write-Step 'Smoke test from the sources'
     Invoke-Native 'npm.cmd' @('run', 'smoke')
 
-    Write-Step "Build portable $version"
+    Write-Step "Portable build $version"
     $outDir = Join-Path $root "dist-staging\$version"
     $launcher = Join-Path $outDir 'OrbitKanban-Portable.exe'
     $internal = Join-Path $outDir 'win-unpacked\OrbitKanban.exe'
@@ -243,28 +243,28 @@ try {
     Assert-ExecutableVersion $launcher $version
     Assert-ExecutableVersion $internal $version
     Invoke-Native 'node' @((Join-Path $root 'app-icon.js'), '--verify', (Join-Path $root 'build\icon.ico'), $launcher, $internal)
-    if ((Get-Item -LiteralPath $launcher).LastWriteTime -lt $buildStartedAt.AddSeconds(-5)) { throw "$launcher non è stato rigenerato dalla build." }
+    if ((Get-Item -LiteralPath $launcher).LastWriteTime -lt $buildStartedAt.AddSeconds(-5)) { throw "$launcher was not regenerated by the build." }
     $testedLauncherHash = (Get-FileHash -LiteralPath $launcher -Algorithm SHA256).Hash
 
-    Write-Step 'Smoke test dell''eseguibile impacchettato'
+    Write-Step 'Smoke test of the packaged executable'
     $smokeScript = Join-Path $root 'smoke.js'
     Invoke-Native 'node' @($smokeScript, $internal)
     Invoke-Native 'node' @($smokeScript, $launcher)
-    if ((Get-FileHash -LiteralPath $launcher -Algorithm SHA256).Hash -ne $testedLauncherHash) { throw 'L''eseguibile è cambiato durante i test: build non pubblicata.' }
+    if ((Get-FileHash -LiteralPath $launcher -Algorithm SHA256).Hash -ne $testedLauncherHash) { throw 'The executable changed during the tests: build not published.' }
 
     $delivered = $null
     if (-not $NoDeliver) {
-        Write-Step 'Consegna dell''eseguibile'
+        Write-Step 'Delivering the executable'
         $delivered = Copy-TestedExecutable -Source $launcher -Version $version
     }
 
     Write-Step 'Commit'
-    if ((Get-WorktreeTree) -ne $testedTree) { throw 'I file del progetto sono cambiati durante build e test: rilancia lo script per testare la versione attuale.' }
+    if ((Get-WorktreeTree) -ne $testedTree) { throw 'Project files changed during build and tests: run the script again to test the current version.' }
     if ($testedTree -eq (Get-HeadTree)) {
-        Write-Host 'Nessuna modifica ai sorgenti: creo un commit vuoto per registrare la build verificata.'
+        Write-Host 'No source changes: creating an empty commit to record the verified build.'
     }
     $null = Invoke-Git 'add', '-A'
-    if ((Invoke-Git 'write-tree') -ne $testedTree) { throw 'L''indice Git non corrisponde ai file testati.' }
+    if ((Invoke-Git 'write-tree') -ne $testedTree) { throw 'The Git index does not match the tested files.' }
     $subject = if ($Message -and $Message.Trim()) { $Message.Trim() } else { "OrbitKanban $version" }
     $lines = @($subject, '', "Build $version verified before commit:", '- npm run check and npm test', '- source smoke test', '- packaged app smoke test (win-unpacked)', '- portable launcher smoke test')
     if (-not $NoCoAuthor) { $lines += @('', $coAuthorTrailer) }
@@ -274,10 +274,10 @@ try {
     finally { Remove-Item -LiteralPath $messageFile -Force -ErrorAction SilentlyContinue }
     $commitCreated = $true
     $head = Invoke-Git 'rev-parse', 'HEAD'
-    if ((Invoke-Git 'rev-parse', 'HEAD^{tree}') -ne $testedTree) { throw 'Il commit non contiene esattamente i sorgenti testati: push annullato.' }
+    if ((Invoke-Git 'rev-parse', 'HEAD^{tree}') -ne $testedTree) { throw 'The commit does not contain exactly the tested sources: push cancelled.' }
     Write-Host ('Commit {0}: {1}' -f $head.Substring(0, 7), (Invoke-Git 'log', '-1', '--format=%s'))
 
-    Write-Step 'Tag e push'
+    Write-Step 'Tag and push'
     $localTag = Invoke-Git 'rev-parse', '-q', '--verify', "refs/tags/$tag^{commit}" -AllowFailure
     $remoteTag = Get-RemoteTagCommit $tag
     $pushTag = $false
@@ -288,7 +288,7 @@ try {
     } elseif ($localTag -and -not $remoteTag) {
         $pushTag = $true
     } else {
-        Write-Host "Il tag $tag esiste già sui sorgenti verificati e non viene spostato."
+        Write-Host "Tag $tag already exists on the verified sources and is not moved."
     }
     $expectedTag = if ($localTag) { $localTag } elseif ($remoteTag) { $remoteTag } else { $head }
     $refs = @($branch)
@@ -296,32 +296,32 @@ try {
     Invoke-Native 'git' (@('push', '--atomic', '--set-upstream', $Remote) + $refs)
     $pushed = $true
     $remoteHead = ([string](Invoke-Git 'ls-remote', $Remote, "refs/heads/$branch") -split "`t")[0]
-    if ($remoteHead -ne $head) { throw ('Verifica non riuscita: {0}/{1} punta a {2} invece di {3}.' -f $Remote, $branch, $remoteHead, $head) }
-    if ((Get-RemoteTagCommit $tag) -ne $expectedTag) { throw "Verifica non riuscita: il tag $tag non risulta pubblicato correttamente su $Remote." }
+    if ($remoteHead -ne $head) { throw ('Verification failed: {0}/{1} points to {2} instead of {3}.' -f $Remote, $branch, $remoteHead, $head) }
+    if ((Get-RemoteTagCommit $tag) -ne $expectedTag) { throw "Verification failed: tag $tag does not appear to be published correctly on $Remote." }
 
-    Write-Step 'Release GitHub'
-    if ((Get-FileHash -LiteralPath $launcher -Algorithm SHA256).Hash -ne $testedLauncherHash) { throw 'L''eseguibile è cambiato dopo i test: release annullata.' }
+    Write-Step 'GitHub release'
+    if ((Get-FileHash -LiteralPath $launcher -Algorithm SHA256).Hash -ne $testedLauncherHash) { throw 'The executable changed after the tests: release cancelled.' }
     $release = (Invoke-Native 'node' @($releaseHelper, '--remote', $remoteUrl, '--tag', $tag, '--commit', $head, '--tree', $testedTree, '--asset', $launcher) -Capture) | ConvertFrom-Json
-    if ($release.sha256 -ne $testedLauncherHash) { throw 'Il checksum della release non corrisponde all''eseguibile testato.' }
+    if ($release.sha256 -ne $testedLauncherHash) { throw 'The release checksum does not match the tested executable.' }
 
     Write-Host ''
-    Write-Host ('Completato in {0:hh\:mm\:ss}: build, test, commit, push e release riusciti.' -f ((Get-Date) - $startedAt)) -ForegroundColor Green
-    Write-Host ('  Versione:   {0}' -f $version)
-    Write-Host ('  Commit:     {0} su {1}/{2} ({3})' -f $head, $Remote, $branch, $remoteUrl)
-    Write-Host ('  Tag:        {0}' -f $(if ($pushTag) { "$tag pubblicato" } elseif ($remoteTag -eq $head) { "$tag già pubblicato" } else { "$tag non spostato (versione invariata)" }))
-    Write-Host '  Launcher:   testato'
+    Write-Host ('Completed in {0:hh\:mm\:ss}: build, tests, commit, push and release succeeded.' -f ((Get-Date) - $startedAt)) -ForegroundColor Green
+    Write-Host ('  Version:    {0}' -f $version)
+    Write-Host ('  Commit:     {0} on {1}/{2} ({3})' -f $head, $Remote, $branch, $remoteUrl)
+    Write-Host ('  Tag:        {0}' -f $(if ($pushTag) { "$tag published" } elseif ($remoteTag -eq $head) { "$tag already published" } else { "$tag not moved (unchanged version)" }))
+    Write-Host '  Launcher:   tested'
     Write-Host ('  Release:    {0}' -f $release.url)
-    if ($delivered) { Write-Host ('  Eseguibile: {0} (SHA-256 {1})' -f $delivered.Path, $delivered.Sha256) }
-    else { Write-Host ('  Eseguibile: {0} (non copiato in dist)' -f $launcher) }
+    if ($delivered) { Write-Host ('  Executable: {0} (SHA-256 {1})' -f $delivered.Path, $delivered.Sha256) }
+    else { Write-Host ('  Executable: {0} (not copied to dist)' -f $launcher) }
 } catch {
     Write-Host ''
-    Write-Host ('ERRORE: {0}' -f $_.Exception.Message) -ForegroundColor Red
+    Write-Host ('ERROR: {0}' -f $_.Exception.Message) -ForegroundColor Red
     if ($pushed) {
-        Write-Host 'Il push è stato eseguito, ma la pubblicazione non è completa. Risolvi l''errore e rilancia lo script per verificare il remoto e completare la release.' -ForegroundColor Yellow
+        Write-Host 'The push was done, but publishing is not complete. Fix the error and run the script again to verify the remote and complete the release.' -ForegroundColor Yellow
     } elseif ($commitCreated -or $tagCreated) {
-        Write-Host 'Commit e/o tag creati in locale ma non pubblicati: risolvi il problema e rilancia lo script per completare il push.' -ForegroundColor Yellow
+        Write-Host 'Commit and/or tag created locally but not published: fix the problem and run the script again to complete the push.' -ForegroundColor Yellow
     } else {
-        Write-Host 'Nessun commit né push eseguito.' -ForegroundColor Yellow
+        Write-Host 'No commit or push was made.' -ForegroundColor Yellow
     }
     exit 1
 } finally {

@@ -88,11 +88,11 @@ function createWorkspaceStore({ dataFolder, extras = () => ({}), seed = initialD
     try { original = JSON.parse(await fs.readFile(dataFile, 'utf8')); }
     catch (error) {
       if (error.code === 'ENOENT') { await write(migrateArchive(seed())); return; }
-      throw codedError('unreadable', `Archivio non leggibile: ${dataFile}\n${error.message}\nIl file non è stato sovrascritto. È disponibile anche workspace.json.bak.`);
+      throw codedError('unreadable', `Workspace archive is unreadable: ${dataFile}\n${error.message}\nThe file has not been overwritten. A backup is also available at workspace.json.bak.`);
     }
     let migrated;
     try { migrated = migrateArchive(original); }
-    catch (error) { throw codedError('unreadable', `Archivio non leggibile: ${dataFile}\n${error.message}\nIl file non è stato sovrascritto. È disponibile anche workspace.json.bak.`); }
+    catch (error) { throw codedError('unreadable', `Workspace archive is unreadable: ${dataFile}\n${error.message}\nThe file has not been overwritten. A backup is also available at workspace.json.bak.`); }
     if (JSON.stringify(original) !== JSON.stringify(migrated)) await write(migrated);
     else {
       current = migrated;
@@ -117,11 +117,11 @@ function createWorkspaceStore({ dataFolder, extras = () => ({}), seed = initialD
     save(data, organizationId, organizationName, revision) {
       return transact(async archive => {
         const organization = archive.organizations.find(o => o.id === organizationId);
-        if (!organization) throw codedError('missing-organization', message(organizationId, 'Questa organizzazione non esiste più.'));
-        if (revision !== revisionOf(organization)) throw codedError('conflict', message(organizationId, 'I dati sono stati modificati da un’altra finestra. Ricarica prima di salvare.'));
+        if (!organization) throw codedError('missing-organization', message(organizationId, "This organization no longer exists."));
+        if (revision !== revisionOf(organization)) throw codedError('conflict', message(organizationId, "The data was changed in another window. Reload before saving."));
         validateData(data);
         if (organizationName !== undefined) {
-          if (typeof organizationName !== 'string' || !organizationName.trim() || organizationName.trim().length > 100) throw new Error(message(organizationId, 'Nome organizzazione non valido.'));
+          if (typeof organizationName !== 'string' || !organizationName.trim() || organizationName.trim().length > 100) throw new Error(message(organizationId, "Invalid organization name."));
           organization.name = organizationName.trim();
         }
         organization.data = data;
@@ -132,14 +132,14 @@ function createWorkspaceStore({ dataFolder, extras = () => ({}), seed = initialD
     organization(operation, payload = {}, contextOrganizationId) {
       return transact(async archive => {
         const exists = id => archive.organizations.some(o => o.id === id);
-        const missing = () => codedError('missing-organization', message(contextOrganizationId, 'Organizzazione inesistente.'));
+        const missing = () => codedError('missing-organization', message(contextOrganizationId, "Organization not found."));
         let target = contextOrganizationId;
         if (operation === 'create') {
           const organization = createOrganization(payload.name, payload.language, payload.logo, payload.palette, payload.demo === true);
           archive.organizations.push(organization);
           archive.activeOrganizationId = target = organization.id;
         } else if (operation === 'import') {
-          if (typeof payload.name !== 'string' || !payload.name.trim() || payload.name.trim().length > 100) throw new Error(message(contextOrganizationId, 'Nome organizzazione non valido.'));
+          if (typeof payload.name !== 'string' || !payload.name.trim() || payload.name.trim().length > 100) throw new Error(message(contextOrganizationId, "Invalid organization name."));
           const organization = { id: crypto.randomUUID(), name: payload.name.trim(), data: validateData(structuredClone(payload.data)) };
           archive.organizations.push(organization);
           archive.activeOrganizationId = target = organization.id;
@@ -149,15 +149,15 @@ function createWorkspaceStore({ dataFolder, extras = () => ({}), seed = initialD
         } else if (operation === 'rename') {
           const organization = archive.organizations.find(o => o.id === payload.id);
           if (!organization) throw missing();
-          if (typeof payload.name !== 'string' || !payload.name.trim() || payload.name.trim().length > 100) throw new Error(message(contextOrganizationId, 'Nome organizzazione non valido.'));
+          if (typeof payload.name !== 'string' || !payload.name.trim() || payload.name.trim().length > 100) throw new Error(message(contextOrganizationId, "Invalid organization name."));
           organization.name = payload.name.trim();
         } else if (operation === 'delete') {
-          if (archive.organizations.length <= 1) throw new Error(message(contextOrganizationId, 'Deve restare almeno un’organizzazione.'));
+          if (archive.organizations.length <= 1) throw new Error(message(contextOrganizationId, "At least one organization must remain."));
           if (!exists(payload.id)) throw missing();
           archive.organizations = archive.organizations.filter(o => o.id !== payload.id);
           if (archive.activeOrganizationId === payload.id) archive.activeOrganizationId = archive.organizations[0].id;
           if (target === payload.id) target = archive.activeOrganizationId;
-        } else throw new Error(message(contextOrganizationId, 'Operazione non supportata.'));
+        } else throw new Error(message(contextOrganizationId, "Unsupported operation."));
         await write(archive);
         return exists(target) ? target : archive.activeOrganizationId;
       });
@@ -181,12 +181,12 @@ function createWorkspaceStore({ dataFolder, extras = () => ({}), seed = initialD
     }),
     restoreBackup(fileName) {
       return transact(async () => {
-        if (typeof fileName !== 'string' || path.basename(fileName) !== fileName || !BACKUP_NAME.test(fileName)) throw new Error(message(undefined, 'Backup selezionato non valido.'));
+        if (typeof fileName !== 'string' || path.basename(fileName) !== fileName || !BACKUP_NAME.test(fileName)) throw new Error(message(undefined, "The selected backup is invalid."));
         let archive;
         try { archive = migrateArchive(JSON.parse(await fs.readFile(path.join(backupsFolder, fileName), 'utf8'))); }
         catch (error) {
-          if (error.code === 'ENOENT') throw new Error(message(undefined, 'Il backup selezionato non esiste più.'));
-          throw codedError('unreadable', `${message(undefined, 'Backup non leggibile:')} ${fileName}\n${error.message}`);
+          if (error.code === 'ENOENT') throw new Error(message(undefined, "The selected backup no longer exists."));
+          throw codedError('unreadable', `${message(undefined, "Backup cannot be read:")} ${fileName}\n${error.message}`);
         }
         await write(archive);
         return archive.activeOrganizationId;
@@ -197,7 +197,7 @@ function createWorkspaceStore({ dataFolder, extras = () => ({}), seed = initialD
     exportOrganization: (organizationId, kind) => enqueue(async () => {
       await ensureLoaded();
       const organization = find(organizationId);
-      if (!organization) throw codedError('missing-organization', message(organizationId, 'Organizzazione inesistente.'));
+      if (!organization) throw codedError('missing-organization', message(organizationId, "Organization not found."));
       const file = organizationExport(organization, kind, { appVersion: String(extras().appVersion || '') });
       return { fileName: organizationFileName(organization.name, kind, organization.data.settings.language), text: JSON.stringify(file, null, 2) };
     }),

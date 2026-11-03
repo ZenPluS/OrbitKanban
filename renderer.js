@@ -1,5 +1,5 @@
 'use strict';
-const { APP_NAME, validateData, matchIssues, findDuplicates, sortTasks, dateColor, extractThemePalette, themeFromLogo, defaultThemes, normalizeUrl, isWebUrl, validPortalTemplate, portalUrl, parseOrganizationFile, applyOrganizationImport, importedOrganizationData, uniqueOrganizationName, FONT_SIZE_PARTS, FONT_SIZE_STEP, defaultFontSizes, clampFontSize, HIGHLIGHT_LIMIT, defaultTaskColumns, normalizeTaskColumns, TAG_LIMIT, TAG_NAME_MAX, today, nextReleaseDate, situationFileName } = window.OrbitaCore;
+const { APP_NAME, validateData, matchIssues, findDuplicates, sortTasks, dateColor, extractThemePalette, themeFromLogo, defaultThemes, normalizeUrl, isWebUrl, validPortalTemplate, hasPortalPlaceholder, portalUrl, parseOrganizationFile, applyOrganizationImport, importedOrganizationData, uniqueOrganizationName, FONT_SIZE_PARTS, FONT_SIZE_STEP, defaultFontSizes, clampFontSize, HIGHLIGHT_LIMIT, defaultTaskColumns, normalizeTaskColumns, TAG_LIMIT, TAG_NAME_MAX, today, nextReleaseDate, situationFileName } = window.OrbitaCore;
 const $ = selector => document.querySelector(selector);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const uid = () => crypto.randomUUID();
@@ -27,7 +27,7 @@ const browserMode = () => window.workspace?.mode === 'browser';
 const currentLanguage = () => data?.settings.language || 'it';
 const t = text => window.OrbitaI18n.translate(text, currentLanguage());
 const tr = t;
-const ui = (strings, ...values) => strings.reduce((html, fragment, i) => html + t(fragment) + (i < values.length ? values[i] : ''), '');
+const ui = (strings, ...values) => window.OrbitaI18n.translateTemplate(strings, values, currentLanguage());
 const locale = () => window.OrbitaI18n.locale(currentLanguage());
 const term = text => window.OrbitaI18n.term(text, currentLanguage());
 const plural = (count, key) => window.OrbitaI18n.plural(count, key, currentLanguage());
@@ -93,8 +93,8 @@ function updateHistoryButtons() {
   const canRedo = Boolean(redoHistory.get(activeOrganizationId)?.length) && !saving && !organizationBusy && !pendingSettings;
   undo.disabled = !canUndo;
   redo.disabled = !canRedo;
-  undo.title = t('Annulla (Ctrl+Z)');
-  redo.title = t('Ripristina (Ctrl+Y)');
+  undo.title = t("Undo (Ctrl+Z)");
+  redo.title = t("Redo (Ctrl+Y)");
   undo.setAttribute('aria-label', undo.title);
   redo.setAttribute('aria-label', redo.title);
 }
@@ -116,31 +116,31 @@ async function changeHistory(direction) {
   const expected = direction === 'undo' ? entry.after : entry.before;
   if (JSON.stringify(data) !== JSON.stringify(expected)) {
     clearHistory(activeOrganizationId);
-    notify('La cronologia non corrisponde più ai dati correnti; annulla e ripristina sono stati azzerati.', true);
+    notify("History no longer matches the current data; undo and redo have been cleared.", true);
     return;
   }
   const organizationId = activeOrganizationId;
   saving = true;
   updateHistoryButtons();
-  $('#save-status').textContent = t('Salvataggio…');
+  $('#save-status').textContent = t("Saving…");
   try {
     const snapshot = await workspaceApi.save(structuredClone(direction === 'undo' ? entry.before : entry.after), organizationId, undefined, revision);
     adoptSnapshot(snapshot);
     source.pop();
     targetStack.push(entry);
     if (targetStack.length > HISTORY_LIMIT) targetStack.splice(0, targetStack.length - HISTORY_LIMIT);
-    $('#save-status').innerHTML = ui`<i class="connection-dot"></i> Tutto salvato in locale`;
+    $('#save-status').innerHTML = ui`<i class="connection-dot"></i> Everything saved locally`;
     rerenderPreservingView();
-    notify(direction === 'undo' ? 'Modifica annullata.' : 'Modifica ripristinata.');
+    notify(direction === 'undo' ? "Change undone." : "Change redone.");
   } catch (error) {
     if (error.code === 'conflict') {
       adoptSnapshot(await workspaceApi.load(organizationId));
       clearHistory(organizationId);
       rerenderPreservingView();
-      notify('Le modifiche sono cambiate in un’altra finestra; annulla e ripristina sono stati azzerati.', true);
+      notify("The data changed in another window; undo and redo have been cleared.", true);
       return;
     }
-    $('#save-status').textContent = t('Salvataggio non riuscito');
+    $('#save-status').textContent = t("Save failed");
     throw error;
   } finally {
     saving = false;
@@ -149,7 +149,7 @@ async function changeHistory(direction) {
   }
 }
 async function commit(change, organizationName) {
-  if (saving || organizationBusy) throw new Error(t('Un salvataggio è già in corso. Riprova tra un istante.'));
+  if (saving || organizationBusy) throw new Error(t("A save is in progress. Please try again in a moment."));
   const build = () => {
     if (typeof change !== 'function') return change;
     const next = structuredClone(data);
@@ -160,14 +160,14 @@ async function commit(change, organizationName) {
   let before = structuredClone(data);
   let next = validateData(build());
   saving = true;
-  $('#save-status').textContent = t('Salvataggio…');
+  $('#save-status').textContent = t("Saving…");
   try {
     let saved;
     try { saved = await workspaceApi.save(next, organizationId, organizationName, revision); }
     catch (error) {
       if (error.code !== 'conflict' || typeof change !== 'function') throw error;
       const fresh = await workspaceApi.load(organizationId);
-      if (fresh.activeOrganizationId !== organizationId) throw Object.assign(new Error(t('Questa organizzazione non esiste più.')), { code: 'missing-organization' });
+      if (fresh.activeOrganizationId !== organizationId) throw Object.assign(new Error(t("This organization no longer exists.")), { code: 'missing-organization' });
       adoptSnapshot(fresh);
       before = structuredClone(data);
       next = validateData(build());
@@ -175,9 +175,9 @@ async function commit(change, organizationName) {
     }
     adoptSnapshot(saved);
     recordHistory(organizationId, before, saved.data);
-    $('#save-status').innerHTML = ui`<i class="connection-dot"></i> Tutto salvato in locale`;
+    $('#save-status').innerHTML = ui`<i class="connection-dot"></i> Everything saved locally`;
   } catch (error) {
-    $('#save-status').textContent = t('Salvataggio non riuscito');
+    $('#save-status').textContent = t("Save failed");
     if (error.code === 'missing-organization') pendingChange = { forced: true };
     throw error;
   } finally { saving = false; updateHistoryButtons(); flushPendingChange(); }
@@ -185,7 +185,7 @@ async function commit(change, organizationName) {
 function action(handler) { return async event => { try { await handler(event); } catch (error) { notify(error.message, true); } }; }
 const openPortal = action(async url => { lastOpenedLink = await workspaceApi.openLink(url); });
 function portalAnchor(url, code, className = 'external-link') {
-  return url ? `<a class="${className}" href="${esc(url)}" data-open-url title="${esc(t('Apri nel browser predefinito') + ': ' + url)}" aria-label="${esc(t('Apri portale') + ' ' + code)}">↗</a>` : '';
+  return url ? `<a class="${className}" href="${esc(url)}" data-open-url title="${esc(t("Open in the default browser") + ': ' + url)}" aria-label="${esc(t("Open portal") + ' ' + code)}">↗</a>` : '';
 }
 document.addEventListener('click', event => {
   const link = event.target.closest('a[data-open-url]');
@@ -196,7 +196,7 @@ document.addEventListener('click', event => {
 function pill(name, color, extra = '') { return `<span class="pill ${extra}" style="--pill:${esc(color)}"><i></i>${esc(name)}</span>`; }
 let dateFormatter, dateFormatterLocale;
 function formatDate(date) {
-  if (!date) return t('Da pianificare');
+  if (!date) return t("Unscheduled");
   const currentLocale = locale();
   if (dateFormatterLocale !== currentLocale) {
     dateFormatter = new Intl.DateTimeFormat(currentLocale, { day: '2-digit', month: 'short', year: 'numeric' });
@@ -207,7 +207,7 @@ function formatDate(date) {
 function effort(value) {
   const days = Math.floor(value / data.settings.hoursPerDay);
   const hours = Math.round((value - days * data.settings.hoursPerDay) * 100) / 100;
-  return [days ? term('{0}g').replaceAll('{0}', days) : '', hours ? `${hours}h` : ''].filter(Boolean).join(' ') || '—';
+  return [days ? term("{0}d").replaceAll('{0}', days) : '', hours ? `${hours}h` : ''].filter(Boolean).join(' ') || '—';
 }
 function optionList(items, selected, all = '') {
   return (all ? `<option value="">${esc(t(all))}</option>` : '') + items.map(x => `<option value="${esc(x.id)}" ${x.id === selected ? 'selected' : ''}>${esc(x.name)}</option>`).join('');
@@ -219,7 +219,7 @@ const tagsOf = task => (data.settings.tags || []).filter(tag => task.tagIds?.inc
 function tagChips(task) { return `<span class="tag-chips">${tagsOf(task).map(tag => pill(tag.name, tag.color, 'tag-pill')).join('')}</span>`; }
 function tagPicker(task) {
   const tags = data.settings.tags || [];
-  return `<fieldset class="field full task-tags" tabindex="-1"><legend>${esc(t('Tags'))}</legend><p class="muted">${esc(t(tags.length ? 'Seleziona uno o più tag. Gestiscili in Impostazioni › Tags.' : 'Nessun tag disponibile. Aggiungili in Impostazioni › Tags.'))}</p><div class="tag-options">${tags.map(tag => `<label class="tag-choice"><input type="checkbox" name="tagIds" value="${esc(tag.id)}" ${task.tagIds?.includes(tag.id) ? 'checked' : ''}>${pill(tag.name, tag.color, 'tag-pill')}</label>`).join('')}</div></fieldset>`;
+  return `<fieldset class="field full task-tags" tabindex="-1"><legend>${esc(t('Tags'))}</legend><p class="muted">${esc(t(tags.length ? "Select one or more tags. Manage them in Settings › Tags." : "No tags available. Add them in Settings › Tags."))}</p><div class="tag-options">${tags.map(tag => `<label class="tag-choice"><input type="checkbox" name="tagIds" value="${esc(tag.id)}" ${task.tagIds?.includes(tag.id) ? 'checked' : ''}>${pill(tag.name, tag.color, 'tag-pill')}</label>`).join('')}</div></fieldset>`;
 }
 function closeTagMenu(restoreFocus = false) {
   const menu = $('#tag-menu');
@@ -242,8 +242,8 @@ function openTagMenu(button, custom) {
   menu.dataset.task = id;
   menu.dataset.owner = owner;
   menu.setAttribute('role', 'dialog');
-  menu.setAttribute('aria-label', custom ? custom.field.name : t('Modifica tag') + ': ' + task.code);
-  menu.innerHTML = (custom ? `<fieldset class="field full task-tags"><legend>${esc(custom.field.name)}</legend><p class="muted">${esc(t('Seleziona le etichette. Nomi e colori si gestiscono nella sezione dedicata delle impostazioni.'))}</p><div class="tag-options">${CustomColumns.choices(custom.field).map(option => `<label class="tag-choice"><input type="checkbox" name="tagIds" value="${esc(option.id)}" ${initial.has(option.id) ? 'checked' : ''}>${pill(option.name, option.color, 'tag-pill')}</label>`).join('')}</div></fieldset>` : tagPicker(task)) + ui`<div class="tag-menu-actions"><button type="button" class="button small" data-cancel-tags>Annulla</button><button type="submit" class="button small primary">Applica</button></div>`;
+  menu.setAttribute('aria-label', custom ? custom.field.name : t("Edit tags") + ': ' + task.code);
+  menu.innerHTML = (custom ? `<fieldset class="field full task-tags"><legend>${esc(custom.field.name)}</legend><p class="muted">${esc(t("Select labels. Manage names and colors in the dedicated settings section."))}</p><div class="tag-options">${CustomColumns.choices(custom.field).map(option => `<label class="tag-choice"><input type="checkbox" name="tagIds" value="${esc(option.id)}" ${initial.has(option.id) ? 'checked' : ''}>${pill(option.name, option.color, 'tag-pill')}</label>`).join('')}</div></fieldset>` : tagPicker(task)) + ui`<div class="tag-menu-actions"><button type="button" class="button small" data-cancel-tags>Cancel</button><button type="submit" class="button small primary">Apply</button></div>`;
   (custom?.form ? $('#modal') : document.body).append(menu);
   positionTagMenu(menu);
   button.setAttribute('aria-expanded', 'true');
@@ -267,7 +267,7 @@ function openTagMenu(button, custom) {
       if (custom) await custom.apply(added, removed, [...chosen]);
       else await commit(next => {
         const row = next.tasks.find(task => task.id === id);
-        if (!row) throw new Error('Attività non più disponibile.');
+        if (!row) throw new Error("Task no longer available.");
         const known = new Set(next.settings.tags.map(tag => tag.id));
         row.tagIds = [...new Set([...(row.tagIds || []).filter(id => !removed.includes(id)), ...added])].filter(id => known.has(id));
       });
@@ -302,14 +302,14 @@ function matchesHighlightFilter(task) {
   return task.highlightId === highlightFilter;
 }
 const duplicatesOf = () => findDuplicates(data.tasks, data.issues);
-const taskLabel = task => `#${task.sequence} ${task.code}${task.hidden ? ` (${t('nascosta')})` : ''}`;
+const taskLabel = task => `#${task.sequence} ${task.code}${task.hidden ? ` (${t("hidden")})` : ''}`;
 // One line per duplicated incident, naming the other tasks or associations that share it.
 function taskDuplicateLines(taskId, groups) {
-  return groups.map(group => fillText('{0} è collegato anche a: {1}', group.incident, group.taskIds.filter(id => id !== taskId).map(id => taskLabel(data.tasks.find(task => task.id === id))).join(', ')));
+  return groups.map(group => fillText("{0} is also linked to: {1}", group.incident, group.taskIds.filter(id => id !== taskId).map(id => taskLabel(data.tasks.find(task => task.id === id))).join(', ')));
 }
 function issueDuplicateLine(issueId, group, issues = data.issues) {
   const others = group.issueIds.filter(id => id !== issueId).map(id => issues.find(issue => issue.id === id)).map(issue => issue.problem.trim() ? `${issue.code} · ${issue.problem}` : issue.code);
-  return fillText('{0} è presente anche in: {1}', group.incident, others.join(', '));
+  return fillText("{0} also appears in: {1}", group.incident, others.join(', '));
 }
 function filteredTasks(duplicates = duplicatesOf(), issues = search || Object.keys(columnFilters.tasks).length ? indexIssues(data.issues) : data.issues) {
   const needle = search.toLowerCase();
@@ -371,13 +371,13 @@ function render() {
   const duplicates = duplicatesOf(), alerts = [duplicates.tasks.size, duplicates.issues.size];
   const alert = i => {
     if (!alerts[i]) return '';
-    const label = fillText(i ? '{0} associazioni con incident duplicato' : '{0} attività con incident duplicato', alerts[i]);
+    const label = fillText(i ? "{0} associations with a duplicate incident" : "{0} tasks with a duplicate incident", alerts[i]);
     return `<span class="nav-alert" title="${esc(label)}"><span aria-hidden="true">${alerts[i]}</span><span class="sr-only">${esc(label)}</span></span>`;
   };
   $('#navigation').innerHTML = data.settings.tabNames.map((name, i) => `<button class="nav-button ${view === i ? 'active' : ''}" data-view="${i}"><span class="nav-icon">${icons[i]}${alert(i)}</span><span>${esc(name)}</span>${i === 0 ? `<span class="nav-count">${visibleTasks().length}</span>` : ''}</button>`).join('');
   document.querySelectorAll('#navigation [data-view]').forEach(button => button.onclick = () => { view = Number(button.dataset.view); render(); });
   $('#settings-button').classList.toggle('active', view === 4);
-  $('#current-tab').textContent = view === 4 ? t('Impostazioni') : data.settings.tabNames[view];
+  $('#current-tab').textContent = view === 4 ? t("Settings") : data.settings.tabNames[view];
   if (view === 0) renderTasks();
   if (view === 1) renderIssues();
   if (view === 2) renderMilestones();
@@ -406,21 +406,21 @@ function adoptSnapshot(snapshot) {
 }
 function renderChrome() {
   document.documentElement.lang = data.settings.language;
-  $('.brand small').textContent = t('IL TUO SPAZIO DI LAVORO');
-  $('.workspace-label').innerHTML = ui`WORKSPACE <span>LOCALE</span>`;
-  $('#settings-button').innerHTML = ui`<span class="nav-icon">⚙</span> Impostazioni`;
-  $('.local-card strong').textContent = t('Solo sul tuo dispositivo');
-  $('.local-card small').textContent = t('I tuoi dati. Sempre con te.');
-  $('footer>span').innerHTML = ui`<i class="connection-dot"></i> Nessun cloud. Nessun account. Tutto sotto controllo.`;
-  $('#folder-button').textContent = t('Apri cartella dati') + ' ↗';
-  $('#global-search-label').textContent = t('Cerca');
-  $('#global-search').title = t('Cerca in OrbitKanban (Ctrl+K)');
+  $('.brand small').textContent = t("YOUR PERSONAL WORKSPACE");
+  $('.workspace-label').innerHTML = ui`WORKSPACE <span>LOCAL</span>`;
+  $('#settings-button').innerHTML = ui`<span class="nav-icon">⚙</span> Settings`;
+  $('.local-card strong').textContent = t("Only on your device");
+  $('.local-card small').textContent = t("Your data. Always with you.");
+  $('footer>span').innerHTML = ui`<i class="connection-dot"></i> No cloud. No account. Everything under control.`;
+  $('#folder-button').textContent = t("Open data folder") + ' ↗';
+  $('#global-search-label').textContent = t("Search");
+  $('#global-search').title = t("Search OrbitKanban (Ctrl+K)");
   renderConnectionStatus();
-  $('#navigation').setAttribute('aria-label', t('Viste principali'));
-  $('.organization-switcher label').textContent = t('Organizzazione');
-  $('#manage-organizations').textContent = t('Gestisci organizzazioni');
+  $('#navigation').setAttribute('aria-label', t("Main views"));
+  $('.organization-switcher label').textContent = t("Organization");
+  $('#manage-organizations').textContent = t("Manage organizations");
   $('#organization-select').innerHTML = organizations.map(o => `<option value="${esc(o.id)}" ${o.id === activeOrganizationId ? 'selected' : ''}>${esc(o.name)}</option>`).join('');
-  $('#open-browser').textContent = t(browserMode() ? 'Apri in nuova scheda' : 'Apri nel browser') + ' ↗';
+  $('#open-browser').textContent = t(browserMode() ? "Open in new tab" : "Open in browser") + ' ↗';
   $('#open-browser').disabled = !browserUrl;
   $('.version').innerHTML = `${browserMode() ? 'BROWSER' : 'PORTABLE'} EDITION <span id="app-version">${esc(appVersion ? `v${appVersion}` : '')}</span>`;
   updateHistoryButtons();
@@ -428,7 +428,7 @@ function renderChrome() {
 function renderConnectionStatus() {
   const status = $('#save-status');
   status.classList.toggle('offline', !online);
-  status.innerHTML = !online ? ui`<i class="connection-dot"></i> App non raggiungibile` : browserMode() ? ui`<i class="connection-dot"></i> Sincronizzato con l’app` : ui`<i class="connection-dot"></i> Archivio locale`;
+  status.innerHTML = !online ? ui`<i class="connection-dot"></i> App not reachable` : browserMode() ? ui`<i class="connection-dot"></i> Synced with the app` : ui`<i class="connection-dot"></i> Local archive`;
 }
 function sameOrganizations(list) {
   return list.length === organizations.length && list.every((o, i) => organizations[i].id === o.id && organizations[i].name === o.name);
@@ -460,7 +460,7 @@ function applyRemoteSnapshot(snapshot, previousId) {
     adoptSnapshot(snapshot);
     search = ''; statusFilter = ''; highlightFilter = ''; highlighter = ''; selectedTasks.clear(); showHidden = false; duplicatesOnly = false; issueDuplicatesOnly = false; activeSavedViewId = ''; sort = [{ key: 'releaseDate', direction: 'asc' }];
     render();
-    notify('L’organizzazione aperta è stata eliminata in un’altra finestra. Ora stai vedendo un’altra organizzazione.', true);
+    notify("The open organization was deleted in another window. You are now viewing another organization.", true);
     return;
   }
   if (snapshot.revision === revision && sameOrganizations(snapshot.organizations)) return;
@@ -469,7 +469,7 @@ function applyRemoteSnapshot(snapshot, previousId) {
   if ($('#modal').open) { renderAfterModal = true; renderChrome(); return; }
   if (keepDraft) {
     renderChrome(); refreshSettingsState();
-    notify('Dati aggiornati da un’altra finestra. Le impostazioni non salvate restano in sospeso: salvandole avranno la precedenza.');
+    notify("Data updated from another window. Your unsaved settings are kept: saving them will take precedence.");
     return;
   }
   rerenderPreservingView();
@@ -506,8 +506,8 @@ function subscribe() {
   workspaceApi.onConnection?.(value => {
     online = value;
     renderConnectionStatus();
-    if (!value) { notify('OrbitKanban non è raggiungibile: riapri l’app sul PC e ricarica la pagina.', true); return; }
-    notify('Connessione ripristinata.');
+    if (!value) { notify("OrbitKanban is not reachable: reopen the app on the PC and reload the page.", true); return; }
+    notify("Connection restored.");
     pendingChange = { forced: true };
     flushPendingChange();
   });
@@ -524,34 +524,36 @@ function settingsChanged() {
   return pendingCustomColumns().length > 0 || JSON.stringify(collectSettings()) !== JSON.stringify(data.settings) || $('#organization-name').value.trim() !== organizations.find(o => o.id === activeOrganizationId).name;
 }
 const settingsTabs = [
-  { id: 'identity', group: 'Organizzazione', icon: '◉', label: 'Identità & navigazione', panel: 'identity-panel', keys: ['tabNames', 'hoursPerDay', 'logo'] },
-  { id: 'languages', group: 'Organizzazione', icon: '文', label: 'Lingua & traduzioni', panel: 'languages-panel', keys: ['language'] },
-  { id: 'portal', group: 'Organizzazione', icon: '⇗', label: 'Link al portale', panel: 'portal-panel', keys: ['portalUrlTemplate'] },
-  { id: 'organizations', group: 'Organizzazione', icon: '⌂', label: 'Organizzazioni', panel: 'organizations-panel', keys: [] },
-  { id: 'themes', group: 'Aspetto', icon: '◐', label: 'Temi & atmosfera', panel: 'themes-panel', keys: ['themes', 'themeId'] },
-  { id: 'fonts', group: 'Aspetto', icon: 'Aa', label: 'Font e dimensione del testo', panel: 'font-size-panel', keys: ['fontSizes', 'fontFamily'] },
-  { id: 'statuses', group: 'Flusso di lavoro', icon: '☰', label: 'Stati del flusso', panel: 'statuses-panel', keys: ['statuses'] },
-  { id: 'urgencies', group: 'Flusso di lavoro', icon: '⚑', label: 'Livelli di urgenza', panel: 'urgencies-panel', keys: ['urgencies'] },
-  { id: 'highlights', group: 'Flusso di lavoro', icon: '✎', label: 'Evidenziatori', panel: 'highlights-panel', keys: ['highlights'] },
-  { id: 'tags', group: 'Flusso di lavoro', icon: '#', label: 'Tags', panel: 'tags-panel', keys: ['tags'] },
-  { id: 'columns', group: 'Flusso di lavoro', icon: '▥', label: 'Colonne della lista', panel: 'columns-panel', keys: ['taskColumns'] },
-  { id: 'custom-columns', group: 'Flusso di lavoro', icon: '＋', label: 'Colonne personalizzate', panel: 'custom-columns-panel', keys: ['taskFields', 'issueFields', 'issueColumns'] },
-  { id: 'transfer', group: 'Dati e accesso', icon: '⇅', label: 'Esporta e importa organizzazione', panel: 'transfer-panel', keys: [] },
-  { id: 'storage', group: 'Dati e accesso', icon: '▣', label: 'Dati che viaggiano con te', panel: 'storage-panel', keys: [] },
-  { id: 'browser', group: 'Dati e accesso', icon: '◍', label: 'Accesso da browser', panel: 'browser-panel', keys: [] }
+  { id: 'identity', group: "Organization", icon: '◉', label: "Identity & navigation", panel: 'identity-panel', keys: ['tabNames', 'hoursPerDay', 'logo'] },
+  { id: 'languages', group: "Organization", icon: '文', label: "Language & translations", panel: 'languages-panel', keys: ['language'] },
+  { id: 'portal', group: "Organization", icon: '⇗', label: "Portal link", panel: 'portal-panel', keys: ['portalUrlTemplate'] },
+  { id: 'organizations', group: "Organization", icon: '⌂', label: "Organizations", panel: 'organizations-panel', keys: [] },
+  { id: 'themes', group: "Appearance", icon: '◐', label: "Themes & atmosphere", panel: 'themes-panel', keys: ['themes', 'themeId'] },
+  { id: 'fonts', group: "Appearance", icon: 'Aa', label: "Font and text size", panel: 'font-size-panel', keys: ['fontSizes', 'fontFamily'] },
+  { id: 'statuses', group: "Workflow", icon: '☰', label: "Workflow statuses", panel: 'statuses-panel', keys: ['statuses'] },
+  { id: 'urgencies', group: "Workflow", icon: '⚑', label: "Urgency levels", panel: 'urgencies-panel', keys: ['urgencies'] },
+  { id: 'highlights', group: "Workflow", icon: '✎', label: "Highlighters", panel: 'highlights-panel', keys: ['highlights'] },
+  { id: 'tags', group: "Workflow", icon: '#', label: 'Tags', panel: 'tags-panel', keys: ['tags'] },
+  { id: 'columns', group: "Workflow", icon: '▥', label: "List columns", panel: 'columns-panel', keys: ['taskColumns'] },
+  { id: 'custom-columns', group: "Workflow", icon: '＋', label: "Custom columns", panel: 'custom-columns-panel', keys: ['taskFields', 'issueFields', 'issueColumns'] },
+  { id: 'transfer', group: "Data & access", icon: '⇅', label: "Export and import organization", panel: 'transfer-panel', keys: [] },
+  { id: 'storage', group: "Data & access", icon: '▣', label: "Data that travels with you", panel: 'storage-panel', keys: [] },
+  { id: 'browser', group: "Data & access", icon: '◍', label: "Browser access", panel: 'browser-panel', keys: [] }
 ];
 function choiceSettingsTabs() {
   return ['tasks', 'issues'].flatMap((kind, index) => CustomColumns.fieldsOf(settingsDraft || data.settings, kind).filter(field => ['select', 'multiselect'].includes(field.type)).map(field => ({
-    id: `choice-${kind}-${field.id}`, panel: `choice-${kind}-${field.id}-panel`, group: 'Etichette delle colonne', icon: '#',
+    id: `choice-${kind}-${field.id}`, panel: `choice-${kind}-${field.id}-panel`, group: "Column labels", icon: '#',
     label: `${field.name} · ${data.settings.tabNames[index]}`, field, kind, custom: true, keys: [kind === 'tasks' ? 'taskFields' : 'issueFields']
   })));
 }
 const allSettingsTabs = () => [...settingsTabs, ...choiceSettingsTabs()];
 // Ordered: the first matching pattern decides which settings tab holds the field to fix.
-const settingsErrorTabs = [[/colonn[ae] personalizzat|opzioni della colonna|nomi e identificativi delle colonne/i, 'custom-columns'], [/\btags?\b/i, 'tags'], [/evidenziatori|highlighter/i, 'highlights'], [/colonne della lista|list columns/i, 'columns'], [/link portale|portal link/i, 'portal'], [/dimensioni del testo|text sizes|\bfont\b/i, 'fonts'], [/\b(?:temi|tema|themes?)\b/i, 'themes'], [/urgen/i, 'urgencies'], [/\b(?:stati|status|statuses)\b/i, 'statuses'], [/\b(?:lingua|language)\b/i, 'languages'], [/organizzazione|organization|\btab\b|ore per giorno|hours per day|logo/i, 'identity']];
+// Validation messages are English source text, except those the store localizes in the organization language, so the patterns also list the Italian wording.
+const settingsErrorTabs = [[/custom columns?|column options|column names and identifiers|colonn[ae] personalizzat|opzioni della colonna|nomi e identificativi delle colonne/i, 'custom-columns'], [/\btags?\b/i, 'tags'], [/evidenziatori|highlighter/i, 'highlights'], [/colonne della lista|list columns/i, 'columns'], [/link portale|portal link/i, 'portal'], [/dimensioni del testo|text sizes|\bfont\b/i, 'fonts'], [/\b(?:temi|tema|themes?)\b/i, 'themes'], [/urgen/i, 'urgencies'], [/\b(?:stati|status|statuses)\b/i, 'statuses'], [/\b(?:lingua|language)\b/i, 'languages'], [/organizzazione|organization|\btab\b|ore per giorno|hours per day|logo/i, 'identity']];
+const settingsErrorTab = message => settingsErrorTabs.find(([pattern]) => pattern.test(String(message)))?.[1];
 function settingsNav() {
   const tabs = allSettingsTabs(), groups = [...new Set(tabs.map(tab => tab.group))];
-  return `<nav class="settings-nav" aria-label="${esc(t('Sezioni delle impostazioni'))}">${groups.map((group, index) => `<div class="settings-nav-group" role="group" aria-labelledby="settings-group-${index}"><span class="settings-nav-label" id="settings-group-${index}">${esc(t(group))}</span>${tabs.filter(tab => tab.group === group).map(tab => `<button type="button" class="settings-tab" id="settings-tab-${tab.id}" data-settings-tab="${tab.id}" aria-controls="${tab.panel}"><span class="settings-tab-icon" aria-hidden="true">${tab.icon}</span><span class="settings-tab-text">${esc(tab.custom ? tab.label : t(tab.label))}</span><span class="settings-tab-dot" role="img" aria-label="${esc(t('Modifiche non salvate'))}" title="${esc(t('Modifiche non salvate'))}" hidden></span></button>`).join('')}</div>`).join('')}</nav>`;
+  return `<nav class="settings-nav" aria-label="${esc(t("Settings sections"))}">${groups.map((group, index) => `<div class="settings-nav-group" role="group" aria-labelledby="settings-group-${index}"><span class="settings-nav-label" id="settings-group-${index}">${esc(t(group))}</span>${tabs.filter(tab => tab.group === group).map(tab => `<button type="button" class="settings-tab" id="settings-tab-${tab.id}" data-settings-tab="${tab.id}" aria-controls="${tab.panel}"><span class="settings-tab-icon" aria-hidden="true">${tab.icon}</span><span class="settings-tab-text">${esc(tab.custom ? tab.label : t(tab.label))}</span><span class="settings-tab-dot" role="img" aria-label="${esc(t("Unsaved changes"))}" title="${esc(t("Unsaved changes"))}" hidden></span></button>`).join('')}</div>`).join('')}</nav>`;
 }
 function showSettingsTab(id, reveal = false) {
   const tabs = allSettingsTabs(), selected = tabs.find(tab => tab.id === id) || settingsTabs[0];
@@ -603,13 +605,13 @@ function refreshSettingsState() {
   const where = $('#unsaved-where'), key = dirty.map(tab => tab.id).join();
   if (where && where.dataset.key !== key) {
     where.dataset.key = key;
-    where.innerHTML = dirty.length ? `${esc(t('Sezioni modificate:'))} ${dirty.map(tab => `<button type="button" class="unsaved-link" data-goto-settings-tab="${tab.id}">${esc(tab.custom ? tab.label : t(tab.label))}</button>`).join(', ')}` : '';
+    where.innerHTML = dirty.length ? `${esc(t("Changed sections:"))} ${dirty.map(tab => `<button type="button" class="unsaved-link" data-goto-settings-tab="${tab.id}">${esc(tab.custom ? tab.label : t(tab.label))}</button>`).join(', ')}` : '';
   }
   $('#settings-page')?.style.setProperty('--unsaved-offset', changed ? `${banner.offsetHeight + 12}px` : '0px');
 }
 async function saveSettings() {
   try {
-    if ($('#logo-file')?.disabled || $('#theme-image-file')?.disabled || $('#create-logo-file')?.disabled) throw new Error(t('Caricamento immagine…'));
+    if ($('#logo-file')?.disabled || $('#theme-image-file')?.disabled || $('#create-logo-file')?.disabled) throw new Error(t("Loading image…"));
     const settings = structuredClone(collectSettings());
     for (const form of pendingCustomColumns()) {
       const kind = form.dataset.addField, fields = CustomColumns.fieldsOf(settings, kind);
@@ -619,11 +621,11 @@ async function saveSettings() {
     settings.taskColumns = normalizeTaskColumns(settings.taskColumns, settings.taskFields);
     settings.issueColumns = CustomColumns.normalizeIssueColumns(settings.issueColumns, settings.issueFields);
     const organizationName = $('#organization-name').value.trim();
-    if (!organizationName || organizationName.length > 100) throw new Error(t('Nome organizzazione non valido.'));
+    if (!organizationName || organizationName.length > 100) throw new Error(t("Invalid organization name."));
     await commit(next => {
       for (const key of ['taskFields', 'issueFields']) {
         if (JSON.stringify(next.settings[key]) !== JSON.stringify(settingsBase[key]) && JSON.stringify(next.settings[key]) !== JSON.stringify(settings[key])) {
-          throw new Error(t('Le colonne personalizzate sono cambiate in un’altra finestra. Annulla le modifiche alle impostazioni e riprova: i dati salvati non sono stati sovrascritti.'));
+          throw new Error(t("Custom columns changed in another window. Discard the settings changes and try again: saved data has not been overwritten."));
         }
       }
       next.settings = structuredClone(settings);
@@ -655,26 +657,26 @@ async function saveSettings() {
     statusFilter = '';
     activeSavedViewId = '';
   } catch (error) {
-    const tab = settingsErrorTabs.find(([pattern]) => pattern.test(String(error?.message)))?.[1];
+    const tab = settingsErrorTab(error?.message);
     if (tab && $('#settings-page')) showSettingsTab(tab, true);
     throw error;
   }
 }
 const settingsPrompts = {
-  switch: ['Salvare le impostazioni prima di cambiare organizzazione?', 'Hai modifiche non salvate. Puoi salvarle oppure scartarle prima di cambiare organizzazione.', 'Scarta e cambia', 'Salva e cambia'],
-  transfer: ['Salvare le impostazioni prima di continuare?', 'Hai modifiche non salvate: esportazione e importazione usano le impostazioni salvate. Puoi salvarle oppure scartarle prima di continuare.', 'Scarta e continua', 'Salva e continua']
+  switch: ["Save settings before switching organization?", "You have unsaved changes. Save or discard them before switching organization.", "Discard and switch", "Save and switch"],
+  transfer: ["Save settings before continuing?", "You have unsaved changes: export and import use the saved settings. Save or discard them before continuing.", "Discard and continue", "Save and continue"]
 };
 async function withSavedSettings(callback, purpose = 'switch') {
-  if (saving || organizationBusy) { notify('Un salvataggio è già in corso. Riprova tra un istante.', true); return; }
-  if ($('#logo-file')?.disabled || $('#theme-image-file')?.disabled || $('#create-logo-file')?.disabled) { notify('Caricamento immagine…', true); return; }
+  if (saving || organizationBusy) { notify("A save is in progress. Please try again in a moment.", true); return; }
+  if ($('#logo-file')?.disabled || $('#theme-image-file')?.disabled || $('#create-logo-file')?.disabled) { notify("Loading image…", true); return; }
   if (!settingsChanged()) { await callback(); return; }
   const [title, message, discard, save] = settingsPrompts[purpose].map(text => t(text));
-  openModal(`<div class="modal-heading"><h2>${title}</h2></div><p class="confirm-message">${message}</p><div class="modal-actions"><button class="button" data-close>${t('Annulla')}</button><button class="button" id="discard-switch">${discard}</button><button class="button primary" id="save-switch">${save}</button></div>`);
+  openModal(`<div class="modal-heading"><h2>${title}</h2></div><p class="confirm-message">${message}</p><div class="modal-actions"><button class="button" data-close>${t("Cancel")}</button><button class="button" id="discard-switch">${discard}</button><button class="button primary" id="save-switch">${save}</button></div>`);
   $('#discard-switch').onclick = action(async () => { $('#modal').close(); render(); await callback(); });
   $('#save-switch').onclick = action(async () => { await saveSettings(); $('#modal').close(); render(); await callback(); });
 }
 async function organizationAction(operation, payload) {
-  if (saving || organizationBusy) throw new Error(t('Un salvataggio è già in corso. Riprova tra un istante.'));
+  if (saving || organizationBusy) throw new Error(t("A save is in progress. Please try again in a moment."));
   organizationBusy = true;
   $('#organization-select').disabled = true;
   try {
@@ -698,25 +700,25 @@ function wireOrganizationCreation() {
     if (!file) return;
     fileInput.disabled = true;
     form.querySelector('[type=submit]').disabled = true;
-    result.textContent = t('Caricamento immagine…');
+    result.textContent = t("Loading image…");
     try {
       const processed = await processLogo(file);
       if (!fileInput.isConnected) return;
       logo = processed.logo; palette = processed.palette;
-      preview.innerHTML = `<img src="${logo}" alt="${esc(t('Logo della nuova organizzazione'))}"><div class="theme-swatches">${themeFields.map(([key, label]) => `<i style="background:${palette[key]}" title="${t(label)}: ${palette[key]}"></i>`).join('')}</div>`;
-      result.textContent = t('Logo pronto: il tema verrà applicato alla nuova organizzazione.');
+      preview.innerHTML = `<img src="${logo}" alt="${esc(t("New organization logo"))}"><div class="theme-swatches">${themeFields.map(([key, label]) => `<i style="background:${palette[key]}" title="${t(label)}: ${palette[key]}"></i>`).join('')}</div>`;
+      result.textContent = t("Logo ready: the theme will be applied to the new organization.");
     } catch (error) { result.textContent = t(error.message); throw error; }
     finally { fileInput.disabled = false; fileInput.value = ''; form.querySelector('[type=submit]').disabled = false; }
   });
   $('#clear-create-logo').onclick = () => { logo = ''; palette = undefined; preview.innerHTML = ''; result.textContent = ''; };
   form.onsubmit = action(async event => {
     event.preventDefault();
-    if (fileInput.disabled) throw new Error(t('Caricamento immagine…'));
+    if (fileInput.disabled) throw new Error(t("Loading image…"));
     const fields = new FormData(form);
     const payload = { name: fields.get('name').trim(), language: fields.get('language'), logo, palette, demo: fields.has('demo') };
     await withSavedSettings(async () => {
       await organizationAction('create', payload);
-      notify('Organizzazione creata.');
+      notify("Organization created.");
     });
   });
 }
@@ -746,25 +748,25 @@ function stats() {
   const releases = new Set(tasks.map(t => t.releaseDate).filter(Boolean));
   const hours = tasks.reduce((sum, t) => sum + t.effortHours, 0);
   const highlighted = tasks.filter(t => highlightOf(t) || data.settings.statuses.find(s => s.id === t.statusId)?.highlight).length;
-  return ui`<div class="stats"><div class="stat"><span>Attività visibili <span class="stat-icon">▤</span></span><strong>${tasks.length}<small>nel tuo workspace</small></strong></div><div class="stat"><span>Release pianificate <span class="stat-icon mint">◈</span></span><strong>${releases.size}<small>prossime destinazioni</small></strong></div><div class="stat"><span>Effort complessivo <span class="stat-icon peach">◷</span></span><strong title="${hours.toLocaleString(locale())} ore totali">${effort(hours)}<small>${hours.toLocaleString(locale())} ore totali</small></strong></div><div class="stat"><span>In evidenza <span class="stat-icon pink">⚑</span></span><strong>${highlighted}<small>da tenere d'occhio</small></strong></div></div>`;
+  return ui`<div class="stats"><div class="stat"><span>Visible tasks <span class="stat-icon">▤</span></span><strong>${tasks.length}<small>in your workspace</small></strong></div><div class="stat"><span>Planned releases <span class="stat-icon mint">◈</span></span><strong>${releases.size}<small>upcoming destinations</small></strong></div><div class="stat"><span>Total effort <span class="stat-icon peach">◷</span></span><strong title="${hours.toLocaleString(locale())} total hours">${effort(hours)}<small>${hours.toLocaleString(locale())} total hours</small></strong></div><div class="stat"><span>Highlighted <span class="stat-icon pink">⚑</span></span><strong>${highlighted}<small>keep an eye on these</small></strong></div></div>`;
 }
 const taskColumnDefs = {
-  sequence: { name: 'Progressivo', header: '#', sort: 'sequence' },
-  code: { name: 'Codice portale', sort: 'code' },
-  link: { name: 'Link portale' },
-  description: { name: 'Descrizione' },
-  urgency: { name: 'Urgenza', sort: 'urgencyId' },
-  status: { name: 'Stato', sort: 'statusId' },
-  highlight: { name: 'Evidenziazione', sort: 'highlightId' },
+  sequence: { name: "Sequence", header: '#', sort: 'sequence' },
+  code: { name: "Portal code", sort: 'code' },
+  link: { name: "Portal link" },
+  description: { name: "Description" },
+  urgency: { name: "Urgency", sort: 'urgencyId' },
+  status: { name: "Status", sort: 'statusId' },
+  highlight: { name: "Highlight", sort: 'highlightId' },
   tags: { name: 'Tags' },
   effort: { name: 'Effort', sort: 'effortHours' },
   incident: { name: 'Incident' },
   problem: { name: 'Problem' },
   releaseDate: { name: 'Release date', sort: 'releaseDate' },
-  notes: { name: 'Note' }
+  notes: { name: "Notes" }
 };
-const issueColumnDefs = { code: { name: 'Codice portale' }, incident: { name: 'Incident' }, problem: { name: 'Problem' }, linked: { name: 'Collegamento', type: 'number' } };
-const fieldTypeNames = { text: 'Testo', richtext: 'Testo formattato', number: 'Numero', date: 'Data', select: 'Elenco a scelta singola', multiselect: 'Elenco a scelta multipla', url: 'Link', effort: 'Effort (ore)', boolean: 'Sì / No' };
+const issueColumnDefs = { code: { name: "Portal code" }, incident: { name: 'Incident' }, problem: { name: 'Problem' }, linked: { name: "Link", type: 'number' } };
+const fieldTypeNames = { text: "Text", richtext: "Rich text", number: "Number", date: "Date", select: "Single choice", multiselect: "Multiple choice", url: 'Link', effort: "Effort (hours)", boolean: "Yes / No" };
 function columnDef(id, kind = 'tasks', settings = data.settings) {
   const base = (kind === 'tasks' ? taskColumnDefs : issueColumnDefs)[id];
   if (base) return base;
@@ -781,7 +783,7 @@ function customText(value, field) {
   if (value === undefined || value === null || value === '') return '';
   if (field.type === 'richtext') return plain(value);
   if (field.type === 'date') return formatDate(value);
-  if (field.type === 'boolean') return t(value ? 'Sì' : 'No');
+  if (field.type === 'boolean') return t(value ? "Yes" : 'No');
   if (field.type === 'effort') return value === 0 ? '0h' : effort(value);
   if (['select', 'multiselect'].includes(field.type)) return CustomColumns.choices(field).filter(option => Array.isArray(value) ? value.includes(option.id) : value === option.id).map(option => option.name).join(', ');
   return Array.isArray(value) ? value.join(', ') : String(value);
@@ -796,7 +798,7 @@ function wireChoicePickers() {
     const kind = button.dataset.choiceKind, id = button.dataset.choiceRecord, fieldId = button.dataset.choiceField, form = button.closest('#task-form, #issue-form');
     const field = CustomColumns.fieldsOf(data.settings, kind).find(field => field.id === fieldId);
     const record = data[kind].find(record => record.id === id);
-    if (!field || !record && !form) { notify('L’elemento non esiste più.', true); return; }
+    if (!field || !record && !form) { notify("This item no longer exists.", true); return; }
     const values = form ? new FormData(form).getAll(fieldId) : record.customFields?.[fieldId] || [];
     openTagMenu(button, { field, values, form, apply: async (added, removed, chosen) => {
       if (form) {
@@ -805,9 +807,9 @@ function wireChoicePickers() {
         wireChoicePickers();
       } else await commit(next => {
         const row = next[kind].find(row => row.id === id), current = CustomColumns.fieldsOf(next.settings, kind).find(field => field.id === fieldId);
-        if (!row || !current) throw new Error(t('L’elemento non esiste più.'));
+        if (!row || !current) throw new Error(t("This item no longer exists."));
         const known = CustomColumns.choices(current).map(option => option.id);
-        if (added.some(id => !known.includes(id))) throw new Error(t('Il catalogo è cambiato. Riapri il menu delle etichette.'));
+        if (added.some(id => !known.includes(id))) throw new Error(t("The catalog has changed. Reopen the labels menu."));
         (row.customFields ||= {})[fieldId] = [...new Set([...(row.customFields[fieldId] || []).filter(id => !removed.includes(id)), ...added])];
       });
     } });
@@ -840,27 +842,27 @@ function passesColumnFilters(record, kind, context) {
 }
 function filterHeader(id, kind) {
   const active = CustomColumns.activeFilter(columnFilters[kind][id]);
-  return `<button type="button" class="column-filter-button ${active ? 'active' : ''}" data-filter-column="${esc(id)}" aria-haspopup="dialog" aria-label="${esc(t('Filtra colonna') + ': ' + columnName(id, kind))}" title="${esc(t('Filtra colonna'))}">▽</button>`;
+  return `<button type="button" class="column-filter-button ${active ? 'active' : ''}" data-filter-column="${esc(id)}" aria-haspopup="dialog" aria-label="${esc(t("Filter column") + ': ' + columnName(id, kind))}" title="${esc(t("Filter column"))}">▽</button>`;
 }
 function columnFilterBar(kind) {
   const ids = Object.keys(columnFilters[kind]);
   return ids.length ? `<div class="column-filter-bar">${ids.map(id => {
     const summary = filterSummary(id, kind, columnFilters[kind][id]), short = summary.length > 48 ? `${summary.slice(0, 47)}…` : summary;
     return `<button class="button small" data-filter-column="${esc(id)}" title="${esc(`${columnName(id, kind)}: ${summary}`)}">${esc(columnName(id, kind))}${short ? `: <span class="filter-summary">${esc(short)}</span>` : ''} ▾</button>`;
-  }).join('')}<button class="button small subtle" data-clear-column-filters>${esc(t('Azzera filtri colonne'))}</button></div>` : '';
+  }).join('')}<button class="button small subtle" data-clear-column-filters>${esc(t("Clear column filters"))}</button></div>` : '';
 }
 // Readable text of one column filter, shared by the filter bar and the Excel summary.
 function filterSummary(id, kind, filter) {
   const spec = filterSpec(id, kind), empty = CustomColumns.EMPTY_VALUE;
   if (spec.type === 'date') {
-    if (filter.empty === 'empty') return t('Non assegnata');
+    if (filter.empty === 'empty') return t("Unassigned");
     const dates = filter.values.filter(value => value !== empty).sort().map(formatDate);
     const range = filter.min || filter.max ? `${filter.min ? formatDate(filter.min) : '…'} → ${filter.max ? formatDate(filter.max) : '…'}` : '';
-    const parts = [...dates, filter.values.includes(empty) && t('Non assegnata'), range].filter(Boolean);
-    return parts.length ? parts.join(', ') : filter.empty === 'filled' ? t('Tutte le date') : '';
+    const parts = [...dates, filter.values.includes(empty) && t("Unassigned"), range].filter(Boolean);
+    return parts.length ? parts.join(', ') : filter.empty === 'filled' ? t("All dates") : '';
   }
-  const values = filter.values.map(value => value === empty ? t('Non assegnata') : spec.type === 'boolean' ? t(value === 'true' ? 'Sì' : 'No') : spec.options?.find(option => String(option.value) === value)?.name || value);
-  return [filter.text && `${t('Contiene')}: ${filter.text}`, filter.min && `${t('Da')}: ${filter.min}`, filter.max && `${t('A')}: ${filter.max}`, values.join(', '), filter.empty !== 'any' && t(filter.empty === 'empty' ? 'Solo vuote' : 'Solo valorizzate')].filter(Boolean).join(', ');
+  const values = filter.values.map(value => value === empty ? t("Unassigned") : spec.type === 'boolean' ? t(value === 'true' ? "Yes" : 'No') : spec.options?.find(option => String(option.value) === value)?.name || value);
+  return [filter.text && `${t("Contains")}: ${filter.text}`, filter.min && `${t("From")}: ${filter.min}`, filter.max && `${t("To")}: ${filter.max}`, values.join(', '), filter.empty !== 'any' && t(filter.empty === 'empty' ? "Empty only" : "Non-empty only")].filter(Boolean).join(', ');
 }
 // Rows the other filters would show, so a column's choices and counts match what applying it would give.
 function filterCandidates(id, kind) {
@@ -887,11 +889,11 @@ function dateFilterFields(filter, choices) {
   const bounds = [...new Set([...choices.dates, min, max].filter(Boolean))].sort();
   const option = (value, label, color, count) => `<label class="date-filter-option"><input type="checkbox" name="values" value="${esc(value)}" ${checked.has(value) ? 'checked' : ''}><span class="date-pill" style="--date:${color}">◷ ${esc(label)}</span><span class="tiny-count">${count}</span></label>`;
   const bound = (name, selected) => `<select name="${name}"><option value="">—</option>${bounds.map(date => `<option value="${date}" ${date === selected ? 'selected' : ''}>${esc(formatDate(date))}</option>`).join('')}</select>`;
-  return `<fieldset class="field full filter-options date-filter-options"><legend>${esc(t('Date presenti'))}</legend>
-      <div class="filter-option-tools"><button type="button" class="button small" data-check-dates="all">${esc(t('Seleziona tutte'))}</button><button type="button" class="button small subtle" data-check-dates="none">${esc(t('Deseleziona tutte'))}</button></div>
-      ${option(empty, t('Non assegnata'), '#929bb2', choices.empty)}${dates.map(date => option(date, formatDate(date), dateColor(date), choices.counts.get(date) || 0)).join('')}</fieldset>
-    <label class="field">${esc(t('Da'))}${bound('min', min)}</label><label class="field">${esc(t('A'))}${bound('max', max)}</label>
-    <p class="full filter-note">${esc(t('Le date spuntate e l’intervallo si sommano: una riga compare se soddisfa almeno una delle due scelte.'))}</p>`;
+  return `<fieldset class="field full filter-options date-filter-options"><legend>${esc(t("Dates in the list"))}</legend>
+      <div class="filter-option-tools"><button type="button" class="button small" data-check-dates="all">${esc(t("Select all"))}</button><button type="button" class="button small subtle" data-check-dates="none">${esc(t("Deselect all"))}</button></div>
+      ${option(empty, t("Unassigned"), '#929bb2', choices.empty)}${dates.map(date => option(date, formatDate(date), dateColor(date), choices.counts.get(date) || 0)).join('')}</fieldset>
+    <label class="field">${esc(t("From"))}${bound('min', min)}</label><label class="field">${esc(t("To"))}${bound('max', max)}</label>
+    <p class="full filter-note">${esc(t("Ticked dates and the range add up: a row is shown when it matches at least one of them."))}</p>`;
 }
 function dateFilterFromForm(fields, choices) {
   const values = fields.getAll('values').map(String), min = String(fields.get('min') || ''), max = String(fields.get('max') || '');
@@ -907,15 +909,15 @@ function wireColumnFilters(kind) {
 }
 function columnFilterDialog(id, kind) {
   const filter = structuredClone(columnFilters[kind][id] || CustomColumns.emptyFilter()), spec = filterSpec(id, kind), isDate = spec.type === 'date';
-  const range = ['number', 'effort'].includes(spec.type), options = spec.type === 'boolean' ? [{ value: 'true', name: t('Sì') }, { value: 'false', name: t('No') }] : spec.options;
+  const range = ['number', 'effort'].includes(spec.type), options = spec.type === 'boolean' ? [{ value: 'true', name: t("Yes") }, { value: 'false', name: t('No') }] : spec.options;
   const choices = isDate && dateFilterChoices(id, kind);
-  openModal(`<form id="column-filter-form"><div class="modal-heading"><h2>${esc(t('Filtra colonna') + ': ' + columnName(id, kind))}</h2></div><div class="form-grid">
+  openModal(`<form id="column-filter-form"><div class="modal-heading"><h2>${esc(t("Filter column") + ': ' + columnName(id, kind))}</h2></div><div class="form-grid">
     ${isDate ? dateFilterFields(filter, choices) :
-      range ? `<label class="field">${esc(t('Da'))}<input name="min" type="number" step="any" value="${esc(filter.min)}"></label><label class="field">${esc(t('A'))}<input name="max" type="number" step="any" value="${esc(filter.max)}"></label>` :
-      options ? `<fieldset class="field full filter-options"><legend>${esc(t('Valori ammessi'))}</legend>${options.map(option => `<label><input type="checkbox" name="values" value="${esc(option.value)}" ${filter.values.includes(String(option.value)) ? 'checked' : ''}> ${esc(option.name)}</label>`).join('')}</fieldset>` :
-        `<label class="field full">${esc(t('Contiene'))}<input name="text" maxlength="200" value="${esc(filter.text)}"></label>`}
-    ${isDate ? '' : `<label class="field full">${esc(t('Celle vuote'))}<select name="empty">${[['any', 'Tutte'], ['empty', 'Solo vuote'], ['filled', 'Solo valorizzate']].map(([value, label]) => `<option value="${value}" ${value === filter.empty ? 'selected' : ''}>${esc(t(label))}</option>`).join('')}</select></label>`}
-    </div><div class="modal-actions"><button type="button" class="button" id="clear-one-filter">${esc(t('Rimuovi filtro'))}</button><span class="spacer"></span><button type="button" class="button" data-close>${esc(t('Annulla'))}</button><button class="button primary" type="submit">${esc(t('Applica'))}</button></div></form>`);
+      range ? `<label class="field">${esc(t("From"))}<input name="min" type="number" step="any" value="${esc(filter.min)}"></label><label class="field">${esc(t("To"))}<input name="max" type="number" step="any" value="${esc(filter.max)}"></label>` :
+      options ? `<fieldset class="field full filter-options"><legend>${esc(t("Allowed values"))}</legend>${options.map(option => `<label><input type="checkbox" name="values" value="${esc(option.value)}" ${filter.values.includes(String(option.value)) ? 'checked' : ''}> ${esc(option.name)}</label>`).join('')}</fieldset>` :
+        `<label class="field full">${esc(t("Contains"))}<input name="text" maxlength="200" value="${esc(filter.text)}"></label>`}
+    ${isDate ? '' : `<label class="field full">${esc(t("Empty cells"))}<select name="empty">${[['any', "All"], ['empty', "Empty only"], ['filled', "Non-empty only"]].map(([value, label]) => `<option value="${value}" ${value === filter.empty ? 'selected' : ''}>${esc(t(label))}</option>`).join('')}</select></label>`}
+    </div><div class="modal-actions"><button type="button" class="button" id="clear-one-filter">${esc(t("Remove filter"))}</button><span class="spacer"></span><button type="button" class="button" data-close>${esc(t("Cancel"))}</button><button class="button primary" type="submit">${esc(t("Apply"))}</button></div></form>`);
   const apply = value => { if (CustomColumns.activeFilter(value)) columnFilters[kind][id] = value; else delete columnFilters[kind][id]; clearActiveSavedView(); $('#modal').close(); rerenderPreservingView(); };
   $('#clear-one-filter').onclick = () => apply(CustomColumns.emptyFilter());
   document.querySelectorAll('#column-filter-form [data-check-dates]').forEach(button => button.onclick = () => {
@@ -924,8 +926,8 @@ function columnFilterDialog(id, kind) {
   $('#column-filter-form').onsubmit = action(event => {
     event.preventDefault();
     const fields = new FormData(event.target), next = isDate ? dateFilterFromForm(fields, choices) : { text: String(fields.get('text') || '').trim(), min: String(fields.get('min') || ''), max: String(fields.get('max') || ''), values: fields.getAll('values'), empty: fields.get('empty') };
-    if (next.min && next.max && (spec.type === 'date' ? next.min > next.max : Number(next.min) > Number(next.max))) throw new Error(t('Il limite minimo supera il massimo.'));
-    if (!CustomColumns.validFilters({ [id]: next }, [id], { [id]: spec.type })) throw new Error(t('Filtro colonna non valido.'));
+    if (next.min && next.max && (spec.type === 'date' ? next.min > next.max : Number(next.min) > Number(next.max))) throw new Error(t("The minimum exceeds the maximum."));
+    if (!CustomColumns.validFilters({ [id]: next }, [id], { [id]: spec.type })) throw new Error(t("Invalid column filter."));
     apply(next);
   });
 }
@@ -954,17 +956,17 @@ function renderTasks() {
   const sortable = [...columns.map(id => columnDef(id).sort).filter(Boolean), 'sequence'];
   sort = sort.filter(s => sortable.includes(s.key));
   if (!sort.length) sort = [{ key: 'releaseDate', direction: 'asc' }];
-  const highlightOptions = [['', 'Tutte le evidenziazioni'], ['__any', 'Solo evidenziate'], ['__none', 'Senza evidenziazione']].map(([value, label]) => `<option value="${value}" ${value === highlightFilter ? 'selected' : ''}>${esc(t(label))}</option>`).join('') +
+  const highlightOptions = [['', "All highlights"], ['__any', "Highlighted only"], ['__none', "Not highlighted"]].map(([value, label]) => `<option value="${value}" ${value === highlightFilter ? 'selected' : ''}>${esc(t(label))}</option>`).join('') +
     highlights.map(h => `<option value="${esc(h.id)}" ${h.id === highlightFilter ? 'selected' : ''}>● ${esc(h.name)}</option>`).join('');
-  const savedViewOptions = `<option value="">${esc(t('Scegli una vista…'))}</option>` + (savedViews.length ? `<optgroup label="${esc(t('Viste salvate'))}">${savedViews.map(saved => `<option value="${esc(saved.id)}" ${saved.id === activeSavedViewId ? 'selected' : ''}>${esc(saved.name)}</option>`).join('')}</optgroup>` : '') + releaseViewOptions();
+  const savedViewOptions = `<option value="">${esc(t("Choose a view…"))}</option>` + (savedViews.length ? `<optgroup label="${esc(t("Saved views"))}">${savedViews.map(saved => `<option value="${esc(saved.id)}" ${saved.id === activeSavedViewId ? 'selected' : ''}>${esc(saved.name)}</option>`).join('')}</optgroup>` : '') + releaseViewOptions();
   const headers = columns.map(id => {
     const def = columnDef(id), label = esc(def.header || (def.field ? def.name : t(def.name))), current = def.sort && sort.find(s => s.key === def.sort);
     const title = def.header ? ` title="${esc(t(def.name))}"` : '';
-    return `<th data-column="${id}"${title}><div class="column-heading">${def.sort ? ui`<button data-sort="${def.sort}" title="Clic per ordinare; Maiusc+clic per ordinamento multiplo">${label} <span>${current ? (current.direction === 'asc' ? '↑' : '↓') + (sort.length > 1 ? sort.indexOf(current) + 1 : '') : '↕'}</span></button>` : `<span>${label}</span>`}${filterHeader(id, 'tasks')}</div></th>`;
+    return `<th data-column="${id}"${title}><div class="column-heading">${def.sort ? ui`<button data-sort="${def.sort}" title="Click to sort; Shift+click for multi-column sorting">${label} <span>${current ? (current.direction === 'asc' ? '↑' : '↓') + (sort.length > 1 ? sort.indexOf(current) + 1 : '') : '↕'}</span></button>` : `<span>${label}</span>`}${filterHeader(id, 'tasks')}</div></th>`;
   }).join('');
-  $('#content').innerHTML = heading(data.settings.tabNames[0], 'Tutte le attività, una direzione. Pianifica il lavoro e tieni a fuoco le prossime release.',
-    csvButton('tasks') + excelButton() + ui`<button class="button primary" id="new-task">＋ Nuova attività</button>`) + stats() +
-    ui`<section class="panel"><div class="table-toolbar"><div class="search-wrap"><span>⌕</span><input id="search" aria-label="Cerca attività" placeholder="Cerca codice, descrizione, incident…" value="${esc(search)}"></div><div class="filters"><select id="status-filter" aria-label="Filtra stato">${optionList(data.settings.statuses, statusFilter, 'Tutti gli stati')}</select><select id="highlight-filter" aria-label="Filtra evidenziazione">${highlightOptions}</select><label class="toggle-label"><input id="show-hidden" type="checkbox" ${showHidden ? 'checked' : ''}> Nascoste <span class="tiny-count">${hidden}</span></label><label class="toggle-label duplicate-toggle ${duplicateCount ? 'has-duplicates' : ''}" title="Mostra solo le attività con un incident collegato anche ad altre attività, comprese quelle nascoste"><input id="duplicates-only" type="checkbox" ${duplicatesOnly ? 'checked' : ''} ${duplicateCount ? '' : 'disabled'}> Duplicati <span class="tiny-count">${duplicateCount}</span></label><div class="saved-view-tools"><select id="saved-view-select" aria-label="Carica una vista salvata">${savedViewOptions}</select><button type="button" class="button subtle" id="saved-view-manage" aria-haspopup="dialog">Viste</button></div><button class="button subtle" id="columns-button" aria-haspopup="dialog" title="Scegli quali colonne mostrare e in che ordine">▥ Colonne</button><button class="button subtle" id="reset-sort" title="Ripristina ordinamento release crescente">↕ Release</button></div></div><div class="highlighter-bar"></div><div class="table-scroll"><table class="activity-table"><thead><tr><th class="select-col"><input type="checkbox" id="select-all" aria-label="Seleziona tutte le attività mostrate" title="Seleziona tutte le attività mostrate"></th>${headers}<th><span class="sr-only">Azioni</span></th></tr></thead><tbody id="task-rows"></tbody></table></div><div class="table-footer"><span id="row-count"></span><span id="footer-hint">Maiusc + clic su una colonna per ordinare su più livelli</span><div class="bulk-bar" id="bulk-bar" role="toolbar" aria-label="Azioni sulle attività selezionate" hidden><strong id="bulk-count"></strong><button type="button" class="button small primary" id="bulk-edit">✎ Modifica multipla…</button><button type="button" class="button small" id="bulk-excel">⤓ Esporta in Excel</button><button type="button" class="button small subtle" id="bulk-clear">Deseleziona</button></div></div></section><div class="hint"><span>✧</span> Un unico archivio, quattro prospettive. Issue, milestone e kanban si aggiornano automaticamente.</div>`;
+  $('#content').innerHTML = heading(data.settings.tabNames[0], "All tasks, one direction. Plan your work and focus on upcoming releases.",
+    csvButton('tasks') + excelButton() + ui`<button class="button primary" id="new-task">＋ New task</button>`) + stats() +
+    ui`<section class="panel"><div class="table-toolbar"><div class="search-wrap"><span>⌕</span><input id="search" aria-label="Search tasks" placeholder="Search code, description, incident…" value="${esc(search)}"></div><div class="filters"><select id="status-filter" aria-label="Filter status">${optionList(data.settings.statuses, statusFilter, "All statuses")}</select><select id="highlight-filter" aria-label="Filter by highlight">${highlightOptions}</select><label class="toggle-label"><input id="show-hidden" type="checkbox" ${showHidden ? 'checked' : ''}> Hidden <span class="tiny-count">${hidden}</span></label><label class="toggle-label duplicate-toggle ${duplicateCount ? 'has-duplicates' : ''}" title="Show only tasks whose incident is also linked to other tasks, hidden ones included"><input id="duplicates-only" type="checkbox" ${duplicatesOnly ? 'checked' : ''} ${duplicateCount ? '' : 'disabled'}> Duplicates <span class="tiny-count">${duplicateCount}</span></label><div class="saved-view-tools"><select id="saved-view-select" aria-label="Load a saved view">${savedViewOptions}</select><button type="button" class="button subtle" id="saved-view-manage" aria-haspopup="dialog">Views</button></div><button class="button subtle" id="columns-button" aria-haspopup="dialog" title="Choose which columns to show and in what order">▥ Columns</button><button class="button subtle" id="reset-sort" title="Reset to ascending release date">↕ Release</button></div></div><div class="highlighter-bar"></div><div class="table-scroll"><table class="activity-table"><thead><tr><th class="select-col"><input type="checkbox" id="select-all" aria-label="Select all shown tasks" title="Select all shown tasks"></th>${headers}<th><span class="sr-only">Actions</span></th></tr></thead><tbody id="task-rows"></tbody></table></div><div class="table-footer"><span id="row-count"></span><span id="footer-hint">Shift + click a column for multi-column sorting</span><div class="bulk-bar" id="bulk-bar" role="toolbar" aria-label="Actions on the selected tasks" hidden><strong id="bulk-count"></strong><button type="button" class="button small primary" id="bulk-edit">✎ Bulk edit…</button><button type="button" class="button small" id="bulk-excel">⤓ Export to Excel</button><button type="button" class="button small subtle" id="bulk-clear">Deselect</button></div></div></section><div class="hint"><span>✧</span> One archive, four perspectives. Issues, milestones and kanban update automatically.</div>`;
   drawHighlighter();
   drawTaskRows();
   $('.table-scroll').insertAdjacentHTML('beforebegin', columnFilterBar('tasks'));
@@ -1032,19 +1034,19 @@ function releaseViewIds(groups = releaseViewGroups()) {
 }
 function releaseViewOptions(groups = releaseViewGroups()) {
   const option = (date, label, count) => `<option value="${esc(RELEASE_VIEW + date)}" ${RELEASE_VIEW + date === activeSavedViewId ? 'selected' : ''}>${esc(`${label} (${count})`)}</option>`;
-  const upcoming = groups.upcoming.map(date => option(date, `◷ ${formatDate(date)}`, groups.counts.get(date))).join('') + (groups.unassigned ? option('', `◌ ${t('Non assegnata')}`, groups.unassigned) : '');
+  const upcoming = groups.upcoming.map(date => option(date, `◷ ${formatDate(date)}`, groups.counts.get(date))).join('') + (groups.unassigned ? option('', `◌ ${t("Unassigned")}`, groups.unassigned) : '');
   const past = groups.past.map(date => option(date, `◷ ${formatDate(date)}`, groups.counts.get(date))).join('');
-  return (upcoming ? `<optgroup label="${esc(t('Prossime release'))}">${upcoming}</optgroup>` : '') + (past ? `<optgroup label="${esc(t('Release passate'))}">${past}</optgroup>` : '');
+  return (upcoming ? `<optgroup label="${esc(t("Upcoming releases"))}">${upcoming}</optgroup>` : '') + (past ? `<optgroup label="${esc(t("Past releases"))}">${past}</optgroup>` : '');
 }
 function applyReleaseView(id) {
   const date = id.slice(RELEASE_VIEW.length);
-  if (!releaseViewIds().includes(id)) throw new Error(t('La vista salvata non esiste più.'));
+  if (!releaseViewIds().includes(id)) throw new Error(t("The saved view no longer exists."));
   search = ''; statusFilter = ''; highlightFilter = ''; duplicatesOnly = false;
   columnFilters.tasks = { releaseDate: date ? { ...CustomColumns.emptyFilter(), values: [date] } : { ...CustomColumns.emptyFilter(), empty: 'empty' } };
   activeSavedViewId = id;
   $('#modal').open && $('#modal').close();
   render();
-  notify(fillText('Vista «{0}» applicata.', `Release ${date ? formatDate(date) : t('Non assegnata')}`));
+  notify(fillText("View “{0}” applied.", `Release ${date ? formatDate(date) : t("Unassigned")}`));
 }
 function clearActiveSavedView() {
   if (!activeSavedViewId) return;
@@ -1063,34 +1065,34 @@ function savedViewSummary(saved) {
   const mark = highlightsOf().find(item => item.id === saved.highlightFilter)?.name;
   const columns = saved.columns.filter(column => column.visible).length;
   const order = saved.sort.map(item => `${columnDef(item.key) ? columnName(item.key) : t(Object.values(taskColumnDefs).find(column => column.sort === item.key)?.name || item.key)} ${item.direction === 'asc' ? '↑' : '↓'}`).join(', ');
-  return [saved.search && fillText('Ricerca: {0}', saved.search), status && fillText('Stato: {0}', status), mark && fillText('Evidenziazione: {0}', mark),
-    saved.highlightFilter === '__any' && t('Solo evidenziate'), saved.highlightFilter === '__none' && t('Senza evidenziazione'),
-    saved.showHidden && t('Include nascoste'), saved.duplicatesOnly && t('Solo duplicati'),
-    fillText('{0} colonne', columns), ...Object.keys(saved.columnFilters || {}).map(id => columnName(id)), order && fillText('Ordine: {0}', order)].filter(Boolean).join(' · ') || t('Tutte le attività');
+  return [saved.search && fillText("Search: {0}", saved.search), status && fillText("Status: {0}", status), mark && fillText("Highlight: {0}", mark),
+    saved.highlightFilter === '__any' && t("Highlighted only"), saved.highlightFilter === '__none' && t("Not highlighted"),
+    saved.showHidden && t("Include hidden"), saved.duplicatesOnly && t("Duplicates only"),
+    fillText("{0} columns", columns), ...Object.keys(saved.columnFilters || {}).map(id => columnName(id)), order && fillText("Sort: {0}", order)].filter(Boolean).join(' · ') || t("All tasks");
 }
 async function saveSavedView(name, existingId = '') {
   const normalized = name.trim();
-  if (!normalized || normalized.length > 60) throw new Error(t('Il nome della vista deve contenere da 1 a 60 caratteri.'));
+  if (!normalized || normalized.length > 60) throw new Error(t("The view name must contain 1 to 60 characters."));
   const saved = savedViewSnapshot(normalized, existingId || uid());
   await commit(next => {
     const list = next.settings.savedViews || (next.settings.savedViews = []);
     const duplicate = list.find(item => item.id !== saved.id && item.name.trim().toLocaleLowerCase() === normalized.toLocaleLowerCase());
-    if (duplicate) throw new Error(t('Esiste già una vista con questo nome.'));
+    if (duplicate) throw new Error(t("A view with this name already exists."));
     const index = list.findIndex(item => item.id === saved.id);
     if (index >= 0) list[index] = saved;
     else {
-      if (list.length >= 30) throw new Error(t('Hai raggiunto il limite di 30 viste salvate.'));
+      if (list.length >= 30) throw new Error(t("You have reached the limit of 30 saved views."));
       list.push(saved);
     }
   });
   activeSavedViewId = saved.id;
   $('#modal').close();
   rerenderPreservingView();
-  notify(existingId ? 'Vista aggiornata.' : 'Vista salvata.');
+  notify(existingId ? "View updated." : "View saved.");
 }
 async function applySavedView(id) {
   const saved = (data.settings.savedViews || []).find(item => item.id === id);
-  if (!saved) throw new Error(t('La vista salvata non esiste più.'));
+  if (!saved) throw new Error(t("The saved view no longer exists."));
   const columns = normalizeTaskColumns(saved.columns, data.settings.taskFields);
   if (JSON.stringify(columns) !== JSON.stringify(normalizeTaskColumns(data.settings.taskColumns, data.settings.taskFields))) {
     await commit(next => { next.settings.taskColumns = structuredClone(columns); });
@@ -1105,30 +1107,30 @@ async function applySavedView(id) {
   activeSavedViewId = saved.id;
   $('#modal').open && $('#modal').close();
   render();
-  notify(fillText('Vista «{0}» applicata.', saved.name));
+  notify(fillText("View “{0}” applied.", saved.name));
 }
 function renderSavedViewList() {
   const list = $('#saved-view-list');
   if (!list) return;
   const savedViews = data.settings.savedViews || [];
-  list.innerHTML = savedViews.length ? savedViews.map(saved => `<article class="saved-view-item"><div class="saved-view-info"><strong>${esc(saved.name)}</strong><small>${esc(savedViewSummary(saved))}</small></div><button type="button" class="button small primary" data-view-action="apply" data-view-id="${esc(saved.id)}">${esc(t('Apri'))}</button><button type="button" class="button small" data-view-action="update" data-view-id="${esc(saved.id)}">${esc(t('Aggiorna'))}</button><button type="button" class="button small danger" data-view-action="delete" data-view-id="${esc(saved.id)}" aria-label="${esc(fillText('Elimina vista {0}', saved.name))}">✕</button></article>`).join('') : `<p class="backup-empty">${esc(t('Non hai ancora salvato viste.'))}</p>`;
+  list.innerHTML = savedViews.length ? savedViews.map(saved => `<article class="saved-view-item"><div class="saved-view-info"><strong>${esc(saved.name)}</strong><small>${esc(savedViewSummary(saved))}</small></div><button type="button" class="button small primary" data-view-action="apply" data-view-id="${esc(saved.id)}">${esc(t("Open"))}</button><button type="button" class="button small" data-view-action="update" data-view-id="${esc(saved.id)}">${esc(t("Update"))}</button><button type="button" class="button small danger" data-view-action="delete" data-view-id="${esc(saved.id)}" aria-label="${esc(fillText("Delete view {0}", saved.name))}">✕</button></article>`).join('') : `<p class="backup-empty">${esc(t("You have not saved any views yet."))}</p>`;
 }
 function openSavedViews() {
-  openModal(ui`<div class="modal-heading"><div><div class="eyebrow">${esc(t('ATTIVITÀ'))}</div><h2>${esc(t('Viste salvate'))}</h2></div><button type="button" class="icon-button" data-close aria-label="Chiudi">✕</button></div><p class="section-description">${esc(t('Salva filtri, ordinamento e colonne per riapplicarli con un clic. Le viste appartengono solo a questa organizzazione.'))}</p><p class="filter-note">${esc(t('Le viste per ogni release date si creano da sole: le trovi nel menu delle viste, in «Prossime release» e «Release passate».'))}</p><form id="saved-view-form" class="form-grid"><label class="field full">${esc(t('Nome vista'))}<input name="name" maxlength="60" required autocomplete="off" placeholder="${esc(t('Es. Prossima release'))}"></label><div class="modal-actions full"><span class="spacer"></span><button type="submit" class="button primary">${esc(t('Salva vista corrente'))}</button></div></form><div class="saved-view-list" id="saved-view-list"></div>`);
+  openModal(ui`<div class="modal-heading"><div><div class="eyebrow">${esc(t("TASK"))}</div><h2>${esc(t("Saved views"))}</h2></div><button type="button" class="icon-button" data-close aria-label="Close">✕</button></div><p class="section-description">${esc(t("Save filters, sorting and columns to reapply them in one click. Views belong to this organization only."))}</p><p class="filter-note">${esc(t("A view for every release date is created automatically: you find them in the views menu, under “Upcoming releases” and “Past releases”."))}</p><form id="saved-view-form" class="form-grid"><label class="field full">${esc(t("View name"))}<input name="name" maxlength="60" required autocomplete="off" placeholder="${esc(t("e.g. Next release"))}"></label><div class="modal-actions full"><span class="spacer"></span><button type="submit" class="button primary">${esc(t("Save current view"))}</button></div></form><div class="saved-view-list" id="saved-view-list"></div>`);
   const form = $('#saved-view-form');
   form.onsubmit = action(async event => { event.preventDefault(); await saveSavedView(new FormData(form).get('name')); });
   $('#saved-view-list').onclick = action(async event => {
     const button = event.target.closest('[data-view-action]');
     if (!button) return;
     const saved = (data.settings.savedViews || []).find(item => item.id === button.dataset.viewId);
-    if (!saved) throw new Error(t('La vista salvata non esiste più.'));
+    if (!saved) throw new Error(t("The saved view no longer exists."));
     if (button.dataset.viewAction === 'apply') return applySavedView(saved.id);
     if (button.dataset.viewAction === 'update') return saveSavedView(saved.name, saved.id);
-    if (button.dataset.viewAction === 'delete') confirmDialog('Eliminare la vista salvata?', saved.name, async () => {
+    if (button.dataset.viewAction === 'delete') confirmDialog("Delete the saved view?", saved.name, async () => {
       await commit(next => { next.settings.savedViews = (next.settings.savedViews || []).filter(item => item.id !== saved.id); });
       if (activeSavedViewId === saved.id) activeSavedViewId = '';
       rerenderPreservingView();
-      notify('Vista eliminata.');
+      notify("View deleted.");
     });
   });
   renderSavedViewList();
@@ -1140,24 +1142,24 @@ function taskCell(column, task, status, urgency, links, duplicateGroups = []) {
     case 'code': return `<td><button class="code-link" data-edit-task="${task.id}">${esc(task.code)}</button>${portalAnchor(portalUrl(task, data.settings), task.code)}</td>`;
     case 'link': {
       const url = portalUrl(task, data.settings);
-      return `<td class="link-cell">${url ? `<a class="portal-link" href="${esc(url)}" data-open-url title="${esc(t('Apri nel browser predefinito') + ': ' + url)}">${esc(url.replace(/^https?:\/\//i, ''))}</a>` : none}</td>`;
+      return `<td class="link-cell">${url ? `<a class="portal-link" href="${esc(url)}" data-open-url title="${esc(t("Open in the default browser") + ': ' + url)}">${esc(url.replace(/^https?:\/\//i, ''))}</a>` : none}</td>`;
     }
-    case 'description': return `<td class="description-col"><button class="description-cell" data-edit-task="${task.id}" title="${esc(plain(task.description))}">${esc(plain(task.description) || t('Senza descrizione'))}</button></td>`;
+    case 'description': return `<td class="description-col"><button class="description-cell" data-edit-task="${task.id}" title="${esc(plain(task.description))}">${esc(plain(task.description) || t("No description"))}</button></td>`;
     case 'urgency': return `<td>${pill(urgency.name, urgency.color)}</td>`;
     case 'status': return `<td>${pill(status.name, status.color, 'status-pill')}</td>`;
     case 'highlight': { const mark = highlightOf(task); return `<td>${mark ? pill(mark.name, mark.color, 'mark-pill') : none}</td>`; }
-    case 'tags': return `<td class="tags-cell"><button type="button" class="task-tags-button" data-task-tags="${esc(task.id)}" aria-haspopup="dialog" aria-expanded="false" aria-label="${esc(t('Modifica tag'))}" title="${esc(t('Modifica tag'))}">${tagsOf(task).length ? tagChips(task) : `<span class="muted">+ ${esc(t('Tags'))}</span>`}<span aria-hidden="true"> ▾</span></button></td>`;
+    case 'tags': return `<td class="tags-cell"><button type="button" class="task-tags-button" data-task-tags="${esc(task.id)}" aria-haspopup="dialog" aria-expanded="false" aria-label="${esc(t("Edit tags"))}" title="${esc(t("Edit tags"))}">${tagsOf(task).length ? tagChips(task) : `<span class="muted">+ ${esc(t('Tags'))}</span>`}<span aria-hidden="true"> ▾</span></button></td>`;
     case 'effort': return `<td class="effort-cell">${effort(task.effortHours)}</td>`;
     case 'incident': {
       const groups = new Map(duplicateGroups.map(group => [group.key, group]));
       return `<td class="references">${links.incidents.map(incident => {
         const group = groups.get(incident.trim().toUpperCase());
-        return group ? `<button type="button" class="dup-ref" data-dup-incident="${esc(group.incident)}" title="${esc(taskDuplicateLines(task.id, [group])[0] + '\n' + t('Clic per vedere solo le attività coinvolte.'))}">⧉ ${esc(incident)}</button>` : esc(incident);
+        return group ? `<button type="button" class="dup-ref" data-dup-incident="${esc(group.incident)}" title="${esc(taskDuplicateLines(task.id, [group])[0] + '\n' + t("Click to see only the tasks involved."))}">⧉ ${esc(incident)}</button>` : esc(incident);
       }).join('<br>') || none}</td>`;
     }
     case 'problem': return `<td class="references">${links.problems.map(esc).join('<br>') || none}</td>`;
     case 'releaseDate': return `<td><span class="date-pill" style="--date:${task.releaseDate ? dateColor(task.releaseDate) : '#929bb2'}">◷ ${formatDate(task.releaseDate)}</span></td>`;
-    case 'notes': return `<td class="notes-col"><button class="description-cell notes-cell" data-edit-task="${task.id}" title="${esc(plain(task.notes) || t('Aggiungi note'))}">${esc(plain(task.notes) || t('Aggiungi note'))}</button></td>`;
+    case 'notes': return `<td class="notes-col"><button class="description-cell notes-cell" data-edit-task="${task.id}" title="${esc(plain(task.notes) || t("Add notes"))}">${esc(plain(task.notes) || t("Add notes"))}</button></td>`;
     default: return columnDef(column)?.field ? customCell(task, columnDef(column).field) : '<td></td>';
   }
 }
@@ -1167,23 +1169,23 @@ function drawTaskRows() {
     const status = data.settings.statuses.find(s => s.id === task.statusId), urgency = data.settings.urgencies.find(s => s.id === task.urgencyId);
     const links = matchIssues(task, issues), mark = highlightOf(task), duplicateGroups = duplicates.tasks.get(task.id) || [];
     const classes = [status.highlight ? 'highlighted' : '', mark ? 'marked' : '', task.hidden ? 'hidden-row' : '', duplicateGroups.length ? 'duplicate-row' : '', selectedTasks.has(task.id) ? 'selected' : ''].filter(Boolean).join(' ');
-    const markLabel = mark ? fillText('Evidenziazione: {0}', mark.name) : t('Evidenzia riga');
-    const duplicateLabel = duplicateGroups.length ? [t('Possibile duplicato'), ...taskDuplicateLines(task.id, duplicateGroups)].join('\n') : '';
-    const duplicateFlag = duplicateGroups.length ? `<button type="button" class="icon-button dup-flag" data-dup-incident="${esc(duplicateGroups[0].incident)}" title="${esc(duplicateLabel + '\n' + t('Clic per vedere solo le attività coinvolte.'))}" aria-label="${esc(duplicateLabel.replaceAll('\n', '. '))}">⧉</button>` : '';
-    const selectLabel = fillText('Seleziona {0}', task.code);
-    return `<tr data-task-row="${esc(task.id)}" title="${esc(t('Doppio clic sulla riga per modificare.'))}" class="${classes}" style="--row-color:${status.color}${mark ? `;--mark:${mark.color}` : ''}"><td class="select-cell"><label class="select-hit" title="${esc(selectLabel + '\n' + t('Maiusc + clic per selezionare un intervallo.'))}"><input type="checkbox" data-select-task="${esc(task.id)}" ${selectedTasks.has(task.id) ? 'checked' : ''} aria-label="${esc(selectLabel)}"></label></td>${columns.map(column => taskCell(column, task, status, urgency, links, duplicateGroups)).join('')}<td class="row-actions">${duplicateFlag}<button type="button" class="icon-button mark-button ${mark ? 'is-marked' : ''}" data-mark-task="${esc(task.id)}" title="${esc(markLabel)}" aria-label="${esc(markLabel)}" aria-haspopup="menu" aria-expanded="false"><i class="mark-dot"></i></button><button class="icon-button" data-toggle-task="${task.id}" title="${esc(t(task.hidden ? 'Mostra attività' : 'Nascondi attività'))}">${task.hidden ? '◉' : '◌'}</button><button class="icon-button" data-edit-task="${task.id}" title="${esc(t('Modifica attività'))}">⋯</button></td></tr>`;
-  }).join('') || `<tr><td colspan="${columns.length + 2}" class="empty">${esc(t('Nessuna attività trovata. Crea una nuova attività o modifica i filtri.'))}</td></tr>`;
+    const markLabel = mark ? fillText("Highlight: {0}", mark.name) : t("Highlight row");
+    const duplicateLabel = duplicateGroups.length ? [t("Possible duplicate"), ...taskDuplicateLines(task.id, duplicateGroups)].join('\n') : '';
+    const duplicateFlag = duplicateGroups.length ? `<button type="button" class="icon-button dup-flag" data-dup-incident="${esc(duplicateGroups[0].incident)}" title="${esc(duplicateLabel + '\n' + t("Click to see only the tasks involved."))}" aria-label="${esc(duplicateLabel.replaceAll('\n', '. '))}">⧉</button>` : '';
+    const selectLabel = fillText("Select {0}", task.code);
+    return `<tr data-task-row="${esc(task.id)}" title="${esc(t("Double-click the row to edit."))}" class="${classes}" style="--row-color:${status.color}${mark ? `;--mark:${mark.color}` : ''}"><td class="select-cell"><label class="select-hit" title="${esc(selectLabel + '\n' + t("Shift + click to select a range."))}"><input type="checkbox" data-select-task="${esc(task.id)}" ${selectedTasks.has(task.id) ? 'checked' : ''} aria-label="${esc(selectLabel)}"></label></td>${columns.map(column => taskCell(column, task, status, urgency, links, duplicateGroups)).join('')}<td class="row-actions">${duplicateFlag}<button type="button" class="icon-button mark-button ${mark ? 'is-marked' : ''}" data-mark-task="${esc(task.id)}" title="${esc(markLabel)}" aria-label="${esc(markLabel)}" aria-haspopup="menu" aria-expanded="false"><i class="mark-dot"></i></button><button class="icon-button" data-toggle-task="${task.id}" title="${esc(t(task.hidden ? "Show task" : "Hide task"))}">${task.hidden ? '◉' : '◌'}</button><button class="icon-button" data-edit-task="${task.id}" title="${esc(t("Edit task"))}">⋯</button></td></tr>`;
+  }).join('') || `<tr><td colspan="${columns.length + 2}" class="empty">${esc(t("No tasks found. Create a new task or change the filters."))}</td></tr>`;
   document.querySelectorAll('#task-rows .select-cell').forEach((cell, index) => cell.insertAdjacentHTML('afterbegin', dragHandle(tasks[index].code)));
   sortable($('#task-rows'), 'tr[data-task-row]', async (from, to) => {
     try {
       await commit(next => reorderTaskSequences(next.tasks, tasks.map(task => task.id), from, to));
       sort = [{ key: 'sequence', direction: 'asc' }];
       clearActiveSavedView();
-      notify('Ordine salvato. Sequence aggiornate.');
+      notify("Order saved. Sequence updated.");
     } finally { rerenderPreservingView(); }
     document.querySelector(`[data-task-row="${CSS.escape(tasks[from].id)}"] [data-drag-handle]`)?.focus({ preventScroll: true });
   }, true);
-  $('#row-count').textContent = ui`${tasks.length} attività mostrate · ${data.tasks.length} totali`;
+  $('#row-count').textContent = ui`${tasks.length} tasks shown · ${data.tasks.length} total`;
   drawSelection();
   document.querySelectorAll('[data-edit-task]').forEach(b => b.onclick = () => {
     taskDialog(data.tasks.find(t => t.id === b.dataset.editTask));
@@ -1202,7 +1204,7 @@ function showTaskDuplicates(incident) {
   search = incident;
   duplicatesOnly = true;
   renderTasks();
-  notify(fillText('Attività che condividono l’incident {0}.', incident));
+  notify(fillText("Tasks sharing incident {0}.", incident));
 }
 // Selection for bulk edit and export. Shift+click extends from the last ticked row over the rows as currently shown.
 function selectTaskRows(box, extend) {
@@ -1238,7 +1240,7 @@ function drawSelection() {
   $('.table-footer').classList.toggle('has-selection', count > 0);
   $('#bulk-bar').hidden = !count;
   $('#footer-hint').hidden = count > 0;
-  $('#bulk-count').textContent = count ? fillText('{0} selezionate', count) + (outside ? ` · ${fillText('{0} non visibili con i filtri attuali', outside)}` : '') : '';
+  $('#bulk-count').textContent = count ? fillText("{0} selected", count) + (outside ? ` · ${fillText("{0} not visible with the current filters", outside)}` : '') : '';
 }
 const shiftDate = (date, days) => {
   const [year, month, day] = date.split('-').map(Number);
@@ -1251,11 +1253,11 @@ function bulkPlan(fields) {
   if (urgency) steps.push(task => { task.urgencyId = urgency; });
   if (mode === 'set') {
     const date = fields.get('releaseDate');
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('Scegli la nuova release date.');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Choose the new release date.");
     steps.push(task => { task.releaseDate = date; });
   } else if (mode === 'shift') {
     const days = Number(fields.get('shiftDays'));
-    if (!Number.isInteger(days) || !days || Math.abs(days) > 3650) throw new Error('Indica di quanti giorni spostare la release: un numero intero diverso da zero.');
+    if (!Number.isInteger(days) || !days || Math.abs(days) > 3650) throw new Error("Enter how many days to move the release: a whole number other than zero.");
     steps.push(task => { if (task.releaseDate) task.releaseDate = shiftDate(task.releaseDate, days); });
   } else if (mode === 'clear') steps.push(task => { task.releaseDate = ''; });
   if (mark) steps.push(task => { task.highlightId = mark === '__none' ? '' : mark; });
@@ -1269,25 +1271,25 @@ function bulkPlan(fields) {
 }
 function bulkDialog(ids, context = '') {
   const settings = data.settings, wanted = new Set(ids), tasks = sortedRows(data.tasks.filter(task => wanted.has(task.id))), tags = settings.tags || [];
-  if (!tasks.length) { notify('Seleziona almeno un’attività.', true); return; }
-  const keep = `<option value="">${esc(t('— Non modificare —'))}</option>`;
+  if (!tasks.length) { notify("Select at least one task.", true); return; }
+  const keep = `<option value="">${esc(t("— Keep unchanged —"))}</option>`;
   const statuses = settings.statuses.filter(status => tasks.some(task => task.statusId === status.id));
   const items = tasks.map(task => {
     const status = settings.statuses.find(s => s.id === task.statusId);
-    return `<label class="bulk-item ${task.hidden ? 'is-hidden' : ''}"><input type="checkbox" name="taskIds" value="${esc(task.id)}" data-status="${esc(task.statusId)}" checked><strong>${esc(task.code)}</strong><span class="bulk-desc">${esc(plain(task.description) || t('Senza descrizione'))}</span>${pill(status.name, status.color)}<span class="bulk-date" style="--date:${task.releaseDate ? dateColor(task.releaseDate) : '#929bb2'}">◷ ${formatDate(task.releaseDate)}</span></label>`;
+    return `<label class="bulk-item ${task.hidden ? 'is-hidden' : ''}"><input type="checkbox" name="taskIds" value="${esc(task.id)}" data-status="${esc(task.statusId)}" checked><strong>${esc(task.code)}</strong><span class="bulk-desc">${esc(plain(task.description) || t("No description"))}</span>${pill(status.name, status.color)}<span class="bulk-date" style="--date:${task.releaseDate ? dateColor(task.releaseDate) : '#929bb2'}">◷ ${formatDate(task.releaseDate)}</span></label>`;
   }).join('');
-  const tagRows = tags.map(tag => `<label class="bulk-tag">${pill(tag.name, tag.color, 'tag-pill')}<select name="tag:${esc(tag.id)}" aria-label="${esc(fillText('Tag {0}', tag.name))}"><option value="">—</option><option value="add">${esc(t('＋ Aggiungi'))}</option><option value="remove">${esc(t('− Togli'))}</option></select></label>`).join('');
-  openModal(ui`<form id="bulk-form" novalidate><div class="modal-heading"><div><div class="eyebrow">${esc(data.settings.tabNames[0])}</div><h2>${esc(t('Modifica multipla'))}</h2></div><button type="button" class="icon-button" data-close aria-label="Chiudi">✕</button></div>${context ? `<p class="section-description">${esc(context)}</p>` : ''}
-    <section class="bulk-targets" aria-labelledby="bulk-targets-title"><div class="bulk-targets-head"><strong id="bulk-targets-title">Attività coinvolte</strong><span class="bulk-quick">${statuses.length > 1 ? statuses.map(status => `<button type="button" class="bulk-status-chip" data-bulk-status="${esc(status.id)}" style="--pill:${esc(status.color)}" title="${esc(fillText('Seleziona solo: {0}', status.name))}">${esc(status.name)}</button>`).join('') : ''}<button type="button" class="unsaved-link" data-bulk-all="1">Seleziona tutte</button><button type="button" class="unsaved-link" data-bulk-all="0">Deseleziona tutte</button></span></div><div class="bulk-list">${items}</div></section>
+  const tagRows = tags.map(tag => `<label class="bulk-tag">${pill(tag.name, tag.color, 'tag-pill')}<select name="tag:${esc(tag.id)}" aria-label="${esc(fillText('Tag {0}', tag.name))}"><option value="">—</option><option value="add">${esc(t("＋ Add"))}</option><option value="remove">${esc(t("− Remove"))}</option></select></label>`).join('');
+  openModal(ui`<form id="bulk-form" novalidate><div class="modal-heading"><div><div class="eyebrow">${esc(data.settings.tabNames[0])}</div><h2>${esc(t("Bulk edit"))}</h2></div><button type="button" class="icon-button" data-close aria-label="Close">✕</button></div>${context ? `<p class="section-description">${esc(context)}</p>` : ''}
+    <section class="bulk-targets" aria-labelledby="bulk-targets-title"><div class="bulk-targets-head"><strong id="bulk-targets-title">Tasks involved</strong><span class="bulk-quick">${statuses.length > 1 ? statuses.map(status => `<button type="button" class="bulk-status-chip" data-bulk-status="${esc(status.id)}" style="--pill:${esc(status.color)}" title="${esc(fillText("Select only: {0}", status.name))}">${esc(status.name)}</button>`).join('') : ''}<button type="button" class="unsaved-link" data-bulk-all="1">Select all</button><button type="button" class="unsaved-link" data-bulk-all="0">Deselect all</button></span></div><div class="bulk-list">${items}</div></section>
     <div class="form-grid bulk-fields">
-      <label class="field">Stato<select name="statusId">${keep}${optionList(settings.statuses, '')}</select></label>
-      <label class="field">Urgenza<select name="urgencyId">${keep}${optionList(settings.urgencies, '')}</select></label>
-      <div class="field"><label for="bulk-release-mode">Release date</label><div class="bulk-inline"><select id="bulk-release-mode" name="releaseMode">${keep}<option value="set">Imposta una data</option><option value="shift">Sposta di N giorni</option><option value="clear">Togli la data (da pianificare)</option></select><input type="date" name="releaseDate" aria-label="Nuova release date" hidden><input type="number" name="shiftDays" step="1" value="7" aria-label="Giorni di spostamento (negativi per anticipare)" title="Giorni di spostamento (negativi per anticipare)" hidden></div><small id="bulk-release-hint"></small></div>
-      <label class="field">Evidenziazione<select name="highlightId">${keep}<option value="__none">Nessuna evidenziazione</option>${optionList(highlightsOf(), '')}</select></label>
-      <label class="field">Visibilità nella lista<select name="hidden">${keep}<option value="hide">Nascondi dalla lista</option><option value="show">Mostra nella lista</option></select></label>
+      <label class="field">Status<select name="statusId">${keep}${optionList(settings.statuses, '')}</select></label>
+      <label class="field">Urgency<select name="urgencyId">${keep}${optionList(settings.urgencies, '')}</select></label>
+      <div class="field"><label for="bulk-release-mode">Release date</label><div class="bulk-inline"><select id="bulk-release-mode" name="releaseMode">${keep}<option value="set">Set a date</option><option value="shift">Move by N days</option><option value="clear">Remove the date (unscheduled)</option></select><input type="date" name="releaseDate" aria-label="New release date" hidden><input type="number" name="shiftDays" step="1" value="7" aria-label="Days to move (negative to bring forward)" title="Days to move (negative to bring forward)" hidden></div><small id="bulk-release-hint"></small></div>
+      <label class="field">Highlight<select name="highlightId">${keep}<option value="__none">No highlight</option>${optionList(highlightsOf(), '')}</select></label>
+      <label class="field">Visibility in the list<select name="hidden">${keep}<option value="hide">Hide from the list</option><option value="show">Show in the list</option></select></label>
       ${tags.length ? ui`<fieldset class="field full bulk-tags"><legend>Tags</legend><div class="bulk-tag-grid">${tagRows}</div></fieldset>` : ''}
     </div><p class="bulk-summary" id="bulk-summary" aria-live="polite"></p>
-    <div class="modal-actions"><button type="button" class="button danger" id="bulk-delete">Elimina…</button><span class="spacer"></span><button type="button" class="button" data-close>Annulla</button><button type="submit" class="button primary" id="bulk-apply">Applica</button></div></form>`);
+    <div class="modal-actions"><button type="button" class="button danger" id="bulk-delete">Delete…</button><span class="spacer"></span><button type="button" class="button" data-close>Cancel</button><button type="submit" class="button primary" id="bulk-apply">Apply</button></div></form>`);
   const form = $('#bulk-form'), boxes = [...form.querySelectorAll('input[name="taskIds"]')];
   const chosen = () => new Set(boxes.filter(box => box.checked).map(box => box.value));
   const summarize = () => {
@@ -1297,8 +1299,8 @@ function bulkDialog(ids, context = '') {
     form.elements.releaseDate.hidden = mode !== 'set';
     form.elements.shiftDays.hidden = mode !== 'shift';
     const dated = tasks.filter(task => ids.has(task.id) && task.releaseDate).length;
-    $('#bulk-release-hint').textContent = mode === 'shift' ? fillText('Solo le attività con una data: {0} su {1}.', dated, ids.size) : '';
-    $('#bulk-summary').textContent = !ids.size ? t('Seleziona almeno un’attività.') : pending ? fillText('Le modifiche verranno applicate a {0}.', plural(ids.size, 'attività')) : fillText('{0} pronte: scegli cosa modificare.', plural(ids.size, 'attività'));
+    $('#bulk-release-hint').textContent = mode === 'shift' ? fillText("Only tasks with a date: {0} of {1}.", dated, ids.size) : '';
+    $('#bulk-summary').textContent = !ids.size ? t("Select at least one task.") : pending ? fillText("Changes will be applied to {0}.", plural(ids.size, "tasks")) : fillText("{0} ready: choose what to change.", plural(ids.size, "tasks"));
     $('#bulk-apply').disabled = !ids.size || !pending;
     $('#bulk-delete').disabled = !ids.size;
     form.querySelectorAll('[data-bulk-status]').forEach(chip => chip.setAttribute('aria-pressed', String(boxes.every(box => box.checked === (box.dataset.status === chip.dataset.bulkStatus)))));
@@ -1311,8 +1313,8 @@ function bulkDialog(ids, context = '') {
   form.onsubmit = action(async event => {
     event.preventDefault();
     const ids = chosen(), plan = bulkPlan(new FormData(form));
-    if (!ids.size) throw new Error('Seleziona almeno un’attività.');
-    if (!plan.steps.length) throw new Error('Scegli almeno un campo da modificare.');
+    if (!ids.size) throw new Error("Select at least one task.");
+    if (!plan.steps.length) throw new Error("Choose at least one field to change.");
     let changed = 0;
     await commit(next => {
       changed = 0;
@@ -1326,12 +1328,12 @@ function bulkDialog(ids, context = '') {
     if (plan.highlight) ids.forEach(id => pendingMarks.delete(id));
     $('#modal').close();
     rerenderPreservingView();
-    notify(fillText('Modifica multipla applicata: {0} aggiornate.', plural(changed, 'attività')));
+    notify(fillText("Bulk edit applied: {0} updated.", plural(changed, "tasks")));
   });
   $('#bulk-delete').onclick = () => {
     const ids = chosen(), codes = tasks.filter(task => ids.has(task.id)).map(task => task.code);
     if (!ids.size) return;
-    confirmDialog('Eliminare le attività scelte?', fillText('{0} saranno eliminate definitivamente: {1}. Le associazioni issue resteranno disponibili.', plural(ids.size, 'attività'), codes.slice(0, 10).join(', ') + (codes.length > 10 ? '…' : '')), async () => {
+    confirmDialog("Delete the chosen tasks?", fillText("{0} will be permanently deleted: {1}. Issue associations will remain available.", plural(ids.size, "tasks"), codes.slice(0, 10).join(', ') + (codes.length > 10 ? '…' : '')), async () => {
       let removed = 0;
       await commit(next => {
         const before = next.tasks.length;
@@ -1340,7 +1342,7 @@ function bulkDialog(ids, context = '') {
       });
       ids.forEach(id => { selectedTasks.delete(id); pendingMarks.delete(id); });
       rerenderPreservingView();
-      notify(fillText('Attività eliminate: {0}.', removed));
+      notify(fillText("Tasks deleted: {0}.", removed));
     });
   };
 }
@@ -1353,14 +1355,14 @@ function drawHighlighter() {
   const bar = $('.highlighter-bar');
   if (!bar) return;
   const highlights = highlightsOf(), active = highlights.find(h => h.id === highlighter);
-  const hint = highlighter === 'erase' ? t('Gomma attiva: clicca sulle righe per togliere l’evidenziazione. Esc per terminare.')
-    : active ? fillText('Evidenziatore «{0}» attivo: clicca sulle righe da colorare, di nuovo per togliere il colore. Esc per terminare.', active.name)
-      : highlights.length ? t('Scegli un colore e clicca sulle righe da evidenziare, oppure usa il pallino ● a fine riga.') : t('Nessun colore disponibile: aggiungili nelle impostazioni.');
+  const hint = highlighter === 'erase' ? t("Eraser active: click rows to remove their highlight. Press Esc to finish.")
+    : active ? fillText("Highlighter “{0}” active: click rows to color them, click again to remove the color. Press Esc to finish.", active.name)
+      : highlights.length ? t("Pick a color and click the rows to highlight, or use the ● dot at the end of each row.") : t("No colors available: add them in the settings.");
   bar.classList.toggle('active', Boolean(highlighter));
   bar.setAttribute('role', 'toolbar');
-  bar.setAttribute('aria-label', t('Evidenziatore'));
+  bar.setAttribute('aria-label', t("Highlighter"));
   bar.title = hint;
-  bar.innerHTML = `<span class="highlighter-label"><span aria-hidden="true">✎</span> ${esc(t('Evidenziatore'))}</span><div class="highlighter-swatches">${highlights.map(h => `<button type="button" class="highlighter-swatch" data-highlighter="${esc(h.id)}" style="--mark:${h.color}" aria-pressed="${h.id === highlighter}" title="${esc(h.name)}"><i aria-hidden="true"></i><span>${esc(h.name)}</span></button>`).join('')}${highlights.length ? `<button type="button" class="highlighter-swatch eraser" data-highlighter="erase" aria-pressed="${highlighter === 'erase'}" title="${esc(t('Togli l’evidenziazione dalle righe'))}"><span aria-hidden="true">⌫</span><span>${esc(t('Gomma'))}</span></button>` : ''}</div><span class="highlighter-hint" aria-live="polite">${esc(hint)}</span><button type="button" class="unsaved-link highlighter-manage" data-manage-highlights>${esc(t('Gestisci colori'))}</button>`;
+  bar.innerHTML = `<span class="highlighter-label"><span aria-hidden="true">✎</span> ${esc(t("Highlighter"))}</span><div class="highlighter-swatches">${highlights.map(h => `<button type="button" class="highlighter-swatch" data-highlighter="${esc(h.id)}" style="--mark:${h.color}" aria-pressed="${h.id === highlighter}" title="${esc(h.name)}"><i aria-hidden="true"></i><span>${esc(h.name)}</span></button>`).join('')}${highlights.length ? `<button type="button" class="highlighter-swatch eraser" data-highlighter="erase" aria-pressed="${highlighter === 'erase'}" title="${esc(t("Remove the highlight from rows"))}"><span aria-hidden="true">⌫</span><span>${esc(t("Eraser"))}</span></button>` : ''}</div><span class="highlighter-hint" aria-live="polite">${esc(hint)}</span><button type="button" class="unsaved-link highlighter-manage" data-manage-highlights>${esc(t("Manage colors"))}</button>`;
   const table = $('.activity-table');
   table?.classList.toggle('painting', Boolean(highlighter));
   table?.style.setProperty('--paint', active ? active.color : 'var(--muted)');
@@ -1430,10 +1432,10 @@ function openMarkMenu(button) {
   menu.className = 'mark-menu';
   menu.dataset.task = id;
   menu.setAttribute('role', 'menu');
-  menu.setAttribute('aria-label', fillText('Evidenzia {0}', task.code));
+  menu.setAttribute('aria-label', fillText("Highlight {0}", task.code));
   menu.innerHTML = highlightsOf().map(h => item(h.id, h.name, `<i class="mark-swatch" style="--mark:${h.color}"></i>`)).join('') +
-    item('', t('Nessuna evidenziazione'), '<i class="mark-swatch none"></i>') +
-    `<hr><button type="button" role="menuitem" class="mark-choice" data-manage-highlights><i class="mark-swatch manage" aria-hidden="true">⚙</i><span>${esc(t('Gestisci colori…'))}</span></button>`;
+    item('', t("No highlight"), '<i class="mark-swatch none"></i>') +
+    `<hr><button type="button" role="menuitem" class="mark-choice" data-manage-highlights><i class="mark-swatch manage" aria-hidden="true">⚙</i><span>${esc(t("Manage colors…"))}</span></button>`;
   document.body.append(menu);
   const rect = button.getBoundingClientRect(), width = menu.offsetWidth, height = menu.offsetHeight;
   menu.style.left = `${Math.max(8, Math.min(rect.right - width, innerWidth - width - 8))}px`;
@@ -1467,7 +1469,7 @@ window.addEventListener('scroll', event => { if (!document.getElementById('mark-
 window.addEventListener('resize', () => closeMarkMenu());
 // Drag and drop ordering for the settings lists and the column editors. Rows follow the pointer live, the list
 // scrolls near its edges, Esc restores the original order; the ↑ ↓ buttons and the arrow keys on the grip still work.
-const dragHandle = name => `<button type="button" class="drag-handle" data-drag-handle title="${esc(t('Trascina per riordinare, oppure usa i tasti ↑ ↓'))}" aria-label="${esc(fillText('Riordina «{0}»', name))}"></button>`;
+const dragHandle = name => `<button type="button" class="drag-handle" data-drag-handle title="${esc(t("Drag to reorder, or use the ↑ ↓ keys"))}" aria-label="${esc(fillText("Reorder “{0}”", name))}"></button>`;
 function announceOrder(container, message) {
   const host = container.closest('dialog') || document.body;
   let region = [...host.children].find(child => child.classList.contains('sort-status'));
@@ -1487,13 +1489,13 @@ function sortable(container, rowSelector, move, handlesOnly = false) {
       const result = move(from, to);
       if (result?.then) {
         result.then(() => {
-          announceOrder(container, fillText('Spostato in posizione {0} di {1}', to + 1, count));
+          announceOrder(container, fillText("Moved to position {0} of {1}", to + 1, count));
         }).catch(error => notify(error.message, true));
         return;
       }
     }
     rowsOf()[to]?.querySelector('[data-drag-handle]')?.focus();
-    if (from !== to) announceOrder(container, fillText('Spostato in posizione {0} di {1}', to + 1, count));
+    if (from !== to) announceOrder(container, fillText("Moved to position {0} of {1}", to + 1, count));
     refreshSettingsState();
   };
   container.onkeydown = event => {
@@ -1584,7 +1586,7 @@ function sortable(container, rowSelector, move, handlesOnly = false) {
       if (cancel && dragging && row.isConnected) {
         const others = rowsOf().filter(item => item !== row);
         if (others[from]) others[from].before(row); else others.at(-1)?.after(row);
-        announceOrder(container, t('Spostamento annullato'));
+        announceOrder(container, t("Move cancelled"));
       }
       dragging = false;
     }
@@ -1594,11 +1596,11 @@ function columnEditor(container, columns, kind = 'tasks', settings = data.settin
   const draw = focus => {
     container.innerHTML = `<ol class="column-editor">${columns.map((column, index) => {
       const def = columnDef(column.id, kind, settings), name = def.field ? def.name : t(def.name);
-      return `<li class="column-row ${column.visible ? '' : 'is-off'}">${dragHandle(name)}<span class="order-number">${String(index + 1).padStart(2, '0')}</span><label class="column-toggle"><input type="checkbox" data-column-visible="${column.id}" ${column.visible ? 'checked' : ''}><span>${esc(name)}</span></label>${def.sort ? `<span class="column-tag" title="${esc(t('Clic sull’intestazione per ordinare'))}">↕ ${esc(t('Ordinabile'))}</span>` : ''}<button type="button" class="icon-button" data-column-move="${column.id}:-1" ${index === 0 ? 'disabled' : ''} title="${esc(t('Sposta su'))}" aria-label="${esc(`${t('Sposta su')}: ${name}`)}">↑</button><button type="button" class="icon-button" data-column-move="${column.id}:1" ${index === columns.length - 1 ? 'disabled' : ''} title="${esc(t('Sposta giù'))}" aria-label="${esc(`${t('Sposta giù')}: ${name}`)}">↓</button></li>`;
+      return `<li class="column-row ${column.visible ? '' : 'is-off'}">${dragHandle(name)}<span class="order-number">${String(index + 1).padStart(2, '0')}</span><label class="column-toggle"><input type="checkbox" data-column-visible="${column.id}" ${column.visible ? 'checked' : ''}><span>${esc(name)}</span></label>${def.sort ? `<span class="column-tag" title="${esc(t("Click the header to sort"))}">↕ ${esc(t("Sortable"))}</span>` : ''}<button type="button" class="icon-button" data-column-move="${column.id}:-1" ${index === 0 ? 'disabled' : ''} title="${esc(t("Move up"))}" aria-label="${esc(`${t("Move up")}: ${name}`)}">↑</button><button type="button" class="icon-button" data-column-move="${column.id}:1" ${index === columns.length - 1 ? 'disabled' : ''} title="${esc(t("Move down"))}" aria-label="${esc(`${t("Move down")}: ${name}`)}">↓</button></li>`;
     }).join('')}</ol>`;
     container.querySelectorAll('[data-column-visible]').forEach(input => input.onchange = () => {
       const column = columns.find(item => item.id === input.dataset.columnVisible);
-      if (!input.checked && columns.filter(item => item.visible).length === 1) { input.checked = true; notify('Deve restare visibile almeno una colonna.', true); return; }
+      if (!input.checked && columns.filter(item => item.visible).length === 1) { input.checked = true; notify("At least one column must stay visible.", true); return; }
       column.visible = input.checked;
       draw(`[data-column-visible="${column.id}"]`);
     });
@@ -1617,7 +1619,7 @@ function columnEditor(container, columns, kind = 'tasks', settings = data.settin
 }
 function columnsDialog(kind = 'tasks') {
   const columns = kind === 'tasks' ? normalizeTaskColumns(data.settings.taskColumns, data.settings.taskFields) : CustomColumns.normalizeIssueColumns(data.settings.issueColumns, data.settings.issueFields);
-  openModal(`<div class="modal-heading"><div><div class="eyebrow">${esc(t('ATTIVITÀ'))}</div><h2>${esc(t('Colonne della lista'))}</h2></div><button type="button" class="icon-button" data-close aria-label="${esc(t('Chiudi'))}">✕</button></div><p class="section-description">${esc(t('Spunta le colonne da mostrare e trascinale (o usa le frecce) per cambiarne l’ordine. Nascondere una colonna non cancella i dati.'))}</p><div id="columns-dialog-editor"></div><div class="modal-actions"><button type="button" class="button" id="columns-default">${esc(t('Ripristina predefinite'))}</button><span class="spacer"></span><button type="button" class="button" data-close>${esc(t('Annulla'))}</button><button type="button" class="button primary" id="columns-apply">${esc(t('Applica'))}</button></div>`);
+  openModal(`<div class="modal-heading"><div><div class="eyebrow">${esc(t("TASK"))}</div><h2>${esc(t("List columns"))}</h2></div><button type="button" class="icon-button" data-close aria-label="${esc(t("Close"))}">✕</button></div><p class="section-description">${esc(t("Tick the columns to show and drag them (or use the arrows) to change their order. Hiding a column does not delete any data."))}</p><div id="columns-dialog-editor"></div><div class="modal-actions"><button type="button" class="button" id="columns-default">${esc(t("Restore defaults"))}</button><span class="spacer"></span><button type="button" class="button" data-close>${esc(t("Cancel"))}</button><button type="button" class="button primary" id="columns-apply">${esc(t("Apply"))}</button></div>`);
   const container = $('#columns-dialog-editor');
   columnEditor(container, columns, kind);
   $('#columns-default').onclick = () => { columns.splice(0, columns.length, ...(kind === 'tasks' ? defaultTaskColumns(data.settings.taskFields) : CustomColumns.normalizeIssueColumns(undefined, data.settings.issueFields))); columnEditor(container, columns, kind); };
@@ -1626,7 +1628,7 @@ function columnsDialog(kind = 'tasks') {
     clearActiveSavedView();
     $('#modal').close();
     rerenderPreservingView();
-    notify('Colonne aggiornate.');
+    notify("Columns updated.");
   });
 }
 function openModal(html) {
@@ -1645,7 +1647,7 @@ function globalSearchResults(query) {
     const mark = highlightOf(task)?.name || '', tags = tagsOf(task).map(tag => tag.name);
     const fields = [task.code, String(task.sequence), plain(task.description), plain(task.notes), task.releaseDate, formatDate(task.releaseDate), status, urgency, mark, ...tags, ...Object.values(links).flat(), ...customSearchValues(task, 'tasks')];
     if (!fields.some(value => String(value || '').toLocaleLowerCase().includes(needle))) continue;
-    const detail = [task.releaseDate ? formatDate(task.releaseDate) : t('Da pianificare'), status, links.incidents.length && `INC ${links.incidents.join(', ')}`, links.problems.length && `PRB ${links.problems.join(', ')}`, task.hidden && t('Nascosta')].filter(Boolean).join(' · ');
+    const detail = [task.releaseDate ? formatDate(task.releaseDate) : t("Unscheduled"), status, links.incidents.length && `INC ${links.incidents.join(', ')}`, links.problems.length && `PRB ${links.problems.join(', ')}`, task.hidden && t("Hidden")].filter(Boolean).join(' · ');
     results.push({ kind: 'task', id: task.id, title: task.code, detail, subtitle: plain(task.description) });
     if (results.length === 40) return results;
   }
@@ -1657,11 +1659,11 @@ function globalSearchResults(query) {
   return results;
 }
 function openGlobalSearch(initial = '') {
-  openModal(ui`<div class="modal-heading"><div><div class="eyebrow">${esc(t('RICERCA GLOBALE'))}</div><h2>${esc(t('Cerca in OrbitKanban'))}</h2></div><button type="button" class="icon-button" data-close aria-label="Chiudi">✕</button></div><label class="global-search-field"><span aria-hidden="true">⌕</span><input id="global-search-input" type="search" autocomplete="off" placeholder="${esc(t('Codice, incident, problem, release date…'))}" aria-label="${esc(t('Cerca attività e issue'))}"><kbd>Esc</kbd></label><div class="global-search-results" id="global-search-results" role="listbox" aria-label="${esc(t('Risultati della ricerca'))}"></div>`);
+  openModal(ui`<div class="modal-heading"><div><div class="eyebrow">${esc(t("GLOBAL SEARCH"))}</div><h2>${esc(t("Search OrbitKanban"))}</h2></div><button type="button" class="icon-button" data-close aria-label="Close">✕</button></div><label class="global-search-field"><span aria-hidden="true">⌕</span><input id="global-search-input" type="search" autocomplete="off" placeholder="${esc(t("Code, incident, problem, release date…"))}" aria-label="${esc(t("Search tasks and issues"))}"><kbd>Esc</kbd></label><div class="global-search-results" id="global-search-results" role="listbox" aria-label="${esc(t("Search results"))}"></div>`);
   const input = $('#global-search-input'), list = $('#global-search-results');
   const draw = () => {
     const results = globalSearchResults(input.value);
-    list.innerHTML = results.length ? results.map((item, index) => `<button type="button" class="global-search-result" role="option" aria-selected="false" data-global-kind="${item.kind}" data-global-id="${esc(item.id)}" ${index === 0 ? 'data-first-result' : ''}><strong>${esc(item.title)}</strong><span class="global-search-kind">${esc(t(item.kind === 'task' ? 'Attività' : 'Issue'))}</span><small>${esc([item.detail, item.subtitle].filter(Boolean).join(' · '))}</small></button>`).join('') : input.value.trim() ? `<p class="backup-empty">${esc(t('Nessun risultato.'))}</p>` : `<p class="backup-empty">${esc(t('Cerca codici, incident, problem o date di release.'))}</p>`;
+    list.innerHTML = results.length ? results.map((item, index) => `<button type="button" class="global-search-result" role="option" aria-selected="false" data-global-kind="${item.kind}" data-global-id="${esc(item.id)}" ${index === 0 ? 'data-first-result' : ''}><strong>${esc(item.title)}</strong><span class="global-search-kind">${esc(t(item.kind === 'task' ? "Tasks" : 'Issue'))}</span><small>${esc([item.detail, item.subtitle].filter(Boolean).join(' · '))}</small></button>`).join('') : input.value.trim() ? `<p class="backup-empty">${esc(t("No results."))}</p>` : `<p class="backup-empty">${esc(t("Search codes, incidents, problems or release dates."))}</p>`;
   };
   input.value = initial;
   input.oninput = draw;
@@ -1672,7 +1674,7 @@ function openGlobalSearch(initial = '') {
     const button = event.target.closest('[data-global-kind]');
     if (!button) return;
     const item = button.dataset.globalKind === 'task' ? data.tasks.find(task => task.id === button.dataset.globalId) : data.issues.find(issue => issue.id === button.dataset.globalId);
-    if (!item) { notify('L’elemento non esiste più.', true); return; }
+    if (!item) { notify("This item no longer exists.", true); return; }
     $('#modal').close();
     view = button.dataset.globalKind === 'task' ? 0 : 1;
     render();
@@ -1682,7 +1684,7 @@ function openGlobalSearch(initial = '') {
   input.focus();
 }
 function editor(id, label, html, translateLabel = true) {
-  return ui`<div class="field full"><span class="field-label" id="${id}-label">${esc(translateLabel ? t(label) : label)}</span><div class="rich-editor"><div class="rich-toolbar" data-editor="${id}"><button type="button" data-command="bold" title="Grassetto"><b>B</b></button><button type="button" data-command="italic" title="Corsivo"><i>I</i></button><button type="button" data-command="underline" title="Sottolineato"><u>U</u></button><button type="button" data-command="insertUnorderedList" title="Elenco puntato">• Elenco</button><button type="button" data-command="insertOrderedList" title="Elenco numerato">1. Elenco</button><button type="button" data-command="removeFormat" title="Rimuovi formattazione">Tx</button></div><div id="${id}" class="editable" contenteditable="true" role="textbox" aria-multiline="true" aria-labelledby="${id}-label">${sanitize(html)}</div></div></div>`;
+  return ui`<div class="field full"><span class="field-label" id="${id}-label">${esc(translateLabel ? t(label) : label)}</span><div class="rich-editor"><div class="rich-toolbar" data-editor="${id}"><button type="button" data-command="bold" title="Bold"><b>B</b></button><button type="button" data-command="italic" title="Italic"><i>I</i></button><button type="button" data-command="underline" title="Underline"><u>U</u></button><button type="button" data-command="insertUnorderedList" title="Bulleted list">• List</button><button type="button" data-command="insertOrderedList" title="Numbered list">1. List</button><button type="button" data-command="removeFormat" title="Clear formatting">Tx</button></div><div id="${id}" class="editable" contenteditable="true" role="textbox" aria-multiline="true" aria-labelledby="${id}-label">${sanitize(html)}</div></div></div>`;
 }
 function wireEditors() {
   wireChoicePickers();
@@ -1706,16 +1708,16 @@ function wireEditors() {
 function customEditors(kind, record) {
   const fields = CustomColumns.fieldsOf(data.settings, kind);
   if (!fields.length) return '';
-  return `<section class="custom-edit-fields full"><h3>${esc(t('Colonne personalizzate'))}</h3><div class="form-grid">${fields.map(field => {
+  return `<section class="custom-edit-fields full"><h3>${esc(t("Custom columns"))}</h3><div class="form-grid">${fields.map(field => {
     const value = record.customFields?.[field.id], label = esc(field.name), name = esc(field.id);
     if (field.type === 'richtext') return editor(`editor-${field.id}`, field.name, value || '', false);
     const choice = (value, name, selected) => `<option value="${esc(value)}" ${selected ? 'selected' : ''}>${esc(name)}</option>`;
     let input;
-    if (field.type === 'boolean') input = `<select name="${name}">${choice('', '—', value === undefined)}${choice('true', t('Sì'), value === true)}${choice('false', t('No'), value === false)}</select>`;
+    if (field.type === 'boolean') input = `<select name="${name}">${choice('', '—', value === undefined)}${choice('true', t("Yes"), value === true)}${choice('false', t('No'), value === false)}</select>`;
     else if (field.type === 'multiselect') input = `<div>${choiceButton(record, field, kind)}${(value || []).map(value => `<input type="hidden" name="${name}" value="${esc(value)}">`).join('')}</div>`;
     else if (field.type === 'select') input = `<select name="${name}">${choice('', '—', !value)}${CustomColumns.choices(field).map(option => choice(option.id, option.name, option.id === value)).join('')}</select>`;
     else input = `<input name="${name}" type="${field.type === 'date' ? 'date' : ['number', 'effort'].includes(field.type) ? 'number' : 'text'}" ${['number', 'effort'].includes(field.type) ? 'step="any"' : 'maxlength="200000"'} ${field.type === 'effort' ? 'min="0"' : ''} value="${esc(value ?? '')}">`;
-    return `<label class="field">${label}${input}${field.type === 'effort' ? `<small>${esc(t('Valore in ore'))}</small>` : ''}</label>`;
+    return `<label class="field">${label}${input}${field.type === 'effort' ? `<small>${esc(t("Value in hours"))}</small>` : ''}</label>`;
   }).join('')}</div></section>`;
 }
 function readCustomEditors(form, kind) {
@@ -1734,7 +1736,7 @@ function readCustomEditors(form, kind) {
   return values;
 }
 function csvButton(kind) {
-  return `<button class="button" id="import-csv-${kind}" type="button">${esc(t('Importa CSV'))}</button><input type="file" id="csv-file-${kind}" accept=".csv,.tsv,text/csv,text/tab-separated-values" hidden>`;
+  return `<button class="button" id="import-csv-${kind}" type="button">${esc(t("Import CSV"))}</button><input type="file" id="csv-file-${kind}" accept=".csv,.tsv,text/csv,text/tab-separated-values" hidden>`;
 }
 function wireCsvImport(kind) {
   const fileInput = $(`#csv-file-${kind}`);
@@ -1742,23 +1744,23 @@ function wireCsvImport(kind) {
   fileInput.onchange = action(async () => { const file = fileInput.files[0]; fileInput.value = ''; if (file) await csvImportDialog(file, kind); });
 }
 async function csvImportDialog(file, kind) {
-  if (file.size > Csv.MAX_BYTES) throw new Error(t('Il CSV supera il limite di 16 MB.'));
+  if (file.size > Csv.MAX_BYTES) throw new Error(t("The CSV exceeds the 16 MB limit."));
   const buffer = await file.arrayBuffer(), fields = Csv.destinations(data, kind);
   let rows = [], mapping = [], preview;
-  openModal(`<form id="csv-import-form"><div class="modal-heading"><div><div class="eyebrow">CSV · ${esc(data.settings.tabNames[kind === 'tasks' ? 0 : 1])}</div><h2>${esc(t('Importa CSV'))}</h2></div><button type="button" class="icon-button" data-close aria-label="${esc(t('Chiudi'))}">✕</button></div><p>${esc(file.name)}</p>
-    <p class="section-description">${esc(t('Le righe verranno aggiunte, senza sovrascrivere quelle esistenti. I duplicati saranno segnalati normalmente.'))}</p>
-    <div class="csv-options"><label class="field">${esc(t('Separatore'))}<select id="csv-separator"><option value="">${esc(t('Automatico'))}</option><option value=";">;</option><option value=",">,</option><option value="tab">Tab</option></select></label><label class="field">${esc(t('Codifica'))}<select id="csv-encoding"><option value="utf-8">UTF-8</option><option value="windows-1252">Windows-1252 (Excel)</option><option value="utf-16le">UTF-16 LE</option></select></label><label class="checkbox-field"><input id="csv-header" type="checkbox" checked> ${esc(t('Prima riga con intestazioni'))}</label></div>
-    <p class="muted">${esc(t('Date: AAAA-MM-GG o GG/MM/AAAA. Numeri: punto o virgola decimale. Scelte multiple e tag: separare con |. Cataloghi e colonne personalizzate devono essere già configurati.'))}</p>
-    ${kind === 'tasks' ? `<p class="muted">${esc(t('Incident e problem sono calcolati: importarli nella lista delle issue collegate.'))}</p>` : ''}
+  openModal(`<form id="csv-import-form"><div class="modal-heading"><div><div class="eyebrow">CSV · ${esc(data.settings.tabNames[kind === 'tasks' ? 0 : 1])}</div><h2>${esc(t("Import CSV"))}</h2></div><button type="button" class="icon-button" data-close aria-label="${esc(t("Close"))}">✕</button></div><p>${esc(file.name)}</p>
+    <p class="section-description">${esc(t("Rows will be added without overwriting existing ones. Duplicates will be flagged as usual."))}</p>
+    <div class="csv-options"><label class="field">${esc(t("Delimiter"))}<select id="csv-separator"><option value="">${esc(t("Automatic"))}</option><option value=";">;</option><option value=",">,</option><option value="tab">Tab</option></select></label><label class="field">${esc(t("Encoding"))}<select id="csv-encoding"><option value="utf-8">UTF-8</option><option value="windows-1252">Windows-1252 (Excel)</option><option value="utf-16le">UTF-16 LE</option></select></label><label class="checkbox-field"><input id="csv-header" type="checkbox" checked> ${esc(t("First row contains headers"))}</label></div>
+    <p class="muted">${esc(t("Dates: YYYY-MM-DD or DD/MM/YYYY. Numbers: decimal point or comma. Multiple choices and tags: separate with |. Configure catalogs and custom columns first."))}</p>
+    ${kind === 'tasks' ? `<p class="muted">${esc(t("Incidents and problems are calculated: import them into the linked issues list."))}</p>` : ''}
     <div class="csv-mapping" id="csv-mapping"></div><div id="csv-status" role="status" aria-live="polite"></div><div class="table-scroll csv-preview" id="csv-preview"></div>
-    <div class="modal-actions"><span class="spacer"></span><button class="button" type="button" data-close>${esc(t('Annulla'))}</button><button class="button primary" type="submit" id="csv-import" disabled>${esc(t('Importa righe'))}</button></div></form>`);
+    <div class="modal-actions"><span class="spacer"></span><button class="button" type="button" data-close>${esc(t("Cancel"))}</button><button class="button primary" type="submit" id="csv-import" disabled>${esc(t("Import rows"))}</button></div></form>`);
   const showPreview = () => {
     const status = $('#csv-status'), button = $('#csv-import');
     button.disabled = true; preview = undefined; $('#csv-preview').innerHTML = '';
     try {
       preview = Csv.prepareImport(data, kind, rows, mapping);
       status.className = preview.errorCount ? 'csv-errors' : '';
-      status.innerHTML = `<p>${esc(fillText('{0} righe valide · {1} errori', preview.records.length, preview.errorCount))}</p>` + (preview.errorCount ? `<ul>${preview.errors.map(error => `<li>${esc(t('Riga dati') + ' ' + error.row + (error.column ? ` · ${error.custom ? error.column : t(error.column)}` : '') + ': ' + t(error.message))}</li>`).join('')}</ul>` : '');
+      status.innerHTML = `<p>${esc(fillText("{0} valid rows · {1} errors", preview.records.length, preview.errorCount))}</p>` + (preview.errorCount ? `<ul>${preview.errors.map(error => `<li>${esc(t("Data row") + ' ' + error.row + (error.column ? ` · ${error.custom ? error.column : t(error.column)}` : '') + ': ' + t(error.message))}</li>`).join('')}</ul>` : '');
       const selected = mapping.filter(Boolean).map(id => fields.find(field => field.id === id));
       const text = (record, field) => {
         const value = field.custom ? record.customFields?.[field.id] : field.id === 'effortDays' ? record.effortHours / data.settings.hoursPerDay : record[field.id];
@@ -1767,9 +1769,9 @@ async function csvImportDialog(file, kind) {
         if (field.type === 'effort') return String(value ?? '');
         return customText(value, field);
       };
-      $('#csv-preview').innerHTML = `<table><caption>${esc(t('Anteprima delle prime 10 righe valide'))}</caption><thead><tr>${selected.map(field => `<th>${esc(field.custom ? field.name : t(field.name))}</th>`).join('')}</tr></thead><tbody>${preview.records.slice(0, 10).map(record => `<tr>${selected.map(field => `<td>${esc(text(record, field))}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+      $('#csv-preview').innerHTML = `<table><caption>${esc(t("Preview of the first 10 valid rows"))}</caption><thead><tr>${selected.map(field => `<th>${esc(field.custom ? field.name : t(field.name))}</th>`).join('')}</tr></thead><tbody>${preview.records.slice(0, 10).map(record => `<tr>${selected.map(field => `<td>${esc(text(record, field))}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
       button.disabled = preview.errorCount > 0 || !preview.records.length;
-      button.textContent = fillText('Importa {0} righe', preview.records.length);
+      button.textContent = fillText("Import {0} rows", preview.records.length);
     } catch (error) { status.className = 'csv-errors'; status.textContent = t(error.message); }
   };
   const parse = () => {
@@ -1777,13 +1779,13 @@ async function csvImportDialog(file, kind) {
     try {
       let text;
       try { text = new TextDecoder($('#csv-encoding').value, { fatal: true }).decode(buffer); }
-      catch { throw new Error(t('Il file non corrisponde alla codifica selezionata. Prova Windows-1252 oppure UTF-16 LE.')); }
+      catch { throw new Error(t("The file does not match the selected encoding. Try Windows-1252 or UTF-16 LE.")); }
       const separator = $('#csv-separator').value;
       const parsed = Csv.parseCsv(text, separator === 'tab' ? '\t' : separator), hasHeader = $('#csv-header').checked;
-      const headers = hasHeader ? parsed.rows[0] : parsed.rows[0].map((_, i) => `${t('Colonna')} ${i + 1}`);
+      const headers = hasHeader ? parsed.rows[0] : parsed.rows[0].map((_, i) => `${t("Column")} ${i + 1}`);
       rows = hasHeader ? parsed.rows.slice(1) : parsed.rows;
       mapping = hasHeader ? Csv.suggestMapping(headers, fields) : headers.map(() => '');
-      $('#csv-mapping').innerHTML = `<h3>${esc(t('Mappa le colonne'))}</h3>${headers.map((header, index) => `<label class="csv-map-row"><span><strong>${esc(header || `${t('Colonna')} ${index + 1}`)}</strong><small>${esc(rows[0]?.[index]?.slice(0, 100) || '—')}</small></span><select data-csv-column="${index}" aria-label="${esc(t('Destinazione') + ': ' + header)}"><option value="">${esc(t('Non importare'))}</option>${fields.map(field => `<option value="${esc(field.id)}" ${field.id === mapping[index] ? 'selected' : ''}>${esc((field.custom ? `${field.name} · ${t('Personalizzata')}` : t(field.name)) + ' · ' + t(fieldTypeNames[field.type]))}</option>`).join('')}</select></label>`).join('')}`;
+      $('#csv-mapping').innerHTML = `<h3>${esc(t("Map columns"))}</h3>${headers.map((header, index) => `<label class="csv-map-row"><span><strong>${esc(header || `${t("Column")} ${index + 1}`)}</strong><small>${esc(rows[0]?.[index]?.slice(0, 100) || '—')}</small></span><select data-csv-column="${index}" aria-label="${esc(t("Destination") + ': ' + header)}"><option value="">${esc(t("Do not import"))}</option>${fields.map(field => `<option value="${esc(field.id)}" ${field.id === mapping[index] ? 'selected' : ''}>${esc((field.custom ? `${field.name} · ${t("Custom")}` : t(field.name)) + ' · ' + t(fieldTypeNames[field.type]))}</option>`).join('')}</select></label>`).join('')}`;
       document.querySelectorAll('[data-csv-column]').forEach(select => select.onchange = () => { mapping[Number(select.dataset.csvColumn)] = select.value; showPreview(); });
       showPreview();
     } catch (error) { $('#csv-mapping').innerHTML = ''; $('#csv-preview').innerHTML = ''; $('#csv-status').className = 'csv-errors'; $('#csv-status').textContent = t(error.message); }
@@ -1791,16 +1793,16 @@ async function csvImportDialog(file, kind) {
   for (const id of ['csv-separator', 'csv-encoding', 'csv-header']) document.getElementById(id).onchange = parse;
   $('#csv-import-form').onsubmit = action(async event => {
     event.preventDefault();
-    if (!preview || preview.errorCount || !preview.records.length) throw new Error(t('Correggere gli errori prima di importare.'));
+    if (!preview || preview.errorCount || !preview.records.length) throw new Error(t("Fix the errors before importing."));
     $('#csv-import').disabled = true;
     let count;
     try {
       await commit(next => {
         const result = Csv.prepareImport(next, kind, rows, mapping);
-        if (result.errorCount) throw new Error(t('I dati o i cataloghi sono cambiati. Riapri l’importazione e controlla la mappatura.'));
+        if (result.errorCount) throw new Error(t("The data or catalogs have changed. Reopen the import and check the mapping."));
         count = result.records.length; next[kind].push(...result.records);
       });
-      $('#modal').close(); rerenderPreservingView(); notify(fillText('Importate {0} righe.', count));
+      $('#modal').close(); rerenderPreservingView(); notify(fillText("Imported {0} rows.", count));
     } finally { if ($('#csv-import')) $('#csv-import').disabled = false; }
   });
   parse();
@@ -1812,41 +1814,41 @@ function taskDialog(existing) {
     effortHours: 0, releaseDate: '', notes: '', hidden: false, highlightId: '', tagIds: []
   };
   const days = Math.floor(t.effortHours / data.settings.hoursPerDay), hours = Math.round((t.effortHours - days * data.settings.hoursPerDay) * 100) / 100;
-  openModal(ui`<form id="task-form"><div class="modal-heading"><div><div class="eyebrow">ATTIVITÀ</div><h2>${tr(existing ? 'Modifica attività' : 'Una nuova direzione')}</h2></div><button type="button" class="icon-button" data-close aria-label="Chiudi">✕</button></div><div class="task-edit-layout"><div class="form-grid task-edit-fields">
-    <label class="field">Codice portale *<input name="code" required maxlength="200" value="${esc(t.code)}" placeholder="es. PRJ-1042"></label>
-    <label class="field">Progressivo *<input name="sequence" type="number" min="0" step="1" required value="${t.sequence}"></label>
-    <label class="field">Urgenza<select name="urgencyId">${optionList(data.settings.urgencies, t.urgencyId)}</select></label>
-    <label class="field">Stato<select name="statusId">${optionList(data.settings.statuses, t.statusId)}</select></label>
+  openModal(ui`<form id="task-form"><div class="modal-heading"><div><div class="eyebrow">TASK</div><h2>${tr(existing ? "Edit task" : "A new direction")}</h2></div><button type="button" class="icon-button" data-close aria-label="Close">✕</button></div><div class="task-edit-layout"><div class="form-grid task-edit-fields">
+    <label class="field">Portal code *<input name="code" required maxlength="200" value="${esc(t.code)}" placeholder="es. PRJ-1042"></label>
+    <label class="field">Sequence *<input name="sequence" type="number" min="0" step="1" required value="${t.sequence}"></label>
+    <label class="field">Urgency<select name="urgencyId">${optionList(data.settings.urgencies, t.urgencyId)}</select></label>
+    <label class="field">Status<select name="statusId">${optionList(data.settings.statuses, t.statusId)}</select></label>
     <label class="field">Release date<input name="releaseDate" type="date" value="${esc(t.releaseDate)}"></label>
-    <label class="field" title="Colora la riga nella lista attività. I colori si gestiscono in Impostazioni › Evidenziatori.">Evidenziazione<select name="highlightId">${optionList(highlightsOf(), currentMark(t), 'Nessuna evidenziazione')}</select></label>
-    <label class="field"><span class="task-effort-label">Effort in giorni <small>${esc(fillText('1 giorno = {0} ore', data.settings.hoursPerDay))}</small></span><input name="days" type="number" min="0" step="0.01" value="${days}"></label>
-    <label class="field">Effort in ore aggiuntive<input name="hours" type="number" min="0" step="0.01" value="${hours}"></label>
-    <div class="field full portal-field"><label for="task-url">Link specifico (facoltativo)</label><input id="task-url" name="url" inputmode="url" spellcheck="false" autocomplete="off" maxlength="2000" value="${esc(t.url)}"><small id="portal-link-preview" aria-live="polite"></small></div>
-    <label class="field full checkbox-field"><input type="checkbox" name="hidden" ${t.hidden ? 'checked' : ''}> Nascondi solo dalla lista attività (resta visibile in milestone e kanban)</label>
+    <label class="field" title="Colors the row in the task list. Colors are managed in Settings › Highlighters.">Highlight<select name="highlightId">${optionList(highlightsOf(), currentMark(t), "No highlight")}</select></label>
+    <label class="field"><span class="task-effort-label">Effort in days <small>${esc(fillText("1 day = {0} hours", data.settings.hoursPerDay))}</small></span><input name="days" type="number" min="0" step="0.01" value="${days}"></label>
+    <label class="field">Additional effort in hours<input name="hours" type="number" min="0" step="0.01" value="${hours}"></label>
+    <div class="field full portal-field"><label for="task-url">Specific link (optional)</label><input id="task-url" name="url" inputmode="url" spellcheck="false" autocomplete="off" maxlength="2000" value="${esc(t.url)}"><small id="portal-link-preview" aria-live="polite"></small></div>
+    <label class="field full checkbox-field"><input type="checkbox" name="hidden" ${t.hidden ? 'checked' : ''}> Hide from the task list only (still visible in milestones and kanban)</label>
     <div class="auto-match full" id="match-preview"></div>
     ${customEditors('tasks', t)}
     </div><div class="task-edit-text">
-    ${editor('description-editor', 'Descrizione', t.description)}
-    ${editor('notes-editor', 'Note', t.notes)}
-    </div></div><div class="modal-actions">${existing ? ui`<button type="button" class="button danger" id="delete-task">Elimina</button>` : ''}<span class="spacer"></span><button type="button" class="button" data-close>Annulla</button><button type="submit" class="button primary">Salva attività</button></div></form>`);
+    ${editor('description-editor', "Description", t.description)}
+    ${editor('notes-editor', "Notes", t.notes)}
+    </div></div><div class="modal-actions">${existing ? ui`<button type="button" class="button danger" id="delete-task">Delete</button>` : ''}<span class="spacer"></span><button type="button" class="button" data-close>Cancel</button><button type="submit" class="button primary">Save task</button></div></form>`);
   const form = $('#task-form');
   const updateMatches = () => {
     const code = form.elements.code.value, links = matchIssues({ code }, data.issues);
     const groups = findDuplicates([...data.tasks.filter(task => task.id !== t.id), { ...t, code }], data.issues).tasks.get(t.id) || [];
     $('#match-preview').classList.toggle('has-duplicates', groups.length > 0);
-    $('#match-preview').innerHTML = ui`<span>⌘ Collegamento automatico dal codice portale</span><div>Incident: <strong>${esc(links.incidents.join(', ') || '—')}</strong> &nbsp; Problem: <strong>${esc(links.problems.join(', ') || '—')}</strong></div>` +
-      (groups.length ? `<p class="duplicate-warning"><strong>⧉ ${esc(tr('Possibile duplicato'))}</strong>${taskDuplicateLines(t.id, groups).map(line => `<span>${esc(line)}</span>`).join('')}</p>` : '');
+    $('#match-preview').innerHTML = ui`<span>⌘ Automatic link by portal code</span><div>Incident: <strong>${esc(links.incidents.join(', ') || '—')}</strong> &nbsp; Problem: <strong>${esc(links.problems.join(', ') || '—')}</strong></div>` +
+      (groups.length ? `<p class="duplicate-warning"><strong>⧉ ${esc(tr("Possible duplicate"))}</strong>${taskDuplicateLines(t.id, groups).map(line => `<span>${esc(line)}</span>`).join('')}</p>` : '');
   };
   form.elements.code.oninput = updateMatches; updateMatches(); wireEditors();
   const generatedLink = () => portalUrl({ code: form.elements.code.value, url: '' }, data.settings);
   const updateLink = () => {
     const override = normalizeUrl(form.elements.url.value), generated = generatedLink(), effective = override || generated;
-    form.elements.url.placeholder = generated || tr('https://portale.azienda.com/browse/PRJ-1042');
+    form.elements.url.placeholder = generated || tr("https://portal.company.com/browse/PRJ-1042");
     $('#portal-link-preview').innerHTML = !effective
-      ? esc(tr(data.settings.portalUrlTemplate ? 'Inserisci il codice portale per generare il link.' : 'Nessun link: imposta il modello del link nelle impostazioni dell’organizzazione oppure inserisci un link specifico.'))
+      ? esc(tr(data.settings.portalUrlTemplate ? "Enter the portal code to generate the link." : "No link: set the link template in the organization settings or enter a specific link."))
       : isWebUrl(effective)
-        ? `${esc(tr(override ? 'Link specifico' : 'Link generato dal modello dell’organizzazione'))}: <a class="portal-link" href="${esc(effective)}" data-open-url>${esc(effective)} ↗</a>`
-        : `<span class="portal-error">${esc(tr('Il link deve iniziare con http:// o https://.'))}</span>`;
+        ? `${esc(tr(override ? "Specific link" : "Link generated from the organization template"))}: <a class="portal-link" href="${esc(effective)}" data-open-url>${esc(effective)} ↗</a>`
+        : `<span class="portal-error">${esc(tr("The link must start with http:// or https://."))}</span>`;
   };
   form.elements.code.addEventListener('input', updateLink);
   form.elements.url.oninput = updateLink; updateLink();
@@ -1854,7 +1856,7 @@ function taskDialog(existing) {
     event.preventDefault();
     const fields = new FormData(form);
     let url = normalizeUrl(fields.get('url'));
-    if (url && !isWebUrl(url)) throw new Error('Il link deve iniziare con http:// o https://.');
+    if (url && !isWebUrl(url)) throw new Error("The link must start with http:// or https://.");
     if (url === generatedLink()) url = '';
     const item = {
       ...t, code: fields.get('code').trim(), sequence: Number(fields.get('sequence')), url,
@@ -1868,15 +1870,15 @@ function taskDialog(existing) {
       const index = next.tasks.findIndex(x => x.id === item.id);
       if (index >= 0) next.tasks[index] = { ...item, tagIds: next.tasks[index].tagIds }; else next.tasks.push(item);
     });
-    $('#modal').close(); rerenderPreservingView(); notify('Attività salvata.');
+    $('#modal').close(); rerenderPreservingView(); notify("Task saved.");
   });
-  if (existing) $('#delete-task').onclick = () => confirmDialog('Eliminare questa attività?', `${t.code} sarà eliminata definitivamente. Le associazioni issue resteranno disponibili.`, async () => {
-    await commit(next => { next.tasks = next.tasks.filter(x => x.id !== t.id); }); rerenderPreservingView(); notify('Attività eliminata.');
+  if (existing) $('#delete-task').onclick = () => confirmDialog("Delete this task?", `${t.code} will be permanently deleted. Issue associations will remain available.`, async () => {
+    await commit(next => { next.tasks = next.tasks.filter(x => x.id !== t.id); }); rerenderPreservingView(); notify("Task deleted.");
   });
 }
 function confirmDialog(title, message, callback) {
   if ($('#modal').open) $('#modal').close();
-  openModal(ui`<div class="modal-heading"><h2>${esc(t(title))}</h2></div><p class="confirm-message">${esc(t(message))}</p><div class="modal-actions"><span class="spacer"></span><button class="button" data-close>Annulla</button><button class="button danger" id="confirm-action">Conferma</button></div>`);
+  openModal(ui`<div class="modal-heading"><h2>${esc(t(title))}</h2></div><p class="confirm-message">${esc(t(message))}</p><div class="modal-actions"><span class="spacer"></span><button class="button" data-close>Cancel</button><button class="button danger" id="confirm-action">Confirm</button></div>`);
   $('#confirm-action').onclick = action(async () => { await callback(); $('#modal').close(); });
 }
 function linkedCounts() {
@@ -1892,19 +1894,19 @@ function filteredIssues(query = issueSearch, duplicates = duplicatesOf(), counts
 function renderIssues() {
   const duplicates = duplicatesOf(), duplicateCount = duplicates.issues.size, identicalIds = new Set(duplicates.identical), columns = shownIssueColumns(), counts = linkedCounts();
   if (issueDuplicatesOnly && !duplicateCount) issueDuplicatesOnly = false;
-  $('#content').innerHTML = heading(data.settings.tabNames[1], 'Collega il lavoro alla sua origine. Più incident possono condividere lo stesso problem.', csvButton('issues') + excelButton() + ui`<button class="button primary" id="new-issue">＋ Nuova associazione</button>`) +
-    ui`<div class="info-banner">⌘ &nbsp; Incident e problem vengono riportati automaticamente sulle attività con lo stesso codice portale, senza distinzione tra maiuscole e minuscole.</div><section class="panel"><div class="table-toolbar"><strong id="issue-count">${data.issues.length} associazioni</strong><div class="filters"><input id="issue-search" class="issue-search" value="${esc(issueSearch)}" placeholder="Cerca codice, incident o problem…" aria-label="Cerca associazioni"><label class="toggle-label duplicate-toggle ${duplicateCount ? 'has-duplicates' : ''}" title="Mostra solo le associazioni il cui incident compare in più righe"><input id="issue-duplicates-only" type="checkbox" ${issueDuplicatesOnly ? 'checked' : ''} ${duplicateCount ? '' : 'disabled'}> Duplicati <span class="tiny-count">${duplicateCount}</span></label><button class="button subtle" id="issue-columns-button">▥ Colonne</button>${identicalIds.size ? ui`<button class="button subtle" id="remove-identical" title="Elimina le associazioni con stesso codice portale, incident e problem di un’altra, lasciando la prima">Rimuovi identiche <span class="tiny-count">${identicalIds.size}</span></button>` : ''}</div></div>${columnFilterBar('issues')}<div class="table-scroll"><table><thead><tr>${columns.map(id => `<th data-column="${esc(id)}"><div class="column-heading"><span>${esc(columnDef(id, 'issues').field ? columnDef(id, 'issues').name : t(columnDef(id, 'issues').name))}</span>${filterHeader(id, 'issues')}</div></th>`).join('')}<th>Azioni</th></tr></thead><tbody id="issue-rows"></tbody></table></div></section>`;
+  $('#content').innerHTML = heading(data.settings.tabNames[1], "Connect work to its origin. Multiple incidents can share the same problem.", csvButton('issues') + excelButton() + ui`<button class="button primary" id="new-issue">＋ New association</button>`) +
+    ui`<div class="info-banner">⌘ &nbsp; Incidents and problems are automatically linked to tasks with the same portal code, regardless of letter case.</div><section class="panel"><div class="table-toolbar"><strong id="issue-count">${data.issues.length} associations</strong><div class="filters"><input id="issue-search" class="issue-search" value="${esc(issueSearch)}" placeholder="Search code, incident or problem…" aria-label="Search associations"><label class="toggle-label duplicate-toggle ${duplicateCount ? 'has-duplicates' : ''}" title="Show only associations whose incident appears in more than one row"><input id="issue-duplicates-only" type="checkbox" ${issueDuplicatesOnly ? 'checked' : ''} ${duplicateCount ? '' : 'disabled'}> Duplicates <span class="tiny-count">${duplicateCount}</span></label><button class="button subtle" id="issue-columns-button">▥ Columns</button>${identicalIds.size ? ui`<button class="button subtle" id="remove-identical" title="Delete associations with the same portal code, incident and problem as another one, keeping the first">Remove identical <span class="tiny-count">${identicalIds.size}</span></button>` : ''}</div></div>${columnFilterBar('issues')}<div class="table-scroll"><table><thead><tr>${columns.map(id => `<th data-column="${esc(id)}"><div class="column-heading"><span>${esc(columnDef(id, 'issues').field ? columnDef(id, 'issues').name : t(columnDef(id, 'issues').name))}</span>${filterHeader(id, 'issues')}</div></th>`).join('')}<th>Actions</th></tr></thead><tbody id="issue-rows"></tbody></table></div></section>`;
   function rows(query = $('#issue-search').value) {
     issueSearch = query;
     const issues = filteredIssues(query, duplicates, counts);
-    $('#issue-count').textContent = `${issues.length} / ${data.issues.length} ${t('associazioni')}`;
+    $('#issue-count').textContent = `${issues.length} / ${data.issues.length} ${t("associations")}`;
     $('#issue-rows').innerHTML = issues.map(i => {
       const count = counts.get(i.code.trim().toUpperCase()) || 0, group = duplicates.issues.get(i.id);
-      const identical = identicalIds.has(i.id) ? `<span class="dup-note" title="${esc(t('Stesso codice portale, incident e problem di un’altra associazione.'))}">${esc(t('identica'))}</span>` : '';
-      const incident = group ? `<button type="button" class="dup-ref" data-dup-issue="${esc(group.incident)}" title="${esc(issueDuplicateLine(i.id, group) + '\n' + t('Clic per vedere solo le associazioni coinvolte.'))}">⧉ ${esc(i.incident)}</button>${identical}` : esc(i.incident) || '—';
-      const cells = { code: `<td><button class="code-link" data-issue="${i.id}">${esc(i.code)}</button></td>`, incident: `<td>${incident}</td>`, problem: `<td>${pill(i.problem || '—', '#9d8de8')}</td>`, linked: `<td><span class="${count ? 'linked' : 'muted'}">${count ? ui`↗ ${count} attività collegate` : t('In attesa di attività')}</span></td>` };
-      return ui`<tr data-issue-row="${esc(i.id)}" class="${group ? 'duplicate-row' : ''}" title="Doppio clic sulla riga per modificare.">${columns.map(id => cells[id] || customCell(i, columnDef(id, 'issues').field, 'issues')).join('')}<td><button class="button small" data-issue="${i.id}">Modifica</button></td></tr>`;
-    }).join('') || ui`<tr><td colspan="${columns.length + 1}" class="empty">Nessuna associazione. Aggiungi un codice portale con incident e/o problem.</td></tr>`;
+      const identical = identicalIds.has(i.id) ? `<span class="dup-note" title="${esc(t("Same portal code, incident and problem as another association."))}">${esc(t("identical"))}</span>` : '';
+      const incident = group ? `<button type="button" class="dup-ref" data-dup-issue="${esc(group.incident)}" title="${esc(issueDuplicateLine(i.id, group) + '\n' + t("Click to see only the associations involved."))}">⧉ ${esc(i.incident)}</button>${identical}` : esc(i.incident) || '—';
+      const cells = { code: `<td><button class="code-link" data-issue="${i.id}">${esc(i.code)}</button></td>`, incident: `<td>${incident}</td>`, problem: `<td>${pill(i.problem || '—', '#9d8de8')}</td>`, linked: `<td><span class="${count ? 'linked' : 'muted'}">${count ? ui`↗ ${count} linked tasks` : t("Waiting for a task")}</span></td>` };
+      return ui`<tr data-issue-row="${esc(i.id)}" class="${group ? 'duplicate-row' : ''}" title="Double-click the row to edit.">${columns.map(id => cells[id] || customCell(i, columnDef(id, 'issues').field, 'issues')).join('')}<td><button class="button small" data-issue="${i.id}">Edit</button></td></tr>`;
+    }).join('') || ui`<tr><td colspan="${columns.length + 1}" class="empty">No associations. Add a portal code with an incident and/or problem.</td></tr>`;
     wireChoicePickers();
     document.querySelectorAll('[data-issue]').forEach(b => b.onclick = () => issueDialog(data.issues.find(i => i.id === b.dataset.issue)));
     document.querySelectorAll('#issue-rows [data-dup-issue]').forEach(b => b.onclick = () => {
@@ -1918,31 +1920,31 @@ function renderIssues() {
   $('#issue-columns-button').onclick = () => columnsDialog('issues');
   $('#issue-duplicates-only').onchange = event => { issueDuplicatesOnly = event.target.checked; rows(); };
   $('#new-issue').onclick = () => issueDialog();
-  if (identicalIds.size) $('#remove-identical').onclick = () => confirmDialog('Rimuovere le associazioni identiche?', 'Le associazioni con stesso codice portale, incident e problem di un’altra vengono eliminate, lasciando la prima di ciascun gruppo. Incident e problem delle attività non cambiano.', async () => {
+  if (identicalIds.size) $('#remove-identical').onclick = () => confirmDialog("Remove identical associations?", "Associations with the same portal code, incident and problem as another one are deleted, keeping the first of each group. Task incidents and problems do not change.", async () => {
     let removed = 0;
     await commit(next => {
       const ids = new Set(findDuplicates(next.tasks, next.issues).identical);
       removed = ids.size;
       next.issues = next.issues.filter(issue => !ids.has(issue.id));
     });
-    rerenderPreservingView(); notify(fillText('Associazioni identiche rimosse: {0}.', removed));
+    rerenderPreservingView(); notify(fillText("Identical associations removed: {0}.", removed));
   });
 }
 function issueDialog(existing) {
   const issue = existing || { id: uid(), code: '', incident: '', problem: '' };
-  openModal(ui`<form id="issue-form"><div class="modal-heading"><h2>${t(existing ? 'Modifica associazione' : 'Nuova associazione')}</h2><button class="icon-button" type="button" data-close aria-label="Chiudi">✕</button></div><div class="form-grid">
-    <label class="field full">Codice portale *<input name="code" required value="${esc(issue.code)}" list="task-codes"><datalist id="task-codes">${[...new Set(data.tasks.map(t => t.code))].map(code => `<option value="${esc(code)}">`).join('')}</datalist></label>
+  openModal(ui`<form id="issue-form"><div class="modal-heading"><h2>${t(existing ? "Edit association" : "New association")}</h2><button class="icon-button" type="button" data-close aria-label="Close">✕</button></div><div class="form-grid">
+    <label class="field full">Portal code *<input name="code" required value="${esc(issue.code)}" list="task-codes"><datalist id="task-codes">${[...new Set(data.tasks.map(t => t.code))].map(code => `<option value="${esc(code)}">`).join('')}</datalist></label>
     <label class="field">Incident<input name="incident" value="${esc(issue.incident)}" placeholder="INC-00001"></label><label class="field">Problem<input name="problem" value="${esc(issue.problem)}" placeholder="PRB-00001"></label>
     <p class="duplicate-warning full" id="issue-duplicate" hidden></p>
     ${customEditors('issues', issue)}
-    <p class="muted full">Specificare almeno un incident o un problem. Puoi riutilizzare i codici in più associazioni.</p></div><div class="modal-actions">${existing ? ui`<button type="button" class="button danger" id="delete-issue">Elimina</button>` : ''}<span class="spacer"></span><button type="button" class="button" data-close>Annulla</button><button class="button primary" type="submit">Salva associazione</button></div></form>`);
+    <p class="muted full">Specify at least an incident or a problem. Codes can be reused across associations.</p></div><div class="modal-actions">${existing ? ui`<button type="button" class="button danger" id="delete-issue">Delete</button>` : ''}<span class="spacer"></span><button type="button" class="button" data-close>Cancel</button><button class="button primary" type="submit">Save association</button></div></form>`);
   const form = $('#issue-form');
   // Warns while typing when the incident is already in another association; saving stays possible.
   const updateDuplicate = () => {
     const draft = { id: issue.id, code: form.elements.code.value, incident: form.elements.incident.value, problem: form.elements.problem.value };
     const issues = [...data.issues.filter(i => i.id !== issue.id), draft], result = findDuplicates(data.tasks, issues), group = result.issues.get(issue.id);
     $('#issue-duplicate').hidden = !group;
-    $('#issue-duplicate').innerHTML = group ? `<strong>⧉ ${esc(t(result.identical.includes(issue.id) ? 'Esiste già un’associazione identica' : 'Incident già presente'))}</strong><span>${esc(issueDuplicateLine(issue.id, group, issues))}</span><span>${esc(t('Puoi salvare comunque: l’associazione sarà segnalata come duplicato.'))}</span>` : '';
+    $('#issue-duplicate').innerHTML = group ? `<strong>⧉ ${esc(t(result.identical.includes(issue.id) ? "An identical association already exists" : "Incident already present"))}</strong><span>${esc(issueDuplicateLine(issue.id, group, issues))}</span><span>${esc(t("You can still save: the association will be flagged as a duplicate."))}</span>` : '';
   };
   for (const name of ['code', 'incident', 'problem']) form.elements[name].addEventListener('input', updateDuplicate);
   updateDuplicate(); wireEditors();
@@ -1954,31 +1956,31 @@ function issueDialog(existing) {
       const index = next.issues.findIndex(i => i.id === item.id);
       if (index < 0) next.issues.push(item); else next.issues[index] = item;
     });
-    $('#modal').close(); rerenderPreservingView(); notify('Associazione salvata. Attività aggiornate.');
+    $('#modal').close(); rerenderPreservingView(); notify("Association saved. Tasks updated.");
   });
-  if (existing) $('#delete-issue').onclick = () => confirmDialog('Eliminare l’associazione?', 'I relativi incident e problem non appariranno più nelle attività, a meno che esistano altre associazioni.', async () => {
+  if (existing) $('#delete-issue').onclick = () => confirmDialog("Delete this association?", "The associated incidents and problems will no longer appear on tasks unless other associations exist.", async () => {
     await commit(next => { next.issues = next.issues.filter(i => i.id !== issue.id); }); rerenderPreservingView();
   });
 }
 function miniTask(t, readOnly = false) {
   const status = data.settings.statuses.find(s => s.id === t.statusId), urgency = data.settings.urgencies.find(s => s.id === t.urgencyId), mark = highlightOf(t);
-  return `<article class="task-card ${t.hidden ? 'is-hidden' : ''} ${mark ? 'is-marked' : ''}" style="--card-color:${status.color}${mark ? `;--mark:${mark.color}` : ''}"><div class="card-top">${readOnly ? `<strong class="code-label">${esc(t.code)}</strong>` : `<button class="code-link" data-card="${t.id}">${esc(t.code)}</button>`}${portalAnchor(portalUrl(t, data.settings), t.code, 'external-link card-portal-link')}<span class="card-sequence">${t.hidden ? `<span class="hidden-badge" title="${esc(tr('Nascosta dalla lista attività'))}">◌ ${tr('Nascosta in lista')}</span>` : ''}#${t.sequence}</span></div><div class="card-title">${esc(plain(t.description) || tr('Senza descrizione'))}</div><div class="card-meta">${pill(urgency.name, urgency.color)}<span>${effort(t.effortHours)}</span>${mark ? `<span class="mark-chip" title="${esc(tr('Evidenziazione'))}">${esc(mark.name)}</span>` : ''}</div><div class="card-bottom"><span style="color:${t.releaseDate ? dateColor(t.releaseDate) : 'inherit'}">◷ ${formatDate(t.releaseDate)}</span>${!readOnly ? pill(status.name, status.color) : ''}</div></article>`;
+  return `<article class="task-card ${t.hidden ? 'is-hidden' : ''} ${mark ? 'is-marked' : ''}" style="--card-color:${status.color}${mark ? `;--mark:${mark.color}` : ''}"><div class="card-top">${readOnly ? `<strong class="code-label">${esc(t.code)}</strong>` : `<button class="code-link" data-card="${t.id}">${esc(t.code)}</button>`}${portalAnchor(portalUrl(t, data.settings), t.code, 'external-link card-portal-link')}<span class="card-sequence">${t.hidden ? `<span class="hidden-badge" title="${esc(tr("Hidden from the task list"))}">◌ ${tr("Hidden in list")}</span>` : ''}#${t.sequence}</span></div><div class="card-title">${esc(plain(t.description) || tr("No description"))}</div><div class="card-meta">${pill(urgency.name, urgency.color)}<span>${effort(t.effortHours)}</span>${mark ? `<span class="mark-chip" title="${esc(tr("Highlight"))}">${esc(mark.name)}</span>` : ''}</div><div class="card-bottom"><span style="color:${t.releaseDate ? dateColor(t.releaseDate) : 'inherit'}">◷ ${formatDate(t.releaseDate)}</span>${!readOnly ? pill(status.name, status.color) : ''}</div></article>`;
 }
 function renderMilestones() {
   const tasks = data.tasks, dates = [...new Set(tasks.map(t => t.releaseDate).filter(Boolean))].sort();
   milestoneDay = today();
-  const nextDate = nextReleaseDate(tasks, milestoneDay), nextLabel = nextDate === milestoneDay ? 'Release di oggi' : 'Prossima release';
+  const nextDate = nextReleaseDate(tasks, milestoneDay), nextLabel = nextDate === milestoneDay ? "Today's release" : "Next release";
   if (tasks.some(t => !t.releaseDate)) dates.push('');
-  const shortcut = nextDate ? `<button type="button" class="button next-release-link" id="next-release-button" aria-controls="next-release-milestone" title="${esc(t('Vai alla prossima release'))}">${esc(t(nextLabel))} · ${esc(formatDate(nextDate))}</button>` : `<span class="view-label next-release-empty">${esc(t('Nessuna release in programma'))}</span>`;
-  $('#content').innerHTML = heading(data.settings.tabNames[2], 'Ogni release è una tappa. Le date e le attività si allineano automaticamente.', ui`<span class="view-label">${dates.filter(Boolean).length} milestone · ${tasks.length} attività</span>` + shortcut + excelButton()) +
+  const shortcut = nextDate ? `<button type="button" class="button next-release-link" id="next-release-button" aria-controls="next-release-milestone" title="${esc(t("Go to next release"))}">${esc(t(nextLabel))} · ${esc(formatDate(nextDate))}</button>` : `<span class="view-label next-release-empty">${esc(t("No upcoming release"))}</span>`;
+  $('#content').innerHTML = heading(data.settings.tabNames[2], "Every release is a milestone. Dates and tasks stay automatically aligned.", ui`<span class="view-label">${dates.filter(Boolean).length} milestones · ${tasks.length} tasks</span>` + shortcut + excelButton()) +
     ui`<div class="milestone-shell"><div class="milestone-scroll"><div class="milestone-track">${dates.map((date, index) => {
       const group = tasks.filter(t => t.releaseDate === date), color = date ? dateColor(date) : '#929bb2', isNext = Boolean(nextDate && date === nextDate);
-      return ui`<section class="milestone-column ${isNext ? 'is-next-release' : ''}" data-release-date="${esc(date)}" ${isNext ? 'id="next-release-milestone" aria-current="step"' : ''} style="--milestone:${color}"><div class="timeline-label"><span>${date ? ui`TAPPA ${String(index + 1).padStart(2, '0')}` : 'BACKLOG'}</span>${isNext ? `<span class="next-release-badge">${esc(t(nextLabel))}</span>` : ''}</div><div class="timeline-line"><span>◆</span></div><div class="milestone-heading"><h2>${formatDate(date)}</h2><span>${group.length} attività · ${effort(group.reduce((sum, t) => sum + t.effortHours, 0))}</span><button type="button" class="icon-button milestone-bulk" data-bulk-release="${esc(date)}" title="${esc(t('Modifica multipla delle attività di questa tappa'))}" aria-label="${esc(t('Modifica multipla delle attività di questa tappa'))}">✎</button></div><div class="milestone-cards">${sortedRows(group).map(t => miniTask(t)).join('')}</div></section>`;
-    }).join('') || ui`<div class="empty">Aggiungi attività e release date per costruire la tua roadmap.</div>`}</div></div></div><div class="hint">↔ Scorri in orizzontale per esplorare le release e in verticale per tutte le attività. La stessa data mantiene lo stesso colore in ogni vista.</div>`;
+      return ui`<section class="milestone-column ${isNext ? 'is-next-release' : ''}" data-release-date="${esc(date)}" ${isNext ? 'id="next-release-milestone" aria-current="step"' : ''} style="--milestone:${color}"><div class="timeline-label"><span>${date ? ui`MILESTONE ${String(index + 1).padStart(2, '0')}` : 'BACKLOG'}</span>${isNext ? `<span class="next-release-badge">${esc(t(nextLabel))}</span>` : ''}</div><div class="timeline-line"><span>◆</span></div><div class="milestone-heading"><h2>${formatDate(date)}</h2><span>${group.length} tasks · ${effort(group.reduce((sum, t) => sum + t.effortHours, 0))}</span><button type="button" class="icon-button milestone-bulk" data-bulk-release="${esc(date)}" title="${esc(t("Bulk edit the tasks of this milestone"))}" aria-label="${esc(t("Bulk edit the tasks of this milestone"))}">✎</button></div><div class="milestone-cards">${sortedRows(group).map(t => miniTask(t)).join('')}</div></section>`;
+    }).join('') || ui`<div class="empty">Add tasks and release dates to build your roadmap.</div>`}</div></div></div><div class="hint">↔ Scroll horizontally to explore releases and vertically to see all tasks. The same date has the same color in every view.</div>`;
   document.querySelectorAll('[data-card]').forEach(b => b.onclick = () => taskDialog(data.tasks.find(t => t.id === b.dataset.card)));
   document.querySelectorAll('[data-bulk-release]').forEach(button => button.onclick = () => {
     const date = button.dataset.bulkRelease;
-    bulkDialog(data.tasks.filter(task => task.releaseDate === date).map(task => task.id), date ? fillText('Attività della release del {0}, comprese quelle nascoste.', formatDate(date)) : t('Attività da pianificare, comprese quelle nascoste.'));
+    bulkDialog(data.tasks.filter(task => task.releaseDate === date).map(task => task.id), date ? fillText("Tasks of the {0} release, hidden ones included.", formatDate(date)) : t("Unscheduled tasks, hidden ones included."));
   });
   if ($('#next-release-button')) $('#next-release-button').onclick = revealNextMilestone;
   revealNextMilestone();
@@ -1998,14 +2000,14 @@ setInterval(refreshMilestoneDate, 60000);
 document.addEventListener('visibilitychange', refreshMilestoneDate);
 function renderKanban() {
   const tasks = data.tasks;
-  $('#content').innerHTML = heading(data.settings.tabNames[3], 'Una vista di sola lettura, sempre allineata alle attività. Ogni stato trova il suo spazio.', ui`<span class="readonly-badge">◈ Sola lettura</span>` + excelButton()) +
+  $('#content').innerHTML = heading(data.settings.tabNames[3], "A read-only view, always aligned with your tasks. One space for every status.", ui`<span class="readonly-badge">◈ Read only</span>` + excelButton()) +
     ui`<div class="kanban-scroll"><div class="kanban-board">${data.settings.statuses.map(status => {
       const items = sortTasks(tasks.filter(t => t.statusId === status.id));
-      return `<section class="kanban-column" style="--column:${status.color}"><div class="kanban-heading"><span><i></i>${esc(status.name)}</span><b>${items.length}</b></div><div class="kanban-cards">${items.map(t => miniTask(t, true)).join('') || ui`<div class="kanban-empty">Spazio alle prossime attività</div>`}</div></section>`;
-    }).join('')}</div></div><div class="hint">◈ Per modificare uno stato usa la lista attività. L’ordine delle colonne si configura nelle impostazioni.</div>`;
+      return `<section class="kanban-column" style="--column:${status.color}"><div class="kanban-heading"><span><i></i>${esc(status.name)}</span><b>${items.length}</b></div><div class="kanban-cards">${items.map(t => miniTask(t, true)).join('') || ui`<div class="kanban-empty">Room for upcoming tasks</div>`}</div></section>`;
+    }).join('')}</div></div><div class="hint">◈ To change a status, use the task list. Configure column order in settings.</div>`;
 }
 // ---- Excel export of the current situation ----
-const excelButton = () => `<button type="button" class="button excel-button" data-excel-export title="${esc(t('Esporta la situazione attuale in un file Excel'))}">⤓ Excel</button>`;
+const excelButton = () => `<button type="button" class="button excel-button" data-excel-export title="${esc(t("Export the current situation to an Excel file"))}">⤓ Excel</button>`;
 document.addEventListener('click', event => { if (data && event.target.closest('[data-excel-export]')) excelDialog(); });
 let colorProbe;
 // Any CSS color (including the hsl() used for release dates) as #rrggbb, which is what Excel needs.
@@ -2030,7 +2032,7 @@ function richText(html) {
   el.querySelectorAll('p,div,li,blockquote').forEach(node => node.append('\n'));
   return el.textContent.replace(/[ \t\u00a0]+/g, ' ').replace(/ *\n */g, '\n').replace(/\n{3,}/g, '\n\n').trim();
 }
-const EXCEL_SHEETS = [['summary', 'Riepilogo', 'Totali, filtri attivi e distribuzione per stato e urgenza'], ['tasks', 0, 'Una riga per attività con colori, link, date e incident'], ['issues', 1, 'Associazioni, colonne personalizzate e duplicati segnalati'], ['milestones', 2, 'Una riga per release con effort e stati'], ['kanban', 3, 'Le attività in colonne, una per stato']];
+const EXCEL_SHEETS = [['summary', "Summary", "Totals, active filters and breakdown by status and urgency"], ['tasks', 0, "One row per task with colors, links, dates and incidents"], ['issues', 1, "Associations, custom columns and flagged duplicates"], ['milestones', 2, "One row per release with effort and statuses"], ['kanban', 3, "Tasks in columns, one per status"]];
 let excelChoices = { scope: 'view', columns: 'visible', sheets: EXCEL_SHEETS.map(([id]) => id) };
 function excelTasks(scope) {
   if (scope === 'selected') return sortedRows(data.tasks.filter(task => selectedTasks.has(task.id)));
@@ -2040,12 +2042,12 @@ function columnFilterDescriptions(kind) {
   return Object.entries(columnFilters[kind]).map(([id, filter]) => `${columnName(id, kind)}: ${filterSummary(id, kind, filter)}`);
 }
 function activeFilterText(kind = 'tasks') {
-  if (kind === 'issues') return [issueSearch && `${t('Ricerca')}: ${issueSearch}`, issueDuplicatesOnly && t('Solo duplicati'), ...columnFilterDescriptions(kind)].filter(Boolean).join(' · ') || t('Nessuno');
+  if (kind === 'issues') return [issueSearch && `${t("Search")}: ${issueSearch}`, issueDuplicatesOnly && t("Duplicates only"), ...columnFilterDescriptions(kind)].filter(Boolean).join(' · ') || t("None");
   const status = data.settings.statuses.find(s => s.id === statusFilter);
-  const highlight = { __any: t('Solo evidenziate'), __none: t('Senza evidenziazione') }[highlightFilter] || highlightsOf().find(h => h.id === highlightFilter)?.name;
-  const parts = [search && `${t('Ricerca')}: “${search}”`, status && `${t('Stato')}: ${status.name}`, highlight && `${t('Evidenziazione')}: ${highlight}`, showHidden && t('Nascoste incluse'), duplicatesOnly && t('Solo duplicati')].filter(Boolean);
+  const highlight = { __any: t("Highlighted only"), __none: t("Not highlighted") }[highlightFilter] || highlightsOf().find(h => h.id === highlightFilter)?.name;
+  const parts = [search && `${t("Search")}: “${search}”`, status && `${t("Status")}: ${status.name}`, highlight && `${t("Highlight")}: ${highlight}`, showHidden && t("Hidden included"), duplicatesOnly && t("Duplicates only")].filter(Boolean);
   parts.push(...columnFilterDescriptions('tasks'));
-  return parts.join(' · ') || t('Nessuno');
+  return parts.join(' · ') || t("None");
 }
 function sortText() {
   return sort.map(entry => {
@@ -2075,41 +2077,41 @@ async function situationWorkbook(options, now = new Date()) {
   const nextDate = nextReleaseDate(tasks, today());
   const sheets = [];
   if (wanted.has('summary')) {
-    const scopeLabel = { view: t('Come mostrate nella lista'), all: t('Tutte le attività'), selected: t('Solo le selezionate') }[options.scope];
+    const scopeLabel = { view: t("As shown in the list"), all: t("All tasks"), selected: t("Selected only") }[options.scope];
     const label = text => ({ v: t(text), style: { color: muted } });
     const dated = tasks.filter(task => task.releaseDate), hidden = tasks.filter(task => task.hidden).length, total = hours(tasks);
     const highlighted = tasks.filter(task => highlightOf(task) || statusOf(task).highlight).length, duplicated = tasks.filter(task => duplicates.tasks.has(task.id)).length;
-    const breakdown = (title, items, of) => [section(t(title)), [title, 'Attività', 'Ore', 'Effort', '%'].map(text => ({ v: t(text), style: header })),
+    const breakdown = (title, items, of) => [section(t(title)), [title, "Tasks", "Hours", 'Effort', '%'].map(text => ({ v: t(text), style: header })),
       ...items.map(item => {
         const group = tasks.filter(task => of(task) === item.id), cell = { border: grid };
         return [{ v: item.name, style: { ...cell, bold: true, fill: tint(item.color, 0.35) } }, { v: group.length, style: cell }, { v: hours(group), style: cell }, { v: hours(group) ? effort(hours(group)) : '', style: cell }, { v: tasks.length ? group.length / tasks.length : 0, type: 'number', style: { ...cell, numFmt: '0%' } }];
       })];
     const rows = [
-      [{ v: `${APP_NAME} · ${t('Situazione attuale')}`, style: { bold: true, size: 16, color: '#2d3142' } }], [],
-      [label('Organizzazione'), { v: organization, style: { bold: true } }],
-      [label('Esportato il'), { v: now, type: 'datetime', style: { horizontal: 'left' } }],
-      [label('Versione app'), appVersion || '—'],
-      [label('Attività esportate'), scopeLabel],
-      ...(options.scope === 'view' ? [[label('Filtri attivi'), activeFilterText()], [label('Filtri issue'), activeFilterText('issues')]] : []),
-      [label('Ordinamento'), sortText()],
-      [label('Colonne'), t(options.columns === 'all' ? 'Tutte le colonne' : 'Colonne visibili nella lista')],
-      [], section(t('Totali')),
-      [label('Attività'), tasks.length], [label('Di cui nascoste'), hidden],
-      [label('Effort complessivo'), total ? effort(total) : '—'], [label('Effort (ore)'), total],
-      [label('Release pianificate'), new Set(dated.map(task => task.releaseDate)).size], [label('Da pianificare'), tasks.length - dated.length],
-      [label('Prossima release'), nextDate ? { v: nextDate, type: 'date', style: { horizontal: 'left', bold: true } } : '—', nextDate ? plural(tasks.filter(task => task.releaseDate === nextDate).length, 'attività') : ''],
-      [label('In evidenza'), highlighted], [label('Con incident duplicato'), duplicated],
-      [], ...breakdown('Stato', settings.statuses, task => task.statusId),
-      [], ...breakdown('Urgenza', settings.urgencies, task => task.urgencyId)
+      [{ v: `${APP_NAME} · ${t("Current situation")}`, style: { bold: true, size: 16, color: '#2d3142' } }], [],
+      [label("Organization"), { v: organization, style: { bold: true } }],
+      [label("Exported on"), { v: now, type: 'datetime', style: { horizontal: 'left' } }],
+      [label("App version"), appVersion || '—'],
+      [label("Exported tasks"), scopeLabel],
+      ...(options.scope === 'view' ? [[label("Active filters"), activeFilterText()], [label("Issue filters"), activeFilterText('issues')]] : []),
+      [label("Sorting"), sortText()],
+      [label("Columns"), t(options.columns === 'all' ? "All columns" : "Columns visible in the list")],
+      [], section(t("Totals")),
+      [label("Tasks"), tasks.length], [label("Of which hidden"), hidden],
+      [label("Total effort"), total ? effort(total) : '—'], [label("Effort (hours)"), total],
+      [label("Planned releases"), new Set(dated.map(task => task.releaseDate)).size], [label("Unscheduled"), tasks.length - dated.length],
+      [label("Next release"), nextDate ? { v: nextDate, type: 'date', style: { horizontal: 'left', bold: true } } : '—', nextDate ? plural(tasks.filter(task => task.releaseDate === nextDate).length, "tasks") : ''],
+      [label("Highlighted"), highlighted], [label("With a duplicate incident"), duplicated],
+      [], ...breakdown("Status", settings.statuses, task => task.statusId),
+      [], ...breakdown("Urgency", settings.urgencies, task => task.urgencyId)
     ];
-    sheets.push({ name: t('Riepilogo'), columns: [{ width: 26 }, { width: 30 }, { width: 14 }, { width: 14 }, { width: 9 }], rows, gridLines: false, tabColor: '#2d3142', merges: [{ row: 0, col: 0, cols: 5 }] });
+    sheets.push({ name: t("Summary"), columns: [{ width: 26 }, { width: 30 }, { width: 14 }, { width: 14 }, { width: 9 }], rows, gridLines: false, tabColor: '#2d3142', merges: [{ row: 0, col: 0, cols: 5 }] });
   }
   if (wanted.has('tasks')) {
     const issues = indexIssues(data.issues);
     const ids = options.columns === 'all' ? normalizeTaskColumns(settings.taskColumns, settings.taskFields).map(column => column.id) : shownColumns();
     const widths = { sequence: 7, code: 16, link: 40, description: 56, urgency: 14, status: 18, highlight: 18, tags: 22, effort: 11, incident: 18, problem: 18, releaseDate: 14, notes: 48 };
-    const defs = ids.flatMap(id => id === 'effort' ? [{ id, name: t('Effort'), width: 11 }, { id: 'effortHours', name: t('Effort (ore)'), width: 11 }] : [{ id, name: columnDef(id).field ? columnDef(id).name : t(columnDef(id).name), width: widths[id] || 24 }]);
-    if (tasks.some(task => task.hidden)) defs.push({ id: 'hidden', name: t('Nascosta'), width: 11 });
+    const defs = ids.flatMap(id => id === 'effort' ? [{ id, name: t('Effort'), width: 11 }, { id: 'effortHours', name: t("Effort (hours)"), width: 11 }] : [{ id, name: columnDef(id).field ? columnDef(id).name : t(columnDef(id).name), width: widths[id] || 24 }]);
+    if (tasks.some(task => task.hidden)) defs.push({ id: 'hidden', name: t("Hidden"), width: 11 });
     const rows = [defs.map(def => ({ v: def.name, style: { ...header, wrap: true } }))];
     for (const task of tasks) {
       const status = statusOf(task), urgency = urgencyOf(task), mark = highlightOf(task), links = matchIssues(task, issues), url = portalUrl(task, settings);
@@ -2131,8 +2133,8 @@ async function situationWorkbook(options, now = new Date()) {
           case 'effortHours': return cell(task.effortHours);
           case 'incident': return cell(links.incidents.join('\n'), { wrap: true, ...(duplicates.tasks.has(task.id) && { fill: tint('#f2b94a', 0.45) }) });
           case 'problem': return cell(links.problems.join('\n'), { wrap: true });
-          case 'releaseDate': return task.releaseDate ? cell(task.releaseDate, { fill: tint(dateColor(task.releaseDate), 0.5), horizontal: 'center' }, { type: 'date' }) : cell(t('Da pianificare'), { italic: true, color: muted, horizontal: 'center' });
-          case 'hidden': return cell(task.hidden ? t('Sì') : '', { horizontal: 'center' });
+          case 'releaseDate': return task.releaseDate ? cell(task.releaseDate, { fill: tint(dateColor(task.releaseDate), 0.5), horizontal: 'center' }, { type: 'date' }) : cell(t("Unscheduled"), { italic: true, color: muted, horizontal: 'center' });
+          case 'hidden': return cell(task.hidden ? t("Yes") : '', { horizontal: 'center' });
           default: return columnDef(def.id)?.field ? customSpreadsheetCell(task, columnDef(def.id).field, base) : cell('');
         }
       }));
@@ -2143,23 +2145,23 @@ async function situationWorkbook(options, now = new Date()) {
   if (wanted.has('issues')) {
     const identical = new Set(duplicates.identical), cell = { border: grid, vertical: 'top' };
     const ids = options.columns === 'all' ? CustomColumns.normalizeIssueColumns(settings.issueColumns, settings.issueFields).map(column => column.id) : shownIssueColumns();
-    const rows = [[...ids.map(id => ({ v: columnDef(id, 'issues').field ? columnDef(id, 'issues').name : t(id === 'linked' ? 'Attività collegate' : columnDef(id, 'issues').name), style: header })), { v: t('Duplicato'), style: header }],
+    const rows = [[...ids.map(id => ({ v: columnDef(id, 'issues').field ? columnDef(id, 'issues').name : t(id === 'linked' ? "Linked tasks" : columnDef(id, 'issues').name), style: header })), { v: t("Duplicate"), style: header }],
       ...(options.scope === 'view' ? filteredIssues() : data.issues).map(issue => {
         const linked = data.tasks.filter(task => task.code.trim().toUpperCase() === issue.code.trim().toUpperCase()), task = linked[0], url = task ? portalUrl(task, settings) : '', group = duplicates.issues.get(issue.id);
         const values = { code: { v: issue.code, link: url, style: { ...cell, bold: true } }, incident: { v: issue.incident, style: { ...cell, ...(group && { fill: tint('#f2b94a', 0.45) }) } }, problem: { v: issue.problem, style: cell }, linked: { v: linked.length, style: cell } };
-        return [...ids.map(id => values[id] || customSpreadsheetCell(issue, columnDef(id, 'issues').field, cell)), { v: group ? t(identical.has(issue.id) ? 'identica' : 'Sì') : '', style: { ...cell, horizontal: 'center' } }];
+        return [...ids.map(id => values[id] || customSpreadsheetCell(issue, columnDef(id, 'issues').field, cell)), { v: group ? t(identical.has(issue.id) ? "identical" : "Yes") : '', style: { ...cell, horizontal: 'center' } }];
       })];
     sheets.push({ name: settings.tabNames[1], columns: [...ids.map(() => ({ width: 22 })), { width: 12 }], rows, freeze: { row: 1 }, autoFilter: true });
   }
   if (wanted.has('milestones')) {
     const dates = [...new Set(tasks.map(task => task.releaseDate).filter(Boolean))].sort(), day = today();
     if (tasks.some(task => !task.releaseDate)) dates.push('');
-    const rows = [['Tappa', 'Release date', 'Release', 'Attività', 'Ore', 'Effort'].map(text => ({ v: t(text), style: header })).concat(settings.statuses.map(status => ({ v: status.name, style: { ...header, fill: tint(status.color, 0.55), color: '#1d2030', wrap: true } })), { v: t('Codici'), style: header })];
+    const rows = [["Milestone", 'Release date', 'Release', "Tasks", "Hours", 'Effort'].map(text => ({ v: t(text), style: header })).concat(settings.statuses.map(status => ({ v: status.name, style: { ...header, fill: tint(status.color, 0.55), color: '#1d2030', wrap: true } })), { v: t("Codes"), style: header })];
     dates.forEach((date, index) => {
       const group = tasks.filter(task => task.releaseDate === date), next = Boolean(date && date === nextDate), fill = next ? '#fff1c2' : '';
-      const state = !date ? t('Da pianificare') : next ? t(date === day ? 'Release di oggi' : 'Prossima release') : t(date < day ? 'Passata' : 'Futura');
+      const state = !date ? t("Unscheduled") : next ? t(date === day ? "Today's release" : "Next release") : t(date < day ? "Past" : "Upcoming");
       const cell = { border: grid, vertical: 'top', ...(fill && { fill }), ...(next && { bold: true }) };
-      rows.push([{ v: date ? index + 1 : '—', style: { ...cell, horizontal: 'center' } }, date ? { v: date, type: 'date', style: { ...cell, fill: fill || tint(dateColor(date), 0.5), horizontal: 'center' } } : { v: t('Da pianificare'), style: { ...cell, italic: true } }, { v: state, style: cell }, { v: group.length, style: cell }, { v: hours(group), style: cell }, { v: hours(group) ? effort(hours(group)) : '', style: cell },
+      rows.push([{ v: date ? index + 1 : '—', style: { ...cell, horizontal: 'center' } }, date ? { v: date, type: 'date', style: { ...cell, fill: fill || tint(dateColor(date), 0.5), horizontal: 'center' } } : { v: t("Unscheduled"), style: { ...cell, italic: true } }, { v: state, style: cell }, { v: group.length, style: cell }, { v: hours(group), style: cell }, { v: hours(group) ? effort(hours(group)) : '', style: cell },
         ...settings.statuses.map(status => ({ v: group.filter(task => task.statusId === status.id).length || '', style: { ...cell, horizontal: 'center' } })), { v: sortedRows(group).map(task => task.code).join(', '), style: { ...cell, wrap: true } }]);
     });
     sheets.push({ name: settings.tabNames[2], columns: [{ width: 8 }, { width: 14 }, { width: 17 }, { width: 10 }, { width: 9 }, { width: 11 }, ...settings.statuses.map(() => ({ width: 12 })), { width: 60 }], rows, freeze: { row: 1, col: 2 } });
@@ -2183,7 +2185,7 @@ async function exportExcel(options) {
   const organization = organizations.find(o => o.id === activeOrganizationId)?.name || '';
   const bytes = await situationWorkbook(options);
   const result = await workspaceApi.exportSpreadsheet(situationFileName(organization, currentLanguage()), bytes);
-  if (result) notify('Excel esportato:', false, result.fileName);
+  if (result) notify("Excel exported:", false, result.fileName);
   return result;
 }
 function excelDialog(preset = {}) {
@@ -2192,18 +2194,18 @@ function excelDialog(preset = {}) {
   const columns = normalizeTaskColumns(data.settings.taskColumns, data.settings.taskFields);
   const radio = (name, value, title, detail, disabled = false) => `<label class="choice-card ${disabled ? 'is-disabled' : ''}"><input type="radio" name="${name}" value="${value}" ${choices[name] === value ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span><strong>${esc(t(title))}</strong><small>${esc(detail)}</small></span></label>`;
   const sheetCards = EXCEL_SHEETS.map(([id, name, detail]) => `<label class="choice-card"><input type="checkbox" name="sheets" value="${id}" ${choices.sheets.includes(id) ? 'checked' : ''}><span><strong>${esc(typeof name === 'number' ? data.settings.tabNames[name] : t(name))}</strong><small>${esc(t(detail))}</small></span></label>`).join('');
-  openModal(ui`<form id="excel-form" novalidate><div class="modal-heading"><div><div class="eyebrow">EXCEL</div><h2>Esporta in Excel</h2></div><button type="button" class="icon-button" data-close aria-label="Chiudi">✕</button></div>
-    <p class="section-description">Crea una cartella di lavoro .xlsx. Riepilogo, milestone e kanban seguono le attività scelte. “Come mostrate” applica anche i filtri delle issue; le altre opzioni esportano tutte le issue.</p>
-    <fieldset class="excel-group"><legend>Attività da esportare</legend><div class="choice-grid">${radio('scope', 'view', 'Come mostrate nella lista', fillText('{0} · filtri e ordinamento attuali', plural(filteredTasks().length, 'attività')))}${radio('scope', 'all', 'Tutte le attività', fillText('{0}, comprese le nascoste', plural(data.tasks.length, 'attività')))}${radio('scope', 'selected', 'Solo le selezionate', selected ? fillText('{0} selezionate', selected) : t('Nessuna attività selezionata'), !selected)}</div></fieldset>
-    <fieldset class="excel-group"><legend>Colonne dei fogli attività e issue</legend><div class="choice-grid">${radio('columns', 'visible', 'Colonne visibili nella lista', fillText('Attività: {0} · Issue: {1}', shownColumns().length, shownIssueColumns().length))}${radio('columns', 'all', 'Tutte le colonne', fillText('Attività: {0} · Issue: {1}', columns.length, CustomColumns.normalizeIssueColumns(data.settings.issueColumns, data.settings.issueFields).length))}</div></fieldset>
-    <fieldset class="excel-group"><legend>Fogli</legend><div class="choice-grid sheets">${sheetCards}</div></fieldset>
-    <div class="modal-actions"><span class="spacer"></span><button type="button" class="button" data-close>Annulla</button><button type="submit" class="button primary" id="excel-save">⤓ Esporta</button></div></form>`);
+  openModal(ui`<form id="excel-form" novalidate><div class="modal-heading"><div><div class="eyebrow">EXCEL</div><h2>Export to Excel</h2></div><button type="button" class="icon-button" data-close aria-label="Close">✕</button></div>
+    <p class="section-description">Create an .xlsx workbook. Summary, milestones and kanban follow the selected tasks. “As shown” also applies issue filters; the other options export all issues.</p>
+    <fieldset class="excel-group"><legend>Tasks to export</legend><div class="choice-grid">${radio('scope', 'view', "As shown in the list", fillText("{0} · current filters and sorting", plural(filteredTasks().length, "tasks")))}${radio('scope', 'all', "All tasks", fillText("{0}, hidden ones included", plural(data.tasks.length, "tasks")))}${radio('scope', 'selected', "Selected only", selected ? fillText("{0} selected", selected) : t("No task selected"), !selected)}</div></fieldset>
+    <fieldset class="excel-group"><legend>Task and issue sheet columns</legend><div class="choice-grid">${radio('columns', 'visible', "Columns visible in the list", fillText("Tasks: {0} · Issues: {1}", shownColumns().length, shownIssueColumns().length))}${radio('columns', 'all', "All columns", fillText("Tasks: {0} · Issues: {1}", columns.length, CustomColumns.normalizeIssueColumns(data.settings.issueColumns, data.settings.issueFields).length))}</div></fieldset>
+    <fieldset class="excel-group"><legend>Sheets</legend><div class="choice-grid sheets">${sheetCards}</div></fieldset>
+    <div class="modal-actions"><span class="spacer"></span><button type="button" class="button" data-close>Cancel</button><button type="submit" class="button primary" id="excel-save">⤓ Export</button></div></form>`);
   const form = $('#excel-form');
   form.onsubmit = action(async event => {
     event.preventDefault();
     const fields = new FormData(form), options = { scope: fields.get('scope') || 'view', columns: fields.get('columns') || 'visible', sheets: fields.getAll('sheets') };
-    if (!options.sheets.length) throw new Error('Scegli almeno un foglio da esportare.');
-    if (options.scope === 'selected' && !selectedTasks.size) throw new Error('Seleziona almeno un’attività.');
+    if (!options.sheets.length) throw new Error("Choose at least one sheet to export.");
+    if (options.scope === 'selected' && !selectedTasks.size) throw new Error("Select at least one task.");
     excelChoices = options;
     $('#excel-save').disabled = true;
     try {
@@ -2211,20 +2213,20 @@ function excelDialog(preset = {}) {
     } finally { if (form.isConnected) $('#excel-save').disabled = false; }
   });
 }
-const exportKinds = [['themes', '◐', 'Esporta temi'], ['settings', '⚙', 'Esporta configurazione'], ['data', '▤', 'Esporta dati'], ['organization', '◈', 'Esporta tutto']];
-const exportedMessages = { themes: 'Temi esportati:', settings: 'Configurazione esportata:', data: 'Dati esportati:', organization: 'Organizzazione esportata:' };
-const importKindNames = { themes: 'Temi', settings: 'Configurazione', data: 'Dati', organization: 'Organizzazione completa' };
+const exportKinds = [['themes', '◐', "Export themes"], ['settings', '⚙', "Export settings"], ['data', '▤', "Export data"], ['organization', '◈', "Export everything"]];
+const exportedMessages = { themes: "Themes exported:", settings: "Settings exported:", data: "Data exported:", organization: "Organization exported:" };
+const importKindNames = { themes: "Themes", settings: "Settings", data: "Data", organization: "Full organization" };
 const fillText = (text, ...values) => values.reduce((result, value, index) => result.replaceAll(`{${index}}`, value), t(text));
 function transferPanel() {
   const settings = data.settings, activeTheme = settings.themes.find(theme => theme.id === settings.themeId);
   const details = {
-    themes: `${plural(settings.themes.length, 'tema')} · ${fillText('attivo: {0}', esc(activeTheme.name))}`,
-    settings: `${plural(settings.statuses.length, 'stato')} · ${plural(settings.urgencies.length, 'urgenza')} · ${plural((settings.highlights || []).length, 'evidenziatore')} · ${(settings.tags || []).length} ${t('Tags')} · ${t(settings.logo ? 'lingua, link, tab, colonne, dimensioni del testo e logo' : 'lingua, link, tab, colonne e dimensioni del testo')}`,
-    data: `${plural(data.tasks.length, 'attività')} · ${plural(data.issues.length, 'issue')}`,
-    organization: t('Temi, configurazione e dati in un unico file')
+    themes: `${plural(settings.themes.length, 'theme')} · ${fillText("active: {0}", esc(activeTheme.name))}`,
+    settings: `${plural(settings.statuses.length, 'status')} · ${plural(settings.urgencies.length, 'urgency')} · ${plural((settings.highlights || []).length, 'highlighter')} · ${(settings.tags || []).length} ${t('Tags')} · ${t(settings.logo ? "language, link, tabs, columns, text sizes and logo" : "language, link, tabs, columns and text sizes")}`,
+    data: `${plural(data.tasks.length, "tasks")} · ${plural(data.issues.length, 'issue')}`,
+    organization: t("Themes, settings and data in a single file")
   };
   const cards = exportKinds.map(([kind, icon, label]) => `<button type="button" class="transfer-card" data-export-kind="${kind}"><span class="transfer-icon" aria-hidden="true">${icon}</span><span class="transfer-text"><strong>${t(label)}</strong><small>${details[kind]}</small></span></button>`).join('');
-  return ui`<section class="panel settings-section full" id="transfer-panel"><div class="storage-heading"><div><h2>Esporta e importa organizzazione</h2><p class="section-description">Salva temi, configurazione e dati di questa organizzazione in file separati, da condividere o da reimportare qui o in un’altra copia di OrbitKanban.</p></div><span class="readonly-badge">FILE JSON</span></div><div class="transfer-grid">${cards}</div><div class="storage-actions"><button type="button" class="button primary" id="import-organization">↙ Importa da file…</button><input type="file" id="organization-file" accept=".json,application/json" hidden><span class="transfer-hint">Scegli un file esportato da OrbitKanban: prima di applicarlo potrai decidere quali parti importare e dove.</span></div></section>`;
+  return ui`<section class="panel settings-section full" id="transfer-panel"><div class="storage-heading"><div><h2>Export and import organization</h2><p class="section-description">Save this organization’s themes, settings and data as separate files, to share them or import them again here or into another copy of OrbitKanban.</p></div><span class="readonly-badge">JSON FILES</span></div><div class="transfer-grid">${cards}</div><div class="storage-actions"><button type="button" class="button primary" id="import-organization">↙ Import from file…</button><input type="file" id="organization-file" accept=".json,application/json" hidden><span class="transfer-hint">Choose a file exported by OrbitKanban: before applying it you can decide which parts to import and where.</span></div></section>`;
 }
 function wireTransfer() {
   document.querySelectorAll('[data-export-kind]').forEach(button => {
@@ -2243,7 +2245,7 @@ function wireTransfer() {
     const input = event.target, file = input.files[0];
     if (!file) return;
     input.value = '';
-    if (file.size > 32 * 1024 * 1024) throw new Error(t('File troppo grande per un’esportazione OrbitKanban.'));
+    if (file.size > 32 * 1024 * 1024) throw new Error(t("This file is too large to be an OrbitKanban export."));
     organizationImportDialog(parseOrganizationFile(await file.text()));
   });
 }
@@ -2251,20 +2253,20 @@ function organizationImportDialog(file) {
   const current = organizations.find(o => o.id === activeOrganizationId), toNew = file.kind === 'organization';
   const fileTheme = file.themes?.themes.find(theme => theme.id === file.themes.themeId);
   const exportedAt = file.exportedAt ? new Date(file.exportedAt).toLocaleString(locale(), { dateStyle: 'medium', timeStyle: 'short' }) : '';
-  const origin = [file.organization.name ? fillText('Da «{0}»', esc(file.organization.name)) : esc(t('Organizzazione senza nome')), exportedAt && fillText('esportato il {0}', esc(exportedAt)), file.appVersion && `OrbitKanban v${esc(file.appVersion)}`].filter(Boolean).join(' · ');
+  const origin = [file.organization.name ? fillText("From “{0}”", esc(file.organization.name)) : esc(t("Unnamed organization")), exportedAt && fillText("exported on {0}", esc(exportedAt)), file.appVersion && `OrbitKanban v${esc(file.appVersion)}`].filter(Boolean).join(' · ');
   const part = (name, title, detail, extra = '') => `<div class="import-part"><label class="import-check"><input type="checkbox" name="${name}" checked><span><strong>${esc(t(title))}</strong><small>${detail}</small></span></label>${extra}</div>`;
   const radio = (name, value, title, detail, checked) => `<label class="radio-card"><input type="radio" name="${name}" value="${value}" ${checked ? 'checked' : ''}><span><strong>${esc(t(title))}</strong><small>${detail}</small></span></label>`;
   const parts = [
-    file.themes && part('themes', 'Temi', `${plural(file.themes.themes.length, 'tema')}: ${esc(t('quelli con lo stesso identificativo vengono aggiornati, gli altri aggiunti.'))}`,
-      `<label class="import-sub"><input type="checkbox" name="activateTheme" checked><span>${fillText('Attiva il tema «{0}»', esc(fileTheme.name))}</span><span class="theme-swatches">${themeFields.map(([key]) => `<i style="background:${fileTheme[key]}"></i>`).join('')}</span></label>`),
-    file.settings && part('settings', 'Configurazione', esc(t(file.settings.tags ? 'Lingua, link al portale, nomi delle tab, ore per giorno, dimensioni del testo, stati, urgenze, evidenziatori, tags e colonne della lista. Sostituisce la configurazione attuale.' : file.settings.highlights ? 'Lingua, link al portale, nomi delle tab, ore per giorno, dimensioni del testo, stati, urgenze, evidenziatori e colonne della lista. Sostituisce la configurazione attuale.' : file.settings.fontSizes ? 'Lingua, link al portale, nomi delle tab, ore per giorno, dimensioni del testo, stati e urgenze. Sostituisce la configurazione attuale.' : 'Lingua, link al portale, nomi delle tab, ore per giorno, stati e urgenze. Sostituisce la configurazione attuale.')),
-      file.settings.logo ? `<label class="import-sub"><input type="checkbox" name="logo"><img class="import-logo" src="${file.settings.logo}" alt=""><span>${esc(t('Sostituisci anche il logo'))}</span></label>` : ''),
-    file.data && part('data', 'Dati', `${plural(file.data.tasks.length, 'attività')} · ${plural(file.data.issues.length, 'issue')}`,
-      `<div class="import-sub import-modes" id="import-data-mode">${radio('dataMode', 'merge', 'Aggiungi e aggiorna', esc(t('Le attività con lo stesso identificativo vengono aggiornate, le issue già presenti non vengono duplicate.')), true)}${radio('dataMode', 'replace', 'Sostituisci tutto', esc(t('Attività e issue attuali vengono sostituite da quelle del file.')), false)}</div>`)
+    file.themes && part('themes', "Themes", `${plural(file.themes.themes.length, 'theme')}: ${esc(t("those with the same identifier are updated, the others are added."))}`,
+      `<label class="import-sub"><input type="checkbox" name="activateTheme" checked><span>${fillText("Activate the “{0}” theme", esc(fileTheme.name))}</span><span class="theme-swatches">${themeFields.map(([key]) => `<i style="background:${fileTheme[key]}"></i>`).join('')}</span></label>`),
+    file.settings && part('settings', "Settings", esc(t(file.settings.tags ? "Language, portal link, tab names, hours per day, text sizes, statuses, urgencies, highlighters, tags and list columns. Replaces current settings." : file.settings.highlights ? "Language, portal link, tab names, hours per day, text sizes, statuses, urgencies, highlighters and list columns. Replaces the current settings." : file.settings.fontSizes ? "Language, portal link, tab names, hours per day, text sizes, statuses and urgencies. Replaces the current settings." : "Language, portal link, tab names, hours per day, statuses and urgencies. Replaces the current settings.")),
+      file.settings.logo ? `<label class="import-sub"><input type="checkbox" name="logo"><img class="import-logo" src="${file.settings.logo}" alt=""><span>${esc(t("Also replace the logo"))}</span></label>` : ''),
+    file.data && part('data', "Data", `${plural(file.data.tasks.length, "tasks")} · ${plural(file.data.issues.length, 'issue')}`,
+      `<div class="import-sub import-modes" id="import-data-mode">${radio('dataMode', 'merge', "Add and update", esc(t("Tasks with the same identifier are updated, issues already present are not duplicated.")), true)}${radio('dataMode', 'replace', "Replace everything", esc(t("Current tasks and issues are replaced by those in the file.")), false)}</div>`)
   ].filter(Boolean).join('');
-  const destinations = radio('destination', 'current', 'In questa organizzazione', esc(current.name), !toNew) + radio('destination', 'new', 'In una nuova organizzazione', esc(t('L’organizzazione attuale non viene modificata.')), toNew);
-  const suggestedName = uniqueOrganizationName(file.organization.name, organizations.map(o => o.name), t('Organizzazione importata'));
-  openModal(ui`<form id="organization-import-form"><div class="modal-heading"><div><div class="eyebrow">IMPORTAZIONE</div><h2>Importa da file</h2></div><button type="button" class="icon-button" data-close aria-label="Chiudi">✕</button></div><div class="import-source"><span class="import-kind">${esc(t(importKindNames[file.kind]))}</span><span>${origin}</span></div><fieldset class="import-parts"><legend>Cosa importare</legend>${parts}</fieldset><fieldset class="import-target"><legend>Dove importare</legend><div class="import-destinations">${destinations}</div><label class="field" id="import-name-field">Nome della nuova organizzazione<input name="name" maxlength="100" required value="${esc(suggestedName)}"></label></fieldset><ul class="import-notes" id="import-notes" aria-live="polite"></ul><div class="modal-actions"><span class="spacer"></span><button type="button" class="button" data-close>Annulla</button><button type="submit" class="button primary" id="confirm-import">Importa</button></div></form>`);
+  const destinations = radio('destination', 'current', "Into this organization", esc(current.name), !toNew) + radio('destination', 'new', "Into a new organization", esc(t("The current organization is left unchanged.")), toNew);
+  const suggestedName = uniqueOrganizationName(file.organization.name, organizations.map(o => o.name), t("Imported organization"));
+  openModal(ui`<form id="organization-import-form"><div class="modal-heading"><div><div class="eyebrow">IMPORT</div><h2>Import from file</h2></div><button type="button" class="icon-button" data-close aria-label="Close">✕</button></div><div class="import-source"><span class="import-kind">${esc(t(importKindNames[file.kind]))}</span><span>${origin}</span></div><fieldset class="import-parts"><legend>What to import</legend>${parts}</fieldset><fieldset class="import-target"><legend>Where to import</legend><div class="import-destinations">${destinations}</div><label class="field" id="import-name-field">New organization name<input name="name" maxlength="100" required value="${esc(suggestedName)}"></label></fieldset><ul class="import-notes" id="import-notes" aria-live="polite"></ul><div class="modal-actions"><span class="spacer"></span><button type="button" class="button" data-close>Cancel</button><button type="submit" class="button primary" id="confirm-import">Import</button></div></form>`);
   const form = $('#organization-import-form'), fields = form.elements;
   const selected = name => Boolean(fields[name]?.checked);
   let logoChoice = false;
@@ -2282,14 +2284,14 @@ function organizationImportDialog(file) {
     $('#import-name-field').hidden = !toNewOrganization;
     fields.name.disabled = !toNewOrganization;
     $('#confirm-import').disabled = !['themes', 'settings', 'data'].some(selected);
-    $('#confirm-import').textContent = t(toNewOrganization ? 'Crea e importa' : 'Importa');
+    $('#confirm-import').textContent = t(toNewOrganization ? "Create and import" : "Import");
     const notes = [];
-    if (toNewOrganization) notes.push('Verrà creata una nuova organizzazione con le parti selezionate: quella attuale non viene modificata.');
+    if (toNewOrganization) notes.push("A new organization will be created with the selected parts: the current one is left unchanged.");
     else {
-      if (selected('settings')) notes.push('La configurazione attuale verrà sostituita: le attività esistenti restano e vengono associate agli stati e alle urgenze del file con lo stesso nome, altrimenti nella stessa posizione.');
-      else if (selected('data')) notes.push('Stati e urgenze delle attività importate vengono associati a quelli di questa organizzazione con lo stesso nome, altrimenti nella stessa posizione.');
-      if (selected('data') && fields.dataMode.value === 'replace') notes.push('Tutte le attività e le issue attuali di questa organizzazione verranno eliminate e sostituite da quelle del file.');
-      notes.push('Se vuoi poter tornare indietro, esporta prima un backup o l’organizzazione completa.');
+      if (selected('settings')) notes.push("The current settings will be replaced: existing tasks are kept and mapped to the file’s statuses and urgencies with the same name, otherwise to the same position.");
+      else if (selected('data')) notes.push("Statuses and urgencies of the imported tasks are mapped to this organization’s ones with the same name, otherwise to the same position.");
+      if (selected('data') && fields.dataMode.value === 'replace') notes.push("All current tasks and issues of this organization will be deleted and replaced by those in the file.");
+      notes.push("To be able to go back, first export a backup or the full organization.");
     }
     $('#import-notes').innerHTML = notes.map(note => `<li>${esc(t(note))}</li>`).join('');
   };
@@ -2301,10 +2303,10 @@ function organizationImportDialog(file) {
     const options = { themes: selected('themes'), activateTheme: selected('activateTheme'), settings: selected('settings'), logo: selected('logo'), data: selected('data'), dataMode: fields.dataMode?.value === 'replace' ? 'replace' : 'merge' };
     if (fields.destination.value === 'new') {
       const name = fields.name.value.trim();
-      if (!name || name.length > 100) throw new Error(t('Nome organizzazione non valido.'));
+      if (!name || name.length > 100) throw new Error(t("Invalid organization name."));
       await organizationAction('import', { name, data: importedOrganizationData(file, options, data.settings.language) });
       $('#modal').close();
-      notify('Organizzazione importata.');
+      notify("Organization imported.");
       return;
     }
     await commit(next => {
@@ -2312,23 +2314,23 @@ function organizationImportDialog(file) {
       next.settings = imported.settings; next.tasks = imported.tasks; next.issues = imported.issues;
     });
     statusFilter = '';
-    $('#modal').close(); render(); notify('Importazione completata.');
+    $('#modal').close(); render(); notify("Import completed.");
   });
 }
 const fontSizeLabels = {
-  base: ['Testo generale', 'Barra superiore, pulsanti, statistiche, filtri, impostazioni e messaggi.'],
-  sidebar: ['Barra laterale', 'Organizzazione, viste e informazioni nella colonna di sinistra.'],
-  headings: ['Intestazioni di pagina', 'Occhiello, titolo e descrizione in cima a ogni vista.'],
-  tables: ['Tabelle', 'Righe e colonne della lista attività e delle issue collegate.'],
-  milestones: ['Vista milestone', 'Date, tappe e schede della roadmap.'],
-  kanban: ['Vista kanban', 'Colonne e schede della board.'],
-  dialogs: ['Finestre di dialogo', 'Modifica di attività e issue, conferme e importazione.']
+  base: ["General text", "Top bar, buttons, statistics, filters, settings and messages."],
+  sidebar: ["Sidebar", "Organization, views and details in the left column."],
+  headings: ["Page headings", "Eyebrow, title and description at the top of each view."],
+  tables: ["Tables", "Rows and columns of the task list and linked issues."],
+  milestones: ["Milestone view", "Roadmap dates, milestones and cards."],
+  kanban: ["Kanban view", "Board columns and cards."],
+  dialogs: ["Dialogs", "Task and issue editing, confirmations and import."]
 };
-const fontPresets = [[85, 'Compatta'], [100, 'Standard'], [115, 'Ampia'], [130, 'Molto ampia']];
+const fontPresets = [[85, "Compact"], [100, 'Standard'], [115, "Large"], [130, "Extra large"]];
 function sampleTask() {
   const { statuses, urgencies } = data.settings;
   return data.tasks.find(task => task.releaseDate && !task.hidden && plain(task.description)) || data.tasks.find(task => task.releaseDate) || data.tasks[0] || {
-    id: 'font-sample', code: 'PRJ-1042', sequence: 1, url: '', description: t('Esempio: prepara il rilascio e aggiorna la documentazione.'), notes: '',
+    id: 'font-sample', code: 'PRJ-1042', sequence: 1, url: '', description: t("Example: prepare the release and update the documentation."), notes: '',
     releaseDate: new Date().toLocaleDateString('en-CA'), statusId: statuses[Math.min(1, statuses.length - 1)].id, urgencyId: urgencies[0].id, effortHours: 12, hidden: false
   };
 }
@@ -2336,35 +2338,35 @@ function fontSample(id, task) {
   const settings = data.settings, status = settings.statuses.find(s => s.id === task.statusId) || settings.statuses[0];
   const color = task.releaseDate ? dateColor(task.releaseDate) : '#929bb2', group = data.tasks.includes(task) ? data.tasks.filter(item => item.releaseDate === task.releaseDate) : [task];
   const samples = {
-    base: () => ui`<div class="sample-stack"><div class="stat"><span>Attività visibili <span class="stat-icon">▤</span></span><strong>${visibleTasks().length}<small>nel tuo workspace</small></strong></div><div class="sample-actions"><span class="button primary">＋ Nuova attività</span><span class="button">Salva impostazioni</span></div></div>`,
+    base: () => ui`<div class="sample-stack"><div class="stat"><span>Visible tasks <span class="stat-icon">▤</span></span><strong>${visibleTasks().length}<small>in your workspace</small></strong></div><div class="sample-actions"><span class="button primary">＋ New task</span><span class="button">Save settings</span></div></div>`,
     sidebar: () => [0, 1, 2].map(i => `<div class="nav-button ${i ? '' : 'active'}"><span class="nav-icon">${icons[i]}</span><span>${esc(settings.tabNames[i])}</span>${i ? '' : `<span class="nav-count">${visibleTasks().length}</span>`}</div>`).join(''),
-    headings: () => heading(settings.tabNames[0], 'Tutte le attività, una direzione. Pianifica il lavoro e tieni a fuoco le prossime release.'),
-    tables: () => ui`<table><thead><tr><th>Codice portale</th><th>Descrizione</th><th>Release date</th></tr></thead><tbody><tr><td><span class="code-link">${esc(task.code)}</span></td><td><span class="description-cell">${esc(plain(task.description) || tr('Senza descrizione'))}</span></td><td><span class="date-pill" style="--date:${color}">◷ ${formatDate(task.releaseDate)}</span></td></tr></tbody></table>`,
-    milestones: () => ui`<div style="--milestone:${color}"><div class="timeline-label">TAPPA ${'01'}</div><div class="timeline-line"><span>◆</span></div><div class="milestone-heading"><h2>${formatDate(task.releaseDate)}</h2><span>${group.length} attività · ${effort(group.reduce((sum, item) => sum + item.effortHours, 0))}</span></div><div class="milestone-cards">${miniTask(task)}</div></div>`,
+    headings: () => heading(settings.tabNames[0], "All tasks, one direction. Plan your work and focus on upcoming releases."),
+    tables: () => ui`<table><thead><tr><th>Portal code</th><th>Description</th><th>Release date</th></tr></thead><tbody><tr><td><span class="code-link">${esc(task.code)}</span></td><td><span class="description-cell">${esc(plain(task.description) || tr("No description"))}</span></td><td><span class="date-pill" style="--date:${color}">◷ ${formatDate(task.releaseDate)}</span></td></tr></tbody></table>`,
+    milestones: () => ui`<div style="--milestone:${color}"><div class="timeline-label">MILESTONE ${'01'}</div><div class="timeline-line"><span>◆</span></div><div class="milestone-heading"><h2>${formatDate(task.releaseDate)}</h2><span>${group.length} tasks · ${effort(group.reduce((sum, item) => sum + item.effortHours, 0))}</span></div><div class="milestone-cards">${miniTask(task)}</div></div>`,
     kanban: () => `<div class="kanban-column" style="--column:${status.color}"><div class="kanban-heading"><span><i></i>${esc(status.name)}</span><b>${data.tasks.filter(item => item.statusId === status.id).length}</b></div><div class="kanban-cards">${miniTask(task, true)}</div></div>`,
-    dialogs: () => ui`<div class="sample-dialog"><div class="modal-heading"><div><div class="eyebrow">ATTIVITÀ</div><h2>Modifica attività</h2></div><span class="icon-button">✕</span></div><label class="field">Codice portale<input value="${esc(task.code)}" readonly tabindex="-1"></label><div class="modal-actions"><span class="spacer"></span><span class="button">Annulla</span><span class="button primary">Salva attività</span></div></div>`
+    dialogs: () => ui`<div class="sample-dialog"><div class="modal-heading"><div><div class="eyebrow">TASK</div><h2>Edit task</h2></div><span class="icon-button">✕</span></div><label class="field">Portal code<input value="${esc(task.code)}" readonly tabindex="-1"></label><div class="modal-actions"><span class="spacer"></span><span class="button">Cancel</span><span class="button primary">Save task</span></div></div>`
   };
   return samples[id]();
 }
 function fontSizePanel() {
   const sizes = settingsDraft.fontSizes || defaultFontSizes(), task = sampleTask();
-  const families = [true, false].map(bundled => `<optgroup label="${esc(t(bundled ? 'Inclusi nel portable (offline)' : 'Font di sistema (se installati)'))}">${FONT_FAMILIES.filter(font => Boolean(font.bundled) === bundled).map(font => `<option value="${font.id}" ${font.id === (settingsDraft.fontFamily ?? DEFAULT_FONT_FAMILY) ? 'selected' : ''}>${font.name}</option>`).join('')}</optgroup>`).join('');
+  const families = [true, false].map(bundled => `<optgroup label="${esc(t(bundled ? "Bundled with the portable app (offline)" : "System fonts (if installed)"))}">${FONT_FAMILIES.filter(font => Boolean(font.bundled) === bundled).map(font => `<option value="${font.id}" ${font.id === (settingsDraft.fontFamily ?? DEFAULT_FONT_FAMILY) ? 'selected' : ''}>${font.name}</option>`).join('')}</optgroup>`).join('');
   const presets = fontPresets.map(([value, name]) => `<button type="button" class="button small font-preset" data-font-preset="${value}" aria-pressed="false">${esc(t(name))} <small>${value}%</small></button>`).join('');
   const cards = FONT_SIZE_PARTS.map(({ id, min, max }) => {
-    const [name, description] = fontSizeLabels[id], value = sizes[id] ?? 100, reset = t('Ripristina 100%');
+    const [name, description] = fontSizeLabels[id], value = sizes[id] ?? 100, reset = t("Reset to 100%");
     return `<div class="font-size-card" data-font-card="${id}"><div class="font-size-title"><label for="font-size-${id}">${esc(t(name))}</label><small id="font-size-${id}-hint">${esc(t(description))}</small></div><div class="font-size-control"><span class="font-size-limit" aria-hidden="true">${min}%</span><input type="range" id="font-size-${id}" data-font-size="${id}" min="${min}" max="${max}" step="${FONT_SIZE_STEP}" value="${value}" aria-describedby="font-size-${id}-hint"><span class="font-size-limit" aria-hidden="true">${max}%</span><output class="font-size-value" id="font-size-${id}-value" for="font-size-${id}">${value}%</output><button type="button" class="icon-button font-size-reset" data-font-reset="${id}" title="${esc(reset)}" aria-label="${esc(`${reset}: ${t(name)}`)}">↺</button></div><div class="font-sample" data-part="${id}" inert aria-hidden="true">${fontSample(id, task)}</div></div>`;
   }).join('');
-  return ui`<section class="panel settings-section full" id="font-size-panel"><label class="field font-family-field"><span>${esc(t('Font dell’interfaccia'))}</span><select id="font-family">${families}</select><small>${esc(t('Anteprima immediata; salva per mantenere la scelta. I font inclusi funzionano offline su ogni PC. I font di sistema, come Aptos, richiedono l’installazione locale; se mancano viene usato un carattere alternativo.'))}</small></label><div class="font-size-heading"><div><h2>Dimensione del testo</h2><p class="section-description">Regola il testo di ogni parte dell’app: l’anteprima è immediata in tutta l’interfaccia, salva per mantenerla. Minimi e massimi mantengono tutto leggibile e ordinato.</p></div><div class="font-presets" role="group" aria-label="Preimpostazioni">${presets}</div></div><div class="font-size-grid">${cards}<div class="font-size-card font-size-notes"><h3>Buono a sapersi</h3><ul><li>100% è la dimensione consigliata; le preimpostazioni regolano tutte le parti insieme.</li><li>Ogni parte ha un minimo e un massimo, a passi del 5%: l’interfaccia resta sempre utilizzabile.</li><li>Le dimensioni valgono solo per questa organizzazione e sono incluse nell’esportazione della configurazione.</li></ul></div></div></section>`;
+  return ui`<section class="panel settings-section full" id="font-size-panel"><label class="field font-family-field"><span>${esc(t("Interface font"))}</span><select id="font-family">${families}</select><small>${esc(t("Instant preview; save to keep your choice. Bundled fonts work offline on every PC. System fonts, such as Aptos, must be installed locally; an alternative is used when unavailable."))}</small></label><div class="font-size-heading"><div><h2>Text size</h2><p class="section-description">Adjust the text of each part of the app: the preview applies instantly across the whole interface, save to keep it. Minimums and maximums keep everything readable and tidy.</p></div><div class="font-presets" role="group" aria-label="Presets">${presets}</div></div><div class="font-size-grid">${cards}<div class="font-size-card font-size-notes"><h3>Good to know</h3><ul><li>100% is the recommended size; presets adjust every part at once.</li><li>Each part has a minimum and a maximum, in 5% steps: the interface always stays usable.</li><li>Sizes apply only to this organization and are included in the settings export.</li></ul></div></div></section>`;
 }
 function paintFontFamily(value = DEFAULT_FONT_FAMILY) {
   const font = FONT_FAMILIES.find(font => font.id === value);
-  if (!font) throw new Error(t('Font non valido.'));
+  if (!font) throw new Error(t("Invalid font."));
   document.documentElement.style.fontFamily = font.css;
   if (font.bundled) document.fonts.load(`400 14px "${font.name}"`).then(faces => {
     if (!faces.length) throw new Error(`Missing font face: ${font.name}`);
   }).catch(error => {
     console.error('Portable font load failed:', error);
-    notify(t('Impossibile caricare il font incluso. Verifica i file dell’app o scegli un altro font.') + ` (${font.name})`, true);
+    notify(t("Unable to load the bundled font. Check the app files or choose another font.") + ` (${font.name})`, true);
   });
 }
 function wireFontSizes() {
@@ -2408,24 +2410,24 @@ async function loadBackupList() {
   const requestId = ++backupRequest;
   const result = await workspaceApi.backups('list');
   if (requestId !== backupRequest || !$('#backup-list')) return;
-  $('#backup-status').textContent = fillText('Copie disponibili: {0} su {1}.', result.backups.length, result.retention);
+  $('#backup-status').textContent = fillText("Backups available: {0} of {1}.", result.backups.length, result.retention);
   $('#backup-list').innerHTML = result.backups.length ? result.backups.map(backup => {
     const date = new Date(`${backup.date}T12:00:00`);
     const label = Number.isNaN(date.getTime()) ? backup.date : date.toLocaleDateString(locale(), { weekday: 'short', day: '2-digit', month: 'long', year: 'numeric' });
     const size = backup.size >= 1024 * 1024 ? `${(backup.size / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(backup.size / 1024))} KB`;
-    return `<article class="backup-item"><div class="backup-info"><strong>${esc(label)}</strong><small>${esc(size)} · ${esc(backup.fileName)}</small></div><button type="button" class="button small danger" data-restore-backup="${esc(backup.fileName)}">${esc(t('Ripristina…'))}</button></article>`;
-  }).join('') : `<p class="backup-empty">${esc(t('Non sono ancora disponibili copie automatiche.'))}</p>`;
+    return `<article class="backup-item"><div class="backup-info"><strong>${esc(label)}</strong><small>${esc(size)} · ${esc(backup.fileName)}</small></div><button type="button" class="button small danger" data-restore-backup="${esc(backup.fileName)}">${esc(t("Restore…"))}</button></article>`;
+  }).join('') : `<p class="backup-empty">${esc(t("No automatic backups are available yet."))}</p>`;
 }
 function restoreDailyBackup(fileName) {
   const date = fileName.slice(0, 10);
-  confirmDialog('Ripristinare questa copia?', fillText('Il backup del {0} sostituirà tutte le organizzazioni, attività e impostazioni. Prima viene creato workspace.json.bak con lo stato corrente.', date), async () => {
+  confirmDialog("Restore this backup?", fillText("The backup from {0} will replace all organizations, tasks and settings. workspace.json.bak is created first with the current state.", date), async () => {
     const snapshot = await workspaceApi.backups('restore', fileName);
     columnFilters = { tasks: {}, issues: {} }; issueSearch = '';
     clearHistory();
     adoptSnapshot(snapshot);
     search = ''; statusFilter = ''; highlightFilter = ''; highlighter = ''; selectedTasks.clear(); showHidden = false; duplicatesOnly = false; issueDuplicatesOnly = false; activeSavedViewId = ''; sort = [{ key: 'releaseDate', direction: 'asc' }];
     render();
-    notify('Backup ripristinato.');
+    notify("Backup restored.");
   });
 }
 function pendingCustomColumns() {
@@ -2433,22 +2435,22 @@ function pendingCustomColumns() {
 }
 function newCustomField(form) {
   const values = new FormData(form), type = values.get('type');
-  return { id: `custom-${uid()}`, name: values.get('name').trim(), type, options: ['select', 'multiselect'].includes(type) ? [{ id: uid(), name: `${t('Opzione')} 1`, color: '#a392ff' }] : [] };
+  return { id: `custom-${uid()}`, name: values.get('name').trim(), type, options: ['select', 'multiselect'].includes(type) ? [{ id: uid(), name: `${t("Option")} 1`, color: '#a392ff' }] : [] };
 }
 function customColumnsPanel() {
-  return `<section class="panel settings-section" id="custom-columns-panel"><h2>${esc(t('Colonne personalizzate'))}</h2><p class="section-description">${esc(t('Fino a 30 colonne per lista. Il tipo si sceglie alla creazione; nome, opzioni e ordine restano modificabili. Salvare le impostazioni per applicare.'))}</p><p class="section-description">${esc(t('Salva impostazioni include anche le nuove colonne compilate qui sotto. Usa Aggiungi colonna per configurare subito etichette e colori o preparare altre colonne prima di salvare.'))}</p>${['tasks', 'issues'].map((kind, index) => `<section class="custom-schema"><h3>${esc(data.settings.tabNames[index])}</h3><div id="custom-definitions-${kind}"></div><form class="custom-add-form" data-add-field="${kind}"><label class="field">${esc(t('Nome colonna'))}<input name="name" maxlength="60" required></label><label class="field">${esc(t('Tipo'))}<select name="type">${Object.entries(fieldTypeNames).map(([type, name]) => `<option value="${type}">${esc(t(name))}</option>`).join('')}</select></label><button type="submit" class="button">${esc(t('Aggiungi colonna'))}</button></form></section>`).join('')}<h3>${esc(t('Colonne visibili nelle issue'))}</h3><div id="issue-columns-editor"></div></section>`;
+  return `<section class="panel settings-section" id="custom-columns-panel"><h2>${esc(t("Custom columns"))}</h2><p class="section-description">${esc(t("Up to 30 columns per list. Choose the type when creating a column; its name, options and order remain editable. Save settings to apply."))}</p><p class="section-description">${esc(t("Save settings also includes new columns entered below. Use Add column to configure labels and colors immediately or prepare more columns before saving."))}</p>${['tasks', 'issues'].map((kind, index) => `<section class="custom-schema"><h3>${esc(data.settings.tabNames[index])}</h3><div id="custom-definitions-${kind}"></div><form class="custom-add-form" data-add-field="${kind}"><label class="field">${esc(t("Column name"))}<input name="name" maxlength="60" required></label><label class="field">${esc(t("Type"))}<select name="type">${Object.entries(fieldTypeNames).map(([type, name]) => `<option value="${type}">${esc(t(name))}</option>`).join('')}</select></label><button type="submit" class="button">${esc(t("Add column"))}</button></form></section>`).join('')}<h3>${esc(t("Visible issue columns"))}</h3><div id="issue-columns-editor"></div></section>`;
 }
 function refreshChoiceSettings() {
   let panels = $('#choice-settings-panels');
   if (!panels) { panels = document.createElement('div'); panels.id = 'choice-settings-panels'; $('.settings-panels').append(panels); }
-  panels.innerHTML = choiceSettingsTabs().map(tab => `<section class="panel settings-section" id="${tab.panel}"><h2>${esc(tab.field.name)}</h2><p class="section-description">${esc(t('Gestisci etichette, colori e ordine come nei Tags. Le etichette eliminate vengono rimosse dalle righe solo al salvataggio.'))}</p><div id="${tab.id}-list"></div><button type="button" class="button" data-add-choice="${tab.id}">+ ${esc(t('Aggiungi etichetta'))}</button></section>`).join('');
+  panels.innerHTML = choiceSettingsTabs().map(tab => `<section class="panel settings-section" id="${tab.panel}"><h2>${esc(tab.field.name)}</h2><p class="section-description">${esc(t("Manage labels, colors and order just like Tags. Deleted labels are removed from rows only when settings are saved."))}</p><div id="${tab.id}-list"></div><button type="button" class="button" data-add-choice="${tab.id}">+ ${esc(t("Add label"))}</button></section>`).join('');
   $('.settings-nav').outerHTML = settingsNav();
   document.querySelectorAll('[data-add-choice]').forEach(button => button.onclick = () => {
     const list = optionCatalog(button.dataset.addChoice);
-    if (list.length >= 100) { notify('Opzioni della colonna non valide.', true); return; }
+    if (list.length >= 100) { notify("Invalid column options.", true); return; }
     let index = 1;
-    while (list.some(option => option.name.trim().toLocaleLowerCase() === `${t('Opzione')} ${index}`.toLocaleLowerCase())) index++;
-    list.push({ id: uid(), name: `${t('Opzione')} ${index}`, color: '#a392ff' });
+    while (list.some(option => option.name.trim().toLocaleLowerCase() === `${t("Option")} ${index}`.toLocaleLowerCase())) index++;
+    list.push({ id: uid(), name: `${t("Option")} ${index}`, color: '#a392ff' });
     drawOptionLists(); refreshSettingsState();
   });
   drawOptionLists(); showSettingsTab(settingsTab); refreshSettingsState();
@@ -2465,11 +2467,11 @@ function wireCustomColumns() {
   for (const kind of ['tasks', 'issues']) {
     const key = kind === 'tasks' ? 'taskFields' : 'issueFields', columnKey = kind === 'tasks' ? 'taskColumns' : 'issueColumns', container = $(`#custom-definitions-${kind}`);
     const draw = () => {
-      container.innerHTML = settingsDraft[key].map(field => `<article class="custom-definition" data-field-id="${field.id}">${dragHandle(field.name)}<div class="custom-definition-fields"><label class="field">${esc(t('Nome colonna'))}<input data-field-name maxlength="60" value="${esc(field.name)}"></label><span class="muted">${esc(t(fieldTypeNames[field.type]))}</span>${['select', 'multiselect'].includes(field.type) ? `<button type="button" class="button small" data-goto-settings-tab="choice-${kind}-${field.id}">${esc(t('Gestisci etichette e colori'))}</button>` : ''}</div><button type="button" class="button small danger" data-delete-field>${esc(t('Elimina'))}</button></article>`).join('');
+      container.innerHTML = settingsDraft[key].map(field => `<article class="custom-definition" data-field-id="${field.id}">${dragHandle(field.name)}<div class="custom-definition-fields"><label class="field">${esc(t("Column name"))}<input data-field-name maxlength="60" value="${esc(field.name)}"></label><span class="muted">${esc(t(fieldTypeNames[field.type]))}</span>${['select', 'multiselect'].includes(field.type) ? `<button type="button" class="button small" data-goto-settings-tab="choice-${kind}-${field.id}">${esc(t("Manage labels and colors"))}</button>` : ''}</div><button type="button" class="button small danger" data-delete-field>${esc(t("Delete"))}</button></article>`).join('');
       container.querySelectorAll('[data-field-id]').forEach(row => {
         const field = settingsDraft[key].find(field => field.id === row.dataset.fieldId);
         row.querySelector('[data-field-name]').oninput = event => { field.name = event.target.value; syncColumns(); };
-        row.querySelector('[data-delete-field]').onclick = () => confirmDialog('Eliminare la colonna personalizzata?', t('I valori della colonna verranno eliminati al salvataggio delle impostazioni.') + ` (${field.name})`, async () => {
+        row.querySelector('[data-delete-field]').onclick = () => confirmDialog("Delete the custom column?", t("Column values will be deleted when settings are saved.") + ` (${field.name})`, async () => {
           settingsDraft[key] = settingsDraft[key].filter(item => item.id !== field.id);
           settingsDraft[columnKey] = settingsDraft[columnKey].filter(column => column.id !== field.id);
           draw(); syncColumns();
@@ -2504,24 +2506,24 @@ function renderSettings() {
   settingsDraft.taskColumns = normalizeTaskColumns(settingsDraft.taskColumns, settingsDraft.taskFields);
   settingsDraft.issueColumns = CustomColumns.normalizeIssueColumns(settingsDraft.issueColumns, settingsDraft.issueFields);
   const organization = organizations.find(o => o.id === activeOrganizationId);
-  $('#content').innerHTML = '<div id="settings-page">' + heading(t('Impostazioni'), 'Nomi, flussi e colori. Configura il tuo workspace, portalo ovunque.', ui`<button class="button primary" id="save-settings">Salva impostazioni</button>`) +
-    ui`<div class="unsaved-banner" id="unsaved-banner" role="status" aria-live="polite" hidden><span class="unsaved-icon" aria-hidden="true">⚠</span><div class="unsaved-text"><strong>Hai impostazioni non salvate.</strong> Le modifiche, inclusi tema e dimensioni del testo in anteprima, diventano effettive solo con “Salva”. Se esci senza salvare resta la configurazione precedente.<span class="unsaved-where" id="unsaved-where"></span></div><div class="unsaved-actions"><button type="button" class="button small" id="discard-settings">Annulla modifiche</button><button type="button" class="button primary small" id="save-settings-inline">Salva</button></div></div><div class="info-banner"><strong>${APP_NAME}</strong> · Configurazione dell’organizzazione: <strong>${esc(organization.name)}</strong><br>Tutte le impostazioni qui sotto si applicano solo all’organizzazione selezionata.</div>
-    <div class="settings-layout">${settingsNav()}<div class="settings-panels"><section class="panel settings-section full" id="organizations-panel"><h2>Organizzazioni</h2><p class="section-description">Dati e impostazioni sono separati per organizzazione. Il cambio salva automaticamente la selezione.</p>
-    <details id="create-organization-section"><summary>Nuova organizzazione</summary><form id="create-organization"><div class="form-grid"><label class="field">Nome organizzazione<input name="name" required maxlength="100"></label><label class="field">Lingua dell’interfaccia<select name="language">${languageOptions(data.settings.language)}</select></label><label class="field full checkbox-field demo-field"><input type="checkbox" name="demo"><span>Includi dati dimostrativi<small>Milestone ogni due settimane da gennaio 2025 con attività, issue, note e righe nascoste di esempio.</small></span></label><div class="field full"><label for="create-logo-file">Logo della nuova organizzazione</label><input id="create-logo-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp"><small>Scegli il logo durante la creazione: verrà salvato con l’organizzazione e genererà automaticamente il suo tema.</small><div id="create-logo-preview"></div><output id="create-logo-result" aria-live="polite"></output><button type="button" class="button small" id="clear-create-logo">Rimuovi logo</button></div></div><div class="organization-actions"><button class="button primary" type="submit">Crea organizzazione</button></div></form></details>
-    <button class="button danger small" id="delete-organization" ${organizations.length === 1 ? 'disabled' : ''}>Elimina organizzazione</button></section>
-        <section class="panel settings-section full" id="portal-panel"><h2>Link al portale</h2><p class="section-description">Il link di ogni attività viene costruito dal codice portale: inserisci l’indirizzo del portale di questa organizzazione e metti il segnaposto {codice} dove deve comparire il codice.</p><div class="form-grid"><label class="field full">Modello del link<input id="portal-url-template" maxlength="2000" spellcheck="false" autocomplete="off" inputmode="url" placeholder="https://jira.azienda.com/browse/{codice}" value="${esc(data.settings.portalUrlTemplate)}"><small>Esempi: https://jira.azienda.com/browse/{codice} oppure https://portale.net/{codice}/dettaglio. Se manca, https:// viene aggiunto automaticamente. Lascia vuoto per non generare link. Un link specifico inserito nell’attività ha la precedenza.</small></label><div class="portal-preview full" id="portal-preview" aria-live="polite"></div></div></section>
-        <section class="panel settings-section" id="identity-panel"><h2>Identità & navigazione</h2><p class="section-description">Rendi questo spazio davvero tuo.</p><div class="form-grid"><label class="field full">Nome organizzazione<input id="organization-name" maxlength="100" required value="${esc(organization.name)}"></label>${data.settings.tabNames.map((name, i) => ui`<label class="field">Nome tab ${i + 1}<input data-tab-name="${i}" maxlength="60" required value="${esc(name)}"></label>`).join('')}
-    <label class="field">Ore per giorno di effort<input id="hours-per-day" type="number" min="0.01" max="24" step="0.01" value="${data.settings.hoursPerDay}"><small>Modifica la visualizzazione in giorni. Le ore già registrate non cambiano.</small></label>
-    <div class="full logo-settings"><h3>Logo dell’organizzazione</h3><div id="logo-preview"></div><label class="field">Carica logo e genera tema<input id="logo-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp"></label><p class="muted">Il logo e il tema vengono conservati solo per questa organizzazione e viaggiano con l’archivio.</p><button class="button small" id="remove-logo" type="button">Rimuovi logo</button><output id="logo-result" aria-live="polite"></output></div></div></section>
-    <section class="panel settings-section full" id="languages-panel"><h2>Lingua & traduzioni</h2><p class="section-description">Scegli la lingua di questa organizzazione. Le traduzioni sono semplici file JSON: puoi aggiungerne altre senza modificare l’app.</p><div class="form-grid"><label class="field">Lingua dell’interfaccia<select id="language">${languageOptions(data.settings.language)}</select><small>La lingua è salvata per questa organizzazione. Nomi personalizzati e contenuti non vengono tradotti.</small></label><p class="language-missing" id="language-missing" role="status" hidden>Questa lingua non è installata su questo PC: i testi sono mostrati in inglese.</p></div><div id="languages-details"></div></section>
-    <section class="panel settings-section" id="themes-panel"><div class="themes-heading"><div><h2>Temi & atmosfera</h2><p class="section-description">Scegli una palette o crea la tua.</p></div><button class="button" id="add-theme">＋ Crea tema</button></div><div class="themes-layout"><div class="theme-browser"><div class="theme-toolbar"><label class="theme-search"><span aria-hidden="true">⌕</span><input type="search" id="theme-search" placeholder="Cerca tema…" aria-label="Cerca tema" autocomplete="off" spellcheck="false" value="${esc(themeQuery)}"></label><span class="theme-count" id="theme-count" aria-live="polite"></span></div><div class="theme-gallery" id="theme-list"></div></div><div class="theme-editor-panel" id="theme-editor"></div></div></section>${fontSizePanel()}
-    <section class="panel settings-section" id="statuses-panel"><h2>Stati del flusso</h2><p class="section-description">L’ordine qui diventa l’ordine del kanban. Accendi il simbolo ★ per evidenziare automaticamente tutte le righe con quello stato; per colorare singole righe usa gli Evidenziatori.</p><div id="statuses-list"></div><button class="button" data-add-option="statuses">＋ Aggiungi stato</button></section>
-    <section class="panel settings-section" id="urgencies-panel"><h2>Livelli di urgenza</h2><p class="section-description">Definisci le priorità e il loro ordinamento.</p><div id="urgencies-list"></div><button class="button" data-add-option="urgencies">＋ Aggiungi urgenza</button></section>
-    <section class="panel settings-section" id="highlights-panel"><h2>Evidenziatori</h2><p class="section-description">Colori per evidenziare singole righe della lista attività, indipendentemente dallo stato. Nella lista usa la barra Evidenziatore sopra la tabella, il pallino ● a fine riga oppure il campo Evidenziazione della scheda attività.</p><div id="highlights-list"></div><button class="button" data-add-option="highlights">＋ Aggiungi colore</button><p class="muted">Eliminando un colore, le righe che lo usano tornano senza evidenziazione. L’ordine qui è usato anche per ordinare la colonna Evidenziazione.</p></section>
-    <section class="panel settings-section" id="tags-panel"><h2>Tags</h2><p class="section-description">Crea i tag di questa organizzazione, scegli nome e colore e ordinane la visualizzazione. Ogni attività può avere più tag.</p><div id="tags-list"></div><button class="button" data-add-option="tags">＋ Aggiungi tag</button><p class="muted">${esc(fillText('Massimo {0} tag, con nomi univoci di massimo {1} caratteri.', TAG_LIMIT, TAG_NAME_MAX))}</p><p class="muted">Eliminando un tag e salvando, viene rimosso dalle attività che lo usano, anche nascoste. Le attività e gli altri tag non vengono eliminati.</p></section>
-    <section class="panel settings-section" id="columns-panel"><h2>Colonne della lista</h2><p class="section-description">Scegli quali colonne mostrare nella lista attività e in che ordine. Nascondere una colonna non cancella i dati. Puoi farlo anche dal pulsante “Colonne” sopra la tabella.</p><div id="columns-editor"></div><button type="button" class="button" id="reset-columns">↺ Ripristina colonne predefinite</button></section>${customColumnsPanel()}
-    <section class="panel settings-section full" id="browser-panel"><h2>Accesso da browser</h2><p class="section-description">Mentre OrbitKanban è aperto puoi lavorare anche dal browser di questo PC, con più organizzazioni in schede diverse. Le modifiche si sincronizzano in tempo reale tra app e schede.</p><code class="data-path" id="browser-url">${esc(browserUrl || t('Non disponibile'))}</code><div class="storage-actions"><button class="button" id="browser-open" ${browserUrl ? '' : 'disabled'}>${t(browserMode() ? 'Apri in nuova scheda' : 'Apri nel browser')} ↗</button><button class="button" id="browser-copy" ${browserUrl ? '' : 'disabled'}>${t(browserMode() ? 'Copia indirizzo' : 'Copia link di accesso')}</button></div><p class="muted">${t(browserMode() ? 'Stai usando OrbitKanban dal browser: l’app sul PC deve restare aperta. Ogni scheda può mostrare un’organizzazione diversa.' : 'Raggiungibile solo da questo computer (127.0.0.1) e protetto da una chiave personale: il link di accesso contiene la chiave, non condividerlo. Chiudendo l’app le schede del browser si disconnettono.')}</p></section>
-    ${transferPanel()}<section class="panel settings-section full" id="storage-panel"><div class="storage-heading"><div><h2>Dati che viaggiano con te</h2><p class="section-description">Archivio JSON locale e copia automatica del salvataggio precedente.</p></div><span class="readonly-badge">100% LOCALE</span></div><code class="data-path">${esc(dataFolder)}</code><div class="storage-actions"><button class="button" id="export-data">↗ Esporta backup</button><button class="button" id="import-data">↙ Importa backup</button><button class="button" id="open-folder">Apri cartella dati</button><span class="spacer"></span><button class="button danger" id="clear-data">Svuota attività e issue</button></div><div class="backup-section"><div class="storage-heading"><div><h3>Copie di sicurezza automatiche</h3><p class="section-description">Una copia al giorno, conservate nella cartella data per gli ultimi 14 giorni. Puoi ripristinarne una senza perdere l’archivio corrente: prima del ripristino viene creato il backup standard .bak.</p></div><button type="button" class="button small" id="refresh-backups">Aggiorna copie</button></div><p id="backup-status" class="muted" role="status" aria-live="polite"></p><div id="backup-list"></div></div><p class="muted">Per condividere l’app chiudila e copia l’eseguibile insieme alla cartella data. Non eseguire contemporaneamente copie che condividono la stessa cartella dati.</p></section></div></div></div>`;
+  $('#content').innerHTML = '<div id="settings-page">' + heading(t("Settings"), "Names, workflows and colors. Configure your workspace and take it anywhere.", ui`<button class="button primary" id="save-settings">Save settings</button>`) +
+    ui`<div class="unsaved-banner" id="unsaved-banner" role="status" aria-live="polite" hidden><span class="unsaved-icon" aria-hidden="true">⚠</span><div class="unsaved-text"><strong>You have unsaved settings.</strong> Changes, including the previewed theme and text sizes, take effect only when you save. If you leave without saving, the previous configuration remains.<span class="unsaved-where" id="unsaved-where"></span></div><div class="unsaved-actions"><button type="button" class="button small" id="discard-settings">Discard changes</button><button type="button" class="button primary small" id="save-settings-inline">Save</button></div></div><div class="info-banner"><strong>${APP_NAME}</strong> · Organization configuration: <strong>${esc(organization.name)}</strong><br>All settings below apply only to the selected organization.</div>
+    <div class="settings-layout">${settingsNav()}<div class="settings-panels"><section class="panel settings-section full" id="organizations-panel"><h2>Organizations</h2><p class="section-description">Data and settings are isolated per organization. Your selection is saved automatically.</p>
+    <details id="create-organization-section"><summary>New organization</summary><form id="create-organization"><div class="form-grid"><label class="field">Organization name<input name="name" required maxlength="100"></label><label class="field">Interface language<select name="language">${languageOptions(data.settings.language)}</select></label><label class="field full checkbox-field demo-field"><input type="checkbox" name="demo"><span>Include demo data<small>Biweekly milestones since January 2025 with sample tasks, issues, notes and hidden rows.</small></span></label><div class="field full"><label for="create-logo-file">New organization logo</label><input id="create-logo-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp"><small>Choose a logo during creation: it will be stored with the organization and automatically generate its theme.</small><div id="create-logo-preview"></div><output id="create-logo-result" aria-live="polite"></output><button type="button" class="button small" id="clear-create-logo">Remove logo</button></div></div><div class="organization-actions"><button class="button primary" type="submit">Create organization</button></div></form></details>
+    <button class="button danger small" id="delete-organization" ${organizations.length === 1 ? 'disabled' : ''}>Delete organization</button></section>
+        <section class="panel settings-section full" id="portal-panel"><h2>Portal link</h2><p class="section-description">Each task link is built from its portal code: enter this organization’s portal address and put the {code} placeholder where the code must appear.</p><div class="form-grid"><label class="field full">Link template<input id="portal-url-template" maxlength="2000" spellcheck="false" autocomplete="off" inputmode="url" placeholder="https://jira.company.com/browse/{code}" value="${esc(data.settings.portalUrlTemplate)}"><small>Examples: https://jira.company.com/browse/{code} or https://portal.net/{code}/details. If missing, https:// is added automatically. Leave empty to generate no links. A specific link entered in a task takes precedence.</small></label><div class="portal-preview full" id="portal-preview" aria-live="polite"></div></div></section>
+        <section class="panel settings-section" id="identity-panel"><h2>Identity & navigation</h2><p class="section-description">Make this space truly yours.</p><div class="form-grid"><label class="field full">Organization name<input id="organization-name" maxlength="100" required value="${esc(organization.name)}"></label>${data.settings.tabNames.map((name, i) => ui`<label class="field">Tab name ${i + 1}<input data-tab-name="${i}" maxlength="60" required value="${esc(name)}"></label>`).join('')}
+    <label class="field">Hours per effort day<input id="hours-per-day" type="number" min="0.01" max="24" step="0.01" value="${data.settings.hoursPerDay}"><small>Changes the display in days. Previously recorded hours stay the same.</small></label>
+    <div class="full logo-settings"><h3>Organization logo</h3><div id="logo-preview"></div><label class="field">Upload logo and generate theme<input id="logo-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp"></label><p class="muted">The logo and theme belong only to this organization and travel with the archive.</p><button class="button small" id="remove-logo" type="button">Remove logo</button><output id="logo-result" aria-live="polite"></output></div></div></section>
+    <section class="panel settings-section full" id="languages-panel"><h2>Language & translations</h2><p class="section-description">Choose the language of this organization. Translations are plain JSON files: you can add more without changing the app.</p><div class="form-grid"><label class="field">Interface language<select id="language">${languageOptions(data.settings.language)}</select><small>Language is saved per organization. Custom names and content are not translated.</small></label><p class="language-missing" id="language-missing" role="status" hidden>This language is not installed on this PC: texts are shown in English.</p></div><div id="languages-details"></div></section>
+    <section class="panel settings-section" id="themes-panel"><div class="themes-heading"><div><h2>Themes & atmosphere</h2><p class="section-description">Choose a palette or create your own.</p></div><button class="button" id="add-theme">＋ Create theme</button></div><div class="themes-layout"><div class="theme-browser"><div class="theme-toolbar"><label class="theme-search"><span aria-hidden="true">⌕</span><input type="search" id="theme-search" placeholder="Search themes…" aria-label="Search themes" autocomplete="off" spellcheck="false" value="${esc(themeQuery)}"></label><span class="theme-count" id="theme-count" aria-live="polite"></span></div><div class="theme-gallery" id="theme-list"></div></div><div class="theme-editor-panel" id="theme-editor"></div></div></section>${fontSizePanel()}
+    <section class="panel settings-section" id="statuses-panel"><h2>Workflow statuses</h2><p class="section-description">This order becomes the kanban order. Turn on ★ to automatically highlight every row with that status; to color single rows use the Highlighters.</p><div id="statuses-list"></div><button class="button" data-add-option="statuses">＋ Add status</button></section>
+    <section class="panel settings-section" id="urgencies-panel"><h2>Urgency levels</h2><p class="section-description">Define priorities and their order.</p><div id="urgencies-list"></div><button class="button" data-add-option="urgencies">＋ Add urgency</button></section>
+    <section class="panel settings-section" id="highlights-panel"><h2>Highlighters</h2><p class="section-description">Colors to highlight single rows of the task list, regardless of their status. In the list use the Highlighter bar above the table, the ● dot at the end of each row or the Highlight field of the task form.</p><div id="highlights-list"></div><button class="button" data-add-option="highlights">＋ Add color</button><p class="muted">Deleting a color removes the highlight from the rows that use it. This order is also used to sort the Highlight column.</p></section>
+    <section class="panel settings-section" id="tags-panel"><h2>Tags</h2><p class="section-description">Create this organization's tags, choose names and colors, and set their display order. Each task can have multiple tags.</p><div id="tags-list"></div><button class="button" data-add-option="tags">＋ Add tag</button><p class="muted">${esc(fillText("Up to {0} tags, with unique names of up to {1} characters.", TAG_LIMIT, TAG_NAME_MAX))}</p><p class="muted">Deleting a tag and saving removes it from tasks using it, including hidden tasks. Tasks and other tags are not deleted.</p></section>
+    <section class="panel settings-section" id="columns-panel"><h2>List columns</h2><p class="section-description">Choose which columns the task list shows and in what order. Hiding a column does not delete any data. You can also do this with the “Columns” button above the table.</p><div id="columns-editor"></div><button type="button" class="button" id="reset-columns">↺ Restore default columns</button></section>${customColumnsPanel()}
+    <section class="panel settings-section full" id="browser-panel"><h2>Browser access</h2><p class="section-description">While OrbitKanban is open you can also work from a browser on this PC, with different organizations in separate tabs. Changes sync in real time between the app and the tabs.</p><code class="data-path" id="browser-url">${esc(browserUrl || t("Not available"))}</code><div class="storage-actions"><button class="button" id="browser-open" ${browserUrl ? '' : 'disabled'}>${t(browserMode() ? "Open in new tab" : "Open in browser")} ↗</button><button class="button" id="browser-copy" ${browserUrl ? '' : 'disabled'}>${t(browserMode() ? "Copy address" : "Copy access link")}</button></div><p class="muted">${t(browserMode() ? "You are using OrbitKanban from the browser: the app on the PC must stay open. Each tab can show a different organization." : "Reachable only from this computer (127.0.0.1) and protected by a personal key: the access link contains the key, do not share it. Closing the app disconnects the browser tabs.")}</p></section>
+    ${transferPanel()}<section class="panel settings-section full" id="storage-panel"><div class="storage-heading"><div><h2>Data that travels with you</h2><p class="section-description">Local JSON archive with an automatic copy of the previous save.</p></div><span class="readonly-badge">100% LOCAL</span></div><code class="data-path">${esc(dataFolder)}</code><div class="storage-actions"><button class="button" id="export-data">↗ Export backup</button><button class="button" id="import-data">↙ Import backup</button><button class="button" id="open-folder">Open data folder</button><span class="spacer"></span><button class="button danger" id="clear-data">Clear tasks and issues</button></div><div class="backup-section"><div class="storage-heading"><div><h3>Automatic backups</h3><p class="section-description">One copy per day, kept in the data folder for the last 14 days. You can restore one without losing the current archive: the standard .bak backup is created first.</p></div><button type="button" class="button small" id="refresh-backups">Refresh backups</button></div><p id="backup-status" class="muted" role="status" aria-live="polite"></p><div id="backup-list"></div></div><p class="muted">To share the app, close it and copy the executable together with the data folder. Do not run copies using the same data folder at the same time.</p></section></div></div></div>`;
       showSettingsTab(settingsTab); wireSettingsNav();
       drawOptionLists(); drawThemes(); drawLogoPreview(); wireOrganizationCreation(); drawPortalPreview(); wireFontSizes(); wireLanguages();
       columnEditor($('#columns-editor'), settingsDraft.taskColumns, 'tasks', settingsDraft);
@@ -2530,13 +2532,13 @@ function renderSettings() {
       $('#theme-search').oninput = event => { themeQuery = event.target.value; drawThemeChoices(); };
   $('#portal-url-template').oninput = drawPortalPreview;
   for (const type of ['input', 'change', 'click']) $('#settings-page').addEventListener(type, () => queueMicrotask(refreshSettingsState));
-  $('#delete-organization').onclick = () => confirmDialog('Eliminare questa organizzazione?', 'Verranno eliminati tutti i suoi dati, il logo e le impostazioni. Le altre organizzazioni non saranno modificate. Esporta prima un backup.', () => organizationAction('delete', { id: activeOrganizationId }));
+  $('#delete-organization').onclick = () => confirmDialog("Delete this organization?", "All its data, logo and settings will be deleted. Other organizations will not be changed. Export a backup first.", () => organizationAction('delete', { id: activeOrganizationId }));
   const logoFile = $('#logo-file'), logoResult = $('#logo-result');
   logoFile.onchange = action(async () => {
     const file = logoFile.files[0];
     if (!file) return;
     logoFile.disabled = true;
-    logoResult.textContent = t('Caricamento immagine…');
+    logoResult.textContent = t("Loading image…");
     const draft = settingsDraft;
     try {
       const { logo, palette } = await processLogo(file);
@@ -2544,21 +2546,21 @@ function renderSettings() {
       draft.logo = logo;
       let theme = draft.themes.find(theme => theme.id === 'organization-logo');
       if (!theme) {
-        theme = { id: 'organization-logo', name: t('Tema dal logo') };
+        theme = { id: 'organization-logo', name: t("Theme from logo") };
         draft.themes.push(theme);
       }
       for (const [key] of themeFields) theme[key] = palette[key];
       draft.themeId = theme.id;
       drawLogoPreview(); drawThemes(); refreshSettingsState();
-      logoResult.textContent = t('Logo caricato e tema generato in anteprima. Salva le impostazioni per mantenerli.');
+      logoResult.textContent = t("Logo loaded and theme previewed. Save settings to keep them.");
     } catch (error) { logoResult.textContent = t(error.message); throw error; }
     finally { logoFile.disabled = false; logoFile.value = ''; }
   });
   $('#remove-logo').onclick = () => { settingsDraft.logo = ''; drawLogoPreview(); logoResult.textContent = ''; };
   document.querySelectorAll('[data-add-option]').forEach(b => b.onclick = () => {
     if (b.dataset.addOption === 'tags') {
-      if (settingsDraft.tags.length >= TAG_LIMIT) { notify(fillText('Puoi definire al massimo {0} tag.', TAG_LIMIT), true); return; }
-      const base = t('Nuovo tag'), names = new Set(settingsDraft.tags.map(tag => tag.name.trim().toLowerCase()));
+      if (settingsDraft.tags.length >= TAG_LIMIT) { notify(fillText("You can define up to {0} tags.", TAG_LIMIT), true); return; }
+      const base = t("New tag"), names = new Set(settingsDraft.tags.map(tag => tag.name.trim().toLowerCase()));
       let name = base;
       for (let suffix = 2; names.has(name.toLowerCase()); suffix++) name = `${base} ${suffix}`;
       settingsDraft.tags.push({ id: uid(), name, color: highlightPalette[settingsDraft.tags.length % highlightPalette.length] });
@@ -2566,23 +2568,23 @@ function renderSettings() {
       return;
     }
     if (b.dataset.addOption === 'highlights') {
-      if (settingsDraft.highlights.length >= HIGHLIGHT_LIMIT) { notify(fillText('Puoi definire al massimo {0} colori.', HIGHLIGHT_LIMIT), true); return; }
+      if (settingsDraft.highlights.length >= HIGHLIGHT_LIMIT) { notify(fillText("You can define at most {0} colors.", HIGHLIGHT_LIMIT), true); return; }
       const used = new Set(settingsDraft.highlights.map(h => h.color.toLowerCase()));
-      settingsDraft.highlights.push({ id: uid(), name: t('Nuovo colore'), color: highlightPalette.find(color => !used.has(color)) || '#a392ff' });
+      settingsDraft.highlights.push({ id: uid(), name: t("New color"), color: highlightPalette.find(color => !used.has(color)) || '#a392ff' });
       drawOptionLists();
       return;
     }
-    settingsDraft[b.dataset.addOption].push({ id: uid(), name: t(b.dataset.addOption === 'statuses' ? 'Nuovo stato' : 'Nuova urgenza'), color: '#a392ff', ...(b.dataset.addOption === 'statuses' ? { highlight: false } : {}) });
+    settingsDraft[b.dataset.addOption].push({ id: uid(), name: t(b.dataset.addOption === 'statuses' ? "New status" : "New urgency"), color: '#a392ff', ...(b.dataset.addOption === 'statuses' ? { highlight: false } : {}) });
     drawOptionLists();
   });
   $('#save-settings').onclick = $('#save-settings-inline').onclick = action(async () => {
-    await saveSettings(); rerenderPreservingView(); notify('Impostazioni salvate.');
+    await saveSettings(); rerenderPreservingView(); notify("Settings saved.");
   });
-  $('#discard-settings').onclick = () => { render(); notify('Modifiche annullate.'); };
-  $('#export-data').onclick = action(async () => { if (await workspaceApi.exportData()) notify('Backup esportato.'); });
+  $('#discard-settings').onclick = () => { render(); notify("Changes discarded."); };
+  $('#export-data').onclick = action(async () => { if (await workspaceApi.exportData()) notify("Backup exported."); });
   $('#import-data').onclick = action(async () => {
     const imported = await workspaceApi.importData();
-    if (imported) { clearHistory(); columnFilters = { tasks: {}, issues: {} }; issueSearch = ''; adoptSnapshot(imported); search = ''; statusFilter = ''; highlightFilter = ''; highlighter = ''; selectedTasks.clear(); showHidden = false; duplicatesOnly = false; issueDuplicatesOnly = false; activeSavedViewId = ''; sort = [{ key: 'releaseDate', direction: 'asc' }]; render(); notify('Archivio importato.'); }
+    if (imported) { clearHistory(); columnFilters = { tasks: {}, issues: {} }; issueSearch = ''; adoptSnapshot(imported); search = ''; statusFilter = ''; highlightFilter = ''; highlighter = ''; selectedTasks.clear(); showHidden = false; duplicatesOnly = false; issueDuplicatesOnly = false; activeSavedViewId = ''; sort = [{ key: 'releaseDate', direction: 'asc' }]; render(); notify("Archive imported."); }
   });
   $('#open-folder').onclick = action(() => workspaceApi.openDataFolder());
   $('#refresh-backups').onclick = action(loadBackupList);
@@ -2595,14 +2597,14 @@ function renderSettings() {
   $('#browser-open').onclick = action(openBrowserAccess);
   $('#browser-copy').onclick = action(async () => {
     await workspaceApi.browserAccess('copy', activeOrganizationId);
-    notify(browserMode() ? 'Indirizzo copiato negli appunti.' : 'Link di accesso copiato negli appunti.');
+    notify(browserMode() ? "Address copied to the clipboard." : "Access link copied to the clipboard.");
   });
-  $('#clear-data').onclick = () => confirmDialog('Svuotare il workspace?', 'Tutte le attività e le associazioni issue saranno eliminate. Temi e impostazioni resteranno invariati. Esporta prima un backup se vuoi conservarle.', async () => {
-    await commit(next => { next.tasks = []; next.issues = []; }); render(); notify('Workspace svuotato.');
+  $('#clear-data').onclick = () => confirmDialog("Clear this workspace?", "All tasks and issue associations in this organization will be deleted. Themes and settings will stay unchanged. Export a backup first to keep them.", async () => {
+    await commit(next => { next.tasks = []; next.issues = []; }); render(); notify("Workspace cleared.");
   });
   $('#add-theme').onclick = () => {
     const theme = structuredClone(settingsDraft.themes.find(t => t.id === settingsDraft.themeId));
-    theme.id = uid(); theme.name = t('Il mio tema'); settingsDraft.themes.push(theme); settingsDraft.themeId = theme.id;
+    theme.id = uid(); theme.name = t("My theme"); settingsDraft.themes.push(theme); settingsDraft.themeId = theme.id;
     themeQuery = ''; $('#theme-search').value = '';
     drawThemes();
     $('#theme-name').focus(); $('#theme-name').select();
@@ -2610,9 +2612,9 @@ function renderSettings() {
 }
 function languageOptions(selected) {
   const installed = window.OrbitaI18n.languages();
-  const list = installed.length ? installed : [{ code: 'it', name: 'Italiano' }];
+  const list = installed.length ? installed : [{ code: 'it', name: "Italian" }];
   const options = list.map(language => `<option value="${esc(language.code)}" ${language.code === selected ? 'selected' : ''}>${esc(language.name)}</option>`);
-  if (selected && !list.some(language => language.code === selected)) options.unshift(`<option value="${esc(selected)}" selected>${esc(fillText('{0} (non installata)', selected))}</option>`);
+  if (selected && !list.some(language => language.code === selected)) options.unshift(`<option value="${esc(selected)}" selected>${esc(fillText("{0} (not installed)", selected))}</option>`);
   return options.join('');
 }
 async function loadLanguages(operation = 'info') {
@@ -2621,7 +2623,7 @@ async function loadLanguages(operation = 'info') {
   registry.reset();
   for (const pack of info?.packs || []) {
     try { registry.register(pack, { replace: true }); }
-    catch (error) { console.error('Lingua non registrata:', pack?.code, error); }
+    catch (error) { console.error('Language not registered:', pack?.code, error); }
   }
   const sources = new Map((info?.languages || []).map(language => [language.code, language.source]));
   languageInfo = {
@@ -2631,12 +2633,12 @@ async function loadLanguages(operation = 'info') {
   };
   return languageInfo;
 }
-const languageSources = { 'built-in': 'Integrata', added: 'Aggiunta da file', customized: 'Personalizzata da file' };
+const languageSources = { 'built-in': "Built-in", added: "Added from file", customized: "Customized from file" };
 const languageSteps = [
-  'Apri la cartella lingue: contiene en.template.json, il file inglese completo da usare come modello.',
-  'Copialo con il codice della nuova lingua, per esempio de.json, e aggiorna code, name e locale.',
-  'Traduci solo i valori a destra: le chiavi a sinistra sono il testo originale e non vanno modificate. I testi mancanti restano in inglese.',
-  'Premi “Ricarica lingue”: la nuova lingua comparirà nell’elenco.'
+  "Open the languages folder: it contains en.template.json, the complete English file to use as a template.",
+  "Copy it using the code of the new language, for example de.json, and update code, name and locale.",
+  "Translate only the values on the right: the keys on the left are the original text and must not be changed. Missing texts stay in English.",
+  "Press “Reload languages”: the new language will appear in the list."
 ];
 function drawLanguages() {
   const details = $('#languages-details');
@@ -2644,16 +2646,16 @@ function drawLanguages() {
   const select = $('#language');
   $('#language-missing').hidden = !select || window.OrbitaI18n.has(select.value);
   const languages = languageInfo.languages.map(language => `<li><span class="language-name">${esc(language.name)}</span><code>${esc(language.code)}</code><span class="language-source ${esc(language.source)}">${esc(t(languageSources[language.source] || languageSources['built-in']))}</span></li>`).join('');
-  const errors = languageInfo.errors.length ? `<div class="language-errors" role="alert"><h3>${esc(t('File lingua ignorati'))}</h3><ul>${languageInfo.errors.map(error => `<li><code>${esc(error.file || '—')}</code> ${esc(t(error.message))}</li>`).join('')}</ul></div>` : '';
-  const folder = languageInfo.folder ? `<p class="muted language-folder-label">${esc(t('Cartella lingue'))}</p><code class="data-path" id="languages-folder">${esc(languageInfo.folder)}</code>` : '';
-  details.innerHTML = `<div class="languages-layout"><div><h3>${esc(t('Lingue disponibili'))}</h3><ul class="language-list">${languages}</ul></div><div><h3>${esc(t('Aggiungi una lingua'))}</h3><ol class="language-steps">${languageSteps.map(step => `<li>${esc(t(step))}</li>`).join('')}</ol></div></div>${folder}<div class="storage-actions"><button type="button" class="button" id="open-languages-folder">${esc(t('Apri cartella lingue'))} ↗</button><button type="button" class="button" id="reload-languages">${esc(t('Ricarica lingue'))}</button></div>${errors}`;
+  const errors = languageInfo.errors.length ? `<div class="language-errors" role="alert"><h3>${esc(t("Ignored language files"))}</h3><ul>${languageInfo.errors.map(error => `<li><code>${esc(error.file || '—')}</code> ${esc(t(error.message))}</li>`).join('')}</ul></div>` : '';
+  const folder = languageInfo.folder ? `<p class="muted language-folder-label">${esc(t("Languages folder"))}</p><code class="data-path" id="languages-folder">${esc(languageInfo.folder)}</code>` : '';
+  details.innerHTML = `<div class="languages-layout"><div><h3>${esc(t("Available languages"))}</h3><ul class="language-list">${languages}</ul></div><div><h3>${esc(t("Add a language"))}</h3><ol class="language-steps">${languageSteps.map(step => `<li>${esc(t(step))}</li>`).join('')}</ol></div></div>${folder}<div class="storage-actions"><button type="button" class="button" id="open-languages-folder">${esc(t("Open languages folder"))} ↗</button><button type="button" class="button" id="reload-languages">${esc(t("Reload languages"))}</button></div>${errors}`;
   $('#open-languages-folder').onclick = action(async () => { await loadLanguages('open-folder'); drawLanguages(); });
   $('#reload-languages').onclick = action(async () => {
     const draftLanguage = $('#language').value, changed = settingsChanged();
     await loadLanguages('reload');
     if (!changed) render();
     else { $('#language').innerHTML = languageOptions(draftLanguage); drawLanguages(); }
-    notify('Lingue ricaricate.');
+    notify("Languages reloaded.");
   });
 }
 function wireLanguages() {
@@ -2665,20 +2667,20 @@ function drawPortalPreview() {
   const sample = data.tasks.find(task => task.code.trim())?.code.trim() || 'PRJ-1042';
   const preview = $('#portal-preview');
   preview.classList.toggle('invalid', Boolean(template) && !validPortalTemplate(template));
-  if (!template) { preview.textContent = t('Nessun modello: i link vengono creati solo se inseriti nella singola attività.'); return; }
-  if (!/\{(?:codice|code)\}|<(?:codice|code)>/i.test(template)) { preview.textContent = t('Aggiungi il segnaposto {codice} nel punto in cui va inserito il codice portale.'); return; }
-  if (!validPortalTemplate(template)) { preview.textContent = t('Indirizzo non valido: usa un indirizzo web, per esempio https://jira.azienda.com/browse/{codice}.'); return; }
+  if (!template) { preview.textContent = t("No template: links exist only when entered in the individual task."); return; }
+  if (!hasPortalPlaceholder(template)) { preview.textContent = t("Add the {code} placeholder where the portal code must be inserted."); return; }
+  if (!validPortalTemplate(template)) { preview.textContent = t("Invalid address: use a web address, for example https://jira.company.com/browse/{code}."); return; }
   const url = portalUrl({ code: sample, url: '' }, { portalUrlTemplate: template });
-  preview.innerHTML = `${esc(t('Anteprima con'))} <strong>${esc(sample)}</strong>: <a class="portal-link" href="${esc(url)}" data-open-url>${esc(url)} ↗</a>`;
+  preview.innerHTML = `${esc(t("Preview with"))} <strong>${esc(sample)}</strong>: <a class="portal-link" href="${esc(url)}" data-open-url>${esc(url)} ↗</a>`;
 }
 function drawLogoPreview() {
-  $('#logo-preview').innerHTML = settingsDraft.logo ? `<img src="${settingsDraft.logo}" alt="${esc(t('Logo dell’organizzazione'))}">` : `<span class="muted">${t('Nessun logo')}</span>`;
+  $('#logo-preview').innerHTML = settingsDraft.logo ? `<img src="${settingsDraft.logo}" alt="${esc(t("Organization logo"))}">` : `<span class="muted">${t("No logo")}</span>`;
 }
 async function decodeImage(file) {
-  if (!['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/bmp'].includes(file.type)) throw new Error(t('Scegli un’immagine PNG, JPEG, WebP, GIF o BMP.'));
-  if (file.size > 15 * 1024 * 1024) throw new Error(t('L’immagine è troppo grande. Il limite è 15 MB.'));
+  if (!['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/bmp'].includes(file.type)) throw new Error(t("Choose a PNG, JPEG, WebP, GIF or BMP image."));
+  if (file.size > 15 * 1024 * 1024) throw new Error(t("The image is too large. The limit is 15 MB."));
   try { return await createImageBitmap(file); }
-  catch { throw new Error(t('Impossibile leggere l’immagine. Il file potrebbe essere danneggiato o non supportato.')); }
+  catch { throw new Error(t("Cannot read this image. The file may be damaged or unsupported.")); }
 }
 async function processLogo(file) {
   const bitmap = await decodeImage(file);
@@ -2688,10 +2690,10 @@ async function processLogo(file) {
     canvas.width = Math.max(1, Math.round(bitmap.width * scale));
     canvas.height = Math.max(1, Math.round(bitmap.height * scale));
     const context = canvas.getContext('2d', { willReadFrequently: true });
-    if (!context) throw new Error(t('Il selettore immagine non è disponibile su questo dispositivo.'));
+    if (!context) throw new Error(t("The image picker is unavailable on this device."));
     context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
     const logo = canvas.toDataURL('image/png');
-    if (logo.length > 1500000) throw new Error(t('L’immagine del logo è troppo grande dopo la conversione.'));
+    if (logo.length > 1500000) throw new Error(t("The logo image is too large after conversion."));
     const palette = themeFromLogo(context.getImageData(0, 0, canvas.width, canvas.height).data);
     return { logo, palette };
   } finally { bitmap.close(); }
@@ -2712,9 +2714,9 @@ function drawOptionLists() {
     const optional = custom || key === 'highlights' || key === 'tags';
     const usage = id => {
       const count = custom ? data[custom.kind].filter(row => { const value = row.customFields?.[custom.field.id]; return Array.isArray(value) ? value.includes(id) : value === id; }).length : data.tasks.filter(task => key === 'tags' ? task.tagIds?.includes(id) : task.highlightId === id).length;
-      return `<span class="option-usage" title="${esc(t(custom ? 'Righe con questa etichetta' : key === 'tags' ? 'Attività con questo tag' : 'Righe con questo colore'))}">${custom ? count : esc(plural(count, 'attività'))}</span>`;
+      return `<span class="option-usage" title="${esc(t(custom ? "Rows with this label" : key === 'tags' ? "Tasks with this tag" : "Rows with this color"))}">${custom ? count : esc(plural(count, "tasks"))}</span>`;
     };
-    document.getElementById(`${key}-list`).innerHTML = list.map((item, index) => ui`<div class="option-row">${dragHandle(item.name)}<span class="order-number">${String(index + 1).padStart(2, '0')}</span><input type="color" aria-label="Colore ${esc(item.name)}" data-color="${key}:${esc(item.id)}" value="${item.color}"><input class="option-name" aria-label="Nome opzione" ${optional ? 'maxlength="60"' : ''} data-option-name="${key}:${esc(item.id)}" value="${esc(item.name)}">${optional ? usage(item.id) : ''}${key === 'statuses' ? ui`<button class="icon-button star ${item.highlight ? 'selected' : ''}" data-highlight="${esc(item.id)}" title="Evidenzia le attività con questo stato" aria-pressed="${item.highlight}">★</button>` : ''}<button class="icon-button" data-move="${key}:${esc(item.id)}:-1" ${index === 0 ? 'disabled' : ''} title="Sposta su">↑</button><button class="icon-button" data-move="${key}:${esc(item.id)}:1" ${index === list.length - 1 ? 'disabled' : ''} title="Sposta giù">↓</button><button class="icon-button delete-option" data-remove="${key}:${esc(item.id)}" title="Elimina opzione">×</button></div>`).join('') || (optional ? `<p class="muted option-empty">${esc(t(custom ? 'Nessuna etichetta. Aggiungine una per iniziare.' : key === 'tags' ? 'Nessun tag: aggiungine uno per classificare le attività.' : 'Nessun colore: aggiungine uno per usare l’evidenziatore.'))}</p>` : '');
+    document.getElementById(`${key}-list`).innerHTML = list.map((item, index) => ui`<div class="option-row">${dragHandle(item.name)}<span class="order-number">${String(index + 1).padStart(2, '0')}</span><input type="color" aria-label="Color ${esc(item.name)}" data-color="${key}:${esc(item.id)}" value="${item.color}"><input class="option-name" aria-label="Option name" ${optional ? 'maxlength="60"' : ''} data-option-name="${key}:${esc(item.id)}" value="${esc(item.name)}">${optional ? usage(item.id) : ''}${key === 'statuses' ? ui`<button class="icon-button star ${item.highlight ? 'selected' : ''}" data-highlight="${esc(item.id)}" title="Highlight tasks with this status" aria-pressed="${item.highlight}">★</button>` : ''}<button class="icon-button" data-move="${key}:${esc(item.id)}:-1" ${index === 0 ? 'disabled' : ''} title="Move up">↑</button><button class="icon-button" data-move="${key}:${esc(item.id)}:1" ${index === list.length - 1 ? 'disabled' : ''} title="Move down">↓</button><button class="icon-button delete-option" data-remove="${key}:${esc(item.id)}" title="Delete option">×</button></div>`).join('') || (optional ? `<p class="muted option-empty">${esc(t(custom ? "No labels. Add one to get started." : key === 'tags' ? "No tags: add one to categorize tasks." : "No colors yet: add one to use the highlighter."))}</p>` : '');
     const add = document.querySelector(`[data-add-option="${key}"]`);
     if (optional && add) add.disabled = settingsDraft[key].length >= (key === 'tags' ? TAG_LIMIT : HIGHLIGHT_LIMIT);
     const choiceAdd = document.querySelector(`[data-add-choice="${key}"]`);
@@ -2736,27 +2738,27 @@ function drawOptionLists() {
     const [key, id] = optionId(b.dataset.remove);
     if (key === 'highlights' || key === 'tags' || key.startsWith('choice-')) { setOptionCatalog(key, optionCatalog(key).filter(x => x.id !== id)); drawOptionLists(); refreshSettingsState(); return; }
     const field = key === 'statuses' ? 'statusId' : 'urgencyId';
-    if (settingsDraft[key].length === 1) { notify('Deve restare almeno un’opzione.', true); return; }
-    if (data.tasks.some(t => t[field] === id)) { notify('Questa opzione è usata da alcune attività, anche nascoste. Riassegnale prima di eliminarla.', true); return; }
+    if (settingsDraft[key].length === 1) { notify("At least one option must remain.", true); return; }
+    if (data.tasks.some(t => t[field] === id)) { notify("This option is used by tasks, including hidden ones. Reassign them before deleting it.", true); return; }
     settingsDraft[key] = settingsDraft[key].filter(x => x.id !== id); drawOptionLists();
   });
 }
-const themeFields = [['background', 'Sfondo'], ['surface', 'Superfici'], ['text', 'Testo'], ['accent', 'Accento']];
+const themeFields = [['background', "Background"], ['surface', "Surfaces"], ['text', "Text"], ['accent', "Accent"]];
 const themePresets = new Map(defaultThemes().map(theme => [theme.id, theme]));
 function themeKind(theme) {
   const preset = themePresets.get(theme.id);
-  if (!preset) return 'Personalizzato';
-  return theme.name === preset.name && themeFields.every(([key]) => theme[key].toLowerCase() === preset[key]) ? 'Predefinito' : 'Predefinito modificato';
+  if (!preset) return "Custom";
+  return theme.name === preset.name && themeFields.every(([key]) => theme[key].toLowerCase() === preset[key]) ? "Built-in" : "Modified built-in";
 }
 function drawThemeChoices() {
   const query = themeQuery.trim().toLocaleLowerCase(), total = settingsDraft.themes.length;
   const themes = settingsDraft.themes.filter(theme => !query || theme.name.toLocaleLowerCase().includes(query));
-  const themeCount = plural(total, 'tema');
+  const themeCount = plural(total, 'theme');
   $('#theme-count').textContent = query ? `${themes.length} / ${themeCount}` : themeCount;
   $('#theme-list').innerHTML = themes.length ? themes.map(theme => {
     const chosen = theme.id === settingsDraft.themeId, mock = themeFields.map(([key]) => `--mock-${key}:${theme[key]}`).join(';');
     return `<button type="button" class="theme-choice ${chosen ? 'chosen' : ''}" data-theme="${esc(theme.id)}" aria-pressed="${chosen}" title="${esc(theme.name)}"><span class="theme-mock" style="${mock}" aria-hidden="true"><span class="theme-mock-card"><span class="theme-mock-line"></span><span class="theme-mock-pill"></span></span></span><span class="theme-choice-info"><span class="theme-choice-name">${esc(theme.name)}</span><span class="theme-kind">${esc(t(themeKind(theme)))}</span><span class="theme-swatches">${themeFields.map(([key, label]) => `<i style="background:${theme[key]}" title="${t(label)}: ${theme[key]}" role="img" aria-label="${t(label)}: ${theme[key]}"></i>`).join('')}</span></span>${chosen ? '<span class="theme-check" aria-hidden="true">✓</span>' : ''}</button>`;
-  }).join('') : `<p class="theme-empty">${esc(t('Nessun tema corrisponde alla ricerca.'))}</p>`;
+  }).join('') : `<p class="theme-empty">${esc(t("No theme matches your search."))}</p>`;
   document.querySelectorAll('#theme-list [data-theme]').forEach(b => b.onclick = () => {
     settingsDraft.themeId = b.dataset.theme; drawThemes();
     document.querySelector(`#theme-list [data-theme="${CSS.escape(b.dataset.theme)}"]`)?.focus({ preventScroll: true });
@@ -2778,7 +2780,7 @@ async function loadThemeImage(file, canvas) {
     canvas.width = Math.max(1, Math.round(bitmap.width * scale));
     canvas.height = Math.max(1, Math.round(bitmap.height * scale));
     const context = canvas.getContext('2d', { willReadFrequently: true });
-    if (!context) throw new Error('Il selettore immagine non è disponibile su questo dispositivo.');
+    if (!context) throw new Error("The image picker is unavailable on this device.");
     context.fillStyle = '#ffffff';
     context.fillRect(0, 0, canvas.width, canvas.height);
     context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
@@ -2790,9 +2792,9 @@ function drawThemes() {
   drawThemeChoices();
   const theme = settingsDraft.themes.find(t => t.id === settingsDraft.themeId);
   paintTheme(theme);
-  $('#theme-editor').innerHTML = ui`<div class="theme-edit"><h3 class="theme-edit-title">Modifica tema</h3><label class="field">Nome tema<input id="theme-name" value="${esc(theme.name)}"></label><div class="theme-colors">${themeFields.map(([key, label]) => `<label><input type="color" value="${theme[key]}" data-theme-color="${key}">${t(label)}</label>`).join('')}</div>
-    <div class="image-picker"><label class="field">Genera i 4 colori da un’immagine<input id="theme-image-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp"></label><p class="muted">Carica un’immagine: sfondo, superfici, testo e accento vengono estratti e assegnati automaticamente. Puoi poi ritoccarli con i selettori. Le trasparenze sono visualizzate su bianco.</p><canvas id="theme-image-canvas" hidden role="img" aria-label="Immagine usata per generare automaticamente i quattro colori del tema"></canvas><label class="field">Ritocco facoltativo: colore da prelevare con un clic<select id="theme-image-target">${themeFields.map(([key, label]) => `<option value="${key}">${t(label)}</option>`).join('')}</select></label><output id="theme-image-result" aria-live="polite">L’immagine resta locale e non viene salvata: nel tema sono conservati solo i colori.</output></div>
-    <small class="muted">Anteprima dal vivo: il tema viene applicato subito all’app. Salva le impostazioni per mantenerlo, altrimenti resta quello precedente.</small>${themePresets.has(theme.id) ? ui`<button class="button small" id="reset-theme">Ripristina tema predefinito</button>` : ui`<button class="button small" id="delete-theme">Elimina tema</button>`}</div>`;
+  $('#theme-editor').innerHTML = ui`<div class="theme-edit"><h3 class="theme-edit-title">Edit theme</h3><label class="field">Theme name<input id="theme-name" value="${esc(theme.name)}"></label><div class="theme-colors">${themeFields.map(([key, label]) => `<label><input type="color" value="${theme[key]}" data-theme-color="${key}">${t(label)}</label>`).join('')}</div>
+    <div class="image-picker"><label class="field">Generate 4 colors from an image<input id="theme-image-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp"></label><p class="muted">Upload an image: background, surfaces, text and accent are extracted and assigned automatically. You can then adjust them with the color controls. Transparency is shown on white.</p><canvas id="theme-image-canvas" hidden role="img" aria-label="Image used to automatically generate the four theme colors"></canvas><label class="field">Optional adjustment: color to sample with a click<select id="theme-image-target">${themeFields.map(([key, label]) => `<option value="${key}">${t(label)}</option>`).join('')}</select></label><output id="theme-image-result" aria-live="polite">The image stays local and is not saved: only colors are stored in the theme.</output></div>
+    <small class="muted">Live preview: the theme is applied to the app immediately. Save settings to keep it, otherwise the previous one remains.</small>${themePresets.has(theme.id) ? ui`<button class="button small" id="reset-theme">Restore built-in theme</button>` : ui`<button class="button small" id="delete-theme">Delete theme</button>`}</div>`;
   $('#theme-name').oninput = e => { theme.name = e.target.value; drawThemeChoices(); };
   document.querySelectorAll('[data-theme-color]').forEach(input => input.oninput = () => { theme[input.dataset.themeColor] = input.value; drawThemeChoices(); paintTheme(theme); });
   const canvas = $('#theme-image-canvas'), fileInput = $('#theme-image-file'), result = $('#theme-image-result');
@@ -2800,18 +2802,18 @@ function drawThemes() {
     const file = fileInput.files[0];
     if (!file) return;
     fileInput.disabled = true;
-    result.textContent = t('Caricamento immagine…');
+    result.textContent = t("Loading image…");
     try {
       if (await loadThemeImage(file, canvas)) {
         const context = canvas.getContext('2d', { willReadFrequently: true });
-        if (!context) throw new Error('Impossibile estrarre la palette dall’immagine.');
+        if (!context) throw new Error("Cannot extract a palette from this image.");
         const palette = extractThemePalette(context.getImageData(0, 0, canvas.width, canvas.height).data);
         for (const [key] of themeFields) {
           theme[key] = palette[key];
           document.querySelector(`[data-theme-color="${key}"]`).value = palette[key];
         }
         drawThemeChoices(); paintTheme(theme); refreshSettingsState();
-        result.textContent = `${file.name} — ${t('quattro colori assegnati automaticamente.')} ${palette.colorCount < 4 ? t('L’immagine contiene pochi colori distinti: alcuni ruoli condividono lo stesso colore.') + ' ' : ''}${t('Premi “Salva impostazioni” per conservarli.')}`;
+        result.textContent = `${file.name} — ${t("four colors assigned automatically.")} ${palette.colorCount < 4 ? t("The image has few distinct colors: some roles share the same color.") + ' ' : ''}${t("Click “Save settings” to keep them.")}`;
       }
     } catch (error) {
       result.textContent = t(error.message);
@@ -2823,7 +2825,7 @@ function drawThemes() {
     const x = Math.max(0, Math.min(canvas.width - 1, Math.floor((event.clientX - bounds.left) * canvas.width / bounds.width)));
     const y = Math.max(0, Math.min(canvas.height - 1, Math.floor((event.clientY - bounds.top) * canvas.height / bounds.height)));
     const context = canvas.getContext('2d', { willReadFrequently: true });
-    if (!context) throw new Error('Impossibile leggere il colore dall’immagine.');
+    if (!context) throw new Error("Cannot read the image color.");
     const pixel = context.getImageData(x, y, 1, 1).data;
     const color = '#' + [...pixel].slice(0, 3).map(value => value.toString(16).padStart(2, '0')).join('');
     const key = $('#theme-image-target').value;
@@ -2837,7 +2839,7 @@ function drawThemes() {
     drawThemes();
   };
   if ($('#delete-theme')) $('#delete-theme').onclick = () => {
-    if (settingsDraft.themes.length === 1) { notify('Deve restare almeno un tema.', true); return; }
+    if (settingsDraft.themes.length === 1) { notify("At least one theme must remain.", true); return; }
     settingsDraft.themes = settingsDraft.themes.filter(t => t.id !== theme.id); settingsDraft.themeId = settingsDraft.themes[0].id; drawThemes();
   };
   revealChosenTheme();
@@ -2846,7 +2848,7 @@ $('#settings-button').onclick = () => { view = 4; render(); };
 $('#folder-button').onclick = action(() => workspaceApi.openDataFolder());
 async function openBrowserAccess() {
   await workspaceApi.browserAccess('open', activeOrganizationId);
-  if (!browserMode()) notify('Organizzazione aperta nel browser predefinito.');
+  if (!browserMode()) notify("Organization opened in the default browser.");
 }
 $('#open-browser').onclick = action(openBrowserAccess);
 $('#global-search').onclick = action(() => withSavedSettings(openGlobalSearch));
@@ -2891,37 +2893,37 @@ window.runSmokeTests = async () => {
   async function waitFor(predicate) {
     const deadline = Date.now() + 5000;
     while (!predicate()) {
-      if (Date.now() > deadline) throw new Error('Timeout durante il salvataggio del test.');
+      if (Date.now() > deadline) throw new Error('Timeout while saving the test.');
       await new Promise(resolve => setTimeout(resolve, 25));
     }
   }
   const initialTaskCount = data.tasks.length;
   const tableArea = $('.table-scroll').getBoundingClientRect();
-  check($('.page-heading').offsetHeight <= 75 && tableArea.top < 330 && tableArea.height >= innerHeight * 0.5 && tableArea.bottom <= $('footer').getBoundingClientRect().top, 'Intestazione compatta e almeno metà finestra disponibile per la tabella');
-  check(getComputedStyle($('.page-heading h1')).userSelect === 'none' && getComputedStyle($('#task-rows td')).userSelect === 'none' && getComputedStyle($('#search')).userSelect === 'text', 'Testo dell’interfaccia non selezionabile, ricerca selezionabile');
+  check($('.page-heading').offsetHeight <= 75 && tableArea.top < 330 && tableArea.height >= innerHeight * 0.5 && tableArea.bottom <= $('footer').getBoundingClientRect().top, 'Compact heading leaves at least half the window available for the table');
+  check(getComputedStyle($('.page-heading h1')).userSelect === 'none' && getComputedStyle($('#task-rows td')).userSelect === 'none' && getComputedStyle($('#search')).userSelect === 'text', "Interface text is not selectable, while search text is selectable");
   if (customTitleBar()) {
     const overlay = navigator.windowControlsOverlay, area = overlay?.visible ? overlay.getTitlebarAreaRect() : null;
     const controls = area ? innerWidth - area.x - area.width : 0, region = selector => getComputedStyle($(selector)).getPropertyValue('-webkit-app-region');
-    check(document.documentElement.classList.contains('custom-titlebar') && region('.topbar') === 'drag' && region('.sidebar .brand') === 'drag' && region('#modal') === 'no-drag' && region('#toast') === 'no-drag' && region('#organization-select') !== 'drag' && controls >= 90 && parseFloat(getComputedStyle($('.topbar')).paddingRight) >= controls + 23 && $('.topbar .avatar').getBoundingClientRect().right <= innerWidth - controls, 'Barra superiore trascinabile come barra del titolo, con spazio per i pulsanti della finestra');
+    check(document.documentElement.classList.contains('custom-titlebar') && region('.topbar') === 'drag' && region('.sidebar .brand') === 'drag' && region('#modal') === 'no-drag' && region('#toast') === 'no-drag' && region('#organization-select') !== 'drag' && controls >= 90 && parseFloat(getComputedStyle($('.topbar')).paddingRight) >= controls + 23 && $('.topbar .avatar').getBoundingClientRect().right <= innerWidth - controls, 'Top bar is draggable as a title bar with room for window controls');
     const style = document.documentElement.style;
-    check(windowChromeSent && windowChromeSent.background === style.getPropertyValue('--background') && windowChromeSent.text === style.getPropertyValue('--text') && windowChromeSent.height === $('.topbar').clientHeight && $('.topbar').clientHeight < $('.topbar').offsetHeight && windowChromeSent.dimmed === false && Math.abs(area.height - windowChromeSent.height) <= 1, 'Pulsanti della finestra con i colori del tema e l’altezza della barra superiore');
+    check(windowChromeSent && windowChromeSent.background === style.getPropertyValue('--background') && windowChromeSent.text === style.getPropertyValue('--text') && windowChromeSent.height === $('.topbar').clientHeight && $('.topbar').clientHeight < $('.topbar').offsetHeight && windowChromeSent.dimmed === false && Math.abs(area.height - windowChromeSent.height) <= 1, 'Window controls match the theme colors and top bar height');
     openModal('<p>OrbitKanban</p>');
     await tick();
     const dimmed = windowChromeSent.dimmed === true;
     $('#modal').close();
     await tick();
-    check(dimmed && windowChromeSent.dimmed === false, 'Pulsanti della finestra oscurati insieme alla pagina durante i dialog');
+    check(dimmed && windowChromeSent.dimmed === false, 'Window controls dim with the page while dialogs are open');
   }
   taskDialog(data.tasks.find(task => !task.hidden));
   const editModal = $('#modal'), editBody = $('.task-edit-layout'), editWidth = editModal.clientWidth;
-  check(editWidth >= Math.min(1100, innerWidth * 0.9) && $('.task-edit-fields').getBoundingClientRect().right < $('.task-edit-text').getBoundingClientRect().left, 'Editor attività largo con proprietà e testi affiancati');
-  check(editModal.scrollHeight <= editModal.clientHeight + 1 && editBody.scrollHeight <= editBody.clientHeight + 1 && $('#task-form [type="submit"]').getBoundingClientRect().bottom <= innerHeight, 'Editor desktop interamente visibile senza scorrere la modale');
-  $('#description-editor').innerHTML = '<p>Descrizione lunga da modificare.</p>'.repeat(100);
-  $('#notes-editor').innerHTML = '<p>Note lunghe da modificare.</p>'.repeat(100);
-  check($('#description-editor').scrollHeight > $('#description-editor').clientHeight && $('#notes-editor').scrollHeight > $('#notes-editor').clientHeight && editBody.scrollHeight <= editBody.clientHeight + 1, 'Testi lunghi scorrono solo negli editor, senza spostare campi e pulsanti');
+  check(editWidth >= Math.min(1100, innerWidth * 0.9) && $('.task-edit-fields').getBoundingClientRect().right < $('.task-edit-text').getBoundingClientRect().left, "Wide task editor places properties and text side by side");
+  check(editModal.scrollHeight <= editModal.clientHeight + 1 && editBody.scrollHeight <= editBody.clientHeight + 1 && $('#task-form [type="submit"]').getBoundingClientRect().bottom <= innerHeight, 'Desktop editor fits onscreen without scrolling the modal');
+  $('#description-editor').innerHTML = "<p>Long description to edit.</p>".repeat(100);
+  $('#notes-editor').innerHTML = "<p>Long notes to edit.</p>".repeat(100);
+  check($('#description-editor').scrollHeight > $('#description-editor').clientHeight && $('#notes-editor').scrollHeight > $('#notes-editor').clientHeight && editBody.scrollHeight <= editBody.clientHeight + 1, 'Long text scrolls only inside the editors without moving fields or buttons');
   editModal.close();
   openModal('<p>OrbitKanban</p>');
-  check($('#modal').clientWidth < editWidth, 'Le altre finestre mantengono il layout compatto');
+  check($('#modal').clientWidth < editWidth, 'Other dialogs keep a compact layout');
   $('#modal').close();
   {
     const baseline = structuredClone(data), editedId = data.tasks.find(task => !task.hidden).id;
@@ -2932,13 +2934,23 @@ window.runSmokeTests = async () => {
       add.elements.name.dispatchEvent(new Event('input', { bubbles: true }));
     }
     await tick();
-    check(settingsChanged() && !$('#unsaved-banner').hidden && !$('#settings-tab-custom-columns .settings-tab-dot').hidden, 'Colonne compilate ma non aggiunte segnalate come modifiche non salvate');
+    check(settingsChanged() && !$('#unsaved-banner').hidden && !$('#settings-tab-custom-columns .settings-tab-dot').hidden, "Filled but unadded columns are flagged as unsaved changes");
     $('#save-settings').click();
     await waitFor(() => !saving && data.settings.taskFields.some(field => field.name === 'Pending tasks'));
     const pendingStored = await workspaceApi.load();
-    check(pendingStored.data.settings.issueFields.some(field => field.name === 'Pending issues') && data.settings.taskColumns.some(column => column.id === data.settings.taskFields[0].id), 'Salva impostazioni crea e persiste entrambe le colonne senza richiedere Aggiungi colonna');
+    check(pendingStored.data.settings.issueFields.some(field => field.name === 'Pending issues') && data.settings.taskColumns.some(column => column.id === data.settings.taskFields[0].id), "Saving settings creates and persists both columns without requiring Add column");
     await commit(baseline); render(); showSettingsTab('custom-columns');
-    check(!$('#custom-columns-panel').hidden && document.querySelectorAll('[data-add-field]').length === 2, 'Impostazioni con schemi separati per attività e issue');
+    check(!$('#custom-columns-panel').hidden && document.querySelectorAll('[data-add-field]').length === 2, "Settings has separate schemas for tasks and issues");
+    const errorTabs = [
+      ["Invalid custom column list.", 'custom-columns'], ["Invalid custom column.", 'custom-columns'], ["Column names and identifiers must be unique.", 'custom-columns'], ["Invalid column options.", 'custom-columns'],
+      ["Invalid tags.", 'tags'], ["Tag names must be unique.", 'tags'], ["Invalid highlighters.", 'highlights'], ["Invalid list columns.", 'columns'],
+      ["The portal link template must be a valid web address containing {code}.", 'portal'], ["Invalid text sizes.", 'fonts'], ["Invalid font.", 'fonts'],
+      ["Invalid themes.", 'themes'], ["Selected theme does not exist.", 'themes'], ["The urgencies list is invalid or empty.", 'urgencies'], ["Invalid urgencies values.", 'urgencies'],
+      ["The statuses list is invalid or empty.", 'statuses'], ["Invalid statuses values.", 'statuses'], ["Invalid status highlighting.", 'statuses'], ["Unsupported language.", 'languages'],
+      ["Specify four valid tab names.", 'identity'], ["Hours per day must be greater than 0 and no more than 24.", 'identity'], ["Invalid logo.", 'identity'], ["Invalid organization name.", 'identity']
+    ];
+    const wrongTabs = errorTabs.flatMap(([message, tab]) => ['en', 'it'].filter(language => settingsErrorTab(window.OrbitaI18n.translate(message, language)) !== tab).map(language => `${language} “${message}”`));
+    check(!wrongTabs.length, wrongTabs.length ? `Settings errors open the wrong tab: ${wrongTabs.join(', ')}` : "Settings errors open the matching tab in English and Italian");
     for (const kind of ['tasks', 'issues']) {
       for (const type of kind === 'tasks' ? CustomColumns.TYPES : ['text', 'select', 'boolean', 'multiselect']) {
         const add = $(`[data-add-field="${kind}"]`);
@@ -2949,45 +2961,45 @@ window.runSmokeTests = async () => {
           const key = `choice-${kind}-${field.id}`;
           $(`[data-add-choice="${key}"]`).click();
           const inputs = [...document.querySelectorAll(`#${key}-list [data-option-name]`)];
-          inputs.forEach((input, index) => { input.value = ['Uno', 'Due'][index]; input.dispatchEvent(new Event('input', { bubbles: true })); });
+          inputs.forEach((input, index) => { input.value = ['One', 'Two'][index]; input.dispatchEvent(new Event('input', { bubbles: true })); });
         }
       }
     }
-    check(settingsDraft.taskFields.length === 9 && settingsDraft.issueFields.length === 4 && !$('#unsaved-banner').hidden && document.querySelectorAll('.custom-definition select').length === 0, 'Aggiunta dei nove tipi con tipo immutabile e impostazioni ancora non salvate');
-    check(choiceSettingsTabs().length === 4 && document.querySelectorAll('#choice-settings-panels .option-row').length === 8, 'Una sezione dinamica di etichette e colori per ogni colonna a scelta');
+    check(settingsDraft.taskFields.length === 9 && settingsDraft.issueFields.length === 4 && !$('#unsaved-banner').hidden && document.querySelectorAll('.custom-definition select').length === 0, 'All nine types can be added, types stay fixed, and changes remain unsaved');
+    check(choiceSettingsTabs().length === 4 && document.querySelectorAll('#choice-settings-panels .option-row').length === 8, 'Dynamic labels and colors section appears for each select column');
     $('#save-settings').click();
     await waitFor(() => !saving && data.settings.taskFields.length === 9);
     const taskFields = Object.fromEntries(data.settings.taskFields.map(field => [field.type, field]));
     const issueFields = Object.fromEntries(data.settings.issueFields.map(field => [field.type, field]));
-    check((await workspaceApi.load()).data.settings.issueFields.length === 4 && data.settings.taskColumns.some(column => column.id === taskFields.number.id), 'Schemi e colonne predefinite persistiti nell’archivio');
+    check((await workspaceApi.load()).data.settings.issueFields.length === 4 && data.settings.taskColumns.some(column => column.id === taskFields.number.id), 'Schemas and default columns persist in storage');
     const pendingTask = $('[data-add-field="tasks"]'), pendingIssue = $('[data-add-field="issues"]');
     pendingTask.elements.name.value = taskFields.text.name;
     pendingIssue.elements.name.value = 'Must not partially save';
     let duplicateRejected = false;
-    try { await saveSettings(); } catch (error) { duplicateRejected = /univoc/i.test(error.message); }
-    check(duplicateRejected && (await workspaceApi.load()).data.settings.issueFields.length === 4 && pendingTask.elements.name.value === taskFields.text.name && pendingIssue.elements.name.value === 'Must not partially save', 'Nome duplicato rifiutato senza salvare parzialmente o perdere le colonne ancora compilate');
+    try { await saveSettings(); } catch (error) { duplicateRejected = /unique/i.test(error.message); }
+    check(duplicateRejected && (await workspaceApi.load()).data.settings.issueFields.length === 4 && pendingTask.elements.name.value === taskFields.text.name && pendingIssue.elements.name.value === 'Must not partially save', 'Duplicate name is rejected without partial save or losing pending columns');
     view = 0; render(); taskDialog(data.tasks.find(task => task.id === editedId));
     const form = $('#task-form'), values = { text: 'Needle custom text '.repeat(40), number: '17.5', date: '2028-02-29', select: taskFields.select.options[1].id, url: 'https://example.com/custom', effort: '1.25', boolean: 'false' };
     for (const [type, value] of Object.entries(values)) form.elements[taskFields[type].id].value = value;
     form.querySelector('[data-choice-picker]').click();
     $('.task-edit-layout').dispatchEvent(new Event('scroll'));
-    check(Boolean($('#tag-menu')), 'Scorrimento automatico dell’editor non chiude la scelta multipla appena aperta');
+    check(Boolean($('#tag-menu')), 'Scrolling the editor does not close the newly opened multiselect');
     closeTagMenu(true);
-    check(form.querySelector('[data-choice-picker]').getAttribute('aria-expanded') === 'false' && document.activeElement === form.querySelector('[data-choice-picker]'), 'Chiusura del menu ripristina stato e focus sul selettore dell’editor, non sulla tabella sottostante');
+    check(form.querySelector('[data-choice-picker]').getAttribute('aria-expanded') === 'false' && document.activeElement === form.querySelector('[data-choice-picker]'), 'Closing the menu restores editor state and selector focus, not focus to the underlying table');
     form.querySelector('[data-choice-picker]').click();
     document.querySelectorAll('#tag-menu input').forEach(input => { input.checked = true; });
     $('#tag-menu').requestSubmit(); await waitFor(() => !$('#tag-menu'));
-    check(!form.querySelector('select[multiple]') && form.querySelectorAll('.tag-pill').length === 2 && $('#modal').open, 'Scelta multipla nella scheda con dropdown e pillole colorate, senza lista nativa');
+    check(!form.querySelector('select[multiple]') && form.querySelectorAll('.tag-pill').length === 2 && $('#modal').open, 'Multiselect in the task tab uses a dropdown and colored pills instead of a native list');
     $(`#editor-${taskFields.richtext.id}`).innerHTML = '<p>Needle custom <strong>rich</strong></p>';
     form.requestSubmit();
     await waitFor(() => !saving && !$('#modal').open);
     const edited = () => data.tasks.find(task => task.id === editedId);
-    check(edited().customFields[taskFields.number.id] === 17.5 && edited().customFields[taskFields.boolean.id] === false && edited().customFields[taskFields.multiselect.id].length === 2 && edited().customFields[taskFields.richtext.id].includes('<strong>'), 'Editor salva numeri, booleani falsi, scelte multiple e rich text personalizzati');
+    check(edited().customFields[taskFields.number.id] === 17.5 && edited().customFields[taskFields.boolean.id] === false && edited().customFields[taskFields.multiselect.id].length === 2 && edited().customFields[taskFields.richtext.id].includes('<strong>'), 'Editor saves numbers, false booleans, multiselects, and custom rich text');
     const storedCustom = (await workspaceApi.load()).data.tasks.find(task => task.id === editedId).customFields;
-    check(JSON.stringify(storedCustom) === JSON.stringify(edited().customFields), 'Tutti i valori personalizzati riletti dal backend coincidono con quelli salvati');
+    check(JSON.stringify(storedCustom) === JSON.stringify(edited().customFields), 'All custom values read back from the backend match the saved values');
     const customCells = $(`[data-task-row="${editedId}"]`).querySelectorAll('.custom-cell');
-    check(customCells.length === 9 && [...customCells].some(cell => cell.querySelector('a[data-open-url]')) && [...customCells].some(cell => cell.querySelector('.date-pill')) && getComputedStyle(customCells[0]).overflowWrap === 'anywhere', 'Colonne tipizzate leggibili con link, date colorate e testo lungo contenuto');
-    check(globalSearchResults('Needle custom').some(result => result.id === editedId), 'Ricerca globale include i valori personalizzati');
+    check(customCells.length === 9 && [...customCells].some(cell => cell.querySelector('a[data-open-url]')) && [...customCells].some(cell => cell.querySelector('.date-pill')) && getComputedStyle(customCells[0]).overflowWrap === 'anywhere', "Typed columns render links, colored dates, and contained long text");
+    check(globalSearchResults('Needle custom').some(result => result.id === editedId), "Global search includes custom values");
     async function setColumnFilter(id, kind, fields) {
       columnFilterDialog(id, kind);
       const form = $('#column-filter-form');
@@ -3000,129 +3012,129 @@ window.runSmokeTests = async () => {
       return area.height >= 160 && bar.height < 80 && bar.bottom <= area.top + 1 && Boolean(row) && row.height > 0 && row.top < area.bottom && row.bottom > area.top;
     };
     await setColumnFilter(taskFields.number.id, 'tasks', { min: '10', max: '20' });
-    check(filteredTasks().length === 1 && $('.column-filter-button.active'), 'Filtro numerico per colonna seleziona la riga attesa');
-    check(tableShowsRows('#task-rows tr[data-task-row]') && $('#task-rows tr[data-task-row]').children.length === shownColumns().length + 2, 'Con un filtro di colonna attivo la tabella resta visibile con tutte le colonne');
+    check(filteredTasks().length === 1 && $('.column-filter-button.active'), 'Numeric column filter selects the expected row');
+    check(tableShowsRows('#task-rows tr[data-task-row]') && $('#task-rows tr[data-task-row]').children.length === shownColumns().length + 2, 'Table stays fully visible while a column filter is active');
     await setColumnFilter(taskFields.text.id, 'tasks', { empty: 'empty' });
-    check(filteredTasks().length === 0 && $('.column-filter-bar').querySelectorAll('[data-filter-column]').length === 2, 'Filtri di colonne diverse si combinano con AND, inclusi i valori vuoti');
+    check(filteredTasks().length === 0 && $('.column-filter-bar').querySelectorAll('[data-filter-column]').length === 2, 'Filters on different columns combine with AND, including empty values');
     $('[data-clear-column-filters]').click();
-    check(filteredTasks().length === baseline.tasks.filter(task => !task.hidden).length && !$('.column-filter-bar'), 'Azzera filtri ripristina la lista senza cambiare i dati');
+    check(filteredTasks().length === baseline.tasks.filter(task => !task.hidden).length && !$('.column-filter-bar'), "Clearing filters restores the list without changing data");
     const dated = data.tasks.find(task => task.releaseDate && !task.hidden), sameDay = data.tasks.filter(task => !task.hidden && task.releaseDate === dated.releaseDate).length;
     await setColumnFilter('releaseDate', 'tasks', { min: dated.releaseDate, max: dated.releaseDate });
-    check(filteredTasks().length === sameDay && document.querySelectorAll('#task-rows tr[data-task-row]').length === sameDay && $('#row-count').textContent.startsWith(String(sameDay)) && tableShowsRows('#task-rows tr[data-task-row]'), 'Filtro sulla release date dello stesso giorno mostra le righe di quella data');
+    check(filteredTasks().length === sameDay && document.querySelectorAll('#task-rows tr[data-task-row]').length === sameDay && $('#row-count').textContent.startsWith(String(sameDay)) && tableShowsRows('#task-rows tr[data-task-row]'), 'Same-day release date filter shows rows for that date');
     const visibleDated = data.tasks.filter(task => !task.hidden), presentDates = [...new Set(visibleDated.map(task => task.releaseDate).filter(Boolean))].sort(), unassignedCount = visibleDated.filter(task => !task.releaseDate).length;
     columnFilterDialog('releaseDate', 'tasks');
     const dateBoxes = () => [...document.querySelectorAll('#column-filter-form input[name="values"]')];
-    check($('#column-filter-form').elements.min.tagName === 'SELECT' && !$('#column-filter-form input[type="date"]') && !$('#column-filter-form').elements.empty && [...$('#column-filter-form').elements.max.options].slice(1).map(option => option.value).join() === presentDates.join(), 'Filtro data senza digitazione: Da e A scelgono tra le date presenti');
-    check(dateBoxes()[0].value === CustomColumns.EMPTY_VALUE && dateBoxes().slice(1).map(box => box.value).join() === presentDates.join() && $('#column-filter-form .date-filter-option .tiny-count').textContent === String(unassignedCount) && dateBoxes().every(box => !box.checked), 'Elenco del filtro data con Non assegnata, ogni data presente e i conteggi');
+    check($('#column-filter-form').elements.min.tagName === 'SELECT' && !$('#column-filter-form input[type="date"]') && !$('#column-filter-form').elements.empty && [...$('#column-filter-form').elements.max.options].slice(1).map(option => option.value).join() === presentDates.join(), "Date filter pickers select existing dates without typing");
+    check(dateBoxes()[0].value === CustomColumns.EMPTY_VALUE && dateBoxes().slice(1).map(box => box.value).join() === presentDates.join() && $('#column-filter-form .date-filter-option .tiny-count').textContent === String(unassignedCount) && dateBoxes().every(box => !box.checked), "Date filter list includes Unassigned, every existing date, and counts");
     $('#column-filter-form').elements.min.value = ''; $('#column-filter-form').elements.max.value = '';
     $(`#column-filter-form input[name="values"][value="${dated.releaseDate}"]`).checked = true;
     $('#column-filter-form').requestSubmit(); await tick();
-    check(filteredTasks().length === sameDay && columnFilters.tasks.releaseDate.values.join() === dated.releaseDate && !columnFilters.tasks.releaseDate.min && tableShowsRows('#task-rows tr[data-task-row]') && $('.column-filter-bar').textContent.includes(formatDate(dated.releaseDate)), 'Spunta di una data presente mostra le sue righe e la barra filtri riporta la data');
+    check(filteredTasks().length === sameDay && columnFilters.tasks.releaseDate.values.join() === dated.releaseDate && !columnFilters.tasks.releaseDate.min && tableShowsRows('#task-rows tr[data-task-row]') && $('.column-filter-bar').textContent.includes(formatDate(dated.releaseDate)), 'Selecting an existing date shows its rows and displays the date in the filter bar');
     columnFilterDialog('releaseDate', 'tasks');
-    check(dateBoxes().filter(box => box.checked).map(box => box.value).join() === dated.releaseDate, 'Riapertura del filtro data mostra la data già spuntata');
+    check(dateBoxes().filter(box => box.checked).map(box => box.value).join() === dated.releaseDate, 'Reopening the date filter keeps the date selected');
     $('#column-filter-form [data-check-dates="none"]').click();
     $(`#column-filter-form input[value="${CustomColumns.EMPTY_VALUE}"]`).checked = true;
     $('#column-filter-form').requestSubmit(); await tick();
-    check(columnFilters.tasks.releaseDate.empty === 'empty' && filteredTasks().length === unassignedCount && filteredTasks().every(task => !task.releaseDate), 'Non assegnata mostra solo le attività senza release date');
+    check(columnFilters.tasks.releaseDate.empty === 'empty' && filteredTasks().length === unassignedCount && filteredTasks().every(task => !task.releaseDate), "Unassigned shows only tasks without a release date");
     columnFilterDialog('releaseDate', 'tasks');
     $('#column-filter-form [data-check-dates="all"]').click();
     $(`#column-filter-form input[value="${CustomColumns.EMPTY_VALUE}"]`).checked = false;
     $('#column-filter-form').requestSubmit(); await tick();
-    check(columnFilters.tasks.releaseDate.empty === 'filled' && !columnFilters.tasks.releaseDate.values.length && filteredTasks().length === visibleDated.length - unassignedCount, 'Tutte le date senza Non assegnata diventa «solo con data», valido anche per date future');
+    check(columnFilters.tasks.releaseDate.empty === 'filled' && !columnFilters.tasks.releaseDate.values.length && filteredTasks().length === visibleDated.length - unassignedCount, "All dates without Unassigned becomes “dated only,” including future dates");
     columnFilterDialog('releaseDate', 'tasks');
-    check(dateBoxes().slice(1).every(box => box.checked) && !dateBoxes()[0].checked, 'Il filtro «solo con data» riaperto spunta tutte le date presenti');
+    check(dateBoxes().slice(1).every(box => box.checked) && !dateBoxes()[0].checked, 'Reopened “dated only” filter selects all existing dates');
     $('#column-filter-form [data-check-dates="all"]').click();
     $('#column-filter-form').requestSubmit(); await tick();
-    check(!columnFilters.tasks.releaseDate && filteredTasks().length === visibleDated.length, 'Seleziona tutte, Non assegnata compresa, rimuove il filtro data');
+    check(!columnFilters.tasks.releaseDate && filteredTasks().length === visibleDated.length, "Select all, including Unassigned, clears the date filter");
     if (presentDates.length > 1) {
       columnFilterDialog('releaseDate', 'tasks');
       $('#column-filter-form').elements.min.value = presentDates[1]; $('#column-filter-form').elements.max.value = presentDates[0];
       $('#column-filter-form').requestSubmit(); await tick();
-      check($('#modal').open && !columnFilters.tasks.releaseDate, 'Intervallo date invertito rifiutato senza applicare il filtro');
+      check($('#modal').open && !columnFilters.tasks.releaseDate, 'Reversed date range is rejected without applying the filter');
       $('#modal').close();
     }
-    check(!$('.column-filter-bar') && !Object.keys(columnFilters.tasks).length, 'Senza filtri attivi la barra dei filtri di colonna scompare');
+    check(!$('.column-filter-bar') && !Object.keys(columnFilters.tasks).length, 'Column filter bar disappears when no filters are active');
     await csvImportDialog(new File(['code;releaseDate\nBAD;2027-02-29'], 'invalid.csv'), 'tasks');
-    check($('#csv-import').disabled && $('#csv-status').textContent.includes('1') && data.tasks.length === baseline.tasks.length, 'CSV invalido mostra gli errori e non importa alcuna riga');
+    check($('#csv-import').disabled && $('#csv-status').textContent.includes('1') && data.tasks.length === baseline.tasks.length, 'Invalid CSV reports errors and imports no rows');
     $('#modal').close();
     const transfer = new DataTransfer();
     transfer.items.add(new File([`Ticket;${taskFields.number.name};${taskFields.date.name};${taskFields.url.name}\nCSV-CUSTOM;42;2031-01-02;https://example.com/csv`], 'mapped.csv'));
     $('#csv-file-tasks').files = transfer.files;
     $('#csv-file-tasks').dispatchEvent(new Event('change'));
     await waitFor(() => $('#modal').open && Boolean($('#csv-import-form')));
-    check($('#csv-import').disabled && $('[data-csv-column="1"]').value === taskFields.number.id, 'Selezione file CSV suggerisce le colonne personalizzate e richiede la mappatura del codice');
+    check($('#csv-import').disabled && $('[data-csv-column="1"]').value === taskFields.number.id, 'CSV file selection suggests custom columns and requires code mapping');
     $('[data-csv-column="0"]').value = 'code'; $('[data-csv-column="0"]').dispatchEvent(new Event('change'));
-    check(!$('#csv-import').disabled && $('#csv-preview').textContent.includes('CSV-CUSTOM') && $('#csv-import').getBoundingClientRect().bottom <= $('#modal').getBoundingClientRect().bottom, 'Mappatura manuale aggiorna anteprima e abilita importazione con pulsante visibile');
+    check(!$('#csv-import').disabled && $('#csv-preview').textContent.includes('CSV-CUSTOM') && $('#csv-import').getBoundingClientRect().bottom <= $('#modal').getBoundingClientRect().bottom, 'Manual mapping updates the preview and enables import with a visible button');
     $('#csv-import-form').requestSubmit();
     await waitFor(() => !saving && !$('#modal').open && data.tasks.length === baseline.tasks.length + 1);
-    check(data.tasks.find(task => task.code === 'CSV-CUSTOM').customFields[taskFields.number.id] === 42, 'Importazione CSV aggiunge i valori tipizzati senza sovrascrivere le attività');
+    check(data.tasks.find(task => task.code === 'CSV-CUSTOM').customFields[taskFields.number.id] === 42, "CSV import adds typed values without overwriting tasks");
     $('#undo-button').click(); await waitFor(() => !saving && data.tasks.length === baseline.tasks.length);
     $('#redo-button').click(); await waitFor(() => !saving && data.tasks.length === baseline.tasks.length + 1);
-    check(data.tasks.some(task => task.code === 'CSV-CUSTOM'), 'Intera importazione CSV annullabile e ripristinabile in una operazione');
+    check(data.tasks.some(task => task.code === 'CSV-CUSTOM'), 'Entire CSV import can be undone and redone in one operation');
     await setColumnFilter('code', 'tasks', { text: 'CSV-CUSTOM' });
     await setColumnFilter(taskFields.number.id, 'tasks', { min: '40' });
     $(`[data-sort="${taskFields.number.id}"]`).click();
     await saveSavedView('Custom filters smoke');
     const saved = data.settings.savedViews.find(saved => saved.name === 'Custom filters smoke');
     columnFilters.tasks = {}; await applySavedView(saved.id);
-    check(filteredTasks().length === 1 && columnFilters.tasks[taskFields.number.id].min === '40' && savedViewSummary(saved).includes(taskFields.number.name), 'Viste salvate mantengono filtri e ordinamento delle colonne personalizzate');
-    check(tableShowsRows('#task-rows tr[data-task-row]'), 'Vista salvata con filtri di colonna mostra le righe nella tabella');
+    check(filteredTasks().length === 1 && columnFilters.tasks[taskFields.number.id].min === '40' && savedViewSummary(saved).includes(taskFields.number.name), "Saved views retain custom column filters and sorting");
+    check(tableShowsRows('#task-rows tr[data-task-row]'), 'Saved view with column filters displays rows in the table');
     view = 1; render();
-    await csvImportDialog(new File([`code;incident;${issueFields.select.name}\nCSV-CUSTOM;INC-CSV-CUSTOM;Due`], 'issues.csv'), 'issues');
+    await csvImportDialog(new File([`code;incident;${issueFields.select.name}\nCSV-CUSTOM;INC-CSV-CUSTOM;Two`], 'issues.csv'), 'issues');
     $('#csv-import-form').requestSubmit();
     await waitFor(() => !saving && !$('#modal').open && data.issues.some(issue => issue.incident === 'INC-CSV-CUSTOM'));
-    check(matchIssues(data.tasks.find(task => task.code === 'CSV-CUSTOM'), data.issues).incidents.includes('INC-CSV-CUSTOM'), 'CSV delle issue aggiorna automaticamente incident e problem delle attività');
+    check(matchIssues(data.tasks.find(task => task.code === 'CSV-CUSTOM'), data.issues).incidents.includes('INC-CSV-CUSTOM'), "Issues CSV automatically updates task incident and problem values");
     const csvIssue = data.issues.find(issue => issue.incident === 'INC-CSV-CUSTOM');
     issueDialog(csvIssue); $('#issue-form').elements[issueFields.boolean.id].value = 'false';
     $('#issue-form').requestSubmit(); await waitFor(() => !saving && !$('#modal').open);
-    check(data.issues.find(issue => issue.id === csvIssue.id).customFields[issueFields.boolean.id] === false, 'Editor issue conserva le scelte importate e salva altri campi personalizzati');
+    check(data.issues.find(issue => issue.id === csvIssue.id).customFields[issueFields.boolean.id] === false, 'Issue editor retains imported selections and saves other custom fields');
     columnFilterDialog(issueFields.select.id, 'issues');
     $('#column-filter-form').querySelector(`input[value="${issueFields.select.options[1].id}"]`).checked = true;
     $('#column-filter-form').requestSubmit(); await tick();
     await setColumnFilter('linked', 'issues', { min: '1' });
-    check(filteredIssues().length === 1 && document.querySelectorAll('#issue-rows [data-issue]').length === 2, 'Filtri issue combinano scelta personalizzata e conteggio attività collegate');
-    check(tableShowsRows('#issue-rows tr'), 'Con filtri di colonna attivi la tabella delle issue resta visibile');
+    check(filteredIssues().length === 1 && document.querySelectorAll('#issue-rows [data-issue]').length === 2, "Issue filters combine custom selection with linked-task count");
+    check(tableShowsRows('#issue-rows tr'), 'Issue table stays visible with active column filters');
     const book = await unzipParts(await situationWorkbook({ scope: 'view', columns: 'all', sheets: ['tasks', 'issues'] }));
     const xml = text => new DOMParser().parseFromString(text, 'application/xml');
-    check(xml(book.get('xl/worksheets/sheet1.xml')).getElementsByTagName('row').length === 2 && xml(book.get('xl/worksheets/sheet2.xml')).getElementsByTagName('row').length === 2, 'Excel della vista applica i filtri di entrambe le liste');
-    check(book.get('xl/sharedStrings.xml').includes(taskFields.number.name) && book.get('xl/sharedStrings.xml').includes(issueFields.select.name) && book.get('xl/worksheets/sheet1.xml').includes(`<v>${window.OrbitaXlsx.excelDate('2031-01-02')}</v>`) && book.get('xl/worksheets/_rels/sheet1.xml.rels').includes('https://example.com/csv'), 'Excel include nomi personalizzati, date reali e collegamenti');
+    check(xml(book.get('xl/worksheets/sheet1.xml')).getElementsByTagName('row').length === 2 && xml(book.get('xl/worksheets/sheet2.xml')).getElementsByTagName('row').length === 2, 'Excel view applies filters from both lists');
+    check(book.get('xl/sharedStrings.xml').includes(taskFields.number.name) && book.get('xl/sharedStrings.xml').includes(issueFields.select.name) && book.get('xl/worksheets/sheet1.xml').includes(`<v>${window.OrbitaXlsx.excelDate('2031-01-02')}</v>`) && book.get('xl/worksheets/_rels/sheet1.xml.rels').includes('https://example.com/csv'), 'Excel includes custom names, actual dates, and links');
     $('#issue-columns-button').click();
     $(`#columns-dialog-editor [data-column-visible="${issueFields.select.id}"]`).click();
     $('#columns-apply').click(); await waitFor(() => !saving && !$('#modal').open);
     const visibleBook = await unzipParts(await situationWorkbook({ scope: 'view', columns: 'visible', sheets: ['issues'] }));
-    check(!visibleBook.get('xl/sharedStrings.xml').includes(issueFields.select.name) && $('.column-filter-bar').textContent.includes(issueFields.select.name), 'Colonna issue nascosta esclusa da Excel ma filtro ancora visibile e rimovibile');
+    check(!visibleBook.get('xl/sharedStrings.xml').includes(issueFields.select.name) && $('.column-filter-bar').textContent.includes(issueFields.select.name), "Hidden issue column is excluded from Excel, but its filter stays visible and removable");
     const issuePicker = document.querySelector(`#issue-rows [data-choice-field="${issueFields.multiselect.id}"]`);
     issuePicker.click();
     $('#tag-menu input').checked = true; $('#tag-menu').requestSubmit();
     await waitFor(() => !saving && !$('#tag-menu'));
-    check(data.issues.find(issue => issue.id === csvIssue.id).customFields[issueFields.multiselect.id].length === 1 && !$('#modal').open, 'Dropdown multiselezione direttamente nella tabella issue, con salvataggio');
+    check(data.issues.find(issue => issue.id === csvIssue.id).customFields[issueFields.multiselect.id].length === 1 && !$('#modal').open, 'Multiselect dropdown works directly in the issue table and saves');
     view = 4; render(); showSettingsTab('custom-columns');
     const optionKey = `choice-tasks-${taskFields.multiselect.id}`, chosenId = taskFields.multiselect.options[0].id;
     showSettingsTab(optionKey);
     const labelInput = document.querySelector(`#${optionKey}-list [data-option-name]`), colorInput = document.querySelector(`#${optionKey}-list [data-color]`);
-    labelInput.value = 'Etichetta rinominata'; labelInput.dispatchEvent(new Event('input', { bubbles: true }));
+    labelInput.value = 'Renamed label'; labelInput.dispatchEvent(new Event('input', { bubbles: true }));
     colorInput.value = '#12ab34'; colorInput.dispatchEvent(new Event('input', { bubbles: true }));
     $(`#${optionKey}-list [data-move="${optionKey}:${chosenId}:1"]`).click();
-    $('#save-settings').click(); await waitFor(() => !saving && data.settings.taskFields.find(field => field.id === taskFields.multiselect.id).options[1].name === 'Etichetta rinominata');
-    check(edited().customFields[taskFields.multiselect.id].includes(chosenId) && customText([chosenId], data.settings.taskFields.find(field => field.id === taskFields.multiselect.id)) === 'Etichetta rinominata', 'Rinomina, colore e riordino preservano le assegnazioni grazie a identificativi stabili');
+    $('#save-settings').click(); await waitFor(() => !saving && data.settings.taskFields.find(field => field.id === taskFields.multiselect.id).options[1].name === 'Renamed label');
+    check(edited().customFields[taskFields.multiselect.id].includes(chosenId) && customText([chosenId], data.settings.taskFields.find(field => field.id === taskFields.multiselect.id)) === 'Renamed label', 'Rename, color, and reorder preserve assignments using stable IDs');
     view = 0; columnFilters.tasks = {}; render();
     const picker = document.querySelector(`[data-task-row="${editedId}"] [data-choice-field="${taskFields.multiselect.id}"]`);
-    check(picker.textContent.includes('Etichetta rinominata') && picker.querySelectorAll('.tag-pill')[1].style.getPropertyValue('--pill') === '#12ab34', 'Etichette e colori del catalogo aggiornati nelle pillole della tabella');
+    check(picker.textContent.includes('Renamed label') && picker.querySelectorAll('.tag-pill')[1].style.getPropertyValue('--pill') === '#12ab34', 'Updated catalog labels and colors appear in table pills');
     picker.click(); $('#tag-menu input').checked = false; $('#tag-menu').requestSubmit();
     await waitFor(() => !saving && !$('#tag-menu'));
-    check(edited().customFields[taskFields.multiselect.id].length === 1 && !$('#modal').open, 'Dropdown multiselezione direttamente nella lista attività');
+    check(edited().customFields[taskFields.multiselect.id].length === 1 && !$('#modal').open, "Multiselect dropdown works directly in the task list");
     view = 4; render(); showSettingsTab(optionKey);
     $(`#${optionKey}-list [data-remove="${optionKey}:${chosenId}"]`).click();
-    check(edited().customFields[taskFields.multiselect.id].includes(chosenId), 'Rimozione etichetta ancora reversibile prima del salvataggio');
+    check(edited().customFields[taskFields.multiselect.id].includes(chosenId), 'Removed label remains undoable before saving');
     $('#save-settings').click(); await waitFor(() => !saving && !edited().customFields[taskFields.multiselect.id].includes(chosenId));
-    check(data.settings.taskFields.find(field => field.id === taskFields.multiselect.id).options.length === 1, 'Eliminazione etichetta pulisce i valori solo al salvataggio');
+    check(data.settings.taskFields.find(field => field.id === taskFields.multiselect.id).options.length === 1, 'Deleting a label clears its values only after saving');
     showSettingsTab('custom-columns');
     $(`[data-field-id="${taskFields.number.id}"] [data-delete-field]`).click();
     $('#confirm-action').click(); await waitFor(() => !$('#modal').open);
-    check(edited().customFields[taskFields.number.id] === 17.5, 'Eliminazione colonna richiede conferma e non cancella dati prima di salvare');
+    check(edited().customFields[taskFields.number.id] === 17.5, "Column deletion requires confirmation and leaves data untouched until saving");
     $('#save-settings').click(); await waitFor(() => !saving && data.settings.taskFields.length === 8);
     const cleaned = data.settings.savedViews.find(view => view.id === saved.id);
-    check(edited().customFields[taskFields.number.id] === undefined && !cleaned.columnFilters[taskFields.number.id] && cleaned.sort[0].key === 'releaseDate', 'Salvataggio rimuove valori, filtri e ordinamenti della colonna eliminata senza invalidare le viste');
+    check(edited().customFields[taskFields.number.id] === undefined && !cleaned.columnFilters[taskFields.number.id] && cleaned.sort[0].key === 'releaseDate', 'Saving removes values, filters, and sorting for the deleted column without invalidating views');
     await commit(baseline);
     columnFilters = { tasks: {}, issues: {} }; issueSearch = ''; search = ''; activeSavedViewId = ''; sort = [{ key: 'releaseDate', direction: 'asc' }];
     view = 0; clearHistory(activeOrganizationId); render();
@@ -3136,9 +3148,9 @@ window.runSmokeTests = async () => {
     external.data.tasks[0].customFields = { 'custom-remote': 'Keep this value' };
     await workspaceApi.save(external.data, activeOrganizationId, undefined, external.revision);
     let conflictRejected = false;
-    try { await saveSettings(); } catch (error) { conflictRejected = /altra finestra/.test(error.message); }
+    try { await saveSettings(); } catch (error) { conflictRejected = error.message === t("Custom columns changed in another window. Discard the settings changes and try again: saved data has not been overwritten."); }
     const protectedData = (await workspaceApi.load()).data;
-    check(conflictRejected && protectedData.settings.taskFields.some(field => field.id === 'custom-remote') && protectedData.tasks[0].customFields['custom-remote'] === 'Keep this value', 'Una bozza vecchia non cancella colonne e valori salvati da un’altra finestra');
+    check(conflictRejected && protectedData.settings.taskFields.some(field => field.id === 'custom-remote') && protectedData.tasks[0].customFields['custom-remote'] === 'Keep this value', 'Stale draft does not delete columns or values saved by another window');
     adoptSnapshot(await workspaceApi.load());
     await commit(baseline); render(); clearHistory(activeOrganizationId);
   }
@@ -3148,47 +3160,47 @@ window.runSmokeTests = async () => {
     for (const font of FONT_FAMILIES) {
       $('#font-family').value = font.id; $('#font-family').dispatchEvent(new Event('change', { bubbles: true }));
       if (font.bundled) {
-        const regular = await document.fonts.load(`400 14px "${font.name}"`, 'Attività Łódź'), bold = await document.fonts.load(`700 14px "${font.name}"`, 'Attività Łódź');
-        check(regular.length > 0 && bold.length > 0 && [...regular, ...bold].every(face => face.status === 'loaded'), `Font ${font.name} caricato realmente dai file locali, anche con accenti e grassetto`);
+        const regular = await document.fonts.load(`400 14px "${font.name}"`, "Tasks Łódź"), bold = await document.fonts.load(`700 14px "${font.name}"`, "Tasks Łódź");
+        check(regular.length > 0 && bold.length > 0 && [...regular, ...bold].every(face => face.status === 'loaded'), `Font ${font.name} actually loads from local files, including accented and bold faces`);
       }
-      check(getComputedStyle($('.font-sample input')).fontFamily === getComputedStyle(document.documentElement).fontFamily && document.documentElement.style.fontFamily === font.css, `Anteprima font ${font.name} applicata anche ai controlli`);
+      check(getComputedStyle($('.font-sample input')).fontFamily === getComputedStyle(document.documentElement).fontFamily && document.documentElement.style.fontFamily === font.css, `Font ${font.name} preview is also applied to controls`);
     }
     $('#discard-settings').click();
-    check(data.settings.fontFamily === DEFAULT_FONT_FAMILY && $('#font-family').value === DEFAULT_FONT_FAMILY, 'Annulla impostazioni ripristina il font precedente');
+    check(data.settings.fontFamily === DEFAULT_FONT_FAMILY && $('#font-family').value === DEFAULT_FONT_FAMILY, "Canceling settings restores the previous font");
     $('#font-family').value = 'verdana'; $('#font-family').dispatchEvent(new Event('change', { bubbles: true }));
     $('#save-settings').click(); await waitFor(() => !saving && data.settings.fontFamily === 'verdana');
-    check((await workspaceApi.load()).data.settings.fontFamily === 'verdana' && $('#unsaved-banner').hidden, 'Font salvato nell’archivio e riletto nelle impostazioni');
+    check((await workspaceApi.load()).data.settings.fontFamily === 'verdana' && $('#unsaved-banner').hidden, 'Saved font persists in storage and reloads in settings');
     await commit(baseline); clearHistory(activeOrganizationId); view = 0; render();
   }
   const historyTask = data.tasks.find(task => !task.hidden);
   const originalHistoryNotes = historyTask.notes;
   await commit(next => { next.tasks.find(task => task.id === historyTask.id).notes = '<p>Undo smoke</p>'; });
-  check(!$('#undo-button').disabled && $('#redo-button').disabled, 'Modifiche persistite abilitate in Annulla');
+  check(!$('#undo-button').disabled && $('#redo-button').disabled, "Persisted changes enable Cancel");
   document.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true, cancelable: true }));
   await waitFor(() => !saving && data.tasks.find(task => task.id === historyTask.id).notes === originalHistoryNotes);
-  check($('#undo-button').disabled && !$('#redo-button').disabled, 'Ctrl+Z ripristina i dati e abilita Ripristina');
+  check($('#undo-button').disabled && !$('#redo-button').disabled, "Ctrl+Z restores data and enables Restore");
   document.dispatchEvent(new KeyboardEvent('keydown', { key: 'y', ctrlKey: true, bubbles: true, cancelable: true }));
   await waitFor(() => !saving && data.tasks.find(task => task.id === historyTask.id).notes === '<p>Undo smoke</p>');
   document.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true, cancelable: true }));
   await waitFor(() => !saving && data.tasks.find(task => task.id === historyTask.id).notes === originalHistoryNotes);
   clearHistory(activeOrganizationId);
-  check($('#undo-button').disabled && $('#redo-button').disabled, 'Annulla e Ripristina restano disabilitati senza operazioni nello storico');
+  check($('#undo-button').disabled && $('#redo-button').disabled, "Cancel and Restore stay disabled when there are no history operations");
   view = 2;
   render();
   document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true, cancelable: true }));
-  check($('#modal').open && $('#global-search-input'), 'Ctrl+K apre la ricerca globale anche da un’altra scheda');
+  check($('#modal').open && $('#global-search-input'), 'Ctrl+K opens global search from another tab');
   const searchTask = data.tasks.find(task => !task.hidden);
   $('#global-search-input').value = searchTask.code;
   $('#global-search-input').dispatchEvent(new Event('input', { bubbles: true }));
-  check($('#global-search-results [data-global-kind="task"]')?.dataset.globalId === searchTask.id, 'Ricerca globale trova attività per codice');
+  check($('#global-search-results [data-global-kind="task"]')?.dataset.globalId === searchTask.id, "Global search finds tasks by code");
   $('#global-search-results [data-global-kind="task"]').click();
-  check(view === 0 && $('#modal').open && $('#task-form'), 'Risultato attività apre direttamente la modifica');
+  check(view === 0 && $('#modal').open && $('#task-form'), "Task result opens the editor directly");
   $('#modal').close();
   const searchIssue = data.issues.find(issue => issue.incident);
   openGlobalSearch(searchIssue.incident);
-  check($('#global-search-results [data-global-kind="issue"]'), 'Ricerca globale trova issue per incident');
+  check($('#global-search-results [data-global-kind="issue"]'), "Global search finds issues by incident");
   $('#global-search-results [data-global-kind="issue"]').click();
-  check(view === 1 && $('#modal').open && $('#issue-form'), 'Risultato issue apre direttamente la modifica');
+  check(view === 1 && $('#modal').open && $('#issue-form'), 'Issue result opens the editor directly');
   $('#modal').close();
   view = 0;
   render();
@@ -3218,10 +3230,10 @@ window.runSmokeTests = async () => {
   $('#saved-view-select').value = smokeView.id;
   $('#saved-view-select').dispatchEvent(new Event('change', { bubbles: true }));
   await waitFor(() => !saving && activeSavedViewId === smokeView.id && search === savedViewTask.code);
-  check(statusFilter === savedViewTask.statusId && showHidden && sort[0].key === 'sequence' && sort[0].direction === 'desc' && shownColumns().join() === 'code,releaseDate', 'Vista salvata riapplica filtri, ordinamento e colonne');
+  check(statusFilter === savedViewTask.statusId && showHidden && sort[0].key === 'sequence' && sort[0].direction === 'desc' && shownColumns().join() === 'code,releaseDate', 'Saved view reapplies filters, sorting, and columns');
   openSavedViews();
   $('#saved-view-list [data-view-action="delete"]').click();
-  check($('#confirm-action'), 'Eliminazione vista richiede conferma');
+  check($('#confirm-action'), 'Deleting a view requires confirmation');
   $('#confirm-action').click();
   await waitFor(() => !saving && !data.settings.savedViews.some(saved => saved.id === smokeView.id));
   await commit(next => { next.settings.savedViews = savedViewState.savedViews; next.settings.taskColumns = savedViewState.columns; });
@@ -3229,45 +3241,45 @@ window.runSmokeTests = async () => {
   activeSavedViewId = '';
   clearHistory(activeOrganizationId);
   render();
-  check(!(data.settings.savedViews || []).some(saved => saved.name === 'Smoke saved view'), 'Vista salvata eliminata senza lasciare dati di prova');
+  check(!(data.settings.savedViews || []).some(saved => saved.name === 'Smoke saved view'), "Deleted saved view leaves no test data behind");
   {
     const releaseState = { search, statusFilter, highlightFilter, showHidden, duplicatesOnly, filters: structuredClone(columnFilters.tasks) };
     showHidden = false; view = 0; render();
     const day = today(), shownDates = [...new Set(data.tasks.filter(task => !task.hidden && task.releaseDate).map(task => task.releaseDate))].sort();
     const releaseOptions = () => [...$('#saved-view-select').querySelectorAll(`option[value^="${RELEASE_VIEW}"]`)];
     const groupOf = date => $('#saved-view-select').querySelector(`option[value="${RELEASE_VIEW}${date}"]`)?.parentElement.label;
-    check(releaseOptions().map(option => option.value.slice(RELEASE_VIEW.length)).filter(Boolean).sort().join() === shownDates.join() && shownDates.every(date => groupOf(date) === t(date >= day ? 'Prossime release' : 'Release passate')), 'Una vista automatica per ogni release date, divisa tra prossime e passate');
+    check(releaseOptions().map(option => option.value.slice(RELEASE_VIEW.length)).filter(Boolean).sort().join() === shownDates.join() && shownDates.every(date => groupOf(date) === t(date >= day ? "Upcoming releases" : "Past releases")), 'One automatic view per release date, split into upcoming and past');
     const unassignedTasks = data.tasks.filter(task => !task.hidden && !task.releaseDate).length;
-    check(Boolean(groupOf('')) === unassignedTasks > 0 && (!unassignedTasks || releaseOptions().find(option => option.value === RELEASE_VIEW).textContent.endsWith(`(${unassignedTasks})`)), 'Vista automatica per le attività senza release date con il conteggio');
+    check(Boolean(groupOf('')) === unassignedTasks > 0 && (!unassignedTasks || releaseOptions().find(option => option.value === RELEASE_VIEW).textContent.endsWith(`(${unassignedTasks})`)), "Automatic view for tasks without release dates includes a count");
     const tasksOn = date => data.tasks.filter(task => !task.hidden && task.releaseDate === date).length;
     const releaseDate = shownDates.find(date => date >= day && tasksOn(date) > 1) || shownDates.find(date => tasksOn(date) > 1);
     search = 'not-a-release'; statusFilter = data.settings.statuses[0].id; render();
     $('#saved-view-select').value = RELEASE_VIEW + releaseDate;
     $('#saved-view-select').dispatchEvent(new Event('change', { bubbles: true }));
     await waitFor(() => activeSavedViewId === RELEASE_VIEW + releaseDate);
-    check(!search && !statusFilter && filteredTasks().length === tasksOn(releaseDate) && document.querySelectorAll('#task-rows tr[data-task-row]').length === tasksOn(releaseDate) && $('#saved-view-select').value === RELEASE_VIEW + releaseDate && $('.column-filter-bar').textContent.includes(formatDate(releaseDate)), 'Vista release mostra solo le attività di quella data e resta selezionata');
+    check(!search && !statusFilter && filteredTasks().length === tasksOn(releaseDate) && document.querySelectorAll('#task-rows tr[data-task-row]').length === tasksOn(releaseDate) && $('#saved-view-select').value === RELEASE_VIEW + releaseDate && $('.column-filter-bar').textContent.includes(formatDate(releaseDate)), "Release view shows only tasks with that date and remains selected");
     const moved = data.tasks.find(task => !task.hidden && task.releaseDate === releaseDate), farDate = '2099-12-30';
     await commit(next => { next.tasks.find(task => task.id === moved.id).releaseDate = farDate; });
     render();
-    check(groupOf(farDate) === t('Prossime release') && $('#saved-view-select').value === RELEASE_VIEW + releaseDate && filteredTasks().length === tasksOn(releaseDate), 'Una nuova release date crea subito la sua vista e la vista attiva si aggiorna');
+    check(groupOf(farDate) === t("Upcoming releases") && $('#saved-view-select').value === RELEASE_VIEW + releaseDate && filteredTasks().length === tasksOn(releaseDate), 'New release date immediately creates its view and updates the active view');
     await commit(next => { next.tasks.find(task => task.id === moved.id).releaseDate = releaseDate; });
     if (unassignedTasks) {
       applyReleaseView(RELEASE_VIEW);
-      check(filteredTasks().length === unassignedTasks && filteredTasks().every(task => !task.releaseDate) && $('#saved-view-select').value === RELEASE_VIEW, 'Vista release «Non assegnata» mostra le attività da pianificare');
+      check(filteredTasks().length === unassignedTasks && filteredTasks().every(task => !task.releaseDate) && $('#saved-view-select').value === RELEASE_VIEW, "“Unassigned” release view shows tasks to schedule");
     }
     $('#show-hidden').click();
-    check(!activeSavedViewId && $('#saved-view-select').value === '', 'Modificare i filtri lascia la vista release, come per le viste salvate');
+    check(!activeSavedViewId && $('#saved-view-select').value === '', 'Editing filters leaves the release view, as with saved views');
     ({ search, statusFilter, highlightFilter, showHidden, duplicatesOnly } = releaseState);
     columnFilters.tasks = releaseState.filters;
     activeSavedViewId = '';
     clearHistory(activeOrganizationId);
     render();
   }
-  check(initialTaskCount > 200 && visibleTasks().length < initialTaskCount && document.querySelectorAll('#task-rows tr').length === visibleTasks().length, 'Caricamento dati dimostrativi con righe già rilasciate nascoste');
+  check(initialTaskCount > 200 && visibleTasks().length < initialTaskCount && document.querySelectorAll('#task-rows tr').length === visibleTasks().length, "Demo data loads with already released rows hidden");
   const demoReleases = [...new Set(data.tasks.map(t => t.releaseDate).filter(Boolean))].sort();
-  check(demoReleases[0] === '2025-01-01' && demoReleases.length > 40 && demoReleases.every((date, i) => new Date(`${date}T12:00:00Z`).getUTCDay() === 3 && (!i || Date.parse(date) - Date.parse(demoReleases[i - 1]) === 14 * 86400000)), 'Milestone dimostrative ogni due settimane di mercoledì da gennaio 2025');
-  check(data.tasks.some(t => !t.releaseDate) && data.tasks.some(t => t.url) && data.settings.portalUrlTemplate.includes('{codice}') && data.settings.themes.length > 3, 'Dati dimostrativi coprono backlog, link, modello portale e temi');
-  check(data.tasks.some(t => matchIssues(t, data.issues).incidents.length >= 2), 'Associazioni uno-a-molti');
+  check(demoReleases[0] === '2025-01-01' && demoReleases.length > 40 && demoReleases.every((date, i) => new Date(`${date}T12:00:00Z`).getUTCDay() === 3 && (!i || Date.parse(date) - Date.parse(demoReleases[i - 1]) === 14 * 86400000)), "Demo milestones occur every other Wednesday from January 2025");
+  check(data.tasks.some(t => !t.releaseDate) && data.tasks.some(t => t.url) && data.settings.portalUrlTemplate.includes("{code}") && data.settings.themes.length > 3, "Demo data covers backlog, links, portal template, and themes");
+  check(data.tasks.some(t => matchIssues(t, data.issues).incidents.length >= 2), 'One-to-many associations');
   taskDialog();
   const form = $('#task-form');
   form.elements.code.value = 'SMOKE-1';
@@ -3275,11 +3287,11 @@ window.runSmokeTests = async () => {
   form.elements.hours.value = '2';
   form.elements.releaseDate.value = '2027-01-15';
   $('#description-editor').innerHTML = '<p>Test <strong>rich text</strong></p>';
-  $('#notes-editor').innerHTML = '<ul><li>Nota di prova</li></ul>';
+  $('#notes-editor').innerHTML = '<ul><li>Test note</li></ul>';
   form.requestSubmit();
   await waitFor(() => data.tasks.some(t => t.code === 'SMOKE-1') && !saving);
-  check(data.tasks.some(t => t.code === 'SMOKE-1' && t.effortHours === 10 && t.notes.includes('<ul>')), 'Creazione con effort e rich text persistiti');
-  check(data.tasks.find(t => t.code === 'SMOKE-1').url === '', 'Link portale facoltativo in creazione');
+  check(data.tasks.some(t => t.code === 'SMOKE-1' && t.effortHours === 10 && t.notes.includes('<ul>')), 'Created task persists effort and rich text');
+  check(data.tasks.find(t => t.code === 'SMOKE-1').url === '', "Portal link is optional when creating a task");
   issueDialog();
   const issueForm = $('#issue-form');
   issueForm.elements.code.value = 'smoke-1';
@@ -3287,52 +3299,52 @@ window.runSmokeTests = async () => {
   issueForm.elements.problem.value = 'PRB-SMOKE';
   issueForm.requestSubmit();
   await waitFor(() => data.issues.some(i => i.incident === 'INC-SMOKE') && !saving);
-  check(matchIssues(data.tasks.find(t => t.code === 'SMOKE-1'), data.issues).problems[0] === 'PRB-SMOKE', 'Inserimento issue aggiorna automaticamente attività');
+  check(matchIssues(data.tasks.find(t => t.code === 'SMOKE-1'), data.issues).problems[0] === 'PRB-SMOKE', "Adding an issue automatically updates tasks");
   const reloaded = await workspaceApi.load();
-  check(reloaded.data.tasks.some(t => t.code === 'SMOKE-1' && t.description.includes('<strong>')) && reloaded.data.issues.some(i => i.incident === 'INC-SMOKE'), 'Rilettura archivio reale preserva rich text e associazioni');
+  check(reloaded.data.tasks.some(t => t.code === 'SMOKE-1' && t.description.includes('<strong>')) && reloaded.data.issues.some(i => i.incident === 'INC-SMOKE'), "Reloading the real archive preserves rich text and associations");
   let rejected = false;
   try { await workspaceApi.save({ ...data, version: 999 }); } catch { rejected = true; }
-  check(rejected && (await workspaceApi.load()).data.version === 1, 'Archivio non valido rifiutato senza perdita dati');
+  check(rejected && (await workspaceApi.load()).data.version === 1, "Invalid archive is rejected without data loss");
   for (let i = 1; i < 4; i++) {
     view = i; render();
-    check($('#content').textContent.includes(data.settings.tabNames[i]), `Rendering tab ${i + 1}`);
-    check($('.page-heading').offsetHeight <= 75 && document.documentElement.scrollHeight <= innerHeight + 1, `Intestazione compatta e scorrimento interno nel tab ${i + 1}`);
+    check($('#content').textContent.includes(data.settings.tabNames[i]), `Tab ${i + 1} renders`);
+    check($('.page-heading').offsetHeight <= 75 && document.documentElement.scrollHeight <= innerHeight + 1, `Compact heading and internal scrolling in tab ${i + 1}`);
   }
-  check(document.querySelectorAll('.kanban-column').length === data.settings.statuses.length, 'Colonne kanban e ordine stati');
-  check(!document.querySelector('.kanban-board button'), 'Kanban effettivamente readonly');
+  check(document.querySelectorAll('.kanban-column').length === data.settings.statuses.length, "Kanban columns and status order");
+  check(!document.querySelector('.kanban-board button'), 'Kanban is truly read-only');
   doubleClick($('.kanban-board .task-card'));
-  check(!$('#modal').open, 'Doppio clic nel kanban mantiene la sola lettura');
+  check(!$('#modal').open, 'Double-clicking in kanban preserves read-only mode');
   view = 2; render();
-  check($('#content').textContent.includes('SMOKE-1'), 'Milestone aggiornata dopo inserimento');
+  check($('#content').textContent.includes('SMOKE-1'), "Milestones update after insertion");
   const upcoming = () => $('#next-release-milestone');
   const upcomingVisible = () => {
     const column = upcoming().getBoundingClientRect(), scroll = $('.milestone-scroll').getBoundingClientRect();
     return column.left >= scroll.left - 1 && column.right <= scroll.right + 1;
   };
-  check(document.querySelectorAll('.milestone-column.is-next-release').length === 1 && upcoming().dataset.releaseDate === nextReleaseDate(data.tasks) && upcoming().getAttribute('aria-current') === 'step' && upcoming().querySelector('.next-release-badge'), 'Una sola colonna identifica la prossima release in ordine cronologico');
+  check(document.querySelectorAll('.milestone-column.is-next-release').length === 1 && upcoming().dataset.releaseDate === nextReleaseDate(data.tasks) && upcoming().getAttribute('aria-current') === 'step' && upcoming().querySelector('.next-release-badge'), 'A single column identifies the next release in chronological order');
   const frame = upcoming().getBoundingClientRect(), cards = upcoming().querySelectorAll('.task-card');
-  check(parseFloat(getComputedStyle(upcoming()).borderTopWidth) >= 2 && frame.top < cards[0].getBoundingClientRect().top && frame.bottom >= cards[cards.length - 1].getBoundingClientRect().bottom && upcoming().style.getPropertyValue('--milestone') === dateColor(upcoming().dataset.releaseDate), 'Evidenziazione avvolge tutte le attività senza cambiare il colore della data');
-  check(upcomingVisible() && $('.milestone-scroll').scrollLeft > 0, 'Apertura milestone porta la prossima release in vista anche con molto storico');
+  check(parseFloat(getComputedStyle(upcoming()).borderTopWidth) >= 2 && frame.top < cards[0].getBoundingClientRect().top && frame.bottom >= cards[cards.length - 1].getBoundingClientRect().bottom && upcoming().style.getPropertyValue('--milestone') === dateColor(upcoming().dataset.releaseDate), "Highlight spans all tasks without changing the date color");
+  check(upcomingVisible() && $('.milestone-scroll').scrollLeft > 0, 'Opening milestones brings the next release into view despite extensive history');
   $('.milestone-scroll').scrollLeft = 0;
   $('.milestone-scroll').scrollTop = 42;
   const milestoneScrollTop = $('.milestone-scroll').scrollTop;
   rerenderPreservingView();
-  check($('.milestone-scroll').scrollLeft === 0 && $('.milestone-scroll').scrollTop === milestoneScrollTop, 'Aggiornamenti milestone conservano lo scorrimento manuale');
+  check($('.milestone-scroll').scrollLeft === 0 && $('.milestone-scroll').scrollTop === milestoneScrollTop, 'Milestone updates preserve manual scrolling');
   $('#next-release-button').click();
-  check(upcomingVisible() && $('.milestone-scroll').scrollTop === 0, 'Pulsante prossima release ritrova la colonna e la sua intestazione');
+  check(upcomingVisible() && $('.milestone-scroll').scrollTop === 0, 'Next release button finds the column and its heading');
   const previousMilestoneElement = upcoming();
   milestoneDay = '1900-01-01';
   refreshMilestoneDate();
-  check(milestoneDay === today() && upcoming() !== previousMilestoneElement && upcomingVisible(), 'Indicatore ricalcolato al cambio di giorno senza perdere lo scorrimento');
+  check(milestoneDay === today() && upcoming() !== previousMilestoneElement && upcomingVisible(), 'Indicator recalculates at day change without losing scroll position');
   taskDialog(data.tasks[0]);
   const milestoneEditor = $('#description-editor');
   milestoneEditor.innerHTML = '<p>Draft across midnight</p>';
   milestoneDay = '1900-01-01';
   refreshMilestoneDate();
-  check($('#modal').open && $('#description-editor') === milestoneEditor && milestoneEditor.textContent === 'Draft across midnight' && milestoneDay === '1900-01-01', 'Aggiornamento della data non interrompe un editor aperto');
+  check($('#modal').open && $('#description-editor') === milestoneEditor && milestoneEditor.textContent === 'Draft across midnight' && milestoneDay === '1900-01-01', 'Updating the date does not interrupt an open editor');
   $('#modal').close();
   refreshMilestoneDate();
-  check(milestoneDay === today(), 'Indicatore aggiornabile dopo la chiusura dell’editor');
+  check(milestoneDay === today(), 'Indicator can be updated after the editor closes');
   const scheduledTasks = data.tasks, milestoneLanguage = data.settings.language, localDay = today();
   const followingDay = new Date(Date.parse(`${localDay}T00:00:00Z`) + 86400000).toISOString().slice(0, 10);
   try {
@@ -3340,31 +3352,31 @@ window.runSmokeTests = async () => {
       ...scheduledTasks[0], id: `milestone-check-${index}`, releaseDate, hidden: index === 1
     }));
     render();
-    check(upcoming().dataset.releaseDate === localDay && $('.next-release-badge').textContent === 'Release di oggi' && upcoming().querySelectorAll('.task-card').length === 2 && upcoming().querySelector('.task-card.is-hidden'), 'Release di oggi prioritaria, raggruppata e completa delle righe nascoste');
+    check(upcoming().dataset.releaseDate === localDay && $('.next-release-badge').textContent === t("Today's release") && upcoming().querySelectorAll('.task-card').length === 2 && upcoming().querySelector('.task-card.is-hidden'), "Today’s release is prioritized, grouped, and includes hidden rows");
     data.tasks = data.tasks.filter(task => task.releaseDate !== localDay);
     render();
-    check(upcoming().dataset.releaseDate === followingDay && $('.next-release-badge').textContent === 'Prossima release', 'Rimuovendo una milestone l’indicatore passa alla successiva');
+    check(upcoming().dataset.releaseDate === followingDay && $('.next-release-badge').textContent === t("Next release"), 'Removing a milestone advances the indicator to the next one');
     data.settings.language = 'en'; render();
-    check($('.next-release-badge').textContent === 'Next release' && $('#next-release-button').title === 'Go to next release', 'Etichette della prossima release tradotte in inglese');
+    check($('.next-release-badge').textContent === 'Next release' && $('#next-release-button').title === 'Go to next release', 'Next-release labels are translated into English');
     data.tasks = data.tasks.map(task => ({ ...task, releaseDate: task.releaseDate ? '2000-01-01' : '' }));
     render();
-    check(!upcoming() && !$('#next-release-button') && $('.next-release-empty').textContent === 'No upcoming release' && !document.querySelector('.milestone-column[data-release-date=""].is-next-release'), 'Nessuna prossima release con sole date passate o backlog');
+    check(!upcoming() && !$('#next-release-button') && $('.next-release-empty').textContent === 'No upcoming release' && !document.querySelector('.milestone-column[data-release-date=""].is-next-release'), 'No next release when only past dates or backlog exist');
     data.tasks = []; render();
-    check(!upcoming() && !document.querySelector('.milestone-column') && $('.milestone-track .empty'), 'Workspace senza attività non evidenzia milestone inesistenti');
+    check(!upcoming() && !document.querySelector('.milestone-column') && $('.milestone-track .empty'), "Empty workspace does not highlight nonexistent milestones");
   } finally { data.tasks = scheduledTasks; data.settings.language = milestoneLanguage; render(); }
   const next = structuredClone(data); next.tasks.find(t => t.code === 'SMOKE-1').hidden = true; await commit(next); render();
-  check($('#content').textContent.includes('SMOKE-1') && document.querySelector('.milestone-column .task-card.is-hidden .hidden-badge'), 'Attività nascoste dalla lista restano visibili e segnalate nelle milestone');
+  check($('#content').textContent.includes('SMOKE-1') && document.querySelector('.milestone-column .task-card.is-hidden .hidden-badge'), "Tasks hidden from the list remain visible and marked in milestones");
   view = 3; render();
-  check($('#content').textContent.includes('SMOKE-1') && document.querySelector('.kanban-column .task-card.is-hidden'), 'Attività nascoste dalla lista restano nel kanban');
+  check($('#content').textContent.includes('SMOKE-1') && document.querySelector('.kanban-column .task-card.is-hidden'), "Tasks hidden from the list remain in kanban");
   view = 0; showHidden = false; render();
-  check(!$('#task-rows').textContent.includes('SMOKE-1') && $('.nav-count').textContent === String(data.tasks.filter(t => !t.hidden).length), 'Attività nascoste escluse solo dalla lista');
+  check(!$('#task-rows').textContent.includes('SMOKE-1') && $('.nav-count').textContent === String(data.tasks.filter(t => !t.hidden).length), "Hidden tasks are excluded only from the list");
   view = 0; showHidden = true; render();
-  check($('#task-rows').textContent.includes('SMOKE-1'), 'Attività nascoste recuperabili dalla lista');
+  check($('#task-rows').textContent.includes('SMOKE-1'), "Hidden tasks can be restored from the list");
   const datePills = [...document.querySelectorAll('.date-pill')];
-  check(datePills[0].style.getPropertyValue('--date') === datePills[1].style.getPropertyValue('--date'), 'Date uguali hanno lo stesso colore');
-  check(document.querySelectorAll('tr.highlighted').length > 0, 'Evidenziazione righe secondo stato configurato');
+  check(datePills[0].style.getPropertyValue('--date') === datePills[1].style.getPropertyValue('--date'), 'Matching dates share the same color');
+  check(document.querySelectorAll('tr.highlighted').length > 0, "Rows are highlighted according to the configured status");
   const markedRows = () => [...document.querySelectorAll('#task-rows tr.marked')];
-  check(markedRows().length > 0 && markedRows().every(row => highlightOf(data.tasks.find(task => task.id === row.dataset.taskRow))) && document.querySelectorAll('.highlighter-bar [data-highlighter]').length === highlightsOf().length + 1, 'Righe evidenziate con colori personalizzati e barra evidenziatore');
+  check(markedRows().length > 0 && markedRows().every(row => highlightOf(data.tasks.find(task => task.id === row.dataset.taskRow))) && document.querySelectorAll('.highlighter-bar [data-highlighter]').length === highlightsOf().length + 1, 'Rows use custom highlight colors and the highlighter bar');
   const smokeTask = () => data.tasks.find(task => task.code === 'SMOKE-1');
   const smokeRow = () => document.querySelector(`tr[data-task-row="${CSS.escape(smokeTask().id)}"]`);
   const savedSequences = new Map(data.tasks.map(task => [task.id, task.sequence]));
@@ -3372,32 +3384,32 @@ window.runSmokeTests = async () => {
   const beforeDrag = rowIds(), targetRow = document.querySelector(`[data-task-row="${beforeDrag[2]}"]`);
   const rowLifted = dragTo($('#task-rows [data-drag-handle]'), targetRow);
   await waitFor(() => !saving && sort[0].key === 'sequence');
-  check(rowLifted && rowIds()[2] === beforeDrag[0] && data.tasks.every(task => task.sequence >= 1) && new Set(data.tasks.map(task => task.sequence)).size === data.tasks.length, 'Drag delle righe salva Sequence univoche e mantiene ordine manuale');
-  check((await workspaceApi.load()).data.tasks.find(task => task.id === beforeDrag[0]).sequence === data.tasks.find(task => task.id === beforeDrag[0]).sequence, 'Sequence riordinate persistite su disco');
+  check(rowLifted && rowIds()[2] === beforeDrag[0] && data.tasks.every(task => task.sequence >= 1) && new Set(data.tasks.map(task => task.sequence)).size === data.tasks.length, 'Dragging rows saves unique sequence values and preserves manual order');
+  check((await workspaceApi.load()).data.tasks.find(task => task.id === beforeDrag[0]).sequence === data.tasks.find(task => task.id === beforeDrag[0]).sequence, 'Reordered sequence values persist on disk');
   const beforeCancel = rowIds(), sequenceBeforeCancel = data.tasks.map(task => task.sequence).join();
   dragTo($('#task-rows [data-drag-handle]'), document.querySelector(`[data-task-row="${beforeCancel[2]}"]`), 'escape');
-  check(rowIds().join() === beforeCancel.join() && data.tasks.map(task => task.sequence).join() === sequenceBeforeCancel && !saving, 'Esc durante drag non modifica ordine o Sequence');
+  check(rowIds().join() === beforeCancel.join() && data.tasks.map(task => task.sequence).join() === sequenceBeforeCancel && !saving, 'Escape during drag leaves order and sequence values unchanged');
   $('#task-rows [data-drag-handle]').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
   await waitFor(() => !saving && rowIds()[1] === beforeCancel[0]);
-  check(rowIds()[1] === beforeCancel[0], 'Riordino attività disponibile anche con frecce sulla maniglia');
+  check(rowIds()[1] === beforeCancel[0], "Tasks can also be reordered with the handle arrows");
   await commit(next => next.tasks.forEach(task => { task.sequence = savedSequences.get(task.id); }));
   sort = [{ key: 'releaseDate', direction: 'asc' }]; render();
   const oldText = { description: smokeTask().description, notes: smokeTask().notes };
   await commit(next => Object.assign(next.tasks.find(task => task.id === smokeTask().id), { description: '<p>' + 'LongDescription'.repeat(100) + '</p>', notes: '<p>' + 'LongNotes'.repeat(100) + '</p>' }));
   rerenderPreservingView();
   const descriptions = [...smokeRow().querySelectorAll('.description-cell')];
-  check(descriptions.length === 2 && smokeRow().querySelector('.notes-cell').textContent.startsWith('LongNotes') && descriptions.every(cell => cell.scrollWidth <= cell.clientWidth + 1 && cell.getBoundingClientRect().right <= cell.closest('td').getBoundingClientRect().right), 'Note leggibili e testi lunghi senza spazi contenuti nelle celle');
+  check(descriptions.length === 2 && smokeRow().querySelector('.notes-cell').textContent.startsWith('LongNotes') && descriptions.every(cell => cell.scrollWidth <= cell.clientWidth + 1 && cell.getBoundingClientRect().right <= cell.closest('td').getBoundingClientRect().right), "Notes stay readable and long text wraps within cells");
   $('.table-scroll').scrollTop = 500; $('.table-scroll').scrollLeft = 160;
   const tablePosition = [$('.table-scroll').scrollLeft, $('.table-scroll').scrollTop];
   taskDialog(smokeTask());
-  check($('#description-editor').scrollWidth <= $('#description-editor').clientWidth + 1 && $('#notes-editor').scrollWidth <= $('#notes-editor').clientWidth + 1, 'Editor descrizione e note a capo anche con parole molto lunghe');
+  check($('#description-editor').scrollWidth <= $('#description-editor').clientWidth + 1 && $('#notes-editor').scrollWidth <= $('#notes-editor').clientWidth + 1, 'Description and notes editors wrap even very long words');
   $('#task-form').requestSubmit();
   await waitFor(() => !saving && !$('#modal').open);
-  check(tablePosition[0] > 0 && tablePosition[1] > 0 && Math.abs($('.table-scroll').scrollTop - tablePosition[1]) <= 1 && Math.abs($('.table-scroll').scrollLeft - tablePosition[0]) <= 1, 'Modificare attività conserva scorrimento orizzontale e verticale della lista');
+  check(tablePosition[0] > 0 && tablePosition[1] > 0 && Math.abs($('.table-scroll').scrollTop - tablePosition[1]) <= 1 && Math.abs($('.table-scroll').scrollLeft - tablePosition[0]) <= 1, "Editing tasks preserves the list’s horizontal and vertical scroll positions");
   await commit(next => Object.assign(next.tasks.find(task => task.id === smokeTask().id), oldText));
   render();
   view = 4; render(); showSettingsTab('tags');
-  check(!$('#tags-panel').hidden && $('#settings-tab-tags').getAttribute('aria-current') === 'true' && document.querySelectorAll('#tags-list .option-row').length === data.settings.tags.length, 'Catalogo Tags in una scheda dedicata per organizzazione');
+  check(!$('#tags-panel').hidden && $('#settings-tab-tags').getAttribute('aria-current') === 'true' && document.querySelectorAll('#tags-list .option-row').length === data.settings.tags.length, "Tag catalog has a dedicated organization tab");
   const savedTagCount = data.settings.tags.length;
   $('[data-add-option="tags"]').click();
   $('[data-add-option="tags"]').click();
@@ -3409,26 +3421,26 @@ window.runSmokeTests = async () => {
   setTagName(tagOne, 'SMOKE-TAG <b>One</b>');
   setTagName(tagTwo, 'SMOKE-TAG Two');
   await new Promise(resolve => setTimeout(resolve));
-  check(!$('#settings-tab-tags .settings-tab-dot').hidden && !$('#unsaved-banner').hidden && data.settings.tags.length === savedTagCount, 'Nuovi tag restano in bozza fino al salvataggio');
+  check(!$('#settings-tab-tags .settings-tab-dot').hidden && !$('#unsaved-banner').hidden && data.settings.tags.length === savedTagCount, 'New tags stay in draft until saved');
   $('#save-settings-inline').click();
   await waitFor(() => !saving && data.settings.tags.length === savedTagCount + 2);
-  check((await workspaceApi.load()).data.settings.tags.some(tag => tag.id === tagOne), 'Catalogo tag salvato nell’archivio locale');
+  check((await workspaceApi.load()).data.settings.tags.some(tag => tag.id === tagOne), 'Tag catalog is saved to the local archive');
   view = 0; render();
-  check($('.activity-table th[data-column="tags"] .column-heading > span').textContent === 'Tags' && !$('.activity-table th[data-column="tags"] [data-sort]') && $('.activity-table th[data-column="tags"] [data-filter-column]'), 'Colonna Tags visibile e filtrabile ma non ordinabile come campo testuale multiplo');
+  check($('.activity-table th[data-column="tags"] .column-heading > span').textContent === 'Tags' && !$('.activity-table th[data-column="tags"] [data-sort]') && $('.activity-table th[data-column="tags"] [data-filter-column]'), "Tags column is visible and filterable but not sortable as multi-value text");
   smokeRow().querySelector('.task-tags-button').click();
-  check($('#tag-menu') && !$('#modal').open && document.querySelectorAll('.tag-choice').length === data.settings.tags.length && !$('.tag-choice b') && document.activeElement?.name === 'tagIds', 'Colonna Tags apre il dropdown multiselezione senza editor attività, con testo sicuro');
+  check($('#tag-menu') && !$('#modal').open && document.querySelectorAll('.tag-choice').length === data.settings.tags.length && !$('.tag-choice b') && document.activeElement?.name === 'tagIds', "Tags column opens the multiselect dropdown without the task editor and safely displays text");
   document.querySelector(`.tag-choice input[value="${tagOne}"]`).click();
   document.querySelector(`.tag-choice input[value="${tagTwo}"]`).click();
   $('#tag-menu').requestSubmit();
   await waitFor(() => !saving && !$('#tag-menu'));
-  check(smokeTask().tagIds.includes(tagOne) && smokeTask().tagIds.includes(tagTwo) && smokeRow().querySelectorAll('.tag-pill').length === 2, 'Selezione multipla visualizzata come etichette nella riga');
-  check((await workspaceApi.load()).data.tasks.find(task => task.id === smokeTask().id).tagIds.length === 2, 'Selezione multipla persistita sul disco');
+  check(smokeTask().tagIds.includes(tagOne) && smokeTask().tagIds.includes(tagTwo) && smokeRow().querySelectorAll('.tag-pill').length === 2, 'Multiselect values appear as labels in the row');
+  check((await workspaceApi.load()).data.tasks.find(task => task.id === smokeTask().id).tagIds.length === 2, 'Multiselect values persist on disk');
   smokeRow().querySelector('.task-tags-button').click();
-  check(document.querySelectorAll('.tag-choice input:checked').length === 2, 'La modifica ripristina i tag già selezionati');
+  check(document.querySelectorAll('.tag-choice input:checked').length === 2, 'Editing restores the previously selected tags');
   document.querySelector(`.tag-choice input[value="${tagOne}"]`).click();
   $('#tag-menu').requestSubmit();
   await waitFor(() => !saving && !$('#tag-menu'));
-  check(smokeTask().tagIds.length === 1 && smokeTask().tagIds[0] === tagTwo, 'Un tag si può rimuovere dalla singola attività');
+  check(smokeTask().tagIds.length === 1 && smokeTask().tagIds[0] === tagTwo, "A tag can be removed from an individual task");
   smokeRow().querySelector('.task-tags-button').click();
   document.querySelector(`.tag-choice input[value="${tagOne}"]`).click();
   $('#tag-menu').requestSubmit();
@@ -3436,12 +3448,12 @@ window.runSmokeTests = async () => {
   smokeRow().querySelector('.task-tags-button').click();
   document.querySelector(`.tag-choice input[value="${tagOne}"]`).click();
   $('#tag-menu').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-  check(!$('#tag-menu') && smokeTask().tagIds.includes(tagOne), 'Esc annulla il dropdown senza cambiare i tag');
+  check(!$('#tag-menu') && smokeTask().tagIds.includes(tagOne), 'Escape cancels the dropdown without changing tags');
   taskDialog(smokeTask());
-  check(!$('#task-form [name="tagIds"]') && !$('#task-form .task-tags'), 'I tag non sono più modificabili dalla scheda attività');
+  check(!$('#task-form [name="tagIds"]') && !$('#task-form .task-tags'), "Tags are no longer editable from the task tab");
   $('#task-form').requestSubmit();
   await waitFor(() => !saving && !$('#modal').open);
-  check(smokeTask().tagIds.length === 2, 'Salvare una scheda attività mantiene i tag della lista');
+  check(smokeTask().tagIds.length === 2, "Saving a task tab preserves the tags in the list");
   smokeRow().querySelector('.task-tags-button').click();
   document.querySelector(`.tag-choice input[value="${tagOne}"]`).click();
   const submitTagChanges = $('#tag-menu').onsubmit;
@@ -3449,23 +3461,23 @@ window.runSmokeTests = async () => {
   externalSnapshot.data.tasks.find(task => task.id === smokeTask().id).tagIds.push(externalTag);
   await workspaceApi.save(externalSnapshot.data, activeOrganizationId, undefined, externalSnapshot.revision);
   await submitTagChanges(new Event('submit', { cancelable: true }));
-  check(smokeTask().tagIds.includes(externalTag) && !smokeTask().tagIds.includes(tagOne) && smokeTask().tagIds.includes(tagTwo), 'Dropdown tag conserva le aggiunte concorrenti di altre finestre');
+  check(smokeTask().tagIds.includes(externalTag) && !smokeTask().tagIds.includes(tagOne) && smokeTask().tagIds.includes(tagTwo), 'Tag dropdown preserves additions made concurrently in other windows');
   await commit(next => { next.tasks.find(task => task.id === smokeTask().id).tagIds = [tagOne, tagTwo]; });
   rerenderPreservingView();
   $('#search').value = 'smoke-tag';
   $('#search').dispatchEvent(new Event('input'));
-  check(document.querySelectorAll('#task-rows tr[data-task-row]').length === 1 && smokeRow(), 'Ricerca attività estesa ai nomi dei tag');
+  check(document.querySelectorAll('#task-rows tr[data-task-row]').length === 1 && smokeRow(), "Task search includes tag names");
   $('#search').value = ''; $('#search').dispatchEvent(new Event('input'));
   $('#columns-button').click();
   $('[data-column-visible="tags"]').click();
   $('#columns-apply').click();
   await waitFor(() => !saving && !$('#modal').open);
-  check(!$('.activity-table th[data-column="tags"]') && smokeTask().tagIds.length === 2, 'Nascondere Tags non cancella le assegnazioni');
+  check(!$('.activity-table th[data-column="tags"]') && smokeTask().tagIds.length === 2, 'Hiding Tags does not delete assignments');
   $('#columns-button').click();
   $('[data-column-visible="tags"]').click();
   $('#columns-apply').click();
   await waitFor(() => !saving && !$('#modal').open);
-  check(smokeRow().querySelectorAll('.tag-pill').length === 2, 'Colonna Tags ripristinata con i dati salvati');
+  check(smokeRow().querySelectorAll('.tag-pill').length === 2, "Tags column is restored with saved data");
   view = 4; render(); showSettingsTab('tags');
   setTagName(tagTwo, 'SMOKE-TAG Updated');
   const tagColor = document.querySelector(`[data-color="tags:${tagTwo}"]`);
@@ -3474,167 +3486,167 @@ window.runSmokeTests = async () => {
   $('#save-settings-inline').click();
   await waitFor(() => !saving && data.settings.tags.find(tag => tag.id === tagTwo).name === 'SMOKE-TAG Updated');
   view = 0; render();
-  check(smokeRow().querySelector('.tag-pill').textContent === 'SMOKE-TAG Updated' && smokeRow().querySelector('.tag-pill').style.getPropertyValue('--pill') === '#12ab34', 'Nome, colore e ordine del catalogo si riflettono sulle attività');
+  check(smokeRow().querySelector('.tag-pill').textContent === 'SMOKE-TAG Updated' && smokeRow().querySelector('.tag-pill').style.getPropertyValue('--pill') === '#12ab34', "Catalog name, color, and order are reflected in tasks");
   view = 4; render(); showSettingsTab('tags');
   document.querySelector(`[data-remove="tags:${tagOne}"]`).click();
   $('#discard-settings').click();
-  check(settingsDraft.tags.some(tag => tag.id === tagOne) && smokeTask().tagIds.includes(tagOne), 'Annullare una cancellazione conserva catalogo e assegnazioni');
+  check(settingsDraft.tags.some(tag => tag.id === tagOne) && smokeTask().tagIds.includes(tagOne), 'Canceling deletion preserves the catalog and assignments');
   document.querySelector(`[data-remove="tags:${tagOne}"]`).click();
   $('#save-settings-inline').click();
   await waitFor(() => !saving && !data.settings.tags.some(tag => tag.id === tagOne));
-  check(smokeTask().hidden && !smokeTask().tagIds.includes(tagOne) && smokeTask().tagIds.includes(tagTwo) && data.tasks.length === initialTaskCount + 1, 'Eliminare un tag pulisce anche le righe nascoste senza eliminare attività o altri tag');
+  check(smokeTask().hidden && !smokeTask().tagIds.includes(tagOne) && smokeTask().tagIds.includes(tagTwo) && data.tasks.length === initialTaskCount + 1, "Deleting a tag also clears hidden rows without deleting tasks or other tags");
   view = 0; render();
   doubleClick(smokeRow().querySelector('.sequence'));
-  check($('#modal').open && $('#task-form').elements.code.value === 'SMOKE-1', 'Doppio clic su una cella apre la modifica della relativa attività');
-  check(getComputedStyle($('#task-form').elements.code).userSelect === 'text' && getComputedStyle($('#description-editor strong')).userSelect === 'text', 'Campi e contenuti rich text restano selezionabili');
-  $('#notes-editor').innerHTML += '<p>Doppio clic verificato</p>';
+  check($('#modal').open && $('#task-form').elements.code.value === 'SMOKE-1', "Double-clicking a cell opens the corresponding task editor");
+  check(getComputedStyle($('#task-form').elements.code).userSelect === 'text' && getComputedStyle($('#description-editor strong')).userSelect === 'text', 'Rich-text fields and content remain selectable');
+  $('#notes-editor').innerHTML += '<p>Double-click verified</p>';
   $('#task-form').requestSubmit();
   await waitFor(() => !saving && !$('#modal').open);
-  check((await workspaceApi.load()).data.tasks.find(task => task.code === 'SMOKE-1').notes.includes('Doppio clic verificato'), 'Modifica aperta con doppio clic salvata nell’archivio');
+  check((await workspaceApi.load()).data.tasks.find(task => task.code === 'SMOKE-1').notes.includes('Double-click verified'), "Editor opened by double-click is saved to the archive");
   doubleClick(smokeRow().querySelector('[data-mark-task]'));
   doubleClick(smokeRow().querySelector('a'));
-  check(!$('#modal').open, 'Doppio clic su pulsanti e link non apre un secondo editor');
+  check(!$('#modal').open, 'Double-clicking buttons or links does not open another editor');
   view = 1; render();
   $('#issue-search').value = 'INC-SMOKE';
   $('#issue-search').dispatchEvent(new Event('input'));
   doubleClick($('#issue-rows tr[data-issue-row]').cells[1]);
-  check($('#modal').open && $('#issue-form').elements.incident.value === 'INC-SMOKE', 'Doppio clic modifica l’issue corretta anche dopo un filtro');
+  check($('#modal').open && $('#issue-form').elements.incident.value === 'INC-SMOKE', 'Double-click edits the correct issue after filtering');
   $('#issue-form').requestSubmit();
   await waitFor(() => !saving && !$('#modal').open);
-  check(data.issues.some(issue => issue.incident === 'INC-SMOKE' && issue.problem === 'PRB-SMOKE'), 'Associazione salvabile dalla modifica aperta con doppio clic');
-  $('#issue-search').value = 'nessun-risultato-doppio-clic';
+  check(data.issues.some(issue => issue.incident === 'INC-SMOKE' && issue.problem === 'PRB-SMOKE'), 'Association can be saved from the editor opened by double-click');
+  $('#issue-search').value = 'no-result-double-click';
   $('#issue-search').dispatchEvent(new Event('input'));
   doubleClick($('#issue-rows .empty'));
-  check(!$('#modal').open, 'Doppio clic sulla lista vuota non crea associazioni');
+  check(!$('#modal').open, "Double-clicking the empty list does not create associations");
   render();
-  check($('#issue-search').value === 'nessun-risultato-doppio-clic', 'Ricerca issue mantenuta durante il ridisegno della lista');
+  check($('#issue-search').value === 'no-result-double-click', "Issue search is retained while the list rerenders");
   $('#issue-search').value = ''; $('#issue-search').dispatchEvent(new Event('input'));
-  check(!duplicatesOf().groups.length && !document.querySelector('.nav-alert, #issue-rows .dup-ref') && $('#issue-duplicates-only').disabled && !$('#remove-identical'), 'Nessun duplicato segnalato senza incident ripetuti');
+  check(!duplicatesOf().groups.length && !document.querySelector('.nav-alert, #issue-rows .dup-ref') && $('#issue-duplicates-only').disabled && !$('#remove-identical'), 'No duplicate is flagged without repeated incidents');
   issueDialog();
   const duplicateIssueForm = $('#issue-form');
-  check($('#issue-duplicate').hidden, 'Nessun avviso duplicato su una nuova associazione vuota');
+  check($('#issue-duplicate').hidden, 'No duplicate warning for a new empty association');
   duplicateIssueForm.elements.code.value = 'SMOKE-DUP';
   duplicateIssueForm.elements.incident.value = ' inc-smoke ';
   duplicateIssueForm.elements.incident.dispatchEvent(new Event('input'));
-  check(!$('#issue-duplicate').hidden && $('#issue-duplicate').textContent.includes('INC-SMOKE') && $('#issue-duplicate').textContent.includes('smoke-1 · PRB-SMOKE'), 'Avviso immediato per incident già presente, senza distinzione di maiuscole e spazi');
+  check(!$('#issue-duplicate').hidden && $('#issue-duplicate').textContent.includes('INC-SMOKE') && $('#issue-duplicate').textContent.includes('smoke-1 · PRB-SMOKE'), 'Immediate warning for an existing incident, regardless of case or whitespace');
   duplicateIssueForm.requestSubmit();
   await waitFor(() => !saving && !$('#modal').open);
   const smokeIssue = data.issues.find(issue => issue.incident === 'INC-SMOKE'), duplicateIssue = data.issues.find(issue => issue.code === 'SMOKE-DUP');
-  check(duplicateIssue?.incident === 'inc-smoke' && (await workspaceApi.load()).data.issues.some(issue => issue.id === duplicateIssue.id), 'Associazione con incident duplicato salvabile comunque');
+  check(duplicateIssue?.incident === 'inc-smoke' && (await workspaceApi.load()).data.issues.some(issue => issue.id === duplicateIssue.id), 'Association with a duplicate incident can still be saved');
   const flaggedIssues = () => [...document.querySelectorAll('#issue-rows tr.duplicate-row')].map(row => row.dataset.issueRow).sort().join();
-  check(flaggedIssues() === [smokeIssue.id, duplicateIssue.id].sort().join() && document.querySelectorAll('#issue-rows .dup-ref').length === 2, 'Entrambe le associazioni con lo stesso incident segnalate');
-  check($('[data-view="1"] .nav-alert [aria-hidden]')?.textContent === '2' && !$('[data-view="0"] .nav-alert'), 'Navigazione segnala le associazioni duplicate, non le attività con un solo collegamento');
+  check(flaggedIssues() === [smokeIssue.id, duplicateIssue.id].sort().join() && document.querySelectorAll('#issue-rows .dup-ref').length === 2, "Both associations with the same incident are flagged");
+  check($('[data-view="1"] .nav-alert [aria-hidden]')?.textContent === '2' && !$('[data-view="0"] .nav-alert'), "Navigation flags duplicate associations, not tasks with a single link");
   $('#issue-duplicates-only').click();
-  check(issueDuplicatesOnly && document.querySelectorAll('#issue-rows tr[data-issue-row]').length === 2, 'Filtro Duplicati mostra solo le associazioni coinvolte');
+  check(issueDuplicatesOnly && document.querySelectorAll('#issue-rows tr[data-issue-row]').length === 2, "Duplicates filter shows only the affected associations");
   const identicalId = uid();
   await commit(next => { next.issues.push({ id: identicalId, code: 'smoke-dup', incident: 'INC-SMOKE', problem: '' }); });
   render();
-  check(document.querySelectorAll('#issue-rows tr[data-issue-row]').length === 3 && document.querySelectorAll('#issue-rows .dup-note').length === 1 && $(`#issue-rows tr[data-issue-row="${identicalId}"] .dup-note`) && $('#remove-identical .tiny-count').textContent === '1', 'Associazione identica a un’altra riconosciuta e marcata');
+  check(document.querySelectorAll('#issue-rows tr[data-issue-row]').length === 3 && document.querySelectorAll('#issue-rows .dup-note').length === 1 && $(`#issue-rows tr[data-issue-row="${identicalId}"] .dup-note`) && $('#remove-identical .tiny-count').textContent === '1', "Identical association is detected and marked");
   $('#remove-identical').click();
-  check($('#modal').open && $('#confirm-action'), 'Rimozione delle identiche chiede conferma');
+  check($('#modal').open && $('#confirm-action'), 'Removing identical associations requires confirmation');
   $('#confirm-action').click();
   await waitFor(() => !saving && !$('#modal').open);
   const issuesOnDisk = (await workspaceApi.load()).data.issues;
-  check(!data.issues.some(issue => issue.id === identicalId) && !issuesOnDisk.some(issue => issue.id === identicalId) && issuesOnDisk.some(issue => issue.id === duplicateIssue.id) && issuesOnDisk.some(issue => issue.id === smokeIssue.id) && !$('#remove-identical'), 'Rimuovi identiche elimina solo le copie, lasciando la prima');
+  check(!data.issues.some(issue => issue.id === identicalId) && !issuesOnDisk.some(issue => issue.id === identicalId) && issuesOnDisk.some(issue => issue.id === duplicateIssue.id) && issuesOnDisk.some(issue => issue.id === smokeIssue.id) && !$('#remove-identical'), "Remove identical deletes only the copies, leaving the first");
   $('#issue-duplicates-only').click();
   $(`#issue-rows tr[data-issue-row="${duplicateIssue.id}"] .dup-ref`).click();
-  check($('#issue-search').value === 'INC-SMOKE' && issueDuplicatesOnly && document.querySelectorAll('#issue-rows tr[data-issue-row]').length === 2, 'Clic sull’incident duplicato filtra le associazioni coinvolte');
+  check($('#issue-search').value === 'INC-SMOKE' && issueDuplicatesOnly && document.querySelectorAll('#issue-rows tr[data-issue-row]').length === 2, "Clicking a duplicate incident filters the affected associations");
   view = 0; render();
   taskDialog();
   const duplicateTaskForm = $('#task-form');
   duplicateTaskForm.elements.code.value = 'smoke-dup';
   duplicateTaskForm.elements.code.dispatchEvent(new Event('input'));
-  check($('#match-preview .duplicate-warning')?.textContent.includes('INC-SMOKE') && $('#match-preview .duplicate-warning').textContent.includes(`#${smokeTask().sequence} SMOKE-1`), 'Avviso di possibile duplicato già durante l’inserimento dell’attività');
+  check($('#match-preview .duplicate-warning')?.textContent.includes('INC-SMOKE') && $('#match-preview .duplicate-warning').textContent.includes(`#${smokeTask().sequence} SMOKE-1`), "Possible duplicate warning appears while entering a task incident");
   duplicateTaskForm.requestSubmit();
   await waitFor(() => !saving && !$('#modal').open && data.tasks.some(task => task.code === 'smoke-dup'));
   const duplicateTask = data.tasks.find(task => task.code === 'smoke-dup'), taskRowOf = id => document.querySelector(`#task-rows tr[data-task-row="${CSS.escape(id)}"]`);
-  check(duplicatesOf().tasks.size === 2 && $('[data-view="0"] .nav-alert [aria-hidden]')?.textContent === '2' && $('#duplicates-only').closest('label').classList.contains('has-duplicates'), 'Attività collegate allo stesso incident segnalate in navigazione e nel filtro');
-  check([smokeTask().id, duplicateTask.id].every(id => taskRowOf(id)?.classList.contains('duplicate-row') && taskRowOf(id).querySelector('.dup-flag') && (!shownColumns().includes('incident') || taskRowOf(id).querySelector('.dup-ref'))) && document.querySelectorAll('#task-rows .dup-flag').length === 2, 'Righe, incident e azioni segnalano i possibili duplicati');
-  check(taskRowOf(duplicateTask.id).querySelector('.dup-flag').title.includes(`#${smokeTask().sequence} SMOKE-1`), 'Il segnale indica con quali attività è condiviso l’incident');
+  check(duplicatesOf().tasks.size === 2 && $('[data-view="0"] .nav-alert [aria-hidden]')?.textContent === '2' && $('#duplicates-only').closest('label').classList.contains('has-duplicates'), "Linked tasks sharing an incident are flagged in navigation and the filter");
+  check([smokeTask().id, duplicateTask.id].every(id => taskRowOf(id)?.classList.contains('duplicate-row') && taskRowOf(id).querySelector('.dup-flag') && (!shownColumns().includes('incident') || taskRowOf(id).querySelector('.dup-ref'))) && document.querySelectorAll('#task-rows .dup-flag').length === 2, 'Rows, incidents, and actions indicate possible duplicates');
+  check(taskRowOf(duplicateTask.id).querySelector('.dup-flag').title.includes(`#${smokeTask().sequence} SMOKE-1`), "Signal identifies which tasks share the incident");
   showHidden = false; render();
-  check(smokeTask().hidden && !taskRowOf(smokeTask().id), 'Attività duplicata nascosta esclusa dalla lista normale');
+  check(smokeTask().hidden && !taskRowOf(smokeTask().id), "Hidden duplicate task is excluded from the normal list");
   $('#duplicates-only').click();
-  check(duplicatesOnly && document.querySelectorAll('#task-rows tr[data-task-row]').length === 2 && taskRowOf(smokeTask().id), 'Filtro Duplicati include anche le attività nascoste');
+  check(duplicatesOnly && document.querySelectorAll('#task-rows tr[data-task-row]').length === 2 && taskRowOf(smokeTask().id), "Duplicates filter also includes hidden tasks");
   $('#duplicates-only').click();
   taskRowOf(duplicateTask.id).querySelector('.dup-flag').click();
-  check(search === 'INC-SMOKE' && $('#search').value === 'INC-SMOKE' && duplicatesOnly && document.querySelectorAll('#task-rows tr[data-task-row]').length === 2 && !$('#modal').open, 'Clic sul segnale mostra le attività che condividono l’incident');
+  check(search === 'INC-SMOKE' && $('#search').value === 'INC-SMOKE' && duplicatesOnly && document.querySelectorAll('#task-rows tr[data-task-row]').length === 2 && !$('#modal').open, "Clicking the signal shows tasks that share the incident");
   doubleClick(taskRowOf(duplicateTask.id).querySelector('.dup-flag'));
-  check(!$('#modal').open, 'Doppio clic sul segnale duplicato non apre la modifica');
+  check(!$('#modal').open, 'Double-clicking the duplicate signal does not open the editor');
   await commit(next => {
     next.tasks = next.tasks.filter(task => task.id !== duplicateTask.id);
     next.issues = next.issues.filter(issue => issue.id !== duplicateIssue.id);
   });
   search = ''; duplicatesOnly = false; issueDuplicatesOnly = false; showHidden = true; render();
-  check(!duplicatesOf().groups.length && !document.querySelector('.nav-alert, .dup-flag, .dup-ref') && $('#duplicates-only').disabled && data.tasks.length === initialTaskCount + 1, 'Risolto il duplicato spariscono segnalazioni e filtro');
+  check(!duplicatesOf().groups.length && !document.querySelector('.nav-alert, .dup-flag, .dup-ref') && $('#duplicates-only').disabled && data.tasks.length === initialTaskCount + 1, 'Resolving a duplicate removes its flags and filter');
   view = 0; render();
   const paint = highlightsOf()[1];
   $(`.highlighter-bar [data-highlighter="${paint.id}"]`).click();
-  check(highlighter === paint.id && $('.activity-table').classList.contains('painting') && $('.highlighter-bar').classList.contains('active') && $(`.highlighter-bar [data-highlighter="${paint.id}"]`).getAttribute('aria-pressed') === 'true', 'Evidenziatore attivabile dalla barra sopra la tabella');
+  check(highlighter === paint.id && $('.activity-table').classList.contains('painting') && $('.highlighter-bar').classList.contains('active') && $(`.highlighter-bar [data-highlighter="${paint.id}"]`).getAttribute('aria-pressed') === 'true', "Highlighter can be toggled from the bar above the table");
   smokeRow().querySelector('.description-cell').click();
-  check(!$('#modal').open && smokeRow().classList.contains('marked'), 'Clic su una riga con l’evidenziatore la colora senza aprire la scheda');
+  check(!$('#modal').open && smokeRow().classList.contains('marked'), 'Clicking a row with the highlighter colors it without opening the task');
   await waitFor(() => !saving && !markFlush);
-  check(smokeTask().highlightId === paint.id && (await workspaceApi.load()).data.tasks.find(task => task.code === 'SMOKE-1').highlightId === paint.id && smokeRow().classList.contains('marked') && smokeRow().style.getPropertyValue('--mark').trim() === paint.color && highlighter === paint.id, 'Evidenziazione della riga salvata nell’archivio portatile');
+  check(smokeTask().highlightId === paint.id && (await workspaceApi.load()).data.tasks.find(task => task.code === 'SMOKE-1').highlightId === paint.id && smokeRow().classList.contains('marked') && smokeRow().style.getPropertyValue('--mark').trim() === paint.color && highlighter === paint.id, "Row highlight is saved in the portable archive");
   doubleClick(smokeRow().cells[1]);
-  check(!$('#modal').open && highlighter === paint.id, 'Doppio clic con evidenziatore attivo non apre la modifica');
+  check(!$('#modal').open && highlighter === paint.id, 'Double-clicking with the highlighter active does not open the editor');
   smokeRow().cells[1].click();
   await waitFor(() => !saving && !markFlush);
-  check(smokeTask().highlightId === '' && !smokeRow().classList.contains('marked'), 'Secondo clic con lo stesso colore toglie l’evidenziazione');
+  check(smokeTask().highlightId === '' && !smokeRow().classList.contains('marked'), 'Second click with the same color removes the highlight');
   document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-  check(highlighter === '' && !$('.activity-table').classList.contains('painting') && !$('.highlighter-bar').classList.contains('active'), 'Esc termina la modalità evidenziatore');
+  check(highlighter === '' && !$('.activity-table').classList.contains('painting') && !$('.highlighter-bar').classList.contains('active'), 'Escape exits highlighter mode');
   smokeRow().querySelector('[data-mark-task]').click();
-  check($('#mark-menu') && document.querySelectorAll('#mark-menu [data-mark-choice]').length === highlightsOf().length + 1 && smokeRow().querySelector('[data-mark-task]').getAttribute('aria-expanded') === 'true' && document.activeElement.closest('#mark-menu'), 'Menu di evidenziazione dal pallino a fine riga');
+  check($('#mark-menu') && document.querySelectorAll('#mark-menu [data-mark-choice]').length === highlightsOf().length + 1 && smokeRow().querySelector('[data-mark-task]').getAttribute('aria-expanded') === 'true' && document.activeElement.closest('#mark-menu'), 'Highlight menu opens from the dot at the end of the row');
   $('#mark-menu').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-  check(!$('#mark-menu') && document.activeElement === smokeRow().querySelector('[data-mark-task]'), 'Esc chiude il menu e riporta il focus sul pallino');
+  check(!$('#mark-menu') && document.activeElement === smokeRow().querySelector('[data-mark-task]'), 'Escape closes the menu and restores focus to the dot');
   smokeRow().querySelector('[data-mark-task]').click();
   $(`#mark-menu [data-mark-choice="${highlightsOf()[0].id}"]`).click();
   await waitFor(() => !saving && !markFlush);
-  check(!$('#mark-menu') && smokeTask().highlightId === highlightsOf()[0].id && smokeRow().classList.contains('marked') && smokeRow().querySelector('.mark-button.is-marked'), 'Colore scelto dal menu applicato alla riga');
+  check(!$('#mark-menu') && smokeTask().highlightId === highlightsOf()[0].id && smokeRow().classList.contains('marked') && smokeRow().querySelector('.mark-button.is-marked'), "Color chosen from the menu is applied to the row");
   const listedRows = () => [...document.querySelectorAll('#task-rows tr[data-task-row]')];
   const setHighlightFilter = value => { $('#highlight-filter').value = value; $('#highlight-filter').dispatchEvent(new Event('change')); };
   setHighlightFilter(highlightsOf()[0].id);
-  check(listedRows().length > 0 && listedRows().every(row => data.tasks.find(task => task.id === row.dataset.taskRow).highlightId === highlightsOf()[0].id) && listedRows().includes(smokeRow()), 'Filtro della lista per colore di evidenziazione');
+  check(listedRows().length > 0 && listedRows().every(row => data.tasks.find(task => task.id === row.dataset.taskRow).highlightId === highlightsOf()[0].id) && listedRows().includes(smokeRow()), 'Filter the list by highlight color');
   setHighlightFilter('__none');
-  check(listedRows().length > 0 && listedRows().every(row => !row.classList.contains('marked')), 'Filtro delle righe senza evidenziazione');
+  check(listedRows().length > 0 && listedRows().every(row => !row.classList.contains('marked')), 'Filter rows without a highlight');
   setHighlightFilter('');
-  check(listedRows().length === filteredTasks().length && highlightFilter === '', 'Filtro evidenziazione azzerato');
+  check(listedRows().length === filteredTasks().length && highlightFilter === '', 'Highlight filter is cleared');
   smokeRow().querySelector('.code-link').click();
-  check($('#task-form').elements.highlightId.value === highlightsOf()[0].id && $('#task-form').elements.highlightId.options.length === highlightsOf().length + 1, 'Campo evidenziazione nella scheda attività');
+  check($('#task-form').elements.highlightId.value === highlightsOf()[0].id && $('#task-form').elements.highlightId.options.length === highlightsOf().length + 1, "Highlight field in the task editor");
   $('#task-form').elements.highlightId.value = highlightsOf()[2].id;
   $('#task-form').requestSubmit();
   await waitFor(() => !saving && !$('#modal').open && smokeTask().highlightId === highlightsOf()[2].id);
-  check(smokeRow().classList.contains('marked') && smokeRow().style.getPropertyValue('--mark').trim() === highlightsOf()[2].color, 'Evidenziazione modificabile dalla scheda attività');
+  check(smokeRow().classList.contains('marked') && smokeRow().style.getPropertyValue('--mark').trim() === highlightsOf()[2].color, "Highlight can be edited in the task editor");
   const headerIds = () => [...document.querySelectorAll('.activity-table thead th[data-column]')].map(th => th.dataset.column);
-  check(headerIds().join() === 'sequence,code,description,urgency,status,tags,effort,incident,problem,releaseDate,notes' && document.querySelectorAll('#task-rows td.description-col').length === listedRows().length, 'Colonne predefinite della lista attività');
+  check(headerIds().join() === 'sequence,code,description,urgency,status,tags,effort,incident,problem,releaseDate,notes' && document.querySelectorAll('#task-rows td.description-col').length === listedRows().length, "Default columns in the task list");
   $('#columns-button').click();
   const columnToggle = id => $(`#columns-dialog-editor [data-column-visible="${id}"]`);
-  check($('#modal').open && document.querySelectorAll('#columns-dialog-editor [data-column-visible]').length === Object.keys(taskColumnDefs).length && !columnToggle('highlight').checked && columnToggle('notes').checked, 'Scelta delle colonne dal pulsante Colonne');
+  check($('#modal').open && document.querySelectorAll('#columns-dialog-editor [data-column-visible]').length === Object.keys(taskColumnDefs).length && !columnToggle('highlight').checked && columnToggle('notes').checked, "Choose columns from the Columns button");
   columnToggle('highlight').click();
   columnToggle('notes').click();
   $('#columns-dialog-editor [data-column-move="highlight:-1"]').click();
-  check(document.activeElement?.dataset.columnMove === 'highlight:-1', 'Spostamento colonne utilizzabile da tastiera');
+  check(document.activeElement?.dataset.columnMove === 'highlight:-1', 'Column movement works with the keyboard');
   const dialogOrder = () => [...document.querySelectorAll('#columns-dialog-editor [data-column-visible]')].map(input => input.dataset.columnVisible);
   const columnsBeforeDrag = dialogOrder();
-  check(document.querySelectorAll('#columns-dialog-editor .column-row [data-drag-handle]').length === columnsBeforeDrag.length && $('#modal .section-description').textContent === t('Spunta le colonne da mostrare e trascinale (o usa le frecce) per cambiarne l’ordine. Nascondere una colonna non cancella i dati.'), 'Maniglia di trascinamento su ogni colonna');
+  check(document.querySelectorAll('#columns-dialog-editor .column-row [data-drag-handle]').length === columnsBeforeDrag.length && $('#modal .section-description').textContent === t("Tick the columns to show and drag them (or use the arrows) to change their order. Hiding a column does not delete any data."), 'Every column has a drag handle');
   const codeRow = () => columnToggle('code').closest('.column-row');
   const columnLifted = dragTo(codeRow().querySelector('.column-toggle span'), columnToggle('sequence').closest('.column-row'));
   columnToggle('code').closest('label').click();
   await tick();
-  check(columnLifted && dialogOrder().join() === ['code', 'sequence', ...columnsBeforeDrag.slice(2)].join() && columnToggle('code').checked && $('#modal').open && !document.querySelector('.is-dragging') && $('#modal > .sort-status')?.textContent === fillText('Spostato in posizione {0} di {1}', 1, columnsBeforeDrag.length), 'Colonne trascinabili anche dal nome, senza cambiarne la visibilità');
+  check(columnLifted && dialogOrder().join() === ['code', 'sequence', ...columnsBeforeDrag.slice(2)].join() && columnToggle('code').checked && $('#modal').open && !document.querySelector('.is-dragging') && $('#modal > .sort-status')?.textContent === fillText("Moved to position {0} of {1}", 1, columnsBeforeDrag.length), "Columns can also be dragged by name without changing visibility");
   codeRow().querySelector('[data-drag-handle]').focus();
   document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
-  check(dialogOrder().join() === columnsBeforeDrag.join() && document.activeElement === codeRow().querySelector('[data-drag-handle]') && codeRow() === document.querySelectorAll('#columns-dialog-editor .column-row')[1], 'Colonne riordinabili con le frecce sulla maniglia');
+  check(dialogOrder().join() === columnsBeforeDrag.join() && document.activeElement === codeRow().querySelector('[data-drag-handle]') && codeRow() === document.querySelectorAll('#columns-dialog-editor .column-row')[1], "Columns can be reordered with the handle arrows");
   $('#columns-apply').click();
   await waitFor(() => !saving && !$('#modal').open);
-  check(headerIds().join() === 'sequence,code,description,urgency,highlight,status,tags,effort,incident,problem,releaseDate' && smokeRow().cells.length === headerIds().length + 2 && smokeRow().querySelector('.mark-pill') && !data.settings.taskColumns.find(column => column.id === 'notes').visible && (await workspaceApi.load()).data.settings.taskColumns.find(column => column.id === 'highlight').visible, 'Colonne mostrate, nascoste e riordinate e salvate');
+  check(headerIds().join() === 'sequence,code,description,urgency,highlight,status,tags,effort,incident,problem,releaseDate' && smokeRow().cells.length === headerIds().length + 2 && smokeRow().querySelector('.mark-pill') && !data.settings.taskColumns.find(column => column.id === 'notes').visible && (await workspaceApi.load()).data.settings.taskColumns.find(column => column.id === 'highlight').visible, "Shown, hidden, and reordered columns are saved");
   $('[data-sort="highlightId"]').click();
-  check(sort.length === 1 && sort[0].key === 'highlightId' && listedRows()[0].classList.contains('marked') && !listedRows().at(-1).classList.contains('marked'), 'Ordinamento per evidenziazione');
+  check(sort.length === 1 && sort[0].key === 'highlightId' && listedRows()[0].classList.contains('marked') && !listedRows().at(-1).classList.contains('marked'), "Sort by highlight");
   await commit(next => { next.settings.taskColumns = defaultTaskColumns(); });
   render();
-  check(headerIds().at(-1) === 'notes' && !headerIds().includes('highlight') && sort.length === 1 && sort[0].key === 'releaseDate', 'Ordinamento su colonna nascosta torna alla release date');
+  check(headerIds().at(-1) === 'notes' && !headerIds().includes('highlight') && sort.length === 1 && sort[0].key === 'releaseDate', "Sorting by a hidden column returns to release date");
   view = 2; render();
-  check(document.querySelector('.milestone-column .task-card.is-marked .mark-chip'), 'Evidenziazione visibile nelle milestone');
+  check(document.querySelector('.milestone-column .task-card.is-marked .mark-chip'), "Highlight is visible in milestones");
   view = 3; render();
-  check(document.querySelector('.kanban-column .task-card.is-marked .mark-chip'), 'Evidenziazione visibile nel kanban');
+  check(document.querySelector('.kanban-column .task-card.is-marked .mark-chip'), "Highlight is visible in kanban");
   // Bulk selection and edit.
   const bulkTasks = () => ['BULK-1', 'BULK-2', 'BULK-3'].map(code => data.tasks.find(task => task.code === code));
   await commit(next => {
@@ -3642,25 +3654,25 @@ window.runSmokeTests = async () => {
   });
   view = 0; search = 'BULK-'; statusFilter = ''; highlightFilter = ''; duplicatesOnly = false; showHidden = false; sort = [{ key: 'code', direction: 'asc' }]; selectedTasks.clear(); render();
   const selectBoxes = () => [...document.querySelectorAll('#task-rows input[data-select-task]')];
-  check(selectBoxes().length === 3 && $('.activity-table thead th.select-col #select-all') && $('#bulk-bar').hidden && !$('#footer-hint').hidden && !$('#select-all').checked && !$('#select-all').indeterminate, 'Colonna di selezione delle attività, barra azioni nascosta senza selezione');
+  check(selectBoxes().length === 3 && $('.activity-table thead th.select-col #select-all') && $('#bulk-bar').hidden && !$('#footer-hint').hidden && !$('#select-all').checked && !$('#select-all').indeterminate, "Task selection column appears; action bar stays hidden without a selection");
   selectBoxes()[0].click();
-  check(selectedTasks.size === 1 && selectBoxes()[0].closest('tr').classList.contains('selected') && !$('#bulk-bar').hidden && $('#footer-hint').hidden && $('#select-all').indeterminate && $('#bulk-count').textContent === fillText('{0} selezionate', 1), 'Selezione di una riga mostra la barra della modifica multipla');
+  check(selectedTasks.size === 1 && selectBoxes()[0].closest('tr').classList.contains('selected') && !$('#bulk-bar').hidden && $('#footer-hint').hidden && $('#select-all').indeterminate && $('#bulk-count').textContent === fillText("{0} selected", 1), 'Selecting a row shows the bulk edit bar');
   selectBoxes()[2].dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, shiftKey: true }));
-  check(selectedTasks.size === 3 && selectBoxes().every(box => box.checked) && $('#select-all').checked && !$('#select-all').indeterminate, 'Maiusc + clic seleziona un intervallo di righe');
+  check(selectedTasks.size === 3 && selectBoxes().every(box => box.checked) && $('#select-all').checked && !$('#select-all').indeterminate, 'Shift-click selects a range of rows');
   $('#select-all').click();
-  check(!selectedTasks.size && $('#bulk-bar').hidden && selectBoxes().every(box => !box.checked), 'Casella di intestazione deseleziona tutte le righe mostrate');
+  check(!selectedTasks.size && $('#bulk-bar').hidden && selectBoxes().every(box => !box.checked), 'Header checkbox deselects all visible rows');
   $('#select-all').click();
   $('#search').value = 'BULK-1'; $('#search').dispatchEvent(new Event('input'));
-  check(selectedTasks.size === 3 && $('#bulk-count').textContent === `${fillText('{0} selezionate', 3)} · ${fillText('{0} non visibili con i filtri attuali', 2)}`, 'Selezione conservata cambiando i filtri, con conteggio delle righe non visibili');
+  check(selectedTasks.size === 3 && $('#bulk-count').textContent === `${fillText("{0} selected", 3)} · ${fillText("{0} not visible with the current filters", 2)}`, 'Selection is preserved when filters change, with a count of hidden rows');
   $('#search').value = 'BULK-'; $('#search').dispatchEvent(new Event('input'));
   doubleClick(selectBoxes()[0].closest('td'));
-  check(!$('#modal').open, 'Doppio clic sulla casella di selezione non apre la modifica');
+  check(!$('#modal').open, 'Double-clicking the selection checkbox does not open the editor');
   document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-  check(!selectedTasks.size && $('#bulk-bar').hidden, 'Esc azzera la selezione');
+  check(!selectedTasks.size && $('#bulk-bar').hidden, 'Escape clears the selection');
   $('#select-all').click();
   $('#bulk-edit').click();
   const bulkForm = () => $('#bulk-form'), bulkBox = code => bulkForm().querySelector(`input[name="taskIds"][value="${CSS.escape(data.tasks.find(task => task.code === code).id)}"]`);
-  check($('#modal').open && bulkForm() && bulkForm().querySelectorAll('input[name="taskIds"]:checked').length === 3 && $('#bulk-apply').disabled && $('#bulk-summary').textContent === fillText('{0} pronte: scegli cosa modificare.', plural(3, 'attività')), 'Modifica multipla con elenco delle attività coinvolte');
+  check($('#modal').open && bulkForm() && bulkForm().querySelectorAll('input[name="taskIds"]:checked').length === 3 && $('#bulk-apply').disabled && $('#bulk-summary').textContent === fillText("{0} ready: choose what to change.", plural(3, "tasks")), "Bulk edit lists the affected tasks");
   const bulkTag = (data.settings.tags || [])[0], bulkStatus = data.settings.statuses[1], bulkMark = highlightsOf()[0];
   bulkBox('BULK-2').click();
   bulkForm().elements.statusId.value = bulkStatus.id;
@@ -3668,41 +3680,41 @@ window.runSmokeTests = async () => {
   bulkForm().elements.highlightId.value = bulkMark.id;
   bulkForm().elements[`tag:${bulkTag.id}`].value = 'add';
   bulkForm().dispatchEvent(new Event('change'));
-  check(!bulkForm().elements.shiftDays.hidden && bulkForm().elements.releaseDate.hidden && !$('#bulk-apply').disabled && $('#bulk-summary').textContent === fillText('Le modifiche verranno applicate a {0}.', plural(2, 'attività')) && $('#bulk-release-hint').textContent === fillText('Solo le attività con una data: {0} su {1}.', 1, 2), 'Riepilogo dal vivo della modifica multipla');
+  check(!bulkForm().elements.shiftDays.hidden && bulkForm().elements.releaseDate.hidden && !$('#bulk-apply').disabled && $('#bulk-summary').textContent === fillText("Changes will be applied to {0}.", plural(2, "tasks")) && $('#bulk-release-hint').textContent === fillText("Only tasks with a date: {0} of {1}.", 1, 2), "Bulk edit summary updates live");
   bulkForm().requestSubmit();
   await waitFor(() => !saving && !$('#modal').open);
   const [bulkOne, bulkTwo, bulkThree] = bulkTasks(), savedBulk = (await workspaceApi.load()).data.tasks.filter(task => task.code.startsWith('BULK-'));
-  check([bulkOne, bulkThree].every(task => task.statusId === bulkStatus.id && task.highlightId === bulkMark.id && task.tagIds.includes(bulkTag.id)) && bulkOne.releaseDate === '2031-03-21' && bulkThree.releaseDate === '' && bulkTwo.statusId === data.settings.statuses[0].id && bulkTwo.releaseDate === '2031-03-14' && !bulkTwo.tagIds.length && savedBulk.filter(task => task.statusId === bulkStatus.id).length === 2, 'Modifica multipla applica stato, release, evidenziazione e tag solo alle attività spuntate');
-  check($('#toast').textContent === fillText('Modifica multipla applicata: {0} aggiornate.', plural(2, 'attività')) && selectedTasks.size === 3 && document.querySelectorAll('#task-rows tr.selected').length === 3, 'Esito della modifica multipla e selezione conservata');
+  check([bulkOne, bulkThree].every(task => task.statusId === bulkStatus.id && task.highlightId === bulkMark.id && task.tagIds.includes(bulkTag.id)) && bulkOne.releaseDate === '2031-03-21' && bulkThree.releaseDate === '' && bulkTwo.statusId === data.settings.statuses[0].id && bulkTwo.releaseDate === '2031-03-14' && !bulkTwo.tagIds.length && savedBulk.filter(task => task.statusId === bulkStatus.id).length === 2, "Bulk edit applies status, release date, highlight, and tags only to selected tasks");
+  check($('#toast').textContent === fillText("Bulk edit applied: {0} updated.", plural(2, "tasks")) && selectedTasks.size === 3 && document.querySelectorAll('#task-rows tr.selected').length === 3, 'Bulk edit result and selection are preserved');
   $('#bulk-edit').click();
   bulkForm().requestSubmit();
   await tick();
-  check($('#modal').open && $('#toast').textContent === t('Scegli almeno un campo da modificare.'), 'Modifica multipla senza campi scelti viene bloccata');
+  check($('#modal').open && $('#toast').textContent === t("Choose at least one field to change."), "Bulk edit is blocked when no fields are selected");
   bulkForm().elements.releaseMode.value = 'set';
   bulkForm().dispatchEvent(new Event('change'));
   bulkForm().requestSubmit();
   await tick();
-  check($('#modal').open && !bulkForm().elements.releaseDate.hidden && $('#toast').textContent === t('Scegli la nuova release date.'), 'Nuova release date obbligatoria nella modifica multipla');
+  check($('#modal').open && !bulkForm().elements.releaseDate.hidden && $('#toast').textContent === t("Choose the new release date."), "A new release date is required for bulk editing");
   bulkForm().elements.releaseMode.value = '';
   bulkForm().elements.hidden.value = 'hide';
   bulkForm().requestSubmit();
   await waitFor(() => !saving && !$('#modal').open);
-  check(bulkTasks().every(task => task.hidden) && !selectBoxes().length && selectedTasks.size === 3 && $('#bulk-count').textContent.includes(fillText('{0} non visibili con i filtri attuali', 3)), 'Modifica multipla nasconde le attività senza perdere la selezione');
+  check(bulkTasks().every(task => task.hidden) && !selectBoxes().length && selectedTasks.size === 3 && $('#bulk-count').textContent.includes(fillText("{0} not visible with the current filters", 3)), "Bulk edit hides tasks without losing the selection");
   view = 2; render();
-  check(document.querySelectorAll('.page-heading [data-excel-export]').length === 1 && document.querySelectorAll('.milestone-heading [data-bulk-release]').length === document.querySelectorAll('.milestone-column').length, 'Modifica multipla ed Excel disponibili dalle milestone');
+  check(document.querySelectorAll('.page-heading [data-excel-export]').length === 1 && document.querySelectorAll('.milestone-heading [data-bulk-release]').length === document.querySelectorAll('.milestone-column').length, "Bulk edit and Excel are available from milestones");
   document.querySelector('[data-bulk-release="2031-03-21"]').click();
-  check(bulkForm() && [...bulkForm().querySelectorAll('input[name="taskIds"]')].map(box => box.value).join() === bulkOne.id && bulkForm().querySelector('.bulk-item.is-hidden') && $('#bulk-form .section-description').textContent === fillText('Attività della release del {0}, comprese quelle nascoste.', formatDate('2031-03-21')), 'Modifica della tappa con le sue attività, comprese le nascoste');
+  check(bulkForm() && [...bulkForm().querySelectorAll('input[name="taskIds"]')].map(box => box.value).join() === bulkOne.id && bulkForm().querySelector('.bulk-item.is-hidden') && $('#bulk-form .section-description').textContent === fillText("Tasks of the {0} release, hidden ones included.", formatDate('2031-03-21')), "Milestone editor includes its tasks, including hidden ones");
   bulkForm().elements.releaseMode.value = 'set';
   bulkForm().elements.releaseDate.value = '2031-04-01';
   bulkForm().requestSubmit();
   await waitFor(() => !saving && !$('#modal').open);
-  check(bulkTasks()[0].releaseDate === '2031-04-01' && view === 2 && $('.milestone-column[data-release-date="2031-04-01"]') && !$('.milestone-column[data-release-date="2031-03-21"]'), 'Tappa spostata con la modifica multipla dalle milestone');
+  check(bulkTasks()[0].releaseDate === '2031-04-01' && view === 2 && $('.milestone-column[data-release-date="2031-04-01"]') && !$('.milestone-column[data-release-date="2031-03-21"]'), "Milestone is moved using bulk edit from milestones");
   view = 3; render();
-  check(document.querySelectorAll('.page-heading [data-excel-export]').length === 1, 'Esportazione Excel disponibile dal kanban');
+  check(document.querySelectorAll('.page-heading [data-excel-export]').length === 1, 'Excel export is available from kanban');
   view = 1; render();
-  check(document.querySelectorAll('.page-heading [data-excel-export]').length === 1, 'Esportazione Excel disponibile dalle issue');
+  check(document.querySelectorAll('.page-heading [data-excel-export]').length === 1, 'Excel export is available from issues');
   // Excel workbook content.
-  check(richText('<ol><li>Uno</li><li>Due</li></ol><ul><li>Tre</li></ul><p>A<br>B</p>') === '1. Uno\n2. Due\n• Tre\nA\nB' && hexColor('hsl(0 100% 50%)') === '#ff0000' && tint('#000000', 0.5) === '#808080' && hexColor('nonsense') === '#929bb2', 'Testo ricco e colori convertiti per Excel');
+  check(richText("<ol><li>One</li><li>Two</li></ol><ul><li>Three</li></ul><p>To<br>B</p>") === "1. One\n2. Two\n• Three\nTo\nB" && hexColor('hsl(0 100% 50%)') === '#ff0000' && tint('#000000', 0.5) === '#808080' && hexColor('nonsense') === '#929bb2', "Rich text and colors are converted for Excel");
   async function unzipParts(bytes) {
     const reader = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength), parts = new Map(), decoder = new TextDecoder();
     let end = bytes.length - 22;
@@ -3719,169 +3731,169 @@ window.runSmokeTests = async () => {
   const allSheets = EXCEL_SHEETS.map(([id]) => id), xmlDoc = text => new DOMParser().parseFromString(text, 'application/xml');
   const fullBook = await unzipParts(await situationWorkbook({ scope: 'all', columns: 'all', sheets: allSheets }));
   const bookSheets = [...xmlDoc(fullBook.get('xl/workbook.xml')).getElementsByTagName('sheet')].map(sheet => sheet.getAttribute('name'));
-  check([...fullBook].every(([name, text]) => !/\.(xml|rels)$/.test(name) || !xmlDoc(text).querySelector('parsererror')) && bookSheets.join('|') === window.OrbitaXlsx.sheetNames([t('Riepilogo'), ...data.settings.tabNames.slice(0, 4)]).join('|'), 'Cartella Excel ben formata con riepilogo e un foglio per tab');
+  check([...fullBook].every(([name, text]) => !/\.(xml|rels)$/.test(name) || !xmlDoc(text).querySelector('parsererror')) && bookSheets.join('|') === window.OrbitaXlsx.sheetNames([t("Summary"), ...data.settings.tabNames.slice(0, 4)]).join('|'), 'Well-formed Excel workbook includes a summary and one sheet per tab');
   const taskSheetXml = fullBook.get('xl/worksheets/sheet2.xml'), sharedXml = fullBook.get('xl/sharedStrings.xml');
-  check(xmlDoc(taskSheetXml).getElementsByTagName('row').length === data.tasks.length + 1 && sharedXml.includes('SMOKE-1') && sharedXml.includes('BULK-3') && taskSheetXml.includes(`<v>${window.OrbitaXlsx.excelDate('2031-04-01')}</v>`) && taskSheetXml.includes('<autoFilter ') && taskSheetXml.includes('state="frozen"') && fullBook.has('xl/worksheets/_rels/sheet2.xml.rels'), 'Foglio attività con tutte le righe, date reali, filtri, riquadri bloccati e link');
-  check(fullBook.get('xl/styles.xml').includes(window.OrbitaXlsx.argb(tint(bulkStatus.color, 0.35))) && fullBook.get('xl/styles.xml').includes(window.OrbitaXlsx.argb(tint(dateColor('2031-04-01'), 0.5))) && fullBook.get('xl/worksheets/sheet3.xml').includes('<autoFilter ') && fullBook.get('xl/styles.xml').includes('FFFFF1C2') && [t('Prossima release'), t('Release di oggi')].some(text => sharedXml.includes(text)), 'Colori di stato, date e prossima release riportati nel file Excel');
+  check(xmlDoc(taskSheetXml).getElementsByTagName('row').length === data.tasks.length + 1 && sharedXml.includes('SMOKE-1') && sharedXml.includes('BULK-3') && taskSheetXml.includes(`<v>${window.OrbitaXlsx.excelDate('2031-04-01')}</v>`) && taskSheetXml.includes('<autoFilter ') && taskSheetXml.includes('state="frozen"') && fullBook.has('xl/worksheets/_rels/sheet2.xml.rels'), "Task sheet includes every row, real dates, filters, frozen panes, and links");
+  check(fullBook.get('xl/styles.xml').includes(window.OrbitaXlsx.argb(tint(bulkStatus.color, 0.35))) && fullBook.get('xl/styles.xml').includes(window.OrbitaXlsx.argb(tint(dateColor('2031-04-01'), 0.5))) && fullBook.get('xl/worksheets/sheet3.xml').includes('<autoFilter ') && fullBook.get('xl/styles.xml').includes('FFFFF1C2') && [t("Next release"), t("Today's release")].some(text => sharedXml.includes(text)), 'Status colors, dates, and next release are included in the Excel file');
   const pickedBook = await unzipParts(await situationWorkbook({ scope: 'selected', columns: 'visible', sheets: ['summary', 'tasks'] }));
   const pickedSheet = pickedBook.get('xl/worksheets/sheet2.xml'), pickedShared = pickedBook.get('xl/sharedStrings.xml');
-  check(!pickedBook.has('xl/worksheets/sheet3.xml') && xmlDoc(pickedSheet).getElementsByTagName('row').length === 4 && pickedShared.includes(t('Solo le selezionate')) && pickedShared.includes(t('Nascosta')) && !pickedShared.includes('SMOKE-1'), 'Excel delle sole attività selezionate con i fogli scelti');
+  check(!pickedBook.has('xl/worksheets/sheet3.xml') && xmlDoc(pickedSheet).getElementsByTagName('row').length === 4 && pickedShared.includes(t("Selected only")) && pickedShared.includes(t("Hidden")) && !pickedShared.includes('SMOKE-1'), "Excel export includes only selected tasks and chosen sheets");
   view = 0; render();
   $('#bulk-excel').click();
   const excelForm = () => $('#excel-form');
-  check($('#modal').open && excelForm().elements.scope.value === 'selected' && excelForm().querySelectorAll('input[name="sheets"]:checked').length === allSheets.length && excelForm().querySelectorAll('input[name="sheets"]').length === 5, 'Excel delle attività selezionate dalla barra della selezione');
+  check($('#modal').open && excelForm().elements.scope.value === 'selected' && excelForm().querySelectorAll('input[name="sheets"]:checked').length === allSheets.length && excelForm().querySelectorAll('input[name="sheets"]').length === 5, "Excel exports the tasks selected from the selection bar");
   excelForm().querySelectorAll('input[name="sheets"]').forEach(box => { box.checked = false; });
   excelForm().requestSubmit();
   await tick();
-  check($('#modal').open && $('#toast').textContent === t('Scegli almeno un foglio da esportare.'), 'Esportazione Excel richiede almeno un foglio');
+  check($('#modal').open && $('#toast').textContent === t("Choose at least one sheet to export."), 'Excel export requires at least one sheet');
   excelForm().querySelectorAll('input[name="sheets"]').forEach(box => { box.checked = true; });
   excelForm().requestSubmit();
   await waitFor(() => !$('#modal').open);
   const excelName = situationFileName(organizations.find(o => o.id === activeOrganizationId).name, currentLanguage());
-  check($('#toast').textContent === `${t('Excel esportato:')} ${excelName}` && excelChoices.scope === 'selected', 'Esportazione Excel salvata su file con nome dell’organizzazione e data');
+  check($('#toast').textContent === `${t("Excel exported:")} ${excelName}` && excelChoices.scope === 'selected', "Excel export is saved with the organization name and date in the filename");
   clearSelection();
   $('[data-excel-export]').click();
-  check(excelForm().elements.scope.value === 'view' && excelForm().querySelector('input[value="selected"]').disabled, 'Senza selezione l’Excel parte dalla vista attuale');
+  check(excelForm().elements.scope.value === 'view' && excelForm().querySelector('input[value="selected"]').disabled, 'Without a selection, Excel export uses the current view');
   $('#modal').close();
   $('#select-all').click();
-  check(!selectedTasks.size, 'Nessuna riga mostrata da selezionare con le attività nascoste');
+  check(!selectedTasks.size, "No visible rows can be selected when tasks are hidden");
   showHidden = true; render(); $('#select-all').click();
   $('#bulk-edit').click();
   $('#bulk-delete').click();
-  check($('#confirm-action') && $('.confirm-message').textContent.includes('BULK-1'), 'Eliminazione multipla chiede conferma');
+  check($('#confirm-action') && $('.confirm-message').textContent.includes('BULK-1'), 'Bulk deletion requires confirmation');
   $('#confirm-action').click();
   await waitFor(() => !saving && !$('#modal').open);
-  check(!bulkTasks().some(Boolean) && data.tasks.length === initialTaskCount + 1 && !selectedTasks.size && $('#bulk-bar').hidden && !(await workspaceApi.load()).data.tasks.some(task => task.code.startsWith('BULK-')), 'Eliminazione multipla delle attività selezionate');
+  check(!bulkTasks().some(Boolean) && data.tasks.length === initialTaskCount + 1 && !selectedTasks.size && $('#bulk-bar').hidden && !(await workspaceApi.load()).data.tasks.some(task => task.code.startsWith('BULK-')), "Selected tasks are deleted in bulk");
   search = ''; showHidden = false; sort = [{ key: 'releaseDate', direction: 'asc' }];
   view = 0; render();
   $('.highlighter-bar [data-manage-highlights]').click();
-  check(view === 4 && settingsTab === 'highlights' && !$('#highlights-panel').hidden, 'Gestisci colori apre la scheda Evidenziatori');
+  check(view === 4 && settingsTab === 'highlights' && !$('#highlights-panel').hidden, "Manage colors opens the Highlighters tab");
   view = 4; render();
   const visibleSettingsPanels = () => settingsTabs.filter(tab => !$(`#${tab.panel}`).hidden).map(tab => tab.id);
-  check(document.querySelectorAll('.settings-nav .settings-tab').length === settingsTabs.length && settingsTabs.every(tab => $(`#${tab.panel}`) && $(`#settings-tab-${tab.id}`).getAttribute('aria-controls') === tab.panel) && visibleSettingsPanels().length === 1, 'Impostazioni divise in schede con un solo pannello visibile');
+  check(document.querySelectorAll('.settings-nav .settings-tab').length === settingsTabs.length && settingsTabs.every(tab => $(`#${tab.panel}`) && $(`#settings-tab-${tab.id}`).getAttribute('aria-controls') === tab.panel) && visibleSettingsPanels().length === 1, "Settings are divided into tabs with only one panel visible");
   $('[data-settings-tab="themes"]').click();
-  check(visibleSettingsPanels().join() === 'themes' && $('#settings-tab-themes').getAttribute('aria-current') === 'true' && !$('#settings-tab-identity').hasAttribute('aria-current') && settingsTab === 'themes', 'Scheda temi selezionabile dalla navigazione');
+  check(visibleSettingsPanels().join() === 'themes' && $('#settings-tab-themes').getAttribute('aria-current') === 'true' && !$('#settings-tab-identity').hasAttribute('aria-current') && settingsTab === 'themes', "Themes tab can be selected from navigation");
   render();
-  check(visibleSettingsPanels().join() === 'themes' && $('#settings-tab-themes').classList.contains('active'), 'Scheda delle impostazioni mantenuta dopo il ridisegno');
+  check(visibleSettingsPanels().join() === 'themes' && $('#settings-tab-themes').classList.contains('active'), 'Settings tab remains selected after rerender');
   $('#settings-tab-themes').focus();
   $('#settings-tab-themes').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
-  check(settingsTab === 'fonts' && visibleSettingsPanels().join() === 'fonts' && document.activeElement === $('#settings-tab-fonts'), 'Schede delle impostazioni navigabili da tastiera');
+  check(settingsTab === 'fonts' && visibleSettingsPanels().join() === 'fonts' && document.activeElement === $('#settings-tab-fonts'), 'Settings tabs are keyboard navigable');
   showSettingsTab('themes');
   const accent = () => document.documentElement.style.getPropertyValue('--accent');
   const savedAccent = data.settings.themes.find(theme => theme.id === data.settings.themeId).accent;
-  check($('#unsaved-banner').hidden && !settingsChanged() && accent() === savedAccent, 'Nessun avviso senza modifiche alle impostazioni');
-  check(defaultThemes().length === 40 && defaultThemes().every(theme => data.settings.themes.some(saved => saved.id === theme.id)) && $('#reset-theme') && !$('#delete-theme') && [...document.querySelectorAll('#theme-list .theme-kind')].filter(label => label.textContent === t('Predefinito')).length === 40, 'Catalogo di 40 temi predefiniti disponibile senza importazione');
+  check($('#unsaved-banner').hidden && !settingsChanged() && accent() === savedAccent, 'No warning appears when settings have not changed');
+  check(defaultThemes().length === 40 && defaultThemes().every(theme => data.settings.themes.some(saved => saved.id === theme.id)) && $('#reset-theme') && !$('#delete-theme') && [...document.querySelectorAll('#theme-list .theme-kind')].filter(label => label.textContent === t("Built-in")).length === 40, "Catalog of 40 default themes is available without importing");
   const previewTheme = data.settings.themes.find(theme => theme.id !== data.settings.themeId && theme.accent !== savedAccent);
   document.querySelector(`[data-theme="${previewTheme.id}"]`).click();
   await new Promise(resolve => setTimeout(resolve));
-  check(accent() === previewTheme.accent && document.documentElement.style.getPropertyValue('--background') === previewTheme.background, 'Selezione tema applicata subito in anteprima');
-  if (customTitleBar()) check(windowChromeSent.background === previewTheme.background && windowChromeSent.text === previewTheme.text, 'Barra del titolo aggiornata con l’anteprima del tema');
-  check(!$('#unsaved-banner').hidden && data.settings.themeId !== previewTheme.id, 'Avviso impostazioni non salvate visibile senza salvare il tema');
-  check(!$('#settings-tab-themes .settings-tab-dot').hidden && settingsTabs.filter(tab => !$(`#settings-tab-${tab.id} .settings-tab-dot`).hidden).length === 1 && $('#unsaved-where').textContent.includes(t('Temi & atmosfera')) && $('#unsaved-where [data-goto-settings-tab="themes"]'), 'Scheda con modifiche segnalata nella navigazione e nell’avviso');
+  check(accent() === previewTheme.accent && document.documentElement.style.getPropertyValue('--background') === previewTheme.background, 'Selected theme is immediately applied in the preview');
+  if (customTitleBar()) check(windowChromeSent.background === previewTheme.background && windowChromeSent.text === previewTheme.text, 'Title bar updated with the theme preview');
+  check(!$('#unsaved-banner').hidden && data.settings.themeId !== previewTheme.id, 'Unsaved settings warning appears without saving the theme');
+  check(!$('#settings-tab-themes .settings-tab-dot').hidden && settingsTabs.filter(tab => !$(`#settings-tab-${tab.id} .settings-tab-dot`).hidden).length === 1 && $('#unsaved-where').textContent.includes(t("Themes & atmosphere")) && $('#unsaved-where [data-goto-settings-tab="themes"]'), 'Modified tab is flagged in navigation and in the warning');
   showSettingsTab('identity');
   $('#unsaved-where [data-goto-settings-tab="themes"]').click();
-  check(settingsTab === 'themes' && visibleSettingsPanels().join() === 'themes', 'Collegamento dell’avviso apre la scheda modificata');
+  check(settingsTab === 'themes' && visibleSettingsPanels().join() === 'themes', "Warning link opens the modified tab");
   const searchThemes = value => { $('#theme-search').value = value; $('#theme-search').dispatchEvent(new Event('input', { bubbles: true })); };
   const themeQueryText = previewTheme.name.slice(1, 4).toLocaleUpperCase();
   const expectedThemes = settingsDraft.themes.filter(theme => theme.name.toLocaleLowerCase().includes(themeQueryText.toLocaleLowerCase()));
   searchThemes(themeQueryText);
-  check(document.querySelectorAll('#theme-list .theme-choice').length === expectedThemes.length && expectedThemes.length < settingsDraft.themes.length && $('#theme-count').textContent.startsWith(`${expectedThemes.length} / ${settingsDraft.themes.length}`), 'Ricerca temi filtra la galleria senza distinguere maiuscole');
-  searchThemes('nessun-tema-con-questo-nome');
-  check($('.theme-empty') && !document.querySelector('#theme-list .theme-choice') && $('#theme-editor #theme-name'), 'Ricerca temi senza risultati mostra un messaggio e mantiene l’editor');
+  check(document.querySelectorAll('#theme-list .theme-choice').length === expectedThemes.length && expectedThemes.length < settingsDraft.themes.length && $('#theme-count').textContent.startsWith(`${expectedThemes.length} / ${settingsDraft.themes.length}`), "Theme search filters the gallery regardless of letter case");
+  searchThemes('no-theme-with-this-name');
+  check($('.theme-empty') && !document.querySelector('#theme-list .theme-choice') && $('#theme-editor #theme-name'), "Theme search with no results displays a message and keeps the editor");
   searchThemes('');
-  check(document.querySelectorAll('#theme-list .theme-choice').length === settingsDraft.themes.length && themeQuery === '', 'Ricerca temi azzerata mostra tutti i temi');
+  check(document.querySelectorAll('#theme-list .theme-choice').length === settingsDraft.themes.length && themeQuery === '', "Clearing theme search shows all themes");
   document.querySelector('[data-theme-color="accent"]').value = '#12ab34';
   document.querySelector('[data-theme-color="accent"]').dispatchEvent(new Event('input', { bubbles: true }));
-  check(accent() === '#12ab34', 'Modifica colore tema applicata in tempo reale');
+  check(accent() === '#12ab34', "Theme color editing is applied in real time");
   if (customTitleBar()) {
     const backgroundInput = document.querySelector('[data-theme-color="background"]');
     backgroundInput.value = '#f4f1e8';
     backgroundInput.dispatchEvent(new Event('input', { bubbles: true }));
-    check(windowChromeSent.background === '#f4f1e8' && windowChromeSent.text === previewTheme.text, 'Barra del titolo segue in tempo reale lo sfondo del tema');
+    check(windowChromeSent.background === '#f4f1e8' && windowChromeSent.text === previewTheme.text, 'Title bar background follows the theme in real time');
   }
-  check($('.theme-choice.chosen .theme-kind').textContent === t('Predefinito modificato') && !$('#delete-theme'), 'Tema predefinito modificabile senza eliminare il modello incorporato');
+  check($('.theme-choice.chosen .theme-kind').textContent === t("Modified built-in") && !$('#delete-theme'), 'Default theme can be edited without deleting the built-in version');
   $('#reset-theme').click();
-  check(accent() === previewTheme.accent && $('#theme-name').value === previewTheme.name && $('.theme-choice.chosen .theme-kind').textContent === t('Predefinito'), 'Ripristino tema recupera nome e quattro colori originali');
+  check(accent() === previewTheme.accent && $('#theme-name').value === previewTheme.name && $('.theme-choice.chosen .theme-kind').textContent === t("Built-in"), 'Resetting the theme restores its original name and four colors');
   document.querySelector('[data-theme-color="accent"]').value = '#12ab34';
   document.querySelector('[data-theme-color="accent"]').dispatchEvent(new Event('input', { bubbles: true }));
   $('#discard-settings').click();
-  check(accent() === savedAccent && $('#unsaved-banner').hidden && !settingsDraft.themes.some(theme => theme.accent === '#12ab34'), 'Annulla modifiche ripristina il tema salvato');
+  check(accent() === savedAccent && $('#unsaved-banner').hidden && !settingsDraft.themes.some(theme => theme.accent === '#12ab34'), "Discard changes restores the saved theme");
   if (customTitleBar()) {
     const savedTheme = data.settings.themes.find(theme => theme.id === data.settings.themeId);
-    check(windowChromeSent.background === savedTheme.background && windowChromeSent.text === savedTheme.text, 'Barra del titolo ripristinata con il tema salvato');
+    check(windowChromeSent.background === savedTheme.background && windowChromeSent.text === savedTheme.text, 'Title bar is restored with the saved theme');
   }
   document.querySelector(`[data-theme="${previewTheme.id}"]`).click();
-  check(accent() === previewTheme.accent, 'Anteprima tema riattivata');
+  check(accent() === previewTheme.accent, 'Theme preview is re-enabled');
   document.querySelector('[data-view="0"]').click();
-  check(view === 0 && accent() === savedAccent && data.settings.themeId !== previewTheme.id, 'Uscita senza salvare mantiene il tema precedente');
+  check(view === 0 && accent() === savedAccent && data.settings.themeId !== previewTheme.id, 'Leaving without saving keeps the previous theme');
   view = 4; render();
-  document.querySelector('[data-tab-name="1"]').value = 'Modifica temporanea';
+  document.querySelector('[data-tab-name="1"]').value = "Edit temporanea";
   document.querySelector('[data-tab-name="1"]').dispatchEvent(new Event('input', { bubbles: true }));
   await new Promise(resolve => setTimeout(resolve));
-  check(!$('#unsaved-banner').hidden, 'Avviso per qualsiasi impostazione modificata');
-  check(!$('#settings-tab-identity .settings-tab-dot').hidden && $('#settings-tab-themes .settings-tab-dot').hidden, 'Modifica ai nomi delle tab segnalata sulla scheda identità');
+  check(!$('#unsaved-banner').hidden, 'Warning appears for any changed setting');
+  check(!$('#settings-tab-identity .settings-tab-dot').hidden && $('#settings-tab-themes .settings-tab-dot').hidden, "Editing tab names is flagged on the Identity tab");
   document.querySelector('[data-tab-name="1"]').value = data.settings.tabNames[1];
   document.querySelector('[data-tab-name="1"]').dispatchEvent(new Event('input', { bubbles: true }));
   await new Promise(resolve => setTimeout(resolve));
-  check($('#unsaved-banner').hidden, 'Avviso rimosso quando le modifiche tornano ai valori salvati');
+  check($('#unsaved-banner').hidden, 'Warning disappears when changes match the saved values');
   showSettingsTab('themes');
   const galleryThemes = Array.from({ length: 30 }, (_, index) => ({ id: uid(), name: `Galleria ${index + 1}`, background: '#101820', surface: '#203040', text: '#f0f4fc', accent: '#40a0e0' }));
   settingsDraft.themes.push(...galleryThemes);
   settingsDraft.themeId = galleryThemes.at(-1).id;
   drawThemes();
-  check($('.theme-choice.chosen .theme-kind').textContent === t('Personalizzato') && $('#delete-theme') && !$('#reset-theme'), 'Tema personale distinto dai predefiniti e ancora eliminabile');
+  check($('.theme-choice.chosen .theme-kind').textContent === t("Custom") && $('#delete-theme') && !$('#reset-theme'), 'Custom theme is distinct from defaults and can still be deleted');
   $('#delete-theme').click();
-  check(!settingsDraft.themes.some(theme => theme.id === galleryThemes.at(-1).id) && defaultThemes().every(theme => settingsDraft.themes.some(saved => saved.id === theme.id)), 'Eliminazione tema personale non rimuove i predefiniti');
+  check(!settingsDraft.themes.some(theme => theme.id === galleryThemes.at(-1).id) && defaultThemes().every(theme => settingsDraft.themes.some(saved => saved.id === theme.id)), 'Deleting a custom theme does not remove default themes');
   settingsDraft.themes.push(galleryThemes.at(-1));
   settingsDraft.themeId = galleryThemes.at(-1).id;
   drawThemes();
   const gallery = $('#theme-list'), lastGalleryTile = gallery.querySelector('.theme-choice.chosen');
-  check(gallery.scrollHeight > gallery.clientHeight + 100 && gallery.scrollTop > 0 && lastGalleryTile.offsetTop >= gallery.scrollTop && lastGalleryTile.offsetTop + lastGalleryTile.offsetHeight <= gallery.scrollTop + gallery.clientHeight + 1 && $('#themes-panel').offsetHeight < $('#theme-editor').offsetHeight + 400, 'Galleria temi compatta: scorre al suo interno e mostra il tema scelto');
+  check(gallery.scrollHeight > gallery.clientHeight + 100 && gallery.scrollTop > 0 && lastGalleryTile.offsetTop >= gallery.scrollTop && lastGalleryTile.offsetTop + lastGalleryTile.offsetHeight <= gallery.scrollTop + gallery.clientHeight + 1 && $('#themes-panel').offsetHeight < $('#theme-editor').offsetHeight + 400, "Compact theme gallery scrolls internally and shows the selected theme");
   $('#discard-settings').click();
-  check(settingsDraft.themes.length === data.settings.themes.length && $('#unsaved-banner').hidden, 'Temi aggiunti alla galleria scartati');
+  check(settingsDraft.themes.length === data.settings.themes.length && $('#unsaved-banner').hidden, "Added themes are discarded from the gallery");
   showSettingsTab('highlights');
   const savedHighlights = structuredClone(data.settings.highlights), removedHighlight = savedHighlights.find(h => h.id === smokeTask().highlightId);
-  check(visibleSettingsPanels().join() === 'highlights' && document.querySelectorAll('#highlights-list .option-row').length === savedHighlights.length && document.querySelectorAll('#highlights-list .option-usage').length === savedHighlights.length && !$('#highlights-list .star'), 'Scheda Evidenziatori con i colori dell’organizzazione');
+  check(visibleSettingsPanels().join() === 'highlights' && document.querySelectorAll('#highlights-list .option-row').length === savedHighlights.length && document.querySelectorAll('#highlights-list .option-usage').length === savedHighlights.length && !$('#highlights-list .star'), "Highlighters tab uses the organization colors");
   $('[data-add-option="highlights"]').click();
   await new Promise(resolve => setTimeout(resolve));
-  check(settingsDraft.highlights.length === savedHighlights.length + 1 && !savedHighlights.some(h => h.color === settingsDraft.highlights.at(-1).color) && !$('#settings-tab-highlights .settings-tab-dot').hidden && !$('#unsaved-banner').hidden, 'Nuovo colore con tinta non usata segnalato come modifica');
+  check(settingsDraft.highlights.length === savedHighlights.length + 1 && !savedHighlights.some(h => h.color === settingsDraft.highlights.at(-1).color) && !$('#settings-tab-highlights .settings-tab-dot').hidden && !$('#unsaved-banner').hidden, "New color with an unused tint is flagged as a change");
   $('#discard-settings').click();
-  check(settingsDraft.highlights.length === savedHighlights.length && $('#unsaved-banner').hidden, 'Nuovo colore scartato annullando le modifiche');
+  check(settingsDraft.highlights.length === savedHighlights.length && $('#unsaved-banner').hidden, "New color is discarded when changes are canceled");
   document.querySelector(`[data-remove="highlights:${removedHighlight.id}"]`).click();
   $('#save-settings-inline').click();
   await waitFor(() => data.settings.highlights.length === savedHighlights.length - 1 && !saving);
-  check(!data.tasks.some(task => task.highlightId === removedHighlight.id) && smokeTask().highlightId === '', 'Eliminando un colore le righe tornano senza evidenziazione');
+  check(!data.tasks.some(task => task.highlightId === removedHighlight.id) && smokeTask().highlightId === '', 'Deleting a color removes highlights from rows');
   await commit(next => { next.settings.highlights = savedHighlights; });
   render();
   showSettingsTab('statuses');
   const savedStatuses = structuredClone(data.settings.statuses), statusIds = list => list.map(status => status.id).join();
   const statusRow = index => document.querySelectorAll('#statuses-list .option-row')[index], statusHandle = index => statusRow(index).querySelector('[data-drag-handle]');
-  check(savedStatuses.length >= 3 && document.querySelectorAll('#statuses-list [data-drag-handle]').length === savedStatuses.length && getComputedStyle(statusHandle(0)).cursor === 'grab' && $('#unsaved-banner').hidden, 'Maniglia di trascinamento su ogni stato');
+  check(savedStatuses.length >= 3 && document.querySelectorAll('#statuses-list [data-drag-handle]').length === savedStatuses.length && getComputedStyle(statusHandle(0)).cursor === 'grab' && $('#unsaved-banner').hidden, 'Every status has a drag handle');
   const statusLifted = dragTo(statusHandle(0), statusRow(2));
   await tick();
   const draggedStatuses = [savedStatuses[1], savedStatuses[2], savedStatuses[0], ...savedStatuses.slice(3)];
-  check(statusLifted && statusIds(settingsDraft.statuses) === statusIds(draggedStatuses) && document.activeElement === statusHandle(2) && !document.querySelector('.is-dragging') && !document.body.classList.contains('is-sorting') && !$('#settings-tab-statuses .settings-tab-dot').hidden && !$('#unsaved-banner').hidden && $('body > .sort-status')?.textContent === fillText('Spostato in posizione {0} di {1}', 3, savedStatuses.length), 'Stati riordinati trascinandoli, con modifica segnalata e annunciata');
+  check(statusLifted && statusIds(settingsDraft.statuses) === statusIds(draggedStatuses) && document.activeElement === statusHandle(2) && !document.querySelector('.is-dragging') && !document.body.classList.contains('is-sorting') && !$('#settings-tab-statuses .settings-tab-dot').hidden && !$('#unsaved-banner').hidden && $('body > .sort-status')?.textContent === fillText("Moved to position {0} of {1}", 3, savedStatuses.length), 'Dragging reorders statuses, flags the change, and announces it');
   const statusCancelled = dragTo(statusHandle(0), statusRow(2), 'escape');
   await tick();
   const listedStatusIds = () => [...document.querySelectorAll('#statuses-list [data-option-name]')].map(input => input.dataset.optionName.slice('statuses:'.length)).join();
-  check(statusCancelled && statusIds(settingsDraft.statuses) === statusIds(draggedStatuses) && listedStatusIds() === statusIds(draggedStatuses) && !document.querySelector('.is-dragging') && !statusRow(0).style.transform && !$('#modal').open, 'Esc annulla il trascinamento e ripristina l’ordine');
+  check(statusCancelled && statusIds(settingsDraft.statuses) === statusIds(draggedStatuses) && listedStatusIds() === statusIds(draggedStatuses) && !document.querySelector('.is-dragging') && !statusRow(0).style.transform && !$('#modal').open, 'Escape cancels dragging and restores the order');
   statusHandle(2).focus();
   document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }));
   const keyedStatuses = [savedStatuses[1], savedStatuses[0], savedStatuses[2], ...savedStatuses.slice(3)];
-  check(statusIds(settingsDraft.statuses) === statusIds(keyedStatuses) && listedStatusIds() === statusIds(keyedStatuses) && document.activeElement === statusHandle(1), 'Stati riordinabili con le frecce sulla maniglia');
+  check(statusIds(settingsDraft.statuses) === statusIds(keyedStatuses) && listedStatusIds() === statusIds(keyedStatuses) && document.activeElement === statusHandle(1), 'Statuses can be reordered using the handle arrows');
   $('#save-settings-inline').click();
   await waitFor(() => !saving && statusIds(data.settings.statuses) === statusIds(keyedStatuses));
   view = 3; render();
-  check(statusIds((await workspaceApi.load()).data.settings.statuses) === statusIds(keyedStatuses) && [...document.querySelectorAll('.kanban-column .kanban-heading span')].map(span => span.textContent).join() === keyedStatuses.map(status => status.name).join(), 'Nuovo ordine degli stati salvato e applicato al kanban');
+  check(statusIds((await workspaceApi.load()).data.settings.statuses) === statusIds(keyedStatuses) && [...document.querySelectorAll('.kanban-column .kanban-heading span')].map(span => span.textContent).join() === keyedStatuses.map(status => status.name).join(), 'New status order is saved and applied to kanban');
   await commit(next => { next.settings.statuses = savedStatuses; });
   view = 4; render();
   showSettingsTab('columns');
   $('#columns-editor [data-column-visible="link"]').click();
   await new Promise(resolve => setTimeout(resolve));
-  check(settingsDraft.taskColumns.find(column => column.id === 'link').visible && !$('#settings-tab-columns .settings-tab-dot').hidden, 'Colonne della lista configurabili dalle impostazioni');
+  check(settingsDraft.taskColumns.find(column => column.id === 'link').visible && !$('#settings-tab-columns .settings-tab-dot').hidden, "List columns can be configured in settings");
   $('#reset-columns').click();
   await new Promise(resolve => setTimeout(resolve));
-  check(!settingsDraft.taskColumns.find(column => column.id === 'link').visible && $('#unsaved-banner').hidden, 'Ripristino delle colonne predefinite');
+  check(!settingsDraft.taskColumns.find(column => column.id === 'link').visible && $('#unsaved-banner').hidden, 'Default columns are restored');
   showSettingsTab('fonts');
   const rootSize = id => document.documentElement.style.getPropertyValue(`--fs-${id}`);
   const fontPx = element => parseFloat(getComputedStyle(element).fontSize);
@@ -3894,63 +3906,63 @@ window.runSmokeTests = async () => {
   check($('#font-size-panel') && FONT_SIZE_PARTS.every(({ id, min, max }) => {
     const input = $(`#font-size-${id}`);
     return Number(input.min) === min && Number(input.max) === max && Number(input.step) === FONT_SIZE_STEP && Number(input.value) === data.settings.fontSizes[id] && rootSize(id) === String(data.settings.fontSizes[id] / 100);
-  }) && document.querySelectorAll('#font-size-panel .font-sample[inert]').length === FONT_SIZE_PARTS.length, 'Dimensione del testo configurabile per parte con limiti e anteprime');
+  }) && document.querySelectorAll('#font-size-panel .font-sample[inert]').length === FONT_SIZE_PARTS.length, "Text size is configurable per section with limits and previews");
   const tableSampleSize = fontPx($('.font-sample[data-part="tables"] .code-link')), baseSampleSize = fontPx($('.font-sample[data-part="base"] .button'));
   const navSize = fontPx($('.sidebar .nav-button')), topbarSize = fontPx($('.topbar'));
   await setFontSize('tables', 130);
-  check(rootSize('tables') === '1.3' && Math.abs(fontPx($('.font-sample[data-part="tables"] .code-link')) - tableSampleSize * 1.3) < 0.1 && fontPx($('.font-sample[data-part="base"] .button')) === baseSampleSize && $('#font-size-tables-value').textContent === '130%' && !$('#unsaved-banner').hidden && data.settings.fontSizes.tables === 100, 'Dimensione tabelle applicata subito in anteprima solo alla sua parte');
+  check(rootSize('tables') === '1.3' && Math.abs(fontPx($('.font-sample[data-part="tables"] .code-link')) - tableSampleSize * 1.3) < 0.1 && fontPx($('.font-sample[data-part="base"] .button')) === baseSampleSize && $('#font-size-tables-value').textContent === '130%' && !$('#unsaved-banner').hidden && data.settings.fontSizes.tables === 100, 'Table size preview applies immediately only to the table area');
   await setFontSize('tables', 400);
-  check(settingsDraft.fontSizes.tables === 150 && $('#font-size-tables').value === '150' && rootSize('tables') === '1.5', 'Dimensione del testo limitata al massimo consentito');
+  check(settingsDraft.fontSizes.tables === 150 && $('#font-size-tables').value === '150' && rootSize('tables') === '1.5', "Text size is capped at the allowed maximum");
   $('[data-font-preset="85"]').click();
   await new Promise(resolve => setTimeout(resolve));
-  check(FONT_SIZE_PARTS.every(({ id }) => settingsDraft.fontSizes[id] === 85 && rootSize(id) === '0.85') && $('[data-font-preset="85"]').getAttribute('aria-pressed') === 'true' && Math.abs(fontPx($('.sidebar .nav-button')) - navSize * 0.85) < 0.05 && Math.abs(fontPx($('.topbar')) - topbarSize * 0.85) < 0.05, 'Preimpostazione compatta applicata a tutta l’interfaccia');
+  check(FONT_SIZE_PARTS.every(({ id }) => settingsDraft.fontSizes[id] === 85 && rootSize(id) === '0.85') && $('[data-font-preset="85"]').getAttribute('aria-pressed') === 'true' && Math.abs(fontPx($('.sidebar .nav-button')) - navSize * 0.85) < 0.05 && Math.abs(fontPx($('.topbar')) - topbarSize * 0.85) < 0.05, 'Compact preset applies to the entire interface');
   $('#discard-settings').click();
-  check(FONT_SIZE_PARTS.every(({ id }) => rootSize(id) === '1' && $(`#font-size-${id}`).value === '100') && $('#unsaved-banner').hidden && fontPx($('.font-sample[data-part="tables"] .code-link')) === tableSampleSize && fontPx($('.topbar')) === topbarSize, 'Annulla modifiche ripristina le dimensioni del testo salvate');
+  check(FONT_SIZE_PARTS.every(({ id }) => rootSize(id) === '1' && $(`#font-size-${id}`).value === '100') && $('#unsaved-banner').hidden && fontPx($('.font-sample[data-part="tables"] .code-link')) === tableSampleSize && fontPx($('.topbar')) === topbarSize, "Discard changes restores the saved text sizes");
   await setFontSize('kanban', 120);
   document.querySelector('[data-view="3"]').click();
   const kanbanTitleSize = fontPx($('.kanban-column .card-title'));
-  check(view === 3 && rootSize('kanban') === '1' && data.settings.fontSizes.kanban === 100, 'Uscita senza salvare mantiene le dimensioni del testo precedenti');
+  check(view === 3 && rootSize('kanban') === '1' && data.settings.fontSizes.kanban === 100, 'Leaving without saving keeps the previous text sizes');
   view = 4; render();
   await setFontSize('kanban', 120);
   $('#save-settings-inline').click();
   await waitFor(() => data.settings.fontSizes.kanban === 120 && !saving);
-  check((await workspaceApi.load()).data.settings.fontSizes.kanban === 120 && rootSize('kanban') === '1.2' && $('#unsaved-banner').hidden, 'Dimensioni del testo salvate per organizzazione');
+  check((await workspaceApi.load()).data.settings.fontSizes.kanban === 120 && rootSize('kanban') === '1.2' && $('#unsaved-banner').hidden, "Text sizes are saved per organization");
   view = 3; render();
-  check(Math.abs(fontPx($('.kanban-column .card-title')) - kanbanTitleSize * 1.2) < 0.1, 'Kanban ingrandito dopo il salvataggio');
+  check(Math.abs(fontPx($('.kanban-column .card-title')) - kanbanTitleSize * 1.2) < 0.1, 'Kanban is enlarged after saving');
   view = 0; render();
-  check(Math.abs(fontPx($('#task-rows .code-link')) - tableSampleSize) < 0.05, 'Tabelle invariate e coerenti con l’anteprima');
+  check(Math.abs(fontPx($('#task-rows .code-link')) - tableSampleSize) < 0.05, "Tables remain unchanged and match the preview");
   let invalidSizesRejected = false;
   const invalidSizes = structuredClone(data);
   invalidSizes.settings.fontSizes.tables = 500;
-  try { await workspaceApi.save(invalidSizes, activeOrganizationId, undefined, revision); } catch (error) { invalidSizesRejected = /Dimensioni del testo non valide|Invalid text sizes/.test(error.message); }
-  check(invalidSizesRejected && (await workspaceApi.load()).data.settings.fontSizes.tables === 100, 'Dimensioni del testo fuori dai limiti rifiutate dall’archivio');
+  try { await workspaceApi.save(invalidSizes, activeOrganizationId, undefined, revision); } catch (error) { invalidSizesRejected = error.message.includes("Invalid text sizes."); }
+  check(invalidSizesRejected && (await workspaceApi.load()).data.settings.fontSizes.tables === 100, 'Out-of-range text sizes are rejected by the archive');
   view = 4; render();
   const sampleCode = data.tasks.find(task => task.code.trim()).code.trim();
   const setTemplate = async value => { $('#portal-url-template').value = value; $('#portal-url-template').dispatchEvent(new Event('input', { bubbles: true })); await new Promise(resolve => setTimeout(resolve)); };
   const savedTemplate = data.settings.portalUrlTemplate;
   await setTemplate('https://jira.smoke.test/browse/');
-  check($('#portal-preview').classList.contains('invalid') && $('#portal-preview').textContent.includes('{codice}'), 'Modello link senza segnaposto segnalato');
+  check($('#portal-preview').classList.contains('invalid') && $('#portal-preview').textContent.includes(t("{code}")), 'Link template without a placeholder is flagged');
   showSettingsTab('themes');
   $('#save-settings-inline').click();
-  await waitFor(() => $('#toast').textContent.includes('Il modello del link portale') && !saving);
-  check(data.settings.portalUrlTemplate === savedTemplate && !$('#unsaved-banner').hidden, 'Modello link non valido non salvato');
-  check(settingsTab === 'portal' && visibleSettingsPanels().join() === 'portal' && !$('#settings-tab-portal .settings-tab-dot').hidden, 'Errore di salvataggio apre la scheda del campo da correggere');
-  await setTemplate('jira.smoke.test/browse/{codice}');
-  check($('#portal-preview a[data-open-url]').getAttribute('href') === `https://jira.smoke.test/browse/${encodeURIComponent(sampleCode)}` && !$('#unsaved-banner').hidden, 'Anteprima modello link con https:// automatico');
+  await waitFor(() => $('#toast').textContent.includes(t("The portal link template must be a valid web address containing {code}.")) && !saving);
+  check(data.settings.portalUrlTemplate === savedTemplate && !$('#unsaved-banner').hidden, 'Invalid link template is not saved');
+  check(settingsTab === 'portal' && visibleSettingsPanels().join() === 'portal' && !$('#settings-tab-portal .settings-tab-dot').hidden, 'Save error opens the tab containing the field to fix');
+  await setTemplate("jira.smoke.test/browse/{code}");
+  check($('#portal-preview a[data-open-url]').getAttribute('href') === `https://jira.smoke.test/browse/${encodeURIComponent(sampleCode)}` && !$('#unsaved-banner').hidden, 'Link template preview automatically adds https://');
   $('#portal-preview a[data-open-url]').click();
   await waitFor(() => lastOpenedLink === `https://jira.smoke.test/browse/${encodeURIComponent(sampleCode)}`);
-  check(location.protocol === 'file:' && view === 4, 'Link di anteprima aperto nel browser predefinito senza navigare nell’app');
-  $('#organization-name').value = 'Workspace di prova';
-  document.querySelector('[data-tab-name="2"]').value = 'Roadmap personalizzata';
+  check(location.protocol === 'file:' && view === 4, 'Preview link opens in the default browser without navigating the app');
+  $('#organization-name').value = 'Test workspace';
+  document.querySelector('[data-tab-name="2"]').value = 'Custom roadmap';
   settingsDraft.statuses.reverse();
   showSettingsTab('themes');
   $('#add-theme').click();
-  $('#theme-name').value = 'Tema di prova';
+  $('#theme-name').value = 'Test theme';
   $('#theme-name').dispatchEvent(new Event('input'));
   document.querySelector('[data-theme-color="accent"]').value = '#ff8844';
   document.querySelector('[data-theme-color="accent"]').dispatchEvent(new Event('input'));
-  check([...document.querySelectorAll('.theme-swatches')].every(swatches => swatches.children.length === 4), 'Anteprime temi mostrano tutti e quattro i colori');
-  check(document.querySelector('.theme-choice.chosen [aria-label="Accento: #ff8844"]'), 'Anteprima aggiornata immediatamente dal selettore colore');
+  check([...document.querySelectorAll('.theme-swatches')].every(swatches => swatches.children.length === 4), "Theme previews show all four colors");
+  check(document.querySelector(`.theme-choice.chosen [aria-label="${t("Accent")}: #ff8844"]`), 'Preview updates immediately from the color picker');
   const imageSource = document.createElement('canvas');
   imageSource.width = 40; imageSource.height = 10;
   const imageContext = imageSource.getContext('2d');
@@ -3965,180 +3977,180 @@ window.runSmokeTests = async () => {
   await waitFor(() => !$('#theme-image-canvas').hidden && !$('#theme-image-file').disabled);
   const generated = { background: '#101820', surface: '#303848', text: '#f0f4fc', accent: '#d06090' };
   for (const [key, label] of themeFields) {
-    check(document.querySelector(`[data-theme-color="${key}"]`).value === generated[key], `Caricamento immagine assegna automaticamente ${key}`);
-    check(document.querySelector(`.theme-choice.chosen [aria-label="${label}: ${generated[key]}"]`), `Anteprima automatica sincronizzata per ${key}`);
+    check(document.querySelector(`[data-theme-color="${key}"]`).value === generated[key], `Image loading assigns ${key} automatically`);
+    check(document.querySelector(`.theme-choice.chosen [aria-label="${t(label)}: ${generated[key]}"]`), `Automatic preview is synchronized for ${key}`);
   }
-  check($('#theme-image-result').textContent.includes('quattro colori assegnati automaticamente'), 'Estrazione dei quattro colori non richiede clic manuali');
-  settingsDraft.themes.push({ id: uid(), name: 'Palette automatica', ...generated });
+  check($('#theme-image-result').textContent.includes(t("four colors assigned automatically.")), 'All four colors are extracted without manual clicks');
+  settingsDraft.themes.push({ id: uid(), name: 'Automatic palette', ...generated });
   const canvas = $('#theme-image-canvas');
   const bounds = canvas.getBoundingClientRect();
   for (const [key] of themeFields) {
     $('#theme-image-target').value = key;
     canvas.dispatchEvent(new MouseEvent('click', { clientX: bounds.left + bounds.width * (key === 'text' ? 0.625 : 0.125), clientY: bounds.top + bounds.height / 2 }));
     const expected = key === 'text' ? '#f0f4fc' : '#101820';
-    check(document.querySelector(`[data-theme-color="${key}"]`).value === expected, `Prelievo da immagine assegna colore esatto a ${key}`);
-    check(document.querySelector(`.theme-choice.chosen [aria-label="${themeFields.find(([field]) => field === key)[1]}: ${expected}"]`), `Anteprima sincronizzata dopo prelievo ${key}`);
+    check(document.querySelector(`[data-theme-color="${key}"]`).value === expected, `Image picker assigns the exact color to ${key}`);
+    check(document.querySelector(`.theme-choice.chosen [aria-label="${t(themeFields.find(([field]) => field === key)[1])}: ${expected}"]`), `Preview is synchronized after picking ${key}`);
   }
   let invalidImageRejected = false;
   try { await loadThemeImage(new File(['invalid'], 'invalid.png', { type: 'image/png' }), canvas); } catch { invalidImageRejected = true; }
-  check(invalidImageRejected, 'Immagine non leggibile rifiutata esplicitamente');
+  check(invalidImageRejected, 'Unreadable image is explicitly rejected');
   let oversizedImageRejected = false;
   try { await loadThemeImage(new File([new Uint8Array(15 * 1024 * 1024 + 1)], 'large.png', { type: 'image/png' }), canvas); } catch { oversizedImageRejected = true; }
-  check(oversizedImageRejected, 'Limite dimensione immagine verificato');
+  check(oversizedImageRejected, 'Image size limit is enforced');
   document.querySelector('[data-theme-color="accent"]').value = '#ff8844';
   document.querySelector('[data-theme-color="accent"]').dispatchEvent(new Event('input'));
-  check(accent() === '#ff8844' && !$('#unsaved-banner').hidden, 'Tema personalizzato in anteprima prima del salvataggio');
+  check(accent() === '#ff8844' && !$('#unsaved-banner').hidden, 'Custom theme is previewed before saving');
   $('#save-settings-inline').click();
   const organizationName = () => organizations.find(o => o.id === activeOrganizationId).name;
-  await waitFor(() => organizationName() === 'Workspace di prova' && !saving);
-  check(view === 4 && $('#unsaved-banner').hidden && accent() === '#ff8844', 'Salvataggio dall’avviso rende effettivo il tema e rimuove l’avviso');
-  check(data.settings.portalUrlTemplate === 'https://jira.smoke.test/browse/{codice}' && (await workspaceApi.load()).data.settings.portalUrlTemplate === data.settings.portalUrlTemplate, 'Modello link portale salvato per organizzazione');
+  await waitFor(() => organizationName() === 'Test workspace' && !saving);
+  check(view === 4 && $('#unsaved-banner').hidden && accent() === '#ff8844', 'Saving from the warning applies the theme and removes the warning');
+  check(data.settings.portalUrlTemplate === "https://jira.smoke.test/browse/{code}" && (await workspaceApi.load()).data.settings.portalUrlTemplate === data.settings.portalUrlTemplate, "Portal link template is saved per organization");
   view = 0; showHidden = true; render();
-  const generatedSmokeLink = 'https://jira.smoke.test/browse/SMOKE-1', overrideLink = 'https://altro.portale.it/ticket/SMOKE-1';
+  const generatedSmokeLink = 'https://jira.smoke.test/browse/SMOKE-1', overrideLink = 'https://other.portal.example/ticket/SMOKE-1';
   const listLink = document.querySelector(`#task-rows a[data-open-url][href="${generatedSmokeLink}"]`);
-  check(listLink && data.tasks.find(t => t.code === 'SMOKE-1').url === '', 'Link generato dal modello per attività senza link specifico');
+  check(listLink && data.tasks.find(t => t.code === 'SMOKE-1').url === '', "Template generates a link for tasks without a specific link");
   listLink.click();
   await waitFor(() => lastOpenedLink === generatedSmokeLink);
-  check(location.protocol === 'file:' && view === 0, 'Link della lista aperto nel browser predefinito');
+  check(location.protocol === 'file:' && view === 0, 'List link opens in the default browser');
   let unsafeLinkRejected = false;
   try { await workspaceApi.openLink('javascript:alert(1)'); } catch { unsafeLinkRejected = true; }
-  check(unsafeLinkRejected, 'Apertura di indirizzi non web rifiutata');
+  check(unsafeLinkRejected, 'Non-web addresses are rejected');
   taskDialog(data.tasks.find(t => t.code === 'SMOKE-1'));
-  check($('#portal-link-preview a').getAttribute('href') === generatedSmokeLink && $('#task-url').placeholder === generatedSmokeLink && !$('#task-url').required, 'Dialog mostra il link generato dal codice');
-  $('#task-url').value = 'altro.portale.it/ticket/SMOKE-1';
+  check($('#portal-link-preview a').getAttribute('href') === generatedSmokeLink && $('#task-url').placeholder === generatedSmokeLink && !$('#task-url').required, 'Dialog displays the link generated from the code');
+  $('#task-url').value = 'other.portal.example/ticket/SMOKE-1';
   $('#task-url').dispatchEvent(new Event('input'));
-  check($('#portal-link-preview a').getAttribute('href') === overrideLink, 'Link specifico normalizzato in anteprima');
+  check($('#portal-link-preview a').getAttribute('href') === overrideLink, "Specific link is normalized in the preview");
   $('#task-form').requestSubmit();
   await waitFor(() => data.tasks.find(t => t.code === 'SMOKE-1').url === overrideLink && !saving);
-  check(document.querySelector(`#task-rows a[href="${overrideLink}"]`) && !document.querySelector(`#task-rows a[href="${generatedSmokeLink}"]`), 'Link specifico ha la precedenza sul modello');
+  check(document.querySelector(`#task-rows a[href="${overrideLink}"]`) && !document.querySelector(`#task-rows a[href="${generatedSmokeLink}"]`), "Specific link takes precedence over the template");
   taskDialog(data.tasks.find(t => t.code === 'SMOKE-1'));
   $('#task-url').value = '';
   $('#task-form').requestSubmit();
   await waitFor(() => data.tasks.find(t => t.code === 'SMOKE-1').url === '' && !saving);
-  check(document.querySelector(`#task-rows a[href="${generatedSmokeLink}"]`), 'Senza link specifico torna il link del modello');
+  check(document.querySelector(`#task-rows a[href="${generatedSmokeLink}"]`), 'Without a specific link, the template link is used');
   view = 2; render();
-  check(document.querySelector(`.milestone-column a.card-portal-link[href="${generatedSmokeLink}"]`), 'Link portale apribile dalle milestone');
+  check(document.querySelector(`.milestone-column a.card-portal-link[href="${generatedSmokeLink}"]`), "Portal link can be opened from milestones");
   view = 3; render();
-  check(document.querySelector(`.kanban-column a.card-portal-link[href="${generatedSmokeLink}"]`) && !document.querySelector('.kanban-board button'), 'Link portale nel kanban senza comandi di modifica');
-  check(organizationName() === 'Workspace di prova' && document.title === APP_NAME && $('#brand-name').textContent === APP_NAME && !$('#app-name'), 'Nome organizzazione modificabile ma identità OrbitKanban fissa');
-  check(data.settings.tabNames[2] === 'Roadmap personalizzata' && data.settings.themes.some(t => t.name === 'Tema di prova' && t.accent === '#ff8844'), 'Nomi tab e tema utente salvati');
-  const savedTheme = (await workspaceApi.load()).data.settings.themes.find(t => t.name === 'Tema di prova');
-  check(savedTheme.background === '#101820' && savedTheme.surface === '#101820' && savedTheme.text === '#f0f4fc', 'Colori prelevati da immagine persistiti su disco');
-  check((await workspaceApi.load()).data.settings.themes.some(t => t.name === 'Palette automatica' && themeFields.every(([key]) => t[key] === generated[key])), 'Intera palette automatica preservata su disco');
+  check(document.querySelector(`.kanban-column a.card-portal-link[href="${generatedSmokeLink}"]`) && !document.querySelector('.kanban-board button'), "Portal link appears in kanban without editing controls");
+  check(organizationName() === 'Test workspace' && document.title === APP_NAME && $('#brand-name').textContent === APP_NAME && !$('#app-name'), "Organization name is editable while the OrbitKanban identity stays fixed");
+  check(data.settings.tabNames[2] === 'Custom roadmap' && data.settings.themes.some(t => t.name === 'Test theme' && t.accent === '#ff8844'), 'Tab names and user theme are saved');
+  const savedTheme = (await workspaceApi.load()).data.settings.themes.find(t => t.name === 'Test theme');
+  check(savedTheme.background === '#101820' && savedTheme.surface === '#101820' && savedTheme.text === '#f0f4fc', 'Colors extracted from an image persist on disk');
+  check((await workspaceApi.load()).data.settings.themes.some(t => t.name === 'Automatic palette' && themeFields.every(([key]) => t[key] === generated[key])), 'Entire automatic palette is preserved on disk');
   view = 3; render();
-  check(document.querySelector('.kanban-heading').textContent.includes(data.settings.statuses[0].name), 'Ordine kanban segue impostazioni');
-  check(sanitize('<img src=x onerror=alert(1)><p onclick="x()">ok<script>x()</script></p>') === '<p>ok</p>', 'Sanitizzazione rich text');
-  check(plain('<p>Prima</p><p>Seconda<br>Terza</p>') === 'Prima Seconda Terza', 'Anteprime rich text preservano separazione parole');
-  const previewSource = `<p>Anteprima ${uid()}<script>non visibile</script></p>`;
+  check(document.querySelector('.kanban-heading').textContent.includes(data.settings.statuses[0].name), 'Kanban order follows settings');
+  check(sanitize('<img src=x onerror=alert(1)><p onclick="x()">ok<script>x()</script></p>') === '<p>ok</p>', 'Rich text is sanitized');
+  check(plain('<p>First</p><p>Second<br>Third</p>') === 'First Second Third', 'Rich-text previews preserve word spacing');
+  const previewSource = `<p>Preview ${uid()}<script>hidden</script></p>`;
   const parseDocument = DOMParser.prototype.parseFromString;
   let previewParses = 0, cachedPreview;
   try {
     DOMParser.prototype.parseFromString = function (...args) { previewParses++; return parseDocument.apply(this, args); };
     cachedPreview = plain(previewSource);
     plain(previewSource);
-    plain(previewSource + '<p>Modificata</p>');
+    plain(previewSource + '<p>Edited</p>');
   } finally { DOMParser.prototype.parseFromString = parseDocument; }
-  check(previewParses === 2 && !cachedPreview.includes('non visibile') && plain(previewSource + '<p>Modificata</p>').endsWith('Modificata'), 'Cache anteprime evita parsing ripetuti senza riutilizzare testi superati o non sanitizzati');
+  check(previewParses === 2 && !cachedPreview.includes('hidden') && plain(previewSource + '<p>Edited</p>').endsWith('Edited'), 'Preview cache avoids repeated parsing without reusing stale or unsanitized text');
   const formatterLanguage = data.settings.language;
   try {
     for (const language of ['en', 'it', 'en']) {
       data.settings.language = language;
-      check(formatDate('2026-11-02') === new Date('2026-11-02T12:00:00').toLocaleDateString(locale(), { day: '2-digit', month: 'short', year: 'numeric' }), `Formattatore date riutilizzato nella lingua ${language}`);
+      check(formatDate('2026-11-02') === new Date('2026-11-02T12:00:00').toLocaleDateString(locale(), { day: '2-digit', month: 'short', year: 'numeric' }), `Date formatter is reused in the ${language} language`);
     }
   } finally { data.settings.language = formatterLanguage; }
   const firstOrganizationId = activeOrganizationId;
   const firstSettings = structuredClone(data.settings);
   const firstOrganizationName = organizationName();
-  check(organizations.length === 1 && $('#organization-select').options.length === 1, 'Archivio precedente migrato in una singola organizzazione');
+  check(organizations.length === 1 && $('#organization-select').options.length === 1, "Previous archive is migrated into a single organization");
   $('#manage-organizations').click();
   const createForm = $('#create-organization');
-  createForm.elements.name.value = 'Seconda organizzazione';
+  createForm.elements.name.value = "Second organization";
   const upload = new DataTransfer();
   upload.items.add(new File([imageBlob], 'logo.png', { type: 'image/png' }));
   $('#create-logo-file').files = upload.files;
   $('#create-logo-file').dispatchEvent(new Event('change'));
   await waitFor(() => Boolean($('#create-logo-preview img')) && !$('#create-logo-file').disabled);
   const creationLogo = $('#create-logo-preview img').src;
-  check($('#create-logo-preview .theme-swatches').children.length === 4 && view === 4, 'Creazione organizzazione in impostazioni con logo e anteprima di quattro colori');
-  check(settingsTab === 'organizations' && visibleSettingsPanels().join() === 'organizations', 'Gestione organizzazioni apre direttamente la sua scheda');
+  check($('#create-logo-preview .theme-swatches').children.length === 4 && view === 4, "New organization is created in Settings with a logo and four-color preview");
+  check(settingsTab === 'organizations' && visibleSettingsPanels().join() === 'organizations', 'Organization management opens its tab directly');
   createForm.requestSubmit();
   await waitFor(() => activeOrganizationId !== firstOrganizationId && !organizationBusy);
   const secondOrganizationId = activeOrganizationId;
-  check(data.tasks.length === 0 && data.issues.length === 0 && data.settings.logo === creationLogo, 'Nuova organizzazione creata con logo e dati indipendenti in un singolo salvataggio');
-  check($('.brand-icon img').src === creationLogo && $('#brand-name').textContent === APP_NAME, 'Logo organizzazione visibile subito senza rinominare l’app');
+  check(data.tasks.length === 0 && data.issues.length === 0 && data.settings.logo === creationLogo, "New organization is created with its own logo and data in one save");
+  check($('.brand-icon img').src === creationLogo && $('#brand-name').textContent === APP_NAME, "Organization logo appears immediately without renaming the app");
   view = 4; render();
-  check(settingsDraft.themeId === 'organization-logo' && themeFields.every(([key]) => settingsDraft.themes.find(theme => theme.id === 'organization-logo')[key] === generated[key]), 'Logo genera automaticamente un tema dedicato con quattro colori');
+  check(settingsDraft.themeId === 'organization-logo' && themeFields.every(([key]) => settingsDraft.themes.find(theme => theme.id === 'organization-logo')[key] === generated[key]), 'Logo automatically generates a dedicated theme with four colors');
   const secondLogo = settingsDraft.logo;
   showSettingsTab('languages');
   const languagePanel = () => $('#languages-panel').textContent;
-  check(visibleSettingsPanels().join() === 'languages' && [...$('#language').options].map(option => option.value).join() === 'de,en,it' && $('#language').value === 'it' && $('#language-missing').hidden, 'Scheda lingua con lingue integrate e lingua aggiunta da file');
-  check(['Deutsch', 'Aggiunta da file', 'Integrata', 'Aggiungi una lingua', 'en.template.json', 'Apri cartella lingue', 'Ricarica lingue'].every(text => languagePanel().includes(text)) && $('#languages-folder').textContent.endsWith('languages'), 'Elenco lingue, istruzioni e cartella lingue visibili');
-  check($('.language-errors') && $('.language-errors').textContent.includes('broken.json') && $('.language-errors').textContent.includes('File JSON non valido.'), 'File lingua non validi segnalati senza bloccare l’app');
-  check(languageOptions('fr').includes('fr (non installata)') && !$('#identity-panel #language'), 'Lingua non installata indicata e selettore spostato nella scheda lingua');
+  check(visibleSettingsPanels().join() === 'languages' && [...$('#language').options].map(option => option.value).join() === 'de,en,it' && $('#language').value === 'it' && $('#language-missing').hidden, 'Language tab shows built-in languages and languages added from files');
+  check(['Deutsch', t("Added from file"), t("Built-in"), t("Add a language"), 'en.template.json', t("Open languages folder"), t("Reload languages")].every(text => languagePanel().includes(text)) && $('#languages-folder').textContent.endsWith('languages'), "Language list, instructions, and folder are visible");
+  check($('.language-errors') && $('.language-errors').textContent.includes('broken.json') && $('.language-errors').textContent.includes(t("Invalid JSON file.")), 'Invalid language files are reported without blocking the app');
+  check(languageOptions('fr').includes(fillText("{0} (not installed)", 'fr')) && !$('#identity-panel #language'), 'Uninstalled language is indicated and the selector is moved to the Languages tab');
   await $('#open-languages-folder').onclick();
-  check(languageInfo.template.endsWith('en.template.json') && languageInfo.errors.length === 1, 'Cartella lingue preparata con il modello inglese');
+  check(languageInfo.template.endsWith('en.template.json') && languageInfo.errors.length === 1, "Languages folder is prepared with the English template");
   $('#language').value = 'de';
   $('#language').dispatchEvent(new Event('change', { bubbles: true }));
   await new Promise(resolve => setTimeout(resolve, 0));
-  check(!$('#settings-tab-languages .settings-tab-dot').hidden && $('#settings-tab-identity .settings-tab-dot').hidden && $('#language-missing').hidden, 'Cambio lingua segnalato nella scheda lingua');
+  check(!$('#settings-tab-languages .settings-tab-dot').hidden && $('#settings-tab-identity .settings-tab-dot').hidden && $('#language-missing').hidden, 'Language change is flagged on the Languages tab');
   $('#save-settings').click();
   await waitFor(() => data.settings.language === 'de' && !saving);
-  check(document.documentElement.lang === 'de' && $('#current-tab').textContent === 'Einstellungen' && $('#save-settings').textContent === 'Einstellungen speichern' && $('#manage-organizations').textContent === 'Manage organizations' && $('#theme-count').textContent.endsWith('themes'), 'Lingua aggiunta da file usata con l’inglese per i testi mancanti');
+  check(document.documentElement.lang === 'de' && $('#current-tab').textContent === 'Einstellungen' && $('#save-settings').textContent === 'Einstellungen speichern' && $('#manage-organizations').textContent === 'Manage organizations' && $('#theme-count').textContent.endsWith('themes'), 'Language added from a file uses English for missing strings');
   await $('#reload-languages').onclick();
-  check($('#toast').textContent === 'Languages reloaded.' && $('#language').value === 'de' && $('#current-tab').textContent === 'Einstellungen' && settingsTab === 'languages', 'Ricarica lingue aggiorna la scheda senza perdere la selezione');
+  check($('#toast').textContent === 'Languages reloaded.' && $('#language').value === 'de' && $('#current-tab').textContent === 'Einstellungen' && settingsTab === 'languages', "Reloading languages updates the tab without losing the selection");
   $('#language').value = 'en';
   $('#organization-name').value = 'English workspace';
   $('#save-settings').click();
   await waitFor(() => data.settings.language === 'en' && !saving);
-  check(document.documentElement.lang === 'en' && $('#current-tab').textContent === 'Settings' && $('#save-settings').textContent === 'Save settings', 'Selettore inglese traduce impostazioni e navigazione');
-  check($('#content').textContent.includes('Organization logo') && $('#content').textContent.includes('Interface language') && !$('#content').textContent.includes('Identità'), 'Impostazioni, logo e lingua tradotti in inglese');
-  check($('.settings-nav').getAttribute('aria-label') === 'Settings sections' && ['Appearance', 'Themes & atmosphere', 'Data & access'].every(text => $('.settings-nav').textContent.includes(text)) && $('#theme-search').placeholder === 'Search themes…' && $('#theme-count').textContent.endsWith('themes'), 'Schede delle impostazioni e galleria temi tradotte in inglese');
-  check($('#portal-panel').textContent.includes('Link template') && $('#portal-panel').textContent.includes('{code}') && !$('#portal-panel').textContent.includes('{codice}') && $('#portal-url-template').placeholder.endsWith('{code}'), 'Sezione link portale tradotta in inglese');
-  check($('.brand-icon img').src === secondLogo && document.documentElement.style.getPropertyValue('--accent') === generated.accent, 'Logo e tema dell’organizzazione attiva visualizzati nella sidebar');
-  check([...document.querySelectorAll('.theme-swatches')].every(swatches => swatches.children.length === 4) && document.querySelector('.theme-choice.chosen [aria-label="Text: #f0f4fc"]'), 'Quattro colori e relative etichette tradotti');
+  check(document.documentElement.lang === 'en' && $('#current-tab').textContent === 'Settings' && $('#save-settings').textContent === 'Save settings', 'English selector translates settings and navigation');
+  check($('#content').textContent.includes('Organization logo') && $('#content').textContent.includes('Interface language') && !$('#content').textContent.includes(window.OrbitaI18n.translate("Identity & navigation", 'it')), "Settings, logo, and language are translated into English");
+  check($('.settings-nav').getAttribute('aria-label') === 'Settings sections' && ['Appearance', 'Themes & atmosphere', "Data & access"].every(text => $('.settings-nav').textContent.includes(text)) && $('#theme-search').placeholder === 'Search themes…' && $('#theme-count').textContent.endsWith('themes'), "Settings tabs and theme gallery are translated into English");
+  check($('#portal-panel').textContent.includes('Link template') && $('#portal-panel').textContent.includes('{code}') && !$('#portal-panel').textContent.includes(window.OrbitaI18n.translate("{code}", 'it')) && $('#portal-url-template').placeholder.endsWith('{code}'), 'Portal link section is translated into English');
+  check($('.brand-icon img').src === secondLogo && document.documentElement.style.getPropertyValue('--accent') === generated.accent, "Active organization’s logo and theme appear in the sidebar");
+  check([...document.querySelectorAll('.theme-swatches')].every(swatches => swatches.children.length === 4) && document.querySelector('.theme-choice.chosen [aria-label="Text: #f0f4fc"]'), 'Four colors and their labels are translated');
   view = 0; render();
-  check($('#new-task').textContent.includes('New task') && $('#search').placeholder.startsWith('Search'), 'Lista attività e ricerca tradotte');
-  check($('.highlighter-label').textContent.includes('Highlighter') && $('#columns-button').textContent.includes('Columns') && $('#highlight-filter').options[0].textContent === 'All highlights' && $('.activity-table th[data-column="description"] .column-heading > span').textContent === 'Description', 'Evidenziatore e colonne tradotti in inglese');
-  check($('#saved-view-select').options[0].textContent === 'Choose a view…' && [...$('#saved-view-select').querySelectorAll('optgroup')].every(group => ['Saved views', 'Upcoming releases', 'Past releases'].includes(group.label)), 'Menu viste e gruppi delle release tradotti in inglese');
+  check($('#new-task').textContent.includes('New task') && $('#search').placeholder.startsWith('Search'), "Task list and search are translated");
+  check($('.highlighter-label').textContent.includes('Highlighter') && $('#columns-button').textContent.includes('Columns') && $('#highlight-filter').options[0].textContent === 'All highlights' && $('.activity-table th[data-column="description"] .column-heading > span').textContent === 'Description', "Highlighter and columns are translated into English");
+  check($('#saved-view-select').options[0].textContent === 'Choose a view…' && [...$('#saved-view-select').querySelectorAll('optgroup')].every(group => ['Saved views', 'Upcoming releases', 'Past releases'].includes(group.label)), 'View menu and release groups are translated into English');
   columnFilterDialog('releaseDate', 'tasks');
-  check($('#column-filter-form legend').textContent === 'Dates in the list' && $('#column-filter-form .date-filter-option').textContent.includes('Unassigned') && $('#column-filter-form [data-check-dates="all"]').textContent === 'Select all' && $('#column-filter-form .filter-note').textContent.startsWith('Ticked dates') && $('#column-filter-form').textContent.includes('From'), 'Filtro data tradotto in inglese con Unassigned');
+  check($('#column-filter-form legend').textContent === 'Dates in the list' && $('#column-filter-form .date-filter-option').textContent.includes('Unassigned') && $('#column-filter-form [data-check-dates="all"]').textContent === 'Select all' && $('#column-filter-form .filter-note').textContent.startsWith('Ticked dates') && $('#column-filter-form').textContent.includes('From'), 'Date filter is translated into English with Unassigned');
   $('#modal').close();
   openSavedViews();
-  check($('#modal-content h2').textContent === 'Saved views' && $('#modal-content .filter-note').textContent.startsWith('A view for every release date'), 'Viste salvate e nota sulle viste release in inglese');
+  check($('#modal-content h2').textContent === 'Saved views' && $('#modal-content .filter-note').textContent.startsWith("A view for every release date"), "Saved views and release-view note are in English");
   $('#modal').close();
   taskDialog();
-  check($('#task-form').textContent.includes('Portal code') && $('#task-form').textContent.includes('Effort in days') && $('#task-form').textContent.includes('1 day'), 'Dialog attività, editor e unità in inglese');
-  check(data.settings.tags.length === 0 && !$('.tag-choice') && !$('.task-tags'), 'Catalogo tag isolato e selettore assente dalla scheda attività');
+  check($('#task-form').textContent.includes('Portal code') && $('#task-form').textContent.includes('Effort in days') && $('#task-form').textContent.includes('1 day'), "Task dialog, editor, and units are in English");
+  check(data.settings.tags.length === 0 && !$('.tag-choice') && !$('.task-tags'), "Tag catalog is isolated and selector is absent from the task tab");
   $('#task-form').elements.code.value = 'SMOKE-1';
-  $('#description-editor').innerHTML = '<p>Attività personalizzate</p>';
+  $('#description-editor').innerHTML = "<p>Custom tasks</p>";
   $('#task-form').elements.days.value = '1';
   $('#task-form').requestSubmit();
   await waitFor(() => data.tasks.length === 1 && !saving);
-  check(data.tasks[0].code === 'SMOKE-1' && matchIssues(data.tasks[0], data.issues).incidents.length === 0, 'Codici uguali tra organizzazioni non condividono issue');
-  check(data.settings.portalUrlTemplate === '' && !document.querySelector('#task-rows a[data-open-url]'), 'Modello link separato per organizzazione');
-  check($('#task-rows').textContent.includes('Attività personalizzate') && effort(data.tasks[0].effortHours) === '1d', 'Contenuti utente preservati e effort localizzato');
+  check(data.tasks[0].code === 'SMOKE-1' && matchIssues(data.tasks[0], data.issues).incidents.length === 0, "Matching codes across organizations do not share issues");
+  check(data.settings.portalUrlTemplate === '' && !document.querySelector('#task-rows a[data-open-url]'), "Link template is separate for each organization");
+  check($('#task-rows').textContent.includes("Custom tasks") && effort(data.tasks[0].effortHours) === '1d', 'User content is preserved and effort is localized');
   $('.task-tags-button').click();
-  check($('#tag-menu').textContent.includes('No tags available. Add them in Settings'), 'Dropdown senza catalogo mostra istruzioni in inglese');
+  check($('#tag-menu').textContent.includes('No tags available. Add them in Settings'), 'Dropdown without a catalog shows instructions in English');
   closeTagMenu();
   view = 1; render(); issueDialog();
-  check($('#issue-form').textContent.includes('Save association') && $('.page-heading p').textContent.startsWith('Connect work to its origin.'), 'Vista issue e dialog tradotti in inglese');
+  check($('#issue-form').textContent.includes('Save association') && $('.page-heading p').textContent.startsWith('Connect work to its origin.'), 'Issue view and dialog are translated into English');
   $('#modal').close();
   view = 2; render();
-  check($('#content').textContent.includes('Unscheduled') && $('.page-heading p').textContent.startsWith('Every release is a milestone.'), 'Milestone e data mancante tradotte');
+  check($('#content').textContent.includes('Unscheduled') && $('.page-heading p').textContent.startsWith('Every release is a milestone.'), "Milestones and missing date are translated");
   view = 3; render();
-  check($('#content').textContent.includes('Read only') && !document.querySelector('.kanban-board button'), 'Kanban inglese resta readonly');
+  check($('#content').textContent.includes('Read only') && !document.querySelector('.kanban-board button'), 'Kanban remains read-only in English');
   view = 4; render();
   $('#organization-name').value = 'Unsaved name';
   const selectOrganization = id => { $('#organization-select').value = id; $('#organization-select').dispatchEvent(new Event('change')); };
   selectOrganization(firstOrganizationId);
-  check($('#modal').open && $('#save-switch') && activeOrganizationId === secondOrganizationId, 'Cambio organizzazione protegge modifiche non salvate');
+  check($('#modal').open && $('#save-switch') && activeOrganizationId === secondOrganizationId, "Organization change protects unsaved changes");
   $('#modal [data-close]').click();
-  check(activeOrganizationId === secondOrganizationId && $('#organization-name').value === 'Unsaved name', 'Annullamento cambio conserva modifiche');
+  check(activeOrganizationId === secondOrganizationId && $('#organization-name').value === 'Unsaved name', 'Canceling the organization change preserves edits');
   selectOrganization(firstOrganizationId);
   $('#discard-switch').click();
   await waitFor(() => activeOrganizationId === firstOrganizationId && !organizationBusy);
-  check(data.tasks.length === initialTaskCount + 1 && data.issues.some(issue => issue.incident === 'INC-SMOKE') && organizationName() === firstOrganizationName, 'Ritorno alla prima organizzazione conserva attività, associazioni e impostazioni');
-  check(document.documentElement.lang === 'it' && $('.brand-icon img').getAttribute('src') === 'app-logo.svg' && document.documentElement.style.getPropertyValue('--accent') === firstSettings.themes.find(theme => theme.id === firstSettings.themeId).accent, 'Lingua e tema per organizzazione e logo applicazione come fallback');
+  check(data.tasks.length === initialTaskCount + 1 && data.issues.some(issue => issue.incident === 'INC-SMOKE') && organizationName() === firstOrganizationName, "Returning to the first organization preserves tasks, associations, and settings");
+  check(document.documentElement.lang === 'it' && $('.brand-icon img').getAttribute('src') === 'app-logo.svg' && document.documentElement.style.getPropertyValue('--accent') === firstSettings.themes.find(theme => theme.id === firstSettings.themeId).accent, "Language and theme are per organization, with the app logo as fallback");
   imageContext.fillStyle = '#22cc88'; imageContext.fillRect(30, 0, 10, 10);
   const firstLogoBlob = await new Promise(resolve => imageSource.toBlob(resolve, 'image/png'));
   const firstLogoUpload = new DataTransfer();
@@ -4146,82 +4158,82 @@ window.runSmokeTests = async () => {
   $('#logo-file').files = firstLogoUpload.files;
   $('#logo-file').dispatchEvent(new Event('change'));
   await waitFor(() => Boolean(settingsDraft.logo) && !$('#logo-file').disabled);
-  $('#organization-name').value = 'Prima organizzazione con logo';
+  $('#organization-name').value = "First organization with logo";
   selectOrganization(secondOrganizationId);
   $('#save-switch').click();
   await waitFor(() => activeOrganizationId === secondOrganizationId && !organizationBusy);
-  check(organizationName() === 'English workspace' && data.settings.logo === secondLogo && document.documentElement.lang === 'en', 'Salva e cambia conserva lingua e logo separati per organizzazione');
+  check(organizationName() === 'English workspace' && data.settings.logo === secondLogo && document.documentElement.lang === 'en', "Save and switch preserves language and logo separately for each organization");
   let staleSaveRejected = false;
   try { await workspaceApi.save(structuredClone(data), firstOrganizationId); } catch { staleSaveRejected = true; }
   const snapshotAfterRejection = await workspaceApi.load();
-  check(staleSaveRejected && snapshotAfterRejection.organizations.find(o => o.id === snapshotAfterRejection.activeOrganizationId).name === 'English workspace', 'Salvataggio con organizzazione obsoleta rifiutato senza contaminare dati');
+  check(staleSaveRejected && snapshotAfterRejection.organizations.find(o => o.id === snapshotAfterRejection.activeOrganizationId).name === 'English workspace', "Save for a stale organization is rejected without contaminating data");
   $('#manage-organizations').click();
   $('#organization-name').value = 'Second renamed';
   $('#save-settings').click();
   await waitFor(() => organizations.some(o => o.name === 'Second renamed') && !saving);
-  check($('#organization-select').selectedOptions[0].textContent === 'Second renamed', 'Rinomina organizzazione aggiorna menu');
+  check($('#organization-select').selectedOptions[0].textContent === 'Second renamed', "Renaming an organization updates the menu");
   $('#manage-organizations').click();
   $('#create-organization').elements.name.value = 'Temporary';
   $('#create-organization').requestSubmit();
   await waitFor(() => organizations.length === 3 && !organizationBusy);
-  check(data.settings.language === 'en' && data.settings.tabNames[0] === 'Tasks', 'Nuova organizzazione eredita lingua con nomi iniziali localizzati');
+  check(data.settings.language === 'en' && data.settings.tabNames[0] === 'Tasks', "New organization inherits the language and localized default names");
   $('#manage-organizations').click();
   $('#delete-organization').click();
   $('#confirm-action').click();
   await waitFor(() => organizations.length === 2 && !organizationBusy);
-  check(!organizations.some(o => o.name === 'Temporary'), 'Eliminazione organizzazione confermata senza toccare le altre');
+  check(!organizations.some(o => o.name === 'Temporary'), "Deleting an organization is confirmed without affecting the others");
   const finalSnapshot = await workspaceApi.load();
-  check(finalSnapshot.organizations.length === 2 && finalSnapshot.data.settings.logo.startsWith('data:image/png;base64,'), 'Organizzazioni e logo incorporato persistiti su disco');
+  check(finalSnapshot.organizations.length === 2 && finalSnapshot.data.settings.logo.startsWith('data:image/png;base64,'), "Organizations and embedded logo persist on disk");
   await organizationAction('switch', { id: firstOrganizationId });
-  check(data.settings.logo !== secondLogo && organizationName() === 'Prima organizzazione con logo', 'Ogni organizzazione mantiene un logo distinto dopo ripetuti cambi');
-  check(document.title === APP_NAME && $('#brand-name').textContent === APP_NAME && data.settings.appName === undefined, 'OrbitKanban rimane il nome fisso indipendentemente da organizzazione e lingua');
+  check(data.settings.logo !== secondLogo && organizationName() === "First organization with logo", "Each organization retains a distinct logo after repeated switches");
+  check(document.title === APP_NAME && $('#brand-name').textContent === APP_NAME && data.settings.appName === undefined, "OrbitKanban name stays fixed regardless of organization or language");
   view = 4; render();
-  check($('#browser-panel') && /^http:\/\/127\.0\.0\.1:\d+\/$/.test($('#browser-url').textContent) && !$('#browser-open').disabled && !$('#browser-copy').disabled, 'Sezione accesso da browser con indirizzo locale');
-  check(!$('#open-browser').disabled && $('#open-browser').textContent.includes('Apri nel browser') && /^\d+\.\d+\.\d+$/.test(appVersion) && $('#app-version').textContent === `v${appVersion}`, 'Pulsante browser e versione dell’app visibili');
-  check((await workspaceApi.browserAccess('info', activeOrganizationId)).url === browserUrl, 'Indirizzo browser coerente con l’app');
+  check($('#browser-panel') && /^http:\/\/127\.0\.0\.1:\d+\/$/.test($('#browser-url').textContent) && !$('#browser-open').disabled && !$('#browser-copy').disabled, 'Browser access section shows a local address');
+  check(!$('#open-browser').disabled && $('#open-browser').textContent.includes(t("Open in browser")) && /^\d+\.\d+\.\d+$/.test(appVersion) && $('#app-version').textContent === `v${appVersion}`, 'Browser button and app version are visible');
+  check((await workspaceApi.browserAccess('info', activeOrganizationId)).url === browserUrl, 'Browser address matches the app');
   $('#open-browser').click();
-  await waitFor(() => $('#toast').textContent.includes('Organizzazione aperta nel browser'));
-  check(location.protocol === 'file:', 'Organizzazione aperta nel browser predefinito senza navigare nell’app');
-  check($('#create-organization [name="demo"]') && !$('#create-organization [name="demo"]').checked, 'Opzione dati dimostrativi nella creazione organizzazione');
+  await waitFor(() => $('#toast').textContent.includes(t("Organization opened in the default browser.")));
+  check(location.protocol === 'file:', "Organization opens in the default browser without navigating the app");
+  check($('#create-organization [name="demo"]') && !$('#create-organization [name="demo"]').checked, "Demo data option appears when creating an organization");
   view = 0; showHidden = true; render();
   const remoteBase = await workspaceApi.load(activeOrganizationId);
   remoteBase.data.tasks.push({ ...structuredClone(remoteBase.data.tasks[0]), id: uid(), code: 'REMOTE-1', sequence: 9001, hidden: false, notes: '' });
   const remoteSaved = await workspaceApi.save(remoteBase.data, activeOrganizationId, undefined, remoteBase.revision);
   await waitFor(() => revision === remoteSaved.revision && !refreshing);
-  check(data.tasks.some(t => t.code === 'REMOTE-1') && $('#task-rows').textContent.includes('REMOTE-1'), 'Modifiche da un’altra finestra sincronizzate in tempo reale');
+  check(data.tasks.some(t => t.code === 'REMOTE-1') && $('#task-rows').textContent.includes('REMOTE-1'), 'Changes from another window synchronize in real time');
   const staleRevision = revision;
   const external = await workspaceApi.load(activeOrganizationId);
-  external.data.tasks.find(t => t.code === 'REMOTE-1').notes = '<p>Nota remota</p>';
+  external.data.tasks.find(t => t.code === 'REMOTE-1').notes = '<p>Remote note</p>';
   const externalSaved = await workspaceApi.save(external.data, activeOrganizationId, undefined, external.revision);
   await waitFor(() => revision === externalSaved.revision && !refreshing);
   revision = staleRevision;
   let conflictCode = '';
   try { await commit(structuredClone(data)); } catch (error) { conflictCode = error.code; }
-  check(conflictCode === 'conflict', 'Salvataggio basato su dati superati rifiutato come conflitto');
+  check(conflictCode === 'conflict', "Save using a stale revision is rejected as a conflict");
   await commit(next => { next.tasks.find(t => t.code === 'REMOTE-1').hidden = true; });
   const merged = await workspaceApi.load(activeOrganizationId);
   const mergedTask = merged.data.tasks.find(t => t.code === 'REMOTE-1');
-  check(mergedTask.hidden && mergedTask.notes === '<p>Nota remota</p>' && revision === merged.revision, 'Conflitto risolto riapplicando la modifica senza perdere quella remota');
+  check(mergedTask.hidden && mergedTask.notes === '<p>Remote note</p>' && revision === merged.revision, 'Conflict is resolved by reapplying the change without losing the remote update');
   view = 4; render();
-  $('#organization-name').value = 'Bozza locale';
+  $('#organization-name').value = 'Local draft';
   $('#organization-name').dispatchEvent(new Event('input', { bubbles: true }));
   await new Promise(resolve => setTimeout(resolve));
   const draftBase = await workspaceApi.load(activeOrganizationId);
   draftBase.data.tasks.find(t => t.code === 'REMOTE-1').code = 'REMOTE-2';
   const draftSaved = await workspaceApi.save(draftBase.data, activeOrganizationId, undefined, draftBase.revision);
   await waitFor(() => revision === draftSaved.revision && !refreshing);
-  check(view === 4 && $('#organization-name').value === 'Bozza locale' && !$('#unsaved-banner').hidden && data.tasks.some(t => t.code === 'REMOTE-2'), 'Aggiornamento remoto non perde le impostazioni non salvate');
+  check(view === 4 && $('#organization-name').value === 'Local draft' && !$('#unsaved-banner').hidden && data.tasks.some(t => t.code === 'REMOTE-2'), 'Remote update preserves unsaved settings');
   $('#discard-settings').click();
-  check($('#organization-name').value === organizationName() && $('#unsaved-banner').hidden, 'Bozza scartata dopo la sincronizzazione');
+  check($('#organization-name').value === organizationName() && $('#unsaved-banner').hidden, 'Draft is discarded after synchronization');
   const originalOrganizationId = activeOrganizationId;
-  const created = await workspaceApi.organization('create', { name: 'Organizzazione remota', language: 'it', demo: true }, 'external-client');
+  const created = await workspaceApi.organization('create', { name: "Remote organization", language: 'it', demo: true }, 'external-client');
   await waitFor(() => organizations.length === 3 && !refreshing);
-  check(activeOrganizationId === originalOrganizationId && $('#organization-select').options.length === 3 && created.data.tasks.length > 200 && created.data.issues.length > 0, 'Organizzazione con dati dimostrativi creata altrove compare senza cambiare vista');
+  check(activeOrganizationId === originalOrganizationId && $('#organization-select').options.length === 3 && created.data.tasks.length > 200 && created.data.issues.length > 0, "Organization created elsewhere with demo data appears without changing the view");
   await organizationAction('switch', { id: created.activeOrganizationId });
-  check(activeOrganizationId === created.activeOrganizationId && visibleTasks().length < data.tasks.length && data.tasks.some(t => t.hidden), 'Organizzazione dimostrativa navigabile');
+  check(activeOrganizationId === created.activeOrganizationId && visibleTasks().length < data.tasks.length && data.tasks.some(t => t.hidden), "Demo organization can be opened");
   await workspaceApi.organization('delete', { id: created.activeOrganizationId }, 'external-client');
   await waitFor(() => activeOrganizationId !== created.activeOrganizationId && organizations.length === 2 && !refreshing);
-  check(organizations.some(o => o.id === activeOrganizationId) && $('#toast').textContent.includes('eliminata in un’altra finestra'), 'Organizzazione eliminata altrove gestita senza perdere la sessione');
+  check(organizations.some(o => o.id === activeOrganizationId) && $('#toast').textContent.includes(t("The open organization was deleted in another window. You are now viewing another organization.")), "Organization deleted elsewhere is handled without losing the session");
   const { baseData, organizationExport } = window.OrbitaCore;
   const chooseImportFile = (content, name) => {
     const transfer = new DataTransfer();
@@ -4232,119 +4244,120 @@ window.runSmokeTests = async () => {
   const importDialogOpen = () => $('#modal').open && Boolean($('#organization-import-form'));
   if (activeOrganizationId !== firstOrganizationId) await organizationAction('switch', { id: firstOrganizationId });
   view = 4; render();
-  check($('#transfer-panel') && document.querySelectorAll('#transfer-panel [data-export-kind]').length === 4 && $('#organization-file').type === 'file' && $('#transfer-panel').textContent.includes('Esporta configurazione'), 'Sezione esporta e importa per organizzazione nelle impostazioni');
-  $('#organization-name').value = 'Bozza esportazione';
+  check($('#transfer-panel') && document.querySelectorAll('#transfer-panel [data-export-kind]').length === 4 && $('#organization-file').type === 'file' && $('#transfer-panel').textContent.includes(t("Export settings")), "Organization export and import section appears in Settings");
+  $('#organization-name').value = 'Export draft';
   $('#organization-name').dispatchEvent(new Event('input', { bubbles: true }));
   document.querySelector('[data-export-kind="themes"]').click();
   await waitFor(() => $('#modal').open && $('#discard-switch'));
-  check($('#modal-content').textContent.includes('esportazione e importazione usano le impostazioni salvate') && $('#discard-switch').textContent === 'Scarta e continua' && $('#save-switch').textContent === 'Salva e continua', 'Esportazione con impostazioni non salvate chiede di salvarle o scartarle');
+  check($('#modal-content').textContent.includes(t("You have unsaved changes: export and import use the saved settings. Save or discard them before continuing.")) && $('#discard-switch').textContent === t("Discard and continue") && $('#save-switch').textContent === t("Save and continue"), 'Export with unsaved settings asks whether to save or discard them');
   $('#discard-switch').click();
-  await waitFor(() => $('#toast').textContent.includes('Temi esportati'));
-  check(!$('#modal').open && $('#organization-name').value === organizationName() && $('#unsaved-banner').hidden && /OrbitKanban-[a-z0-9-]+-temi-\d{4}-\d{2}-\d{2}\.json$/.test($('#toast').textContent), 'Bozza scartata e temi esportati in un file dedicato');
-  for (const [kind, label] of [['settings', 'configurazione'], ['data', 'dati'], ['organization', 'organizzazione']]) {
+  await waitFor(() => $('#toast').textContent.includes(t("Themes exported:")));
+  check(!$('#modal').open && $('#organization-name').value === organizationName() && $('#unsaved-banner').hidden && new RegExp(`OrbitKanban-[a-z0-9-]+-${term("themes")}-\\d{4}-\\d{2}-\\d{2}\\.json$`).test($('#toast').textContent), "Draft is discarded and themes are exported to a separate file");
+  for (const [kind, label] of [['settings', "settings"], ['data', "data"], ['organization', "organization"]]) {
+    const localizedLabel = term(label);
     document.querySelector(`[data-export-kind="${kind}"]`).click();
-    await waitFor(() => new RegExp(`-${label}-\\d{4}-\\d{2}-\\d{2}\\.json$`).test($('#toast').textContent));
+    await waitFor(() => new RegExp(`-${localizedLabel}-\\d{4}-\\d{2}-\\d{2}\\.json$`).test($('#toast').textContent));
   }
-  check($('#toast').textContent.startsWith('Organizzazione esportata:') && !$('#modal').open, 'Configurazione, dati e organizzazione completa esportati in file separati');
-  chooseImportFile('{ non è json', 'rotto.json');
-  await waitFor(() => $('#toast').classList.contains('error') && $('#toast').textContent.includes('non è un file JSON valido'));
+  check($('#toast').textContent.startsWith(t("Organization exported:")) && !$('#modal').open, "Settings, data, and full organization are exported to separate files");
+  chooseImportFile('{ not json', 'broken.json');
+  await waitFor(() => $('#toast').classList.contains('error') && $('#toast').textContent.includes(t("The selected file is not a valid JSON file.")));
   chooseImportFile({ version: 2, activeOrganizationId: 'x', organizations: [{ id: 'x', name: 'Backup', data: {} }] }, 'backup.json');
-  await waitFor(() => $('#toast').textContent.includes('backup completo'));
-  check(!$('#modal').open, 'File non validi e backup completi rifiutati con un messaggio chiaro');
+  await waitFor(() => $('#toast').textContent.includes(t("This file is a full archive backup: use “Import backup” in the “Data that travels with you” section.")));
+  check(!$('#modal').open, 'Invalid files and full backups are rejected with a clear message');
   const importSource = baseData('en');
   importSource.settings.statuses[1].name = data.settings.statuses[2].name;
   importSource.tasks = [
-    { id: 'smoke-import-1', code: 'IMPORT-1', sequence: 8001, url: '', description: '<p>Attività importata</p>', notes: '', releaseDate: '2026-03-04', statusId: importSource.settings.statuses[1].id, urgencyId: importSource.settings.urgencies[0].id, effortHours: 4, hidden: false },
+    { id: 'smoke-import-1', code: 'IMPORT-1', sequence: 8001, url: '', description: "<p>Imported task</p>", notes: '', releaseDate: '2026-03-04', statusId: importSource.settings.statuses[1].id, urgencyId: importSource.settings.urgencies[0].id, effortHours: 4, hidden: false },
     { id: 'smoke-import-2', code: 'IMPORT-2', sequence: 8002, url: '', description: '', notes: '', releaseDate: '', statusId: importSource.settings.statuses[3].id, urgencyId: importSource.settings.urgencies[3].id, effortHours: 0, hidden: false }
   ];
   importSource.issues = [{ id: 'smoke-import-issue', code: 'IMPORT-1', incident: 'INC-IMPORT', problem: 'PRB-IMPORT' }];
-  const dataFile = organizationExport({ name: 'Sorgente esterna', data: importSource }, 'data', { appVersion: '9.9.9' });
+  const dataFile = organizationExport({ name: 'External source', data: importSource }, 'data', { appVersion: '9.9.9' });
   const sameName = name => option => option.name.trim().toLowerCase() === name.trim().toLowerCase();
   const expectedNamedStatus = data.settings.statuses.find(sameName(data.settings.statuses[2].name)).id;
   const expectedPositionStatus = (data.settings.statuses.find(sameName('Done')) || data.settings.statuses[Math.min(3, data.settings.statuses.length - 1)]).id;
   const expectedPositionUrgency = (data.settings.urgencies.find(sameName('Low')) || data.settings.urgencies[Math.min(3, data.settings.urgencies.length - 1)]).id;
-  chooseImportFile(dataFile, 'dati.json');
+  chooseImportFile(dataFile, "data.json");
   await waitFor(importDialogOpen);
   const dataForm = $('#organization-import-form');
-  check(!dataForm.elements.themes && !dataForm.elements.settings && dataForm.elements.data.checked && dataForm.elements.destination.value === 'current' && $('#import-name-field').hidden && dataForm.textContent.includes('Sorgente esterna') && dataForm.textContent.includes('v9.9.9') && dataForm.textContent.includes('2 attività'), 'Dialog di importazione mostra origine, versione e solo le parti presenti nel file');
+  check(!dataForm.elements.themes && !dataForm.elements.settings && dataForm.elements.data.checked && dataForm.elements.destination.value === 'current' && $('#import-name-field').hidden && dataForm.textContent.includes('External source') && dataForm.textContent.includes('v9.9.9') && dataForm.textContent.includes(plural(dataFile.data.tasks.length, "tasks")), 'Import dialog shows source, version, and only the parts present in the file');
   const tasksBeforeImport = data.tasks.length;
   dataForm.requestSubmit();
   await waitFor(() => !$('#modal').open && !saving && data.tasks.some(t => t.id === 'smoke-import-2'));
   const importedFirst = data.tasks.find(t => t.id === 'smoke-import-1'), importedSecond = data.tasks.find(t => t.id === 'smoke-import-2');
-  check(data.tasks.length === tasksBeforeImport + 2 && importedFirst.statusId === expectedNamedStatus && importedSecond.statusId === expectedPositionStatus && importedSecond.urgencyId === expectedPositionUrgency && matchIssues(importedFirst, data.issues).incidents.includes('INC-IMPORT') && data.tasks.some(t => t.code === 'SMOKE-1') && $('#toast').textContent.includes('Importazione completata'), 'Dati uniti all’organizzazione con stati e urgenze riassociati per nome o posizione');
+  check(data.tasks.length === tasksBeforeImport + 2 && importedFirst.statusId === expectedNamedStatus && importedSecond.statusId === expectedPositionStatus && importedSecond.urgencyId === expectedPositionUrgency && matchIssues(importedFirst, data.issues).incidents.includes('INC-IMPORT') && data.tasks.some(t => t.code === 'SMOKE-1') && $('#toast').textContent.includes(t("Import completed.")), "Data is merged into the organization with statuses and priorities matched by name or position");
   const countsBeforeReimport = [data.tasks.length, data.issues.length];
-  chooseImportFile(dataFile, 'dati.json');
+  chooseImportFile(dataFile, "data.json");
   await waitFor(importDialogOpen);
   $('#organization-import-form').requestSubmit();
   await waitFor(() => !$('#modal').open && !saving);
-  check(data.tasks.length === countsBeforeReimport[0] && data.issues.length === countsBeforeReimport[1], 'Reimportare lo stesso file aggiorna senza duplicare attività o issue');
+  check(data.tasks.length === countsBeforeReimport[0] && data.issues.length === countsBeforeReimport[1], "Reimporting the same file updates without duplicating tasks or issues");
   const themesBeforeImport = data.settings.themes.length;
-  chooseImportFile({ format: 'orbitkanban-organization', version: 1, kind: 'themes', exportedAt: new Date().toISOString(), appVersion, organization: { name: 'Palette condivisa' }, themes: { themeId: 'smoke-imported-theme', themes: [{ id: 'smoke-imported-theme', name: 'Tema importato', background: '#14121f', surface: '#1f1b30', text: '#f4f1ff', accent: '#ff7a59', extra: 'ignorato' }] } }, 'temi.json');
+  chooseImportFile({ format: 'orbitkanban-organization', version: 1, kind: 'themes', exportedAt: new Date().toISOString(), appVersion, organization: { name: 'Shared palette' }, themes: { themeId: 'smoke-imported-theme', themes: [{ id: 'smoke-imported-theme', name: 'Imported theme', background: '#14121f', surface: '#1f1b30', text: '#f4f1ff', accent: '#ff7a59', extra: 'ignored' }] } }, "themes.json");
   await waitFor(importDialogOpen);
   const themeForm = $('#organization-import-form');
-  check(themeForm.elements.themes.checked && themeForm.elements.activateTheme.checked && !themeForm.elements.data && themeForm.textContent.includes('Attiva il tema «Tema importato»') && themeForm.querySelectorAll('.import-sub .theme-swatches i').length === 4, 'Importazione temi propone di attivare il tema del file con i suoi quattro colori');
+  check(themeForm.elements.themes.checked && themeForm.elements.activateTheme.checked && !themeForm.elements.data && themeForm.textContent.includes(fillText("Activate the “{0}” theme", 'Imported theme')) && themeForm.querySelectorAll('.import-sub .theme-swatches i').length === 4, "Theme import offers to activate the file’s theme with its four colors");
   themeForm.requestSubmit();
   await waitFor(() => !$('#modal').open && !saving && data.settings.themeId === 'smoke-imported-theme');
-  check(data.settings.themes.length === themesBeforeImport + 1 && data.settings.themes.find(theme => theme.id === 'smoke-imported-theme').extra === undefined && document.documentElement.style.getPropertyValue('--accent') === '#ff7a59', 'Tema importato aggiunto, attivato e applicato senza campi estranei');
+  check(data.settings.themes.length === themesBeforeImport + 1 && data.settings.themes.find(theme => theme.id === 'smoke-imported-theme').extra === undefined && document.documentElement.style.getPropertyValue('--accent') === '#ff7a59', 'Imported theme is added, activated, and applied without unrelated fields');
   const fullFile = organizationExport({ name: organizationName(), data }, 'organization', { appVersion });
-  check(fullFile.settings.fontSizes.kanban === 120 && fullFile.settings.fontSizes.tables === 100, 'Esportazione completa include le dimensioni del testo');
+  check(fullFile.settings.fontSizes.kanban === 120 && fullFile.settings.fontSizes.tables === 100, 'Full export includes text sizes');
   const expectedImportedName = `${organizationName()} (2)`;
-  chooseImportFile(fullFile, 'organizzazione.json');
+  chooseImportFile(fullFile, "organization.json");
   await waitFor(importDialogOpen);
   const fullForm = $('#organization-import-form');
-  check(['themes', 'settings', 'data'].every(part => fullForm.elements[part].checked) && fullForm.elements.destination.value === 'new' && fullForm.elements.name.value === expectedImportedName && !$('#import-name-field').hidden && fullForm.elements.logo.checked && fullForm.elements.logo.disabled && $('#import-data-mode').hidden && $('#confirm-import').textContent === 'Crea e importa', 'Organizzazione completa proposta come nuova organizzazione con nome univoco e logo');
+  check(['themes', 'settings', 'data'].every(part => fullForm.elements[part].checked) && fullForm.elements.destination.value === 'new' && fullForm.elements.name.value === expectedImportedName && !$('#import-name-field').hidden && fullForm.elements.logo.checked && fullForm.elements.logo.disabled && $('#import-data-mode').hidden && $('#confirm-import').textContent === t("Create and import"), "Full organization is offered as a new organization with a unique name and logo");
   fullForm.querySelector('[name="destination"][value="current"]').click();
-  check(!fullForm.elements.logo.checked && !fullForm.elements.logo.disabled && !$('#import-data-mode').hidden && $('#import-name-field').hidden && $('#import-notes').textContent.includes('La configurazione attuale verrà sostituita'), 'Importando nell’organizzazione corrente il logo si sostituisce solo su richiesta');
+  check(!fullForm.elements.logo.checked && !fullForm.elements.logo.disabled && !$('#import-data-mode').hidden && $('#import-name-field').hidden && $('#import-notes').textContent.includes(t("The current settings will be replaced: existing tasks are kept and mapped to the file’s statuses and urgencies with the same name, otherwise to the same position.")), "When importing into the current organization, its logo is replaced only on request");
   fullForm.querySelector('[name="destination"][value="new"]').click();
   const organizationsBeforeImport = organizations.length;
   fullForm.requestSubmit();
   await waitFor(() => !$('#modal').open && !organizationBusy && organizations.length === organizationsBeforeImport + 1);
   const importedOrganizationId = activeOrganizationId;
-  check(importedOrganizationId !== firstOrganizationId && organizationName() === expectedImportedName && data.tasks.length === fullFile.data.tasks.length && data.issues.length === fullFile.data.issues.length && data.settings.logo === fullFile.settings.logo && data.settings.themeId === fullFile.themes.themeId && $('.brand-icon img').src === fullFile.settings.logo && $('#toast').textContent.includes('Organizzazione importata'), 'Organizzazione completa importata come nuova con dati, temi, logo e configurazione');
-  check(data.settings.fontSizes.kanban === 120 && rootSize('kanban') === '1.2', 'Dimensioni del testo importate con l’organizzazione completa');
+  check(importedOrganizationId !== firstOrganizationId && organizationName() === expectedImportedName && data.tasks.length === fullFile.data.tasks.length && data.issues.length === fullFile.data.issues.length && data.settings.logo === fullFile.settings.logo && data.settings.themeId === fullFile.themes.themeId && $('.brand-icon img').src === fullFile.settings.logo && $('#toast').textContent.includes(t("Organization imported.")), "Full organization is imported as new with data, themes, logo, and settings");
+  check(data.settings.fontSizes.kanban === 120 && rootSize('kanban') === '1.2', "Text sizes are imported with the full organization");
   const settingsSource = baseData('en');
   settingsSource.settings.statuses = [{ id: 'smoke-status-a', name: data.settings.statuses[0].name.toUpperCase(), color: '#3366ff', highlight: false }, { id: 'smoke-status-b', name: 'Shipped', color: '#33aa66', highlight: true }];
   settingsSource.settings.tabNames = ['Imported tasks', 'Imported issues', 'Imported milestones', 'Imported board'];
-  settingsSource.settings.portalUrlTemplate = 'https://imported.example.com/browse/{codice}';
+  settingsSource.settings.portalUrlTemplate = "https://imported.example.com/browse/{code}";
   settingsSource.settings.logo = secondLogo;
   settingsSource.settings.fontSizes.tables = 110;
   const settingsFile = organizationExport({ name: 'Remote settings', data: settingsSource }, 'settings', { appVersion });
   const firstStatusTasks = data.tasks.filter(t => t.statusId === data.settings.statuses[0].id).map(t => t.id);
-  chooseImportFile(settingsFile, 'configurazione.json');
+  chooseImportFile(settingsFile, "settings.json");
   await waitFor(importDialogOpen);
   const settingsForm = $('#organization-import-form');
-  check(settingsForm.elements.settings.checked && settingsForm.elements.destination.value === 'current' && !settingsForm.elements.logo.checked && !settingsForm.elements.logo.disabled && settingsForm.querySelector('.import-logo'), 'Configurazione proposta per l’organizzazione corrente senza sostituire il logo');
-  check(/dimensioni del testo|text sizes/.test(settingsForm.textContent), 'Importazione configurazione indica le dimensioni del testo');
+  check(settingsForm.elements.settings.checked && settingsForm.elements.destination.value === 'current' && !settingsForm.elements.logo.checked && !settingsForm.elements.logo.disabled && settingsForm.querySelector('.import-logo'), "Settings import is offered for the current organization without replacing its logo");
+  check(settingsForm.textContent.includes(t("Language, portal link, tab names, hours per day, text sizes, statuses, urgencies, highlighters, tags and list columns. Replaces current settings.")), "Settings import indicates the text sizes");
   settingsForm.requestSubmit();
   await waitFor(() => !$('#modal').open && !saving && data.settings.language === 'en');
-  check(firstStatusTasks.length > 0 && firstStatusTasks.every(id => data.tasks.find(t => t.id === id).statusId === 'smoke-status-a') && data.tasks.every(t => ['smoke-status-a', 'smoke-status-b'].includes(t.statusId)) && data.settings.logo === fullFile.settings.logo && data.settings.tabNames[0] === 'Imported tasks' && data.settings.portalUrlTemplate === 'https://imported.example.com/browse/{codice}', 'Configurazione importata con stati riassociati e logo invariato');
-  check(data.settings.fontSizes.tables === 110 && data.settings.fontSizes.kanban === 100 && rootSize('tables') === '1.1' && rootSize('kanban') === '1', 'Dimensioni del testo sostituite dalla configurazione importata');
-  check(document.documentElement.lang === 'en' && $('#current-tab').textContent === 'Settings' && $('#transfer-panel').textContent.includes('Export and import organization') && $('#transfer-panel').textContent.includes('Export everything') && $('#import-organization').textContent.includes('Import from file') && $('#toast').textContent === 'Import completed.', 'Sezione esporta e importa tradotta con la lingua importata');
-  check($('#font-size-panel h2').textContent === 'Text size' && $('label[for="font-size-tables"]').textContent === 'Tables' && $('[data-font-preset="130"]').textContent.includes('Extra large') && $('#font-size-tables').value === '110', 'Sezione dimensione del testo tradotta in inglese');
+  check(firstStatusTasks.length > 0 && firstStatusTasks.every(id => data.tasks.find(t => t.id === id).statusId === 'smoke-status-a') && data.tasks.every(t => ['smoke-status-a', 'smoke-status-b'].includes(t.statusId)) && data.settings.logo === fullFile.settings.logo && data.settings.tabNames[0] === 'Imported tasks' && data.settings.portalUrlTemplate === "https://imported.example.com/browse/{code}", "Settings are imported with statuses remapped and logo unchanged");
+  check(data.settings.fontSizes.tables === 110 && data.settings.fontSizes.kanban === 100 && rootSize('tables') === '1.1' && rootSize('kanban') === '1', "Text sizes are replaced by the imported settings");
+  check(document.documentElement.lang === 'en' && $('#current-tab').textContent === 'Settings' && $('#transfer-panel').textContent.includes('Export and import organization') && $('#transfer-panel').textContent.includes('Export everything') && $('#import-organization').textContent.includes('Import from file') && $('#toast').textContent === 'Import completed.', 'Export and import section is translated using the imported language');
+  check($('#font-size-panel h2').textContent === 'Text size' && $('label[for="font-size-tables"]').textContent === 'Tables' && $('[data-font-preset="130"]').textContent.includes('Extra large') && $('#font-size-tables').value === '110', 'Text size section is translated into English');
   chooseImportFile(dataFile, 'data.json');
   await waitFor(importDialogOpen);
   const replaceForm = $('#organization-import-form');
-  check($('#modal-content .eyebrow').textContent === 'IMPORT' && replaceForm.textContent.includes('What to import') && replaceForm.textContent.includes('Add and update') && replaceForm.textContent.includes('2 tasks') && !replaceForm.textContent.includes('Cosa importare'), 'Dialog di importazione tradotto in inglese');
+  check($('#modal-content .eyebrow').textContent === 'IMPORT' && replaceForm.textContent.includes('What to import') && replaceForm.textContent.includes('Add and update') && replaceForm.textContent.includes('2 tasks') && !replaceForm.textContent.includes(window.OrbitaI18n.translate("What to import", 'it')), 'Import dialog is translated into English');
   replaceForm.querySelector('[name="dataMode"][value="replace"]').click();
-  check($('#import-notes').textContent.includes('will be deleted and replaced'), 'Sostituzione di attività e issue segnalata prima di importare');
+  check($('#import-notes').textContent.includes('will be deleted and replaced'), "Task and issue replacement is flagged before importing");
   replaceForm.requestSubmit();
   await waitFor(() => !$('#modal').open && !saving && data.tasks.length === 2);
-  check(data.tasks.every(t => t.code.startsWith('IMPORT-') && ['smoke-status-a', 'smoke-status-b'].includes(t.statusId)) && data.issues.length === 1, 'Dati sostituiti nell’organizzazione importata');
+  check(data.tasks.every(t => t.code.startsWith('IMPORT-') && ['smoke-status-a', 'smoke-status-b'].includes(t.statusId)) && data.issues.length === 1, "Data is replaced in the imported organization");
   await organizationAction('delete', { id: importedOrganizationId });
   if (activeOrganizationId !== firstOrganizationId) await organizationAction('switch', { id: firstOrganizationId });
-  check(organizations.length === 2 && !organizations.some(o => o.id === importedOrganizationId) && organizationName() === 'Prima organizzazione con logo' && data.tasks.some(t => t.id === 'smoke-import-1') && data.settings.themeId === 'smoke-imported-theme', 'Organizzazione importata eliminata senza effetti sulle altre');
-  check(rootSize('kanban') === '1.2' && rootSize('tables') === '1' && data.settings.fontSizes.kanban === 120, 'Dimensioni del testo separate per organizzazione');
+  check(organizations.length === 2 && !organizations.some(o => o.id === importedOrganizationId) && organizationName() === "First organization with logo" && data.tasks.some(t => t.id === 'smoke-import-1') && data.settings.themeId === 'smoke-imported-theme', "Imported organization is deleted without affecting the others");
+  check(rootSize('kanban') === '1.2' && rootSize('tables') === '1' && data.settings.fontSizes.kanban === 120, "Text sizes are separate per organization");
   return { ok: true, checks };
 };
 async function boot() {
   try {
-    if (!window.workspace) throw new Error(t('Avvia l’app con OrbitKanban-Portable.exe oppure npm start, non aprendo direttamente il file HTML.'));
+    if (!window.workspace) throw new Error(t("Start the app using OrbitKanban-Portable.exe or npm start, not by opening the HTML file directly."));
     try { await loadLanguages(); }
-    catch (error) { console.error('Lingue non caricate:', error); }
+    catch (error) { console.error('Languages not loaded:', error); }
     const loaded = await workspaceApi.load();
     adoptSnapshot(loaded); render(); subscribe();
   } catch (error) {
-    $('#content').innerHTML = ui`<section class="fatal-error"><h1>Non riesco ad aprire il workspace</h1><p>${esc(t(error.message))}</p><p>Verifica i permessi di scrittura della cartella e conserva l’archivio esistente prima di intervenire.</p><button class="button" id="retry-load">Riprova</button></section>`;
+    $('#content').innerHTML = ui`<section class="fatal-error"><h1>Cannot open the workspace</h1><p>${esc(t(error.message))}</p><p>Check folder write permissions and preserve the existing archive before making changes.</p><button class="button" id="retry-load">Retry</button></section>`;
     $('#retry-load').onclick = boot;
     notify(error.message, true);
   } finally {

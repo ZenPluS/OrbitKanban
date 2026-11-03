@@ -8,135 +8,123 @@ const { translate } = i18n;
 const builtIn = code => JSON.parse(fs.readFileSync(path.join(__dirname, 'languages', `${code}.json`), 'utf8'));
 const withRegistry = run => { try { run(); } finally { i18n.reset(); i18n.loadBuiltIn(); } };
 
-test('Italian source strings stay unchanged and English strings translate', () => {
-  assert.equal(translate('Salva impostazioni', 'it'), 'Salva impostazioni');
-  assert.equal(translate('Salva impostazioni', 'en'), 'Save settings');
-  assert.equal(translate('Gestisci organizzazioni', 'en'), 'Manage organizations');
-  assert.equal(translate('Logo dell’organizzazione', 'en'), 'Organization logo');
+test('English is the source language and Italian translates source strings', () => {
+  assert.equal(translate('Save settings', 'en'), 'Save settings');
+  assert.equal(translate('Save settings', 'it'), 'Salva impostazioni');
+  assert.equal(translate('Manage organizations', 'it'), 'Gestisci organizzazioni');
+  assert.equal(translate('Organization logo', 'it'), 'Logo dell’organizzazione');
+  assert.deepEqual([
+    'YOUR PERSONAL WORKSPACE', 'Organization', 'Manage organizations', 'Open in browser', 'Main views', 'LOCAL',
+    'Settings', 'Only on your device', 'Your data. Always with you.', 'No cloud. No account. Everything under control.',
+    'Tasks', 'Search', 'Undo (Ctrl+Z)', 'Redo (Ctrl+Y)', 'Local archive', 'Open data folder'
+  ].map(text => translate(text, 'it')), [
+    'IL TUO SPAZIO DI LAVORO', 'Organizzazione', 'Gestisci organizzazioni', 'Apri nel browser', 'Viste principali', 'LOCALE',
+    'Impostazioni', 'Solo sul tuo dispositivo', 'I tuoi dati. Sempre con te.', 'Nessun cloud. Nessun account. Tutto sotto controllo.',
+    'Attività', 'Cerca', 'Annulla (Ctrl+Z)', 'Ripristina (Ctrl+Y)', 'Archivio locale', 'Apri cartella dati'
+  ]);
 });
 test('longer UI phrases take precedence and labels retain HTML structure', () => {
-  assert.equal(translate('<button class="button">Salva attività</button>', 'en'), '<button class="button">Save task</button>');
-  assert.equal(translate('Codice portale', 'en'), 'Portal code');
-  assert.equal(translate('La lingua è salvata per questa organizzazione. Nomi personalizzati e contenuti non vengono tradotti.', 'en'), 'Language is saved per organization. Custom names and content are not translated.');
+  assert.equal(translate('<button class="button">Save task</button>', 'it'), '<button class="button">Salva attività</button>');
+  assert.equal(translate('<label id="show-hidden" class="hidden" data-state="hidden" title="Include hidden" aria-label="Include hidden">Include hidden</label>', 'it'), '<label id="show-hidden" class="hidden" data-state="hidden" title="Include nascoste" aria-label="Include nascoste">Include nascoste</label>');
+  assert.equal(translate('Portal code', 'it'), 'Codice portale');
+  assert.equal(translate('Language is saved per organization. Custom names and content are not translated.', 'it'), 'La lingua è salvata per questa organizzazione. Nomi personalizzati e contenuti non vengono tradotti.');
 });
-test('text size settings are translated, including phrases that contain shorter keys', () => {
-  assert.equal(translate('<h2>Dimensione del testo</h2>', 'en'), '<h2>Text size</h2>');
-  assert.equal(translate('<label>Tabelle</label><small>Righe e colonne della lista attività e delle issue collegate.</small>', 'en'), '<label>Tables</label><small>Rows and columns of the task list and linked issues.</small>');
-  assert.equal(translate('Testo generale', 'en'), 'General text');
-  assert.equal(translate('Testo', 'en'), 'Text');
-  assert.deepEqual(['Compatta', 'Ampia', 'Molto ampia'].map(name => translate(name, 'en')), ['Compact', 'Large', 'Extra large']);
-  assert.equal(translate('Ripristina 100%: Vista kanban', 'en'), 'Reset to 100%: Kanban view');
-  assert.equal(translate('Dimensioni del testo non valide.', 'en'), 'Invalid text sizes.');
-  assert.equal(translate('Dimensione del testo', 'it'), 'Dimensione del testo');
+test('template translation protects markup across split tags and leaves interpolated values untouched', () => {
+  const html = i18n.translateTemplate([
+    '<label class="toggle-label"><input id="show-hidden" type="checkbox" ',
+    '> Hidden <span title="Include hidden" data-state="',
+    '">value</span></label>'
+  ], ['checked', 'hidden'], 'it');
+  assert.equal(html, '<label class="toggle-label"><input id="show-hidden" type="checkbox" checked> Nascoste <span title="Include nascoste" data-state="hidden">value</span></label>');
 });
-test('settings tabs and theme gallery are translated', () => {
-  assert.deepEqual(['Predefinito', 'Predefinito modificato', 'Personalizzato', 'Ripristina tema predefinito'].map(text => translate(text, 'en')), ['Built-in', 'Modified built-in', 'Custom', 'Restore built-in theme']);
-  assert.deepEqual(['Organizzazione', 'Aspetto', 'Flusso di lavoro', 'Dati e accesso'].map(group => translate(group, 'en')), ['Organization', 'Appearance', 'Workflow', 'Data & access']);
-  assert.equal(translate('<input placeholder="Cerca tema…" aria-label="Cerca tema">', 'en'), '<input placeholder="Search themes…" aria-label="Search themes">');
-  assert.equal(translate('Sezioni modificate: Temi & atmosfera', 'en'), 'Changed sections: Themes & atmosphere');
-  assert.equal(translate('Nessun tema corrisponde alla ricerca.', 'en'), 'No theme matches your search.');
-  assert.equal(translate('Questo file è un’esportazione di organizzazione (temi, configurazione o dati): usa “Importa da file…” nella sezione “Esporta e importa organizzazione”.', 'en'), 'This file is an organization export (themes, settings or data): use “Import from file…” in the “Export and import organization” section.');
+test('text-size phrases translate without changing markup or placeholders', () => {
+  assert.equal(translate('<h2>Text size</h2>', 'it'), '<h2>Dimensione del testo</h2>');
+  assert.equal(translate('<label>Tables</label><small>Rows and columns of the task list and linked issues.</small>', 'it'), '<label>Tabelle</label><small>Righe e colonne della lista attività e delle issue collegate.</small>');
+  assert.deepEqual(['Compact', 'Large', 'Extra large'].map(text => translate(text, 'it')), ['Compatta', 'Ampia', 'Molto ampia']);
+  assert.equal(translate('Reset to 100%: Kanban view', 'it'), 'Ripristina 100%: Vista kanban');
+  assert.equal(translate('Invalid text sizes.', 'it'), 'Dimensioni del testo non valide.');
 });
-
-test('row highlighters and list columns are translated', () => {
-  assert.equal(translate('Doppio clic sulla riga per modificare.', 'en'), 'Double-click the row to edit.');
-  assert.deepEqual(['Evidenziatori', 'Colonne della lista', 'Nessuna evidenziazione', 'Tutte le evidenziazioni', 'Gomma', 'Link portale'].map(label => translate(label, 'en')), ['Highlighters', 'List columns', 'No highlight', 'All highlights', 'Eraser', 'Portal link']);
-  assert.equal(translate('Evidenziatori', 'it'), 'Evidenziatori');
-  assert.equal(i18n.plural(2, 'evidenziatore', 'en'), '2 highlighters');
-  assert.equal(i18n.plural(3, 'evidenziatore', 'it'), '3 evidenziatori');
+test('settings, themes and default terms translate from English', () => {
+  assert.deepEqual(['Built-in', 'Modified built-in', 'Custom', 'Restore built-in theme'].map(text => translate(text, 'it')), ['Predefinito', 'Predefinito modificato', 'Personalizzata', 'Ripristina tema predefinito']);
+  assert.deepEqual(['Organization', 'Appearance', 'Workflow', 'Data & access'].map(text => translate(text, 'it')), ['Organizzazione', 'Aspetto', 'Flusso di lavoro', 'Dati e accesso']);
+  assert.equal(translate('<input placeholder="Search themes…" aria-label="Search themes">', 'it'), '<input placeholder="Cerca tema…" aria-label="Cerca tema">');
+  assert.equal(i18n.term('To do', 'it'), 'Da fare');
+  assert.equal(i18n.term('To do', 'en'), 'To do');
 });
-test('tag settings, task selection and validation messages are translated', () => {
-  assert.equal(translate('Modifica tag', 'en'), 'Edit tags');
-  assert.equal(translate('Tags attività non validi.', 'en'), 'Invalid task tags.');
-  assert.equal(translate('I nomi dei tag devono essere univoci.', 'en'), 'Tag names must be unique.');
-  assert.equal(translate('Nessun tag disponibile. Aggiungili in Impostazioni › Tags.', 'en'), 'No tags available. Add them in Settings › Tags.');
+test('tasks, filters, duplicate messages and CSV validation translate', () => {
+  assert.equal(translate('Double-click the row to edit.', 'it'), 'Doppio clic sulla riga per modificare.');
+  assert.deepEqual(['Highlighters', 'List columns', 'No highlight', 'All highlights', 'Eraser', 'Portal link'].map(text => translate(text, 'it')), ['Evidenziatori', 'Colonne della lista', 'Nessuna evidenziazione', 'Tutte le evidenziazioni', 'Gomma', 'Link portale']);
+  assert.equal(translate('Column names and identifiers must be unique.', 'it'), 'Nomi e identificativi delle colonne devono essere univoci.');
+  assert.equal(translate('Invalid task tags.', 'it'), 'Tags attività non validi.');
+  assert.equal(translate('No tags available. Add them in Settings › Tags.', 'it'), 'Nessun tag disponibile. Aggiungili in Impostazioni › Tags.');
+  assert.equal(translate('{0} is also linked to: {1}', 'it'), '{0} è collegato anche a: {1}');
+  assert.equal(translate('{0} valid rows · {1} errors', 'it'), '{0} righe valide · {1} errori');
+  assert.equal(translate('Invalid custom column value.', 'it'), 'Valore della colonna personalizzata non valido.');
+  assert.equal(translate('The CSV exceeds the 16 MB limit.', 'it'), 'Il CSV supera il limite di 16 MB.');
+  assert.equal(translate('The statuses list is invalid or empty.', 'it'), 'L’elenco degli stati non è valido o è vuoto.');
 });
-test('upcoming milestone indicators are translated', () => {
-  assert.deepEqual(['Prossima release', 'Release di oggi', 'Vai alla prossima release', 'Nessuna release in programma'].map(text => translate(text, 'en')), ['Next release', "Today's release", 'Go to next release', 'No upcoming release']);
+test('release, Excel and bulk-edit text preserves placeholders', () => {
+  assert.deepEqual(['Next release', "Today's release", 'Go to next release', 'No upcoming release'].map(text => translate(text, 'it')), ['Prossima release', 'Release di oggi', 'Vai alla prossima release', 'Nessuna release in programma']);
+  assert.equal(translate('<button id="bulk-edit">✎ Bulk edit…</button><button id="bulk-excel">⤓ Export to Excel</button>', 'it'), '<button id="bulk-edit">✎ Modifica multipla…</button><button id="bulk-excel">⤓ Esporta in Excel</button>');
+  assert.equal(translate('Changes will be applied to {0}.', 'it'), 'Le modifiche verranno applicate a {0}.');
+  assert.equal(translate('Choose at least one sheet to export.', 'it'), 'Scegli almeno un foglio da esportare.');
 });
-test('custom columns, per-column filters and CSV validation messages are translated', () => {
-  assert.deepEqual(['Colonne personalizzate', 'Filtra colonna', 'Importa CSV', 'Mappa le colonne', 'Solo vuote'].map(text => translate(text, 'en')), ['Custom columns', 'Filter column', 'Import CSV', 'Map columns', 'Empty only']);
-  assert.equal(translate('{0} righe valide · {1} errori', 'en'), '{0} valid rows · {1} errors');
-  assert.equal(translate('Valore della colonna personalizzata non valido.', 'en'), 'Invalid custom column value.');
-  assert.equal(translate('Mappatura colonne non valida o duplicata.', 'en'), 'Invalid or duplicate column mapping.');
-  assert.equal(translate('Il CSV supera il limite di 16 MB.', 'en'), 'The CSV exceeds the 16 MB limit.');
-});
-test('drag and drop ordering is translated', () => {
-  assert.deepEqual(['Ordine salvato. Sequence aggiornate.', 'La lista è cambiata. Riprova il riordino.', 'Attività non più disponibile.'].map(text => translate(text, 'en')), ['Order saved. Sequence updated.', 'The list has changed. Try reordering again.', 'Task no longer available.']);
-  assert.deepEqual(['Trascina per riordinare, oppure usa i tasti ↑ ↓', 'Riordina «{0}»', 'Spostato in posizione {0} di {1}', 'Spostamento annullato'].map(text => translate(text, 'en')), ['Drag to reorder, or use the ↑ ↓ keys', 'Reorder “{0}”', 'Moved to position {0} of {1}', 'Move cancelled']);
-  assert.match(translate('Spunta le colonne da mostrare e trascinale (o usa le frecce) per cambiarne l’ordine. Nascondere una colonna non cancella i dati.', 'en'), /^Tick the columns to show and drag them/);
-  assert.equal(translate('Trascina per riordinare, oppure usa i tasti ↑ ↓', 'it'), 'Trascina per riordinare, oppure usa i tasti ↑ ↓');
-});
-test('duplicate detection texts are translated, placeholders and markup included', () => {
-  assert.equal(translate('<label class="toggle-label duplicate-toggle"><input type="checkbox"> Duplicati <span class="tiny-count">', 'en'), '<label class="toggle-label duplicate-toggle"><input type="checkbox"> Duplicates <span class="tiny-count">');
-  assert.deepEqual(['{0} è collegato anche a: {1}', '{0} è presente anche in: {1}', '{0} attività con incident duplicato', '{0} associazioni con incident duplicato'].map(text => translate(text, 'en')), ['{0} is also linked to: {1}', '{0} also appears in: {1}', '{0} tasks with a duplicate incident', '{0} associations with a duplicate incident']);
-  assert.deepEqual(['Possibile duplicato', 'Rimuovi identiche', 'Esiste già un’associazione identica', 'Incident già presente', 'identica', 'nascosta'].map(text => translate(text, 'en')), ['Possible duplicate', 'Remove identical', 'An identical association already exists', 'Incident already present', 'identical', 'hidden']);
-  assert.equal(translate('Attività che condividono l’incident {0}.', 'en'), 'Tasks sharing incident {0}.');
-  assert.equal(translate('Possibile duplicato', 'it'), 'Possibile duplicato');
-});
-test('Excel export and bulk edit texts are translated, placeholders and markup included', () => {
-  assert.equal(translate('<button type="button" class="button small primary" id="bulk-edit">✎ Modifica multipla…</button><button type="button" class="button small" id="bulk-excel">⤓ Esporta in Excel</button>', 'en'), '<button type="button" class="button small primary" id="bulk-edit">✎ Bulk edit…</button><button type="button" class="button small" id="bulk-excel">⤓ Export to Excel</button>');
-  assert.deepEqual(['{0} selezionate', '{0} non visibili con i filtri attuali', 'Le modifiche verranno applicate a {0}.', 'Modifica multipla applicata: {0} aggiornate.', 'Solo le attività con una data: {0} su {1}.'].map(text => translate(text, 'en')), ['{0} selected', '{0} not visible with the current filters', 'Changes will be applied to {0}.', 'Bulk edit applied: {0} updated.', 'Only tasks with a date: {0} of {1}.']);
-  assert.deepEqual(['— Non modificare —', 'Sposta di N giorni', 'Togli la data (da pianificare)', 'Scegli almeno un campo da modificare.', 'Scegli la nuova release date.'].map(text => translate(text, 'en')), ['— Keep unchanged —', 'Move by N days', 'Remove the date (unscheduled)', 'Choose at least one field to change.', 'Choose the new release date.']);
-  assert.deepEqual(['Esporta in Excel', 'Riepilogo', 'Situazione attuale', 'Effort (ore)', 'Come mostrate nella lista', 'Solo le selezionate', 'Scegli almeno un foglio da esportare.', 'Excel esportato:'].map(text => translate(text, 'en')), ['Export to Excel', 'Summary', 'Current situation', 'Effort (hours)', 'As shown in the list', 'Selected only', 'Choose at least one sheet to export.', 'Excel exported:']);
-  assert.deepEqual(['File Excel non valido.', 'Cartella di lavoro Excel', 'Nessun foglio da esportare.', 'Il foglio Excel supera il numero massimo di righe.'].map(text => translate(text, 'en')), ['Invalid Excel file.', 'Excel workbook', 'No sheet to export.', 'The Excel sheet exceeds the maximum number of rows.']);
-  assert.equal(i18n.term('situazione', 'en'), 'situation');
-  assert.equal(translate('Modifica multipla', 'it'), 'Modifica multipla');
-});
-
-test('built-in language files are valid and every Italian key used for counts and defaults is covered', () => {
+test('built-in packs use English keys and provide Italian translations', () => {
   const en = builtIn('en'), it = builtIn('it');
   assert.deepEqual([en.code, en.name, it.code, it.name], ['en', 'English', 'it', 'Italiano']);
   for (const pack of [en, it]) assert.doesNotThrow(() => i18n.validatePack(pack));
+  assert.deepEqual(Object.keys(it.messages).sort(), Object.keys(en.messages).sort());
+  assert.ok(Object.entries(en.messages).every(([key, text]) => key === text));
+  assert.deepEqual(Object.keys(it.terms).sort(), Object.keys(en.terms).sort());
+  assert.ok(Object.entries(en.terms).every(([key, text]) => key === text));
   assert.deepEqual(Object.keys(it.plurals).sort(), Object.keys(en.plurals).sort());
-  assert.ok(Object.keys(en.messages).length > 400 && Object.values(en.messages).every(text => typeof text === 'string' && text.trim()));
+  assert.ok(Object.keys(en.messages).length > 400 && Object.values(en.messages).every((text, key) => typeof text === 'string' && text.trim()));
   assert.deepEqual(i18n.languages().map(language => language.code), ['en', 'it']);
-  assert.equal(i18n.term('Da fare', 'en'), 'To do');
-  assert.equal(i18n.term('Da fare', 'it'), 'Da fare');
-  assert.equal(i18n.term('{0}g', 'en'), '{0}d');
+  assert.equal(i18n.SOURCE, 'en');
+  assert.equal(i18n.term('To do', 'it'), 'Da fare');
 });
-test('plural forms follow the language rules', () => {
-  assert.equal(i18n.plural(1, 'tema', 'en'), '1 theme');
-  assert.equal(i18n.plural(3, 'tema', 'en'), '3 themes');
-  assert.equal(i18n.plural(1, 'tema', 'it'), '1 tema');
-  assert.equal(i18n.plural(0, 'tema', 'it'), '0 temi');
-  assert.equal(i18n.plural(12000, 'attività', 'it'), '12.000 attività');
-  assert.equal(i18n.plural(2, 'sconosciuto', 'en'), '2 sconosciuto');
+test('plural forms follow the selected language rules', () => {
+  assert.equal(i18n.plural(1, 'theme', 'en'), '1 theme');
+  assert.equal(i18n.plural(3, 'theme', 'en'), '3 themes');
+  assert.equal(i18n.plural(1, 'theme', 'it'), '1 tema');
+  assert.equal(i18n.plural(0, 'theme', 'it'), '0 temi');
+  assert.equal(i18n.plural(12000, 'tasks', 'it'), '12.000 attività');
+  assert.equal(i18n.plural(2, 'unknown', 'en'), '2 unknown');
 });
-test('an added language falls back to English for missing texts and unknown codes show English', () => {
+test('added languages fall back to English and invalid codes use the source language', () => {
   withRegistry(() => {
-    i18n.register({ format: i18n.FORMAT, version: 1, code: 'de', name: 'Deutsch', messages: { 'Salva impostazioni': 'Einstellungen speichern', Impostazioni: 'Einstellungen' }, plurals: { tema: { one: '{0} Thema', other: '{0} Themen' } } });
-    assert.equal(translate('Salva impostazioni', 'de'), 'Einstellungen speichern');
-    assert.equal(translate('Gestisci organizzazioni', 'de'), 'Manage organizations');
-    assert.equal(i18n.plural(2, 'tema', 'de'), '2 Themen');
-    assert.equal(i18n.plural(2, 'stato', 'de'), '2 statuses');
+    i18n.register({ format: i18n.FORMAT, version: 1, code: 'de', name: 'Deutsch', messages: { 'Save settings': 'Einstellungen speichern', Settings: 'Einstellungen' }, plurals: { theme: { one: '{0} Thema', other: '{0} Themen' } } });
+    assert.equal(translate('Save settings', 'de'), 'Einstellungen speichern');
+    assert.equal(translate('Manage organizations', 'de'), 'Manage organizations');
+    assert.equal(i18n.plural(2, 'theme', 'de'), '2 Themen');
+    assert.equal(i18n.plural(2, 'status', 'de'), '2 statuses');
     assert.equal(i18n.locale('de'), 'de');
-    assert.equal(translate('Salva impostazioni', 'fr'), 'Save settings');
+    assert.equal(translate('Save settings', 'fr'), 'Save settings');
     assert.equal(i18n.locale('fr'), 'en-GB');
-    assert.equal(translate('Salva impostazioni', 'NOT A CODE'), 'Salva impostazioni');
+    assert.equal(translate('Save settings', 'NOT A CODE'), 'Save settings');
     assert.deepEqual(i18n.languages().map(language => language.name), ['Deutsch', 'English', 'Italiano']);
   });
   assert.equal(i18n.has('de'), false);
 });
-test('a file for an existing language customises only the texts it contains', () => {
+test('language files can customize built-in packs without removing other translations', () => {
   withRegistry(() => {
-    i18n.register({ format: i18n.FORMAT, version: 1, code: 'en', name: 'English (team)', messages: { 'Salva impostazioni': 'Store settings', Annulla: '' } });
-    assert.equal(translate('Salva impostazioni', 'en'), 'Store settings');
-    assert.equal(translate('Annulla', 'en'), 'Cancel');
-    assert.equal(translate('Gestisci organizzazioni', 'en'), 'Manage organizations');
+    i18n.register({ format: i18n.FORMAT, version: 1, code: 'en', name: 'English (team)', messages: { 'Save settings': 'Store settings', Cancel: '' } });
+    assert.equal(translate('Save settings', 'en'), 'Store settings');
+    assert.equal(translate('Cancel', 'en'), 'Cancel');
+    assert.equal(translate('Manage organizations', 'en'), 'Manage organizations');
     assert.equal(i18n.languages().find(language => language.code === 'en').name, 'English (team)');
-    i18n.register({ format: i18n.FORMAT, version: 1, code: 'it', name: 'Italiano', messages: { Impostazioni: 'Configurazione' } });
-    assert.equal(translate('Impostazioni', 'it'), 'Configurazione');
+    i18n.register({ format: i18n.FORMAT, version: 1, code: 'it', name: 'Italiano', messages: { Settings: 'Configurazione' } });
+    assert.equal(translate('Settings', 'it'), 'Configurazione');
   });
-  assert.equal(translate('Salva impostazioni', 'en'), 'Save settings');
+  assert.equal(translate('Save settings', 'en'), 'Save settings');
 });
-test('invalid language packs are rejected with a clear reason', () => {
+test('invalid language packs are rejected with English error messages', () => {
   const valid = { format: i18n.FORMAT, version: 1, code: 'de', name: 'Deutsch' };
   const cases = [
-    [null, /non è una lingua/], [{ ...valid, format: 'other' }, /non è una lingua/], [{ ...valid, version: 2 }, /Versione/],
-    [{ ...valid, code: 'Deutsch' }, /Codice lingua/], [{ ...valid, code: '../en' }, /Codice lingua/], [{ ...valid, name: ' ' }, /Nome della lingua/],
-    [{ ...valid, locale: 'not a locale!' }, /locale/], [{ ...valid, messages: { Salva: 3 } }, /testi/], [{ ...valid, messages: ['x'] }, /testi/],
-    [{ ...valid, plurals: { tema: { one: '{0} Thema' } } }, /plurali/], [{ ...valid, plurals: { tema: { lots: '{0}', other: '{0}' } } }, /plurali/]
+    [null, /not an OrbitKanban language/], [{ ...valid, format: 'other' }, /not an OrbitKanban language/], [{ ...valid, version: 2 }, /version/],
+    [{ ...valid, code: 'Deutsch' }, /language code/], [{ ...valid, code: '../en' }, /language code/], [{ ...valid, name: ' ' }, /language name/],
+    [{ ...valid, locale: 'not a locale!' }, /locale/], [{ ...valid, messages: { Save: 3 } }, /text/], [{ ...valid, messages: ['x'] }, /text/],
+    [{ ...valid, plurals: { theme: { one: '{0} Thema' } } }, /plural/], [{ ...valid, plurals: { theme: { lots: '{0}', other: '{0}' } } }, /plural/]
   ];
   for (const [pack, error] of cases) assert.throws(() => i18n.validatePack(pack), error);
   assert.equal(i18n.has('de'), false);

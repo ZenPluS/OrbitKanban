@@ -5,7 +5,11 @@ const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
 const { baseData, parseOrganizationFile, importedOrganizationData } = require('./core');
+const { translate } = require('./i18n');
 const { createWorkspaceStore, revisionOf } = require('./workspace-store');
+
+// The test organization is Italian, so store messages must come back localized through the language pack.
+const italian = text => ({ message: translate(text, 'it') });
 
 async function tempStore(options = {}) {
   const dataFolder = await fs.mkdtemp(path.join(os.tmpdir(), 'orbitkanban-store-'));
@@ -94,7 +98,7 @@ test('backup restore rejects path traversal and corrupt archives without changin
   const { store, dataFolder, cleanup } = await tempStore();
   try {
     const loaded = await store.load(), before = await fs.readFile(store.dataFile, 'utf8');
-    await assert.rejects(store.restoreBackup('..\\workspace.json'), /Backup selezionato non valido/);
+    await assert.rejects(store.restoreBackup('..\\workspace.json'), italian("The selected backup is invalid."));
     const corrupt = '2001-02-03-workspace.json';
     await fs.writeFile(path.join(dataFolder, 'backups', corrupt), '{broken', 'utf8');
     await assert.rejects(store.restoreBackup(corrupt), { code: 'unreadable' });
@@ -180,7 +184,7 @@ test('changes are announced with revisions only and deleted organizations fall b
     assert.equal(afterDelete.activeOrganizationId, main.activeOrganizationId);
     await assert.rejects(store.save(second.data, second.activeOrganizationId, undefined, saved.revision), { code: 'missing-organization' });
     await assert.rejects(store.organization('switch', { id: second.activeOrganizationId }), { code: 'missing-organization' });
-    await assert.rejects(store.organization('delete', { id: main.activeOrganizationId }), /almeno/);
+    await assert.rejects(store.organization('delete', { id: main.activeOrganizationId }), italian("At least one organization must remain."));
   } finally { await cleanup(); }
 });
 
@@ -227,16 +231,16 @@ test('organizations are exported one part at a time and imported as new organiza
     assert.deepEqual([file.appVersion, file.organization.name, file.data.tasks.map(t => t.code)], ['9.9.9', 'Àcme Team', ['EXP-1']]);
     assert.match((await store.exportOrganization(main.activeOrganizationId, 'themes')).fileName, /-temi-\d{4}-\d{2}-\d{2}\.json$/);
     await assert.rejects(store.exportOrganization('missing', 'data'), { code: 'missing-organization' });
-    await assert.rejects(store.exportOrganization(main.activeOrganizationId, 'backup'), /non supportato/);
-    const imported = await store.organization('import', { name: ' Copia ', data: importedOrganizationData(file, { themes: true, settings: true, data: true }) }, main.activeOrganizationId);
+    await assert.rejects(store.exportOrganization(main.activeOrganizationId, 'backup'), /unsupported/i);
+    const imported = await store.organization('import', { name: ' Copy ', data: importedOrganizationData(file, { themes: true, settings: true, data: true }) }, main.activeOrganizationId);
     assert.equal(imported.organizations.length, 2);
     assert.notEqual(imported.activeOrganizationId, main.activeOrganizationId);
-    assert.equal(imported.organizations.find(o => o.id === imported.activeOrganizationId).name, 'Copia');
+    assert.equal(imported.organizations.find(o => o.id === imported.activeOrganizationId).name, 'Copy');
     assert.deepEqual(imported.data.tasks.map(t => t.code), ['EXP-1']);
     assert.equal((await store.load(main.activeOrganizationId)).revision, saved.revision);
     const before = await fs.readFile(path.join(dataFolder, 'workspace.json'), 'utf8');
-    await assert.rejects(store.organization('import', { name: 'Rotta', data: { ...imported.data, tasks: 'broken' } }, main.activeOrganizationId), /Elenco attività/);
-    await assert.rejects(store.organization('import', { name: ' ', data: imported.data }, main.activeOrganizationId), /Nome organizzazione/);
+    await assert.rejects(store.organization('import', { name: 'Broken', data: { ...imported.data, tasks: 'broken' } }, main.activeOrganizationId), /invalid task list/i);
+    await assert.rejects(store.organization('import', { name: ' ', data: imported.data }, main.activeOrganizationId), italian("Invalid organization name."));
     assert.equal(await fs.readFile(path.join(dataFolder, 'workspace.json'), 'utf8'), before);
   } finally { await cleanup(); }
 });

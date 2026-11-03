@@ -86,10 +86,10 @@ test('BMP encoder writes a padded bottom-up 24-bit bitmap over the background', 
   assert.deepEqual([...file.subarray(54 + 9, 54 + 12)], [0, 0, 0], 'row padding');
 });
 test('BMP encoder rejects inconsistent input', () => {
-  assert.throws(() => encodeBmp(Buffer.alloc(10), 3, 2), /non validi/);
-  assert.throws(() => encodeBmp(Buffer.alloc(0), 0, 0), /non validi/);
-  assert.throws(() => encodeBmp(null, 1, 1), /non validi/);
-  assert.throws(() => encodeBmp(Buffer.alloc(8), 1.5, 2), /non validi/);
+  assert.throws(() => encodeBmp(Buffer.alloc(10), 3, 2), /invalid bitmap data/i);
+  assert.throws(() => encodeBmp(Buffer.alloc(0), 0, 0), /invalid bitmap data/i);
+  assert.throws(() => encodeBmp(null, 1, 1), /invalid bitmap data/i);
+  assert.throws(() => encodeBmp(Buffer.alloc(8), 1.5, 2), /invalid bitmap data/i);
 });
 test('palette is exact for few colors and close for many', () => {
   const few = quantize([Uint8Array.from([1, 2, 3, 200, 100, 50]), Uint8Array.from([200, 100, 50, 1, 2, 3])]);
@@ -105,7 +105,7 @@ test('palette is exact for few colors and close for many', () => {
     worst = Math.max(worst, ...[0, 1, 2].map(c => Math.abs(color[c] - gradient[index * 3 + c])));
   });
   assert.ok(worst <= 24, `largest channel error ${worst}`);
-  assert.throws(() => quantize([]), /non validi/);
+  assert.throws(() => quantize([]), /invalid frames/i);
 });
 test('AVI encoder writes a looping 8-bit clip the animation control can read', () => {
   const frames = [Uint8Array.from([0, 1, 1, 0, 1, 0]), Uint8Array.from([1, 0, 0, 1, 0, 1])];
@@ -125,6 +125,6 @@ test('AVI encoder writes a looping 8-bit clip the animation control can read', (
   const idx1 = find('idx1', first) + 8;
   assert.deepEqual([file.toString('ascii', idx1, idx1 + 4), file.readUInt32LE(idx1 + 4), file.readUInt32LE(idx1 + 8), file.readUInt32LE(idx1 + 12)], ['00db', 0x10, first - movi, 8]);
   assert.equal(file.readUInt32LE(idx1 + 24), first - movi + 16);
-  assert.throws(() => encodeAvi({ width: 3, height: 2, fps: 30, palette: [[0, 0, 0]], frames: [new Uint8Array(5)] }), /non validi/);
-  assert.throws(() => encodeAvi({ width: 3, height: 2, fps: 0, palette: [[0, 0, 0]], frames }), /non valido/);
+  assert.throws(() => encodeAvi({ width: 3, height: 2, fps: 30, palette: [[0, 0, 0]], frames: [new Uint8Array(5)] }), /invalid frames/i);
+  assert.throws(() => encodeAvi({ width: 3, height: 2, fps: 0, palette: [[0, 0, 0]], frames }), /invalid video format/i);
 });

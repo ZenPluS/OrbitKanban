@@ -17,14 +17,14 @@ function detectDelimiter(text) {
   return [...counts].sort((a, b) => b[1] - a[1])[0][0];
 }
 function parseCsv(input, delimiter = '') {
-  assert(typeof input === 'string' && input.length <= MAX_BYTES, 'Il CSV supera il limite di 16 MB.');
+  assert(typeof input === 'string' && input.length <= MAX_BYTES, "The CSV exceeds the 16 MB limit.");
   const text = input.replace(/^\uFEFF/, '');
   delimiter ||= detectDelimiter(text);
-  assert([';', ',', '\t'].includes(delimiter), 'Separatore CSV non valido.');
+  assert([';', ',', '\t'].includes(delimiter), "Invalid CSV delimiter.");
   const rows = [];
   let row = [], cell = '', quoted = false, closed = false, skipped = 0;
-  const endCell = () => { row.push(cell); cell = ''; closed = false; assert(row.length <= 100, 'Il CSV contiene troppe colonne.'); };
-  const endRow = () => { endCell(); if (row.some(value => value.trim())) rows.push(row); else skipped++; row = []; assert(rows.length <= MAX_ROWS + 1, 'Il CSV supera il limite di 10000 righe.'); };
+  const endCell = () => { row.push(cell); cell = ''; closed = false; assert(row.length <= 100, "The CSV has too many columns."); };
+  const endRow = () => { endCell(); if (row.some(value => value.trim())) rows.push(row); else skipped++; row = []; assert(rows.length <= MAX_ROWS + 1, "The CSV exceeds the 10000-row limit."); };
   for (let i = 0; i < text.length; i++) {
     const char = text[i];
     if (quoted) {
@@ -34,31 +34,32 @@ function parseCsv(input, delimiter = '') {
     else if (char === '\r' || char === '\n') { if (char === '\r' && text[i + 1] === '\n') i++; endRow(); }
     else if (closed && char === ' ') continue;
     else if (char === '"' && !cell && !closed) quoted = true;
-    else { assert(char !== '"' && !closed, 'Virgolette CSV non valide.'); cell += char; }
+    else { assert(char !== '"' && !closed, "Invalid CSV quotes."); cell += char; }
   }
-  assert(!quoted, 'Il CSV contiene un campo tra virgolette non chiuso.');
+  assert(!quoted, "The CSV contains an unclosed quoted field.");
   if (cell || row.length || closed) endRow();
-  assert(rows.length > 0, 'Il CSV è vuoto.');
+  assert(rows.length > 0, "The CSV is empty.");
   return { rows, delimiter, skipped };
 }
 function destinations(data, kind) {
-  assert(['tasks', 'issues'].includes(kind), 'Lista di importazione non valida.');
+  assert(['tasks', 'issues'].includes(kind), "Invalid import list.");
   const s = data.settings;
   const options = items => items.map(item => ({ value: item.id, name: item.name }));
   const base = kind === 'tasks' ? [
-    { id: 'code', name: 'Codice portale', type: 'text' }, { id: 'sequence', name: 'Progressivo', type: 'number' },
-    { id: 'url', name: 'Link specifico', type: 'url' }, { id: 'description', name: 'Descrizione', type: 'richtext' },
-    { id: 'statusId', name: 'Stato', type: 'select', options: options(s.statuses) },
-    { id: 'urgencyId', name: 'Urgenza', type: 'select', options: options(s.urgencies) },
-    { id: 'effortHours', name: 'Effort (ore)', type: 'effort' }, { id: 'effortDays', name: 'Effort in giorni', type: 'effort' },
-    { id: 'releaseDate', name: 'Release date', type: 'date' }, { id: 'notes', name: 'Note', type: 'richtext' },
-    { id: 'highlightId', name: 'Evidenziazione', type: 'select', options: options(s.highlights || []) },
-    { id: 'tagIds', name: 'Tags', type: 'multiselect', options: options(s.tags || []) }, { id: 'hidden', name: 'Nascosta', type: 'boolean' }
-  ] : ['code', 'incident', 'problem'].map((id, i) => ({ id, name: ['Codice portale', 'Incident', 'Problem'][i], type: 'text' }));
+    { id: 'code', name: "Portal code", type: 'text' }, { id: 'sequence', name: "Sequence", type: 'number' },
+    { id: 'url', name: "Specific link", type: 'url' }, { id: 'description', name: "Description", type: 'richtext' },
+    { id: 'statusId', name: "Status", type: 'select', options: options(s.statuses) },
+    { id: 'urgencyId', name: "Urgency", type: 'select', options: options(s.urgencies) },
+    { id: 'effortHours', name: "Effort (hours)", type: 'effort' }, { id: 'effortDays', name: "Effort in days", type: 'effort' },
+    { id: 'releaseDate', name: 'Release date', type: 'date' }, { id: 'notes', name: "Notes", type: 'richtext' },
+    { id: 'highlightId', name: "Highlight", type: 'select', options: options(s.highlights || []) },
+    { id: 'tagIds', name: 'Tags', type: 'multiselect', options: options(s.tags || []) }, { id: 'hidden', name: "Hidden", type: 'boolean' }
+  ] : ['code', 'incident', 'problem'].map((id, i) => ({ id, name: ["Portal code", 'Incident', 'Problem'][i], type: 'text' }));
   return [...base, ...C.fieldsOf(s, kind).map(field => ({ ...field, custom: true, options: C.choices(field).map(option => ({ ...option, value: option.id })) }))];
 }
+// Italian headers stay as aliases so CSV files made with the Italian interface still map automatically.
 const aliases = {
-  code: ['key', 'issue key', 'codice', 'portal code'], sequence: ['sequence'], url: ['url', 'link'],
+  code: ['key', 'issue key', 'codice', 'codice portale', 'portal code'], sequence: ['sequence'], url: ['url', 'link'],
   description: ['description'], notes: ['notes'], statusId: ['status'], urgencyId: ['urgency', 'priority', 'priorità'],
   effortHours: ['effort', 'hours', 'ore'], effortDays: ['days', 'giorni'], releaseDate: ['release', 'data release'], hidden: ['hidden']
 };
@@ -74,53 +75,53 @@ function convertCell(input, field) {
   const value = input.trim();
   if (!value) return undefined;
   if (['number', 'effort'].includes(field.type)) {
-    assert(/^[+-]?(?:\d+(?:[.,]\d+)?|[.,]\d+)$/.test(value), 'Numero non valido: usare il punto o la virgola decimale, senza separatori delle migliaia.');
+    assert(/^[+-]?(?:\d+(?:[.,]\d+)?|[.,]\d+)$/.test(value), "Invalid number: use a decimal point or comma, without thousands separators.");
     const number = Number(value.replace(',', '.'));
-    assert(Number.isFinite(number) && (field.type !== 'effort' || number >= 0) && (field.id !== 'sequence' || Number.isSafeInteger(number) && number >= 0), 'Numero fuori intervallo.');
+    assert(Number.isFinite(number) && (field.type !== 'effort' || number >= 0) && (field.id !== 'sequence' || Number.isSafeInteger(number) && number >= 0), "Number out of range.");
     return number;
   }
   if (field.type === 'date') {
     const parts = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
     const date = parts ? `${parts[3]}-${parts[2].padStart(2, '0')}-${parts[1].padStart(2, '0')}` : value;
-    assert(C.validDate(date), 'Data non valida: usare AAAA-MM-GG oppure GG/MM/AAAA.');
+    assert(C.validDate(date), "Invalid date: use YYYY-MM-DD or DD/MM/YYYY.");
     return date;
   }
   if (field.type === 'boolean') {
     const word = normalized(value);
-    assert(['si', 'yes', 'true', '1', 'no', 'false', '0'].includes(word), 'Valore booleano non valido: usare sì/no, true/false oppure 1/0.');
+    assert(['si', 'yes', 'true', '1', 'no', 'false', '0'].includes(word), "Invalid boolean: use yes/no, true/false or 1/0.");
     return ['si', 'yes', 'true', '1'].includes(word);
   }
   if (['select', 'multiselect'].includes(field.type)) {
     const choice = value => {
       const matches = field.options.filter(option => normalized(option.name) === normalized(value) || option.value === value.trim());
-      assert(matches.length === 1, 'Opzione assente o ambigua nel catalogo: configurarla prima di importare.');
+      assert(matches.length === 1, "Missing or ambiguous catalog option: configure it before importing.");
       return matches[0].value;
     };
     return field.type === 'select' ? choice(value) : [...new Set(value.split('|').map(choice))];
   }
   if (field.type === 'url') {
     const url = core.normalizeUrl(value);
-    assert(core.isWebUrl(url) && url.length <= 2000, 'Il link deve iniziare con http:// o https://.');
+    assert(core.isWebUrl(url) && url.length <= 2000, "The link must start with http:// or https://.");
     return url;
   }
-  assert(value.length <= 200000, 'Testo troppo lungo.');
-  assert(field.custom || !['code', 'incident', 'problem'].includes(field.id) || value.length <= 200, 'I codici possono contenere al massimo 200 caratteri.');
+  assert(value.length <= 200000, "Text is too long.");
+  assert(field.custom || !['code', 'incident', 'problem'].includes(field.id) || value.length <= 200, "Codes can contain up to 200 characters.");
   if (field.type === 'richtext') return `<p>${input.replace(/[&<>"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[char])).replace(/\r\n?|\n/g, '<br>')}</p>`;
   return value;
 }
 function prepareImport(data, kind, rows, mapping) {
   const fields = destinations(data, kind), byId = new Map(fields.map(field => [field.id, field]));
-  assert(Array.isArray(mapping) && Array.isArray(rows), 'Mappatura colonne non valida o duplicata.');
+  assert(Array.isArray(mapping) && Array.isArray(rows), "Invalid or duplicate column mapping.");
   const mapped = mapping.filter(Boolean);
-  assert(rows.length > 0 && rows.length <= MAX_ROWS, 'Selezionare un CSV con almeno una riga dati e al massimo 10000 righe.');
-  assert(mapped.includes('code') && (kind === 'tasks' || mapped.includes('incident') || mapped.includes('problem')), 'Mappare il codice portale e, per le issue, almeno incident o problem.');
-  assert(new Set(mapped).size === mapped.length && mapped.every(id => byId.has(id)), 'Mappatura colonne non valida o duplicata.');
+  assert(rows.length > 0 && rows.length <= MAX_ROWS, "Select a CSV with at least one data row and up to 10000 rows.");
+  assert(mapped.includes('code') && (kind === 'tasks' || mapped.includes('incident') || mapped.includes('problem')), "Map the portal code and, for issues, at least incident or problem.");
+  assert(new Set(mapped).size === mapped.length && mapped.every(id => byId.has(id)), "Invalid or duplicate column mapping.");
   const records = [], errors = [];
   let errorCount = 0, sequence = data.tasks.reduce((max, task) => Math.max(max, task.sequence), 0);
   const error = (row, column, message, custom = false) => { errorCount++; if (errors.length < 100) errors.push({ row, column, message, custom }); };
   rows.forEach((row, rowIndex) => {
     const before = errorCount;
-    if (row.length !== mapping.length) { error(rowIndex + 1, '', 'Il numero di celle non corrisponde alle colonne del file.'); return; }
+    if (row.length !== mapping.length) { error(rowIndex + 1, '', "The cell count does not match the file columns."); return; }
     const record = kind === 'tasks' ? {
       id: globalThis.crypto.randomUUID(), code: '', sequence: ++sequence, url: '', description: '', notes: '', statusId: data.settings.statuses[0].id,
       urgencyId: data.settings.urgencies[Math.min(2, data.settings.urgencies.length - 1)].id, effortHours: 0, releaseDate: '', highlightId: '', hidden: false, tagIds: []
@@ -139,11 +140,11 @@ function prepareImport(data, kind, rows, mapping) {
         else record[id] = value;
       } catch (failure) { error(rowIndex + 1, field.name, failure.message, field.custom); }
     });
-    if (!record.code) error(rowIndex + 1, 'Codice portale', 'Indicare il codice portale.');
-    if (kind === 'issues' && !record.incident && !record.problem) error(rowIndex + 1, '', 'Indicare almeno un incident o problem.');
+    if (!record.code) error(rowIndex + 1, "Portal code", "Enter the portal code.");
+    if (kind === 'issues' && !record.incident && !record.problem) error(rowIndex + 1, '', "Enter at least an incident or problem.");
     if (kind === 'tasks') {
       record.effortHours = Math.round((record.effortHours + days * data.settings.hoursPerDay) * 100) / 100;
-      if (!Number.isFinite(record.effortHours) || !Number.isSafeInteger(record.sequence)) error(rowIndex + 1, '', 'Numero fuori intervallo.');
+      if (!Number.isFinite(record.effortHours) || !Number.isSafeInteger(record.sequence)) error(rowIndex + 1, '', "Number out of range.");
       sequence = Math.max(sequence, record.sequence);
     }
     if (errorCount === before) records.push(record);

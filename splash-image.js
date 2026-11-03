@@ -5,7 +5,7 @@ const hexColor = value => [1, 3, 5].map(index => parseInt(value.slice(index, ind
 
 // Chromium captures premultiplied BGRA: composite over the background to get opaque RGB triplets.
 function toRgb(pixels, width, height, background) {
-  if (!Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0 || !pixels || pixels.length !== width * height * 4) throw new Error('Dati bitmap non validi.');
+  if (!Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0 || !pixels || pixels.length !== width * height * 4) throw new Error("Invalid bitmap data.");
   const [red, green, blue] = hexColor(background), rgb = new Uint8Array(width * height * 3);
   for (let source = 0, target = 0; source < pixels.length; source += 4, target += 3) {
     const uncovered = 1 - pixels[source + 3] / 255;
@@ -45,7 +45,7 @@ function encodeBmp(pixels, width, height, background = '#10131c') {
 
 // Shared palette of at most 256 colors for RGB frames: exact when the frames use few colors, median cut otherwise.
 function quantize(frames) {
-  if (!Array.isArray(frames) || !frames.length || frames.some(frame => !(frame instanceof Uint8Array) || frame.length % 3 || frame.length !== frames[0].length)) throw new Error('Fotogrammi non validi.');
+  if (!Array.isArray(frames) || !frames.length || frames.some(frame => !(frame instanceof Uint8Array) || frame.length % 3 || frame.length !== frames[0].length)) throw new Error('Invalid frames.');
   const counts = new Map();
   for (const frame of frames) for (let index = 0; index < frame.length; index += 3) {
     const key = frame[index] << 16 | frame[index + 1] << 8 | frame[index + 2];
@@ -93,8 +93,8 @@ function quantize(frames) {
 
 // Uncompressed 8-bit AVI: the format the Windows animation control (SysAnimate32) plays on its own thread.
 function encodeAvi({ width, height, fps, palette, frames }) {
-  if (!Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0 || !Number.isInteger(fps) || fps <= 0 || fps > 60) throw new Error('Formato del filmato non valido.');
-  if (!Array.isArray(palette) || !palette.length || palette.length > 256 || !Array.isArray(frames) || !frames.length || frames.some(frame => frame.length !== width * height)) throw new Error('Fotogrammi non validi.');
+  if (!Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0 || !Number.isInteger(fps) || fps <= 0 || fps > 60) throw new Error('Invalid video format.');
+  if (!Array.isArray(palette) || !palette.length || palette.length > 256 || !Array.isArray(frames) || !frames.length || frames.some(frame => frame.length !== width * height)) throw new Error('Invalid frames.');
   const rowSize = Math.ceil(width / 4) * 4, frameSize = rowSize * height;
   const fourcc = (buffer, offset, text) => buffer.write(text, offset, 'ascii');
   const chunk = (id, data) => {

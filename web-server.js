@@ -97,11 +97,11 @@ function createWebServer({ store, appRoot, tokenFolder, port = DEFAULT_PORT, ope
     let size = 0;
     for await (const chunk of req) {
       size += chunk.length;
-      if (size > BODY_LIMIT) throw httpError('too-large', say('Richiesta troppo grande.'));
+      if (size > BODY_LIMIT) throw httpError('too-large', say("Request too large."));
       chunks.push(chunk);
     }
     try { return JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}'); }
-    catch { throw new Error(say('Richiesta non valida.')); }
+    catch { throw new Error(say("Invalid request.")); }
   }
   async function staticFile(name) {
     if (!staticCache.has(name)) staticCache.set(name, await fs.readFile(path.join(appRoot, name.slice(1))));
@@ -112,7 +112,7 @@ function createWebServer({ store, appRoot, tokenFolder, port = DEFAULT_PORT, ope
     let html = await fs.readFile(path.join(appRoot, 'index.html'), 'utf8');
     const csp = html.replace("connect-src 'none'", "connect-src 'self'");
     const bridged = csp.replace('<script defer src="renderer.js"></script>', '<script defer src="web-bridge.js"></script>\n  <script defer src="renderer.js"></script>');
-    if (csp === html || bridged === csp) throw new Error('index.html non compatibile con l’accesso da browser.');
+    if (csp === html || bridged === csp) throw new Error('index.html is not compatible with browser access.');
     return (indexHtml = bridged);
   }
   function events(req, res) {
@@ -131,8 +131,8 @@ function createWebServer({ store, appRoot, tokenFolder, port = DEFAULT_PORT, ope
   async function api(req, res, url) {
     const route = `${req.method} ${url.pathname}`;
     if (route === 'GET /api/events') return events(req, res);
-    if (req.headers['x-orbitkanban'] !== '1') throw httpError('forbidden', say('Richiesta non consentita.'));
-    if (req.method === 'POST' && req.headers.origin !== `http://${req.headers.host}`) throw httpError('forbidden', say('Origine non consentita.'));
+    if (req.headers['x-orbitkanban'] !== '1') throw httpError('forbidden', say("Request not allowed."));
+    if (req.method === 'POST' && req.headers.origin !== `http://${req.headers.host}`) throw httpError('forbidden', say("Origin not allowed."));
     if (route === 'GET /api/load') return json(res, 200, await store.load(url.searchParams.get('org') || undefined));
     if (route === 'GET /api/export') {
       return send(res, 200, await store.exportText(), 'application/json; charset=utf-8', { 'Content-Disposition': 'attachment; filename="OrbitKanban-backup.json"' });
@@ -143,7 +143,7 @@ function createWebServer({ store, appRoot, tokenFolder, port = DEFAULT_PORT, ope
       return send(res, 200, exported.text, 'application/json; charset=utf-8', { 'Content-Disposition': `attachment; filename="${exported.fileName}"` });
     }
     if (route === 'GET /api/languages') return json(res, 200, await languages('info'));
-    if (req.method !== 'POST') throw httpError('not-found', say('Risorsa non trovata.'));
+    if (req.method !== 'POST') throw httpError('not-found', say("Not found."));
     const body = await readBody(req);
     if (url.pathname === '/api/save') return json(res, 200, await store.save(body.data, body.organizationId, body.organizationName, body.revision));
     if (url.pathname === '/api/organization') return json(res, 200, await store.organization(body.operation, body.payload, body.organizationId));
@@ -151,24 +151,24 @@ function createWebServer({ store, appRoot, tokenFolder, port = DEFAULT_PORT, ope
     if (url.pathname === '/api/backups' && body.operation === 'restore') return json(res, 200, await store.restoreBackup(body.fileName));
     if (url.pathname === '/api/languages') return json(res, 200, await languages(body.operation));
     if (url.pathname === '/api/open-data-folder') { await openDataFolder(); return json(res, 200, { ok: true }); }
-    throw httpError('not-found', say('Risorsa non trovata.'));
+    throw httpError('not-found', say("Not found."));
   }
   async function handle(req, res) {
     if (!allowedHost(req)) return send(res, 403, 'Host not allowed');
     const url = new URL(req.url, baseUrl());
     const site = req.headers['sec-fetch-site'];
     if (url.pathname === '/auth' && req.method === 'GET') {
-      if (site === 'cross-site' || !sameSecret(url.searchParams.get('token') || '', token)) return page(res, 403, say('Link non valido'), say('La chiave di accesso non è corretta. Apri il browser dal pulsante “Apri nel browser” dell’app OrbitKanban.'));
+      if (site === 'cross-site' || !sameSecret(url.searchParams.get('token') || '', token)) return page(res, 403, say("Invalid link"), say("The access key is not valid. Open the browser from the “Open in browser” button in the OrbitKanban app."));
       const org = url.searchParams.get('org') || '';
       const location = org && org.length <= 200 ? `/?org=${encodeURIComponent(org)}` : '/';
       return send(res, 303, '', 'text/plain; charset=utf-8', { Location: location, 'Set-Cookie': `${cookieName()}=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=2592000` });
     }
     if (!authenticated(req)) {
-      if (url.pathname.startsWith('/api/')) return json(res, 401, { error: say('Sessione browser non autorizzata. Riapri il link dall’app.'), code: 'unauthorized' });
-      return page(res, 401, say('Accesso protetto'), say('Per aprire OrbitKanban nel browser usa il pulsante “Apri nel browser” nell’app, oppure copia il link di accesso dalle Impostazioni.'));
+      if (url.pathname.startsWith('/api/')) return json(res, 401, { error: say("Browser session not authorized. Reopen the link from the app."), code: 'unauthorized' });
+      return page(res, 401, say("Protected access"), say("To open OrbitKanban in the browser use the “Open in browser” button in the app, or copy the access link from Settings."));
     }
     if (url.pathname.startsWith('/api/')) {
-      if (site && site !== 'same-origin') throw httpError('forbidden', say('Richiesta non consentita.'));
+      if (site && site !== 'same-origin') throw httpError('forbidden', say("Request not allowed."));
       return api(req, res, url);
     }
     if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, 'Method not allowed');

@@ -38,12 +38,12 @@ function createLanguageStore({ dataFolder }) {
         const fullPath = path.join(folder, file);
         const stat = await fs.stat(fullPath);
         if (!stat.isFile()) continue;
-        if (stat.size > MAX_FILE_SIZE) throw new Error('File lingua troppo grande.');
+        if (stat.size > MAX_FILE_SIZE) throw new Error("Language file too large.");
         let pack;
         try { pack = JSON.parse((await fs.readFile(fullPath, 'utf8')).replace(/^\uFEFF/, '')); }
-        catch { throw new Error('File JSON non valido.'); }
+        catch { throw new Error("Invalid JSON file."); }
         const { code } = i18n.validatePack(pack);
-        if (code.toLowerCase() !== file.slice(0, -5).toLowerCase()) throw new Error('Il codice lingua deve coincidere con il nome del file.');
+        if (code.toLowerCase() !== file.slice(0, -5).toLowerCase()) throw new Error("The language code must match the file name.");
         found.push({ file, pack });
       } catch (error) { failed.push({ file, message: error.message }); }
     }

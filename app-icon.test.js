@@ -91,12 +91,12 @@ test('ICO pixels are bottom-up with straight alpha and a transparency mask', () 
   assert.deepEqual([image.data.readUInt32BE(56), image.data.readUInt32BE(60)], [0x80000000, 0], 'only the transparent pixel is masked; bottom row first');
 });
 test('ICO encoder rejects inconsistent images', () => {
-  assert.throws(() => encodeIco([]), /non valide/);
-  assert.throws(() => encodeIco([{ size: 16, rgba: Buffer.alloc(10) }]), /non validi/);
-  assert.throws(() => encodeIco([{ size: 16, rgba: solid(16, [0, 0, 0, 0]) }, { size: 16, rgba: solid(16, [0, 0, 0, 0]) }]), /Dimensioni/);
-  assert.throws(() => encodeIco([{ size: 300, rgba: solid(300, [0, 0, 0, 0]) }]), /Dimensioni/);
+  assert.throws(() => encodeIco([]), /invalid icon images/i);
+  assert.throws(() => encodeIco([{ size: 16, rgba: Buffer.alloc(10) }]), /invalid icon pixels/i);
+  assert.throws(() => encodeIco([{ size: 16, rgba: solid(16, [0, 0, 0, 0]) }, { size: 16, rgba: solid(16, [0, 0, 0, 0]) }]), /invalid icon dimensions/i);
+  assert.throws(() => encodeIco([{ size: 300, rgba: solid(300, [0, 0, 0, 0]) }]), /invalid icon dimensions/i);
   assert.throws(() => encodeIco([{ size: 256, png: Buffer.from('not a png') }]), /PNG/);
-  assert.throws(() => parseIco(Buffer.from('nope')), /non valido/);
+  assert.throws(() => parseIco(Buffer.from('nope')), /invalid/i);
 });
 test('executable icon is read back and must match the application ICO exactly', () => {
   const ico = sampleIco();
@@ -109,9 +109,9 @@ test('executable icon is read back and must match the application ICO exactly', 
   const other = encodeIco(ICON_SIZES.map(size => size === 256 ? { size, png: PNG } : { size, rgba: solid(size, size === 48 ? [9, 9, 9, 255] : [10, 20, 30, 255]) }));
   assert.throws(() => verifyExecutableIcon(buildExecutable(iconResources(other)), ico), /48px/);
   const fewer = encodeIco([{ size: 16, rgba: solid(16, [10, 20, 30, 255]) }]);
-  assert.throws(() => verifyExecutableIcon(buildExecutable(iconResources(fewer)), ico), /diversa/);
-  assert.throws(() => verifyExecutableIcon(buildExecutable([[16, [[1, Buffer.alloc(8)]]]]), ico), /alcuna icona/);
-  assert.throws(() => readExecutableIcons(Buffer.from('not an executable at all, definitely not one, nope, really nothing')), /non valido/);
+  assert.throws(() => verifyExecutableIcon(buildExecutable(iconResources(fewer)), ico), /does not match/i);
+  assert.throws(() => verifyExecutableIcon(buildExecutable([[16, [[1, Buffer.alloc(8)]]]]), ico), /does not contain an icon/i);
+  assert.throws(() => readExecutableIcons(Buffer.from('not an executable at all, definitely not one, nope, really nothing')), /invalid/i);
 });
 test('icon reader understands a real Windows executable', { skip: process.platform !== 'win32' }, () => {
   const electron = require('electron');
@@ -119,5 +119,5 @@ test('icon reader understands a real Windows executable', { skip: process.platfo
   const groups = readExecutableIcons(fs.readFileSync(electron));
   assert.ok(groups.length > 0);
   assert.ok(groups[0].images.length > 0 && groups[0].images.every(image => image.size > 0 && image.data.length > 0));
-  assert.throws(() => verifyExecutableIcon(fs.readFileSync(electron), sampleIco()), /diversa/);
+  assert.throws(() => verifyExecutableIcon(fs.readFileSync(electron), sampleIco()), /does not match/i);
 });

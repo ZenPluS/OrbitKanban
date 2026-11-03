@@ -15,14 +15,14 @@ build({
   effectiveOptionComputed: async options => {
     const [defines, commands] = Array.isArray(options) ? options : [];
     if (defines?.SPLASH_IMAGE && commands && 'Unicode' in commands) {
-      if (!commands.Icon) throw new Error('Icona del launcher portable non configurata.');
+      if (!commands.Icon) throw new Error('The portable launcher icon is not configured.');
       commands['!include'] = `"${launcherHook}"`;
       hooked = true;
     }
     return false;
   }
 }).then(() => {
-  if (!hooked) throw new Error('Launcher portable non personalizzato: verifica la compatibilità con la versione di electron-builder.');
+  if (!hooked) throw new Error('The portable launcher was not customized: check compatibility with this electron-builder version.');
 }).catch(error => {
   console.error(error);
   process.exitCode = 1;

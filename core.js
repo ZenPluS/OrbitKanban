@@ -70,17 +70,17 @@ function normalizeTaskColumns(input, fields = []) {
 function defaultHighlights(language = 'it') {
   const T = text => { const value = term(text, language).trim(); return value && value.length <= HIGHLIGHT_NAME_MAX ? value : text; };
   return [
-    { id: 'highlight-yellow', name: T('Attenzione'), color: '#f2c94c' },
-    { id: 'highlight-red', name: T('Bloccante'), color: '#f0647a' },
-    { id: 'highlight-blue', name: T('Da discutere'), color: '#5aa9f6' },
-    { id: 'highlight-green', name: T('Pronta'), color: '#4fcf8f' }
+    { id: 'highlight-yellow', name: T("Attention"), color: '#f2c94c' },
+    { id: 'highlight-red', name: T("Blocker"), color: '#f0647a' },
+    { id: 'highlight-blue', name: T("To discuss"), color: '#5aa9f6' },
+    { id: 'highlight-green', name: T("Ready"), color: '#4fcf8f' }
   ];
 }
 function defaultThemes() {
   return [
     { id: 'midnight', name: 'Midnight', background: '#10131c', surface: '#191d2a', text: '#edf0fa', accent: '#b39cff' },
     { id: 'ocean', name: 'Ocean', background: '#082032', surface: '#103b50', text: '#e8f1f5', accent: '#00b4d8' },
-    { id: 'daylight', name: 'Luce', background: '#eef0f7', surface: '#ffffff', text: '#252a42', accent: '#6953d9' },
+    { id: 'daylight', name: 'Daylight', background: '#eef0f7', surface: '#ffffff', text: '#252a42', accent: '#6953d9' },
     { id: 'aurora', name: 'Aurora', background: '#0e1a1f', surface: '#16262d', text: '#e6f4f1', accent: '#62d6a6' },
     { id: 'monokai', name: 'Monokai', background: '#272822', surface: '#3e3d32', text: '#f8f8f2', accent: '#ff8ab4' },
     { id: 'dracula', name: 'Dracula', background: '#282a36', surface: '#343746', text: '#f8f8f2', accent: '#bd93f9' },
@@ -120,7 +120,13 @@ function defaultThemes() {
     { id: 'emerald', name: 'Emerald', background: '#10251f', surface: '#1c3830', text: '#e0f4ec', accent: '#60d5ac' }
   ];
 }
+// Built-in themes renamed when the source moved to English: saved copies keep their colors and only lose the old default name.
+const LEGACY_THEME_NAMES = { daylight: 'Luce' };
+function modernThemeName(theme) {
+  return LEGACY_THEME_NAMES[theme.id] === theme.name ? defaultThemes().find(preset => preset.id === theme.id).name : theme.name;
+}
 function normalizeThemes(settings) {
+  for (const theme of settings.themes) theme.name = modernThemeName(theme);
   // Append new presets without replacing saved palettes, their order or the active theme.
   const known = new Set(settings.themes.map(theme => theme.id));
   settings.themes.push(...defaultThemes().filter(theme => !known.has(theme.id)));
@@ -128,21 +134,21 @@ function normalizeThemes(settings) {
 function baseData(language = 'it') {
   const T = (text, max = 60) => { const value = term(text, language).trim(); return value && value.length <= max ? value : text; };
   const statuses = [
-    { id: id(), name: T('Da fare'), color: '#8190aa', highlight: false },
-    { id: id(), name: T('In corso'), color: '#7c6aef', highlight: false },
-    { id: id(), name: T('In verifica'), color: '#e5aa4a', highlight: true },
-    { id: id(), name: T('Completato'), color: '#42b899', highlight: false }
+    { id: id(), name: T("To do"), color: '#8190aa', highlight: false },
+    { id: id(), name: T("In progress"), color: '#7c6aef', highlight: false },
+    { id: id(), name: T("In review"), color: '#e5aa4a', highlight: true },
+    { id: id(), name: T("Done"), color: '#42b899', highlight: false }
   ];
   const urgencies = [
-    { id: id(), name: T('Critica'), color: '#ec7086' },
-    { id: id(), name: T('Alta'), color: '#eda36b' },
-    { id: id(), name: T('Media'), color: '#9e8af7' },
-    { id: id(), name: T('Bassa'), color: '#77a6c9' }
+    { id: id(), name: T("Critical"), color: '#ec7086' },
+    { id: id(), name: T("High"), color: '#eda36b' },
+    { id: id(), name: T("Medium"), color: '#9e8af7' },
+    { id: id(), name: T("Low"), color: '#77a6c9' }
   ];
   return {
     version: 1,
     settings: {
-      language, logo: '', portalUrlTemplate: '', tabNames: ['Attività', 'Issue collegate', 'Milestone', 'Kanban'].map(name => T(name)),
+      language, logo: '', portalUrlTemplate: '', tabNames: ["Tasks", "Linked issues", "Milestones", 'Kanban'].map(name => T(name)),
       hoursPerDay: 8, fontSizes: defaultFontSizes(), fontFamily: DEFAULT_FONT_FAMILY, statuses, urgencies, highlights: defaultHighlights(language), tags: [], taskColumns: defaultTaskColumns(), themeId: 'midnight',
       themes: defaultThemes(), savedViews: [], taskFields: [], issueFields: [], issueColumns: columns.normalizeIssueColumns()
     },
@@ -167,7 +173,7 @@ function demoData(language = 'it', now = new Date()) {
   const format = (text, value) => text.replaceAll('{0}', value);
   const [todo, doing, review, done] = data.settings.statuses.map(status => status.id);
   const [critical, high, medium, low] = data.settings.urgencies.map(urgency => urgency.id);
-  data.settings.portalUrlTemplate = 'https://jira.example.com/browse/{codice}';
+  data.settings.portalUrlTemplate = "https://jira.example.com/browse/{code}";
   data.settings.tags = [
     { id: 'tag-frontend', name: 'Frontend', color: '#5aa9f6' },
     { id: 'tag-backend', name: 'Backend', color: '#b18cff' },
@@ -183,18 +189,18 @@ function demoData(language = 'it', now = new Date()) {
   };
   const pick = list => list[Math.floor(random() * list.length)];
   const areas = [
-    'Dashboard operativa', 'Login e autenticazione', 'Report Finance', 'API ordini', 'Catalogo prodotti', 'Notifiche push',
-    'Checkout e pagamenti', 'App mobile', 'Ricerca avanzata', 'Integrazione SAP', 'Gestione utenti', 'Portale clienti',
-    'Motore promozioni', 'Magazzino', 'Fatturazione elettronica', 'Audit log', 'Single sign-on', 'Data warehouse'
+    "Operations dashboard", "Login and authentication", "Finance report", "Orders API", "Product catalog", "Push notifications",
+    "Checkout and payments", "Mobile app", "Advanced search", "SAP integration", "User management", "Customer portal",
+    "Promotion engine", "Warehouse", "E-invoicing", 'Audit log', 'Single sign-on', 'Data warehouse'
   ];
   // The flag marks fixes that are always critical and linked to incidents.
   const actions = [
-    ['ottimizzazione delle prestazioni'], ['correzione di un errore in produzione', true], ['nuovi filtri e ordinamenti'], ['revisione dell’interfaccia'],
-    ['aggiornamento delle librerie di sicurezza', true], ['adeguamento normativo'], ['migrazione al nuovo database'], ['test end-to-end automatici'],
-    ['gestione degli errori e dei retry'], ['accessibilità WCAG 2.2'], ['esportazione dei dati in Excel'], ['monitoraggio e alert'],
-    ['riduzione dei tempi di caricamento'], ['supporto multilingua'], ['hotfix timeout di sessione', true], ['nuovo flusso di approvazione']
+    ["performance optimization"], ["production bug fix", true], ["new filters and sorting"], ["interface redesign"],
+    ["security library upgrade", true], ["regulatory compliance update"], ["migration to the new database"], ["automated end-to-end tests"],
+    ["error handling and retries"], ["WCAG 2.2 accessibility"], ["Excel data export"], ["monitoring and alerting"],
+    ["faster load times"], ["multi-language support"], ["session timeout hotfix", true], ["new approval workflow"]
   ];
-  const teams = ['Finance', 'Customer Care', 'Logistica', 'Marketing', 'Sicurezza IT', 'Vendite'];
+  const teams = ['Finance', 'Customer Care', "Logistics", 'Marketing', "IT Security", "Sales"];
   const displayDate = date => date.split('-').reverse().join('/');
   const { past, next } = demoReleaseDates(now);
   const hideBefore = addDays(localIsoDate(now), -56);
@@ -216,15 +222,15 @@ function demoData(language = 'it', now = new Date()) {
     const code = external ? numbered('CHG', 41000 + n) : `ORB-${1001 + n}`;
     const descriptions = [
       `<p>${title}</p>`,
-      `<p><strong>${title}</strong></p><ul><li>${L('Analisi e stima')}</li><li>${L('Sviluppo e code review')}</li><li>${L('Rilascio in produzione')}</li></ul>`,
-      `<p>${title}</p><p><em>${format(L('Richiesta del team {0}'), team)}</em></p>`,
-      `<p><u>${title}</u></p><ol><li>${L('Raccolta requisiti')}</li><li>${L('Implementazione')}</li><li>${L('Collaudo con gli utenti')}</li></ol>`
+      `<p><strong>${title}</strong></p><ul><li>${L("Analysis and estimate")}</li><li>${L("Development and code review")}</li><li>${L("Production release")}</li></ul>`,
+      `<p>${title}</p><p><em>${format(L("Requested by the {0} team"), team)}</em></p>`,
+      `<p><u>${title}</u></p><ol><li>${L("Requirements gathering")}</li><li>${L("Implementation")}</li><li>${L("User acceptance testing")}</li></ol>`
     ];
     const notesByStatus = {
-      [done]: [`<p>${L('Rilasciato in produzione il')} <strong>${displayDate(releaseDate || '')}</strong>.</p>`, `<ul><li>${L('Log verificati dopo il rilascio')}</li><li>${L('Service desk informato')}</li></ul>`],
-      [review]: [`<p><strong>${L('Verifica in corso')}</strong>: ${L('controllare gli indicatori nelle prime 48 ore.')}</p>`],
-      [doing]: [`<p><em>${L('In attesa di conferma dal business.')}</em></p>`, `<ul><li>${L('Sviluppo backend completato')}</li><li>${L('Manca la revisione grafica')}</li></ul>`],
-      [todo]: [`<ol><li>${L('Definire i criteri di accettazione')}</li><li>${L('Stimare con il team')}</li></ol>`]
+      [done]: [`<p>${L("Released to production on")} <strong>${displayDate(releaseDate || '')}</strong>.</p>`, `<ul><li>${L("Logs checked after release")}</li><li>${L("Service desk notified")}</li></ul>`],
+      [review]: [`<p><strong>${L("Verification in progress")}</strong>: ${L("check the metrics during the first 48 hours.")}</p>`],
+      [doing]: [`<p><em>${L("Waiting for business sign-off.")}</em></p>`, `<ul><li>${L("Backend development completed")}</li><li>${L("Design review pending")}</li></ul>`],
+      [todo]: [`<ol><li>${L("Define acceptance criteria")}</li><li>${L("Estimate with the team")}</li></ol>`]
     };
     tasks.push({
       id: id(), code, sequence: n + 1,
@@ -256,6 +262,7 @@ function demoData(language = 'it', now = new Date()) {
 }
 function initialData() { return demoData('it'); }
 function assert(condition, message) { if (!condition) throw new Error(message); }
+// Templates saved before the source moved to English use the Italian placeholder {codice} (or <codice>), so both spellings stay valid.
 const hasPortalPlaceholder = template => /\{(?:codice|code)\}|<(?:codice|code)>/i.test(template);
 function normalizeUrl(value) {
   const url = String(value ?? '').trim();
@@ -281,34 +288,34 @@ function portalUrl(task, settings) {
   return template && String(task.code ?? '').trim() ? fillPortalTemplate(template, task.code) : '';
 }
 function validateData(data) {
-  assert(data && data.version === 1, 'Formato archivio non supportato.');
+  assert(data && data.version === 1, "Unsupported archive format.");
   const s = data.settings;
-  assert(s && (s.appName === undefined || (typeof s.appName === 'string' && s.appName.trim().length > 0 && s.appName.length <= 100)), 'Nome organizzazione non valido.');
-  assert(Array.isArray(s.tabNames) && s.tabNames.length === 4 && s.tabNames.every(n => typeof n === 'string' && n.trim() && n.length <= 60), 'Specificare quattro nomi di tab validi.');
-  assert(Number.isFinite(s.hoursPerDay) && s.hoursPerDay > 0 && s.hoursPerDay <= 24, 'Le ore per giorno devono essere comprese tra 0 e 24.');
+  assert(s && (s.appName === undefined || (typeof s.appName === 'string' && s.appName.trim().length > 0 && s.appName.length <= 100)), "Invalid organization name.");
+  assert(Array.isArray(s.tabNames) && s.tabNames.length === 4 && s.tabNames.every(n => typeof n === 'string' && n.trim() && n.length <= 60), "Specify four valid tab names.");
+  assert(Number.isFinite(s.hoursPerDay) && s.hoursPerDay > 0 && s.hoursPerDay <= 24, "Hours per day must be greater than 0 and no more than 24.");
   const uniqueIds = (items) => new Set(items.map(x => x.id)).size === items.length;
   const text = v => typeof v === 'string';
   const color = v => /^#[0-9a-f]{6}$/i.test(v);
-  assert(s.language === undefined || validLanguage(s.language), 'Lingua non supportata.');
-  assert(s.portalUrlTemplate === undefined || validPortalTemplate(s.portalUrlTemplate), 'Il modello del link portale deve essere un indirizzo web valido e contenere {codice}.');
-  assert(s.logo === undefined || s.logo === '' || (text(s.logo) && s.logo.length <= 1500000 && /^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/.test(s.logo)), 'Logo non valido.');
-  assert(s.fontSizes === undefined || validFontSizes(s.fontSizes), 'Dimensioni del testo non valide.');
-  assert(s.fontFamily === undefined || validFontFamily(s.fontFamily), 'Font non valido.');
+  assert(s.language === undefined || validLanguage(s.language), "Unsupported language.");
+  assert(s.portalUrlTemplate === undefined || validPortalTemplate(s.portalUrlTemplate), "The portal link template must be a valid web address containing {code}.");
+  assert(s.logo === undefined || s.logo === '' || (text(s.logo) && s.logo.length <= 1500000 && /^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/.test(s.logo)), "Invalid logo.");
+  assert(s.fontSizes === undefined || validFontSizes(s.fontSizes), "Invalid text sizes.");
+  assert(s.fontFamily === undefined || validFontFamily(s.fontFamily), "Invalid font.");
   for (const key of ['statuses', 'urgencies']) {
-    assert(Array.isArray(s[key]) && s[key].length > 0 && uniqueIds(s[key]), `Elenco ${key} non valido o vuoto.`);
-    assert(s[key].every(x => text(x.id) && x.id && text(x.name) && x.name.trim() && color(x.color)), `Valori ${key} non validi.`);
+    assert(Array.isArray(s[key]) && s[key].length > 0 && uniqueIds(s[key]), `The ${key} list is invalid or empty.`);
+    assert(s[key].every(x => text(x.id) && x.id && text(x.name) && x.name.trim() && color(x.color)), `Invalid ${key} values.`);
   }
-  assert(s.statuses.every(x => typeof x.highlight === 'boolean'), 'Evidenziazione stati non valida.');
-  assert(s.highlights === undefined || (Array.isArray(s.highlights) && s.highlights.length <= HIGHLIGHT_LIMIT && s.highlights.every(x => x && text(x.id) && x.id && text(x.name) && x.name.trim() && x.name.length <= HIGHLIGHT_NAME_MAX && color(x.color)) && uniqueIds(s.highlights)), 'Evidenziatori non validi.');
-  assert(s.tags === undefined || (Array.isArray(s.tags) && s.tags.length <= TAG_LIMIT && s.tags.every(x => x && text(x.id) && x.id && x.id.length <= 200 && text(x.name) && x.name.trim() && x.name.length <= TAG_NAME_MAX && color(x.color)) && uniqueIds(s.tags)), 'Tags non validi.');
-  assert(s.tags === undefined || new Set(s.tags.map(tag => tag.name.trim().toLowerCase())).size === s.tags.length, 'I nomi dei tag devono essere univoci.');
+  assert(s.statuses.every(x => typeof x.highlight === 'boolean'), "Invalid status highlighting.");
+  assert(s.highlights === undefined || (Array.isArray(s.highlights) && s.highlights.length <= HIGHLIGHT_LIMIT && s.highlights.every(x => x && text(x.id) && x.id && text(x.name) && x.name.trim() && x.name.length <= HIGHLIGHT_NAME_MAX && color(x.color)) && uniqueIds(s.highlights)), "Invalid highlighters.");
+  assert(s.tags === undefined || (Array.isArray(s.tags) && s.tags.length <= TAG_LIMIT && s.tags.every(x => x && text(x.id) && x.id && x.id.length <= 200 && text(x.name) && x.name.trim() && x.name.length <= TAG_NAME_MAX && color(x.color)) && uniqueIds(s.tags)), "Invalid tags.");
+  assert(s.tags === undefined || new Set(s.tags.map(tag => tag.name.trim().toLowerCase())).size === s.tags.length, "Tag names must be unique.");
   columns.validateFields(columns.fieldsOf(s, 'tasks'));
   columns.validateFields(columns.fieldsOf(s, 'issues'));
   const taskColumnIds = [...TASK_COLUMN_IDS, ...(s.taskFields || []).map(field => field.id)];
   const filterTypes = { sequence: 'number', effort: 'effort', releaseDate: 'date', ...Object.fromEntries((s.taskFields || []).map(field => [field.id, field.type])) };
   const sortKeys = [...SAVED_VIEW_SORT_KEYS, ...(s.taskFields || []).filter(field => !['text', 'richtext', 'url', 'multiselect'].includes(field.type)).map(field => field.id)];
-  assert(s.taskColumns === undefined || (Array.isArray(s.taskColumns) && s.taskColumns.every(c => c && text(c.id) && c.id && typeof c.visible === 'boolean') && uniqueIds(s.taskColumns) && s.taskColumns.some(c => c.visible && taskColumnIds.includes(c.id))), 'Colonne della lista non valide.');
-  assert(s.issueColumns === undefined || (Array.isArray(s.issueColumns) && s.issueColumns.every(c => c && text(c.id) && typeof c.visible === 'boolean') && uniqueIds(s.issueColumns) && s.issueColumns.some(c => c.visible)), 'Colonne della lista non valide.');
+  assert(s.taskColumns === undefined || (Array.isArray(s.taskColumns) && s.taskColumns.every(c => c && text(c.id) && c.id && typeof c.visible === 'boolean') && uniqueIds(s.taskColumns) && s.taskColumns.some(c => c.visible && taskColumnIds.includes(c.id))), "Invalid list columns.");
+  assert(s.issueColumns === undefined || (Array.isArray(s.issueColumns) && s.issueColumns.every(c => c && text(c.id) && typeof c.visible === 'boolean') && uniqueIds(s.issueColumns) && s.issueColumns.some(c => c.visible)), "Invalid list columns.");
   assert(s.savedViews === undefined || (Array.isArray(s.savedViews) && s.savedViews.length <= SAVED_VIEW_LIMIT && s.savedViews.every(view =>
     view && text(view.id) && view.id && view.id.length <= 200 && text(view.name) && view.name.trim() && view.name.length <= SAVED_VIEW_NAME_MAX &&
     text(view.search) && view.search.length <= 200 && text(view.statusFilter) && view.statusFilter.length <= 200 &&
@@ -318,45 +325,45 @@ function validateData(data) {
     new Set(view.sort.map(item => item.key)).size === view.sort.length && Array.isArray(view.columns) &&
     view.columns.length > 0 && view.columns.every(column => column && taskColumnIds.includes(column.id) && typeof column.visible === 'boolean') &&
     uniqueIds(view.columns) && view.columns.some(column => column.visible) && columns.validFilters(view.columnFilters, taskColumnIds, filterTypes)
-  ) && uniqueIds(s.savedViews) && new Set(s.savedViews.map(view => view.name.trim().toLocaleLowerCase())).size === s.savedViews.length), 'Viste salvate non valide.');
-  assert(Array.isArray(s.themes) && s.themes.length > 0 && uniqueIds(s.themes) && s.themes.every(t => text(t.id) && t.id && text(t.name) && t.name.trim() && ['background', 'surface', 'text', 'accent'].every(k => color(t[k]))), 'Temi non validi.');
-  assert(s.themes.some(t => t.id === s.themeId), 'Tema selezionato inesistente.');
-  assert(Array.isArray(data.tasks) && uniqueIds(data.tasks), 'Elenco attività non valido.');
+  ) && uniqueIds(s.savedViews) && new Set(s.savedViews.map(view => view.name.trim().toLocaleLowerCase())).size === s.savedViews.length), "Invalid saved views.");
+  assert(Array.isArray(s.themes) && s.themes.length > 0 && uniqueIds(s.themes) && s.themes.every(t => text(t.id) && t.id && text(t.name) && t.name.trim() && ['background', 'surface', 'text', 'accent'].every(k => color(t[k]))), "Invalid themes.");
+  assert(s.themes.some(t => t.id === s.themeId), "Selected theme does not exist.");
+  assert(Array.isArray(data.tasks) && uniqueIds(data.tasks), "Invalid task list.");
   for (const t of data.tasks) {
-    assert(['id', 'code', 'url', 'description', 'notes', 'releaseDate', 'statusId', 'urgencyId'].every(k => text(t[k])) && t.id && t.code.trim(), 'Attività incompleta.');
-    assert(Number.isInteger(t.sequence) && t.sequence >= 0, 'Il progressivo deve essere un intero non negativo.');
-    assert(Number.isFinite(t.effortHours) && t.effortHours >= 0, 'Effort non valido.');
-    assert(typeof t.hidden === 'boolean', 'Visibilità non valida.');
-    assert(t.highlightId === undefined || (text(t.highlightId) && t.highlightId.length <= 200), 'Evidenziazione attività non valida.');
-    assert(t.tagIds === undefined || (Array.isArray(t.tagIds) && t.tagIds.length <= TAG_LIMIT && t.tagIds.every(tagId => text(tagId) && tagId && tagId.length <= 200) && new Set(t.tagIds).size === t.tagIds.length), 'Tags attività non validi.');
-    assert(!t.url || /^https?:\/\/\S+$/i.test(t.url), 'Il link deve iniziare con http:// o https://.');
-    assert(!t.releaseDate || (/^\d{4}-\d{2}-\d{2}$/.test(t.releaseDate) && !Number.isNaN(Date.parse(t.releaseDate)) && new Date(t.releaseDate).toISOString().slice(0, 10) === t.releaseDate), 'Data release non valida.');
-    assert(s.statuses.some(x => x.id === t.statusId) && s.urgencies.some(x => x.id === t.urgencyId), 'Stato o urgenza mancanti.');
+    assert(['id', 'code', 'url', 'description', 'notes', 'releaseDate', 'statusId', 'urgencyId'].every(k => text(t[k])) && t.id && t.code.trim(), "Incomplete task.");
+    assert(Number.isInteger(t.sequence) && t.sequence >= 0, "Sequence must be a non-negative integer.");
+    assert(Number.isFinite(t.effortHours) && t.effortHours >= 0, "Invalid effort.");
+    assert(typeof t.hidden === 'boolean', "Invalid visibility.");
+    assert(t.highlightId === undefined || (text(t.highlightId) && t.highlightId.length <= 200), "Invalid task highlight.");
+    assert(t.tagIds === undefined || (Array.isArray(t.tagIds) && t.tagIds.length <= TAG_LIMIT && t.tagIds.every(tagId => text(tagId) && tagId && tagId.length <= 200) && new Set(t.tagIds).size === t.tagIds.length), "Invalid task tags.");
+    assert(!t.url || /^https?:\/\/\S+$/i.test(t.url), "The link must start with http:// or https://.");
+    assert(!t.releaseDate || (/^\d{4}-\d{2}-\d{2}$/.test(t.releaseDate) && !Number.isNaN(Date.parse(t.releaseDate)) && new Date(t.releaseDate).toISOString().slice(0, 10) === t.releaseDate), "Invalid release date.");
+    assert(s.statuses.some(x => x.id === t.statusId) && s.urgencies.some(x => x.id === t.urgencyId), "Missing status or urgency.");
   }
-  assert(Array.isArray(data.issues) && uniqueIds(data.issues), 'Elenco issue non valido.');
-  assert(data.issues.every(x => ['id', 'code', 'incident', 'problem'].every(k => text(x[k])) && x.id && x.code.trim() && (x.incident.trim() || x.problem.trim())), 'Indicare codice e almeno un incident o problem.');
+  assert(Array.isArray(data.issues) && uniqueIds(data.issues), "Invalid issue list.");
+  assert(data.issues.every(x => ['id', 'code', 'incident', 'problem'].every(k => text(x[k])) && x.id && x.code.trim() && (x.incident.trim() || x.problem.trim())), "Enter a portal code and at least one incident or problem.");
   columns.validateCustomData(data);
   return data;
 }
 function migrateArchive(input) {
   const archive = structuredClone(input);
-  assert(archive?.format !== 'orbitkanban-organization', 'Questo file è un’esportazione di organizzazione (temi, configurazione o dati): usa “Importa da file…” nella sezione “Esporta e importa organizzazione”.');
+  assert(archive?.format !== 'orbitkanban-organization', "This file is an organization export (themes, settings or data): use “Import from file…” in the “Export and import organization” section.");
   if (archive.version === 1) {
     validateData(archive);
     const organizationId = id();
     return validateArchive({
       version: 2, activeOrganizationId: organizationId,
-      organizations: [{ id: organizationId, name: archive.settings.appName || 'Organizzazione principale', data: archive }]
+      organizations: [{ id: organizationId, name: archive.settings.appName || term("Main organization", archive.settings.language ?? 'it'), data: archive }]
     });
   }
   return validateArchive(archive);
 }
 function validateArchive(archive) {
-  assert(archive && archive.version === 2, 'Formato archivio non supportato.');
-  assert(Array.isArray(archive.organizations) && archive.organizations.length > 0, 'Deve esistere almeno un’organizzazione.');
-  assert(archive.organizations.every(o => o && typeof o.id === 'string' && o.id && typeof o.name === 'string' && o.name.trim() && o.name.length <= 100), 'Organizzazione non valida.');
-  assert(new Set(archive.organizations.map(o => o.id)).size === archive.organizations.length, 'Organizzazioni duplicate.');
-  assert(archive.organizations.some(o => o.id === archive.activeOrganizationId), 'Organizzazione attiva inesistente.');
+  assert(archive && archive.version === 2, "Unsupported archive format.");
+  assert(Array.isArray(archive.organizations) && archive.organizations.length > 0, "At least one organization must exist.");
+  assert(archive.organizations.every(o => o && typeof o.id === 'string' && o.id && typeof o.name === 'string' && o.name.trim() && o.name.length <= 100), "Invalid organization.");
+  assert(new Set(archive.organizations.map(o => o.id)).size === archive.organizations.length, "Duplicate organizations.");
+  assert(archive.organizations.some(o => o.id === archive.activeOrganizationId), "The active organization does not exist.");
   for (const organization of archive.organizations) {
     validateData(organization.data);
     organization.data.settings.language ??= 'it';
@@ -392,13 +399,13 @@ function normalizeTags(data) {
   return data;
 }
 function createOrganization(name, language = 'it', logo = '', palette, demo = false) {
-  assert(typeof name === 'string' && name.trim() && name.trim().length <= 100, 'Nome organizzazione non valido.');
-  assert(validLanguage(language), 'Lingua non supportata.');
+  assert(typeof name === 'string' && name.trim() && name.trim().length <= 100, "Invalid organization name.");
+  assert(validLanguage(language), "Unsupported language.");
   const data = demo ? demoData(language) : baseData(language);
   data.settings.logo = logo;
   if (logo) {
-    assert(palette && ['background', 'surface', 'text', 'accent'].every(key => /^#[0-9a-f]{6}$/i.test(palette[key])), 'Temi non validi.');
-    const theme = { id: 'organization-logo', name: term('Tema dal logo', language).trim().slice(0, 100) || 'Tema dal logo' };
+    assert(palette && ['background', 'surface', 'text', 'accent'].every(key => /^#[0-9a-f]{6}$/i.test(palette[key])), "Invalid themes.");
+    const theme = { id: 'organization-logo', name: term("Theme from logo", language).trim().slice(0, 100) || "Theme from logo" };
     for (const key of ['background', 'surface', 'text', 'accent']) theme[key] = palette[key];
     data.settings.themes.push(theme);
     data.settings.themeId = theme.id;
@@ -420,7 +427,7 @@ const RECORD_KEYS = {
   issue: ['id', 'code', 'incident', 'problem', 'customFields']
 };
 function organizationExport(organization, kind, { appVersion = '', exportedAt = new Date().toISOString() } = {}) {
-  assert(ORGANIZATION_FILE_KINDS.includes(kind), 'Tipo di esportazione non supportato.');
+  assert(ORGANIZATION_FILE_KINDS.includes(kind), "Unsupported export type.");
   const parts = ORGANIZATION_FILE_PARTS[kind], settings = organization.data.settings;
   const file = { format: ORGANIZATION_FILE_FORMAT, version: ORGANIZATION_FILE_VERSION, kind, exportedAt, appVersion, organization: { name: organization.name } };
   if (parts.includes('themes')) file.themes = { themeId: settings.themeId, themes: structuredClone(settings.themes) };
@@ -445,13 +452,13 @@ function organizationExport(organization, kind, { appVersion = '', exportedAt = 
 }
 const slugify = value => String(value ?? '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60).replace(/-+$/, '');
 function organizationFileName(name, kind, language = 'it', date = today()) {
-  assert(ORGANIZATION_FILE_KINDS.includes(kind), 'Tipo di esportazione non supportato.');
-  const labels = { themes: 'temi', settings: 'configurazione', data: 'dati', organization: 'organizzazione' };
+  assert(ORGANIZATION_FILE_KINDS.includes(kind), "Unsupported export type.");
+  const labels = { themes: "themes", settings: "settings", data: "data", organization: "organization" };
   const label = key => slugify(term(labels[key], language)) || key;
   return `${APP_NAME}-${slugify(name) || label('organization')}-${label(kind)}-${date}.json`;
 }
 function situationFileName(name, language = 'it', date = today()) {
-  return `${APP_NAME}-${slugify(name) || slugify(term('organizzazione', language)) || 'organization'}-${slugify(term('situazione', language)) || 'situation'}-${date}.xlsx`;
+  return `${APP_NAME}-${slugify(name) || slugify(term("organization", language)) || 'organization'}-${slugify(term("situation", language)) || 'situation'}-${date}.xlsx`;
 }
 function fileRecords(list, keys, message) {
   assert(Array.isArray(list) && list.every(item => item && typeof item === 'object' && !Array.isArray(item)), message);
@@ -461,16 +468,16 @@ function parseOrganizationFile(input) {
   let file = input;
   if (typeof input === 'string') {
     try { file = JSON.parse(input.replace(/^\uFEFF/, '')); }
-    catch { throw new Error('Il file selezionato non è un file JSON valido.'); }
+    catch { throw new Error("The selected file is not a valid JSON file."); }
   }
-  assert(file && typeof file === 'object' && !Array.isArray(file), 'Il file non è un’esportazione di organizzazione OrbitKanban.');
-  assert(file.format !== undefined || !(Array.isArray(file.organizations) || (file.settings && Array.isArray(file.tasks))), 'Questo file è un backup completo dell’archivio: usa “Importa backup” nella sezione “Dati che viaggiano con te”.');
-  assert(file.format === ORGANIZATION_FILE_FORMAT, 'Il file non è un’esportazione di organizzazione OrbitKanban.');
-  assert(Number.isInteger(file.version) && file.version >= 1, 'Versione del file non supportata.');
-  assert(file.version <= ORGANIZATION_FILE_VERSION, 'Il file è stato creato da una versione più recente di OrbitKanban: aggiorna l’app per importarlo.');
-  assert(ORGANIZATION_FILE_KINDS.includes(file.kind), 'Tipo di esportazione non supportato.');
+  assert(file && typeof file === 'object' && !Array.isArray(file), "The file is not an OrbitKanban organization export.");
+  assert(file.format !== undefined || !(Array.isArray(file.organizations) || (file.settings && Array.isArray(file.tasks))), "This file is a full archive backup: use “Import backup” in the “Data that travels with you” section.");
+  assert(file.format === ORGANIZATION_FILE_FORMAT, "The file is not an OrbitKanban organization export.");
+  assert(Number.isInteger(file.version) && file.version >= 1, "Unsupported file version.");
+  assert(file.version <= ORGANIZATION_FILE_VERSION, "The file was created by a newer version of OrbitKanban: update the app to import it.");
+  assert(ORGANIZATION_FILE_KINDS.includes(file.kind), "Unsupported export type.");
   const name = file.organization?.name;
-  assert(name === undefined || (typeof name === 'string' && name.trim().length <= 100), 'Nome organizzazione non valido.');
+  assert(name === undefined || (typeof name === 'string' && name.trim().length <= 100), "Invalid organization name.");
   const parts = ORGANIZATION_FILE_PARTS[file.kind];
   const result = {
     format: ORGANIZATION_FILE_FORMAT, version: file.version, kind: file.kind, parts: [...parts],
@@ -478,12 +485,12 @@ function parseOrganizationFile(input) {
     appVersion: typeof file.appVersion === 'string' && /^[\w.+-]{1,40}$/.test(file.appVersion) ? file.appVersion : '',
     organization: { name: typeof name === 'string' ? name.trim() : '' }
   };
-  const missing = { themes: 'Il file non contiene i temi.', settings: 'Il file non contiene la configurazione.', data: 'Il file non contiene i dati.' };
+  const missing = { themes: "The file does not contain themes.", settings: "The file does not contain settings.", data: "The file does not contain data." };
   for (const part of parts) assert(file[part] && typeof file[part] === 'object' && !Array.isArray(file[part]), missing[part]);
   const probe = baseData('it');
   const check = (settings, content = {}) => validateData({ ...probe, settings: { ...probe.settings, ...settings }, ...content });
   if (parts.includes('themes')) {
-    const themes = { themeId: file.themes.themeId, themes: fileRecords(file.themes.themes, RECORD_KEYS.theme, 'Temi non validi.') };
+    const themes = { themeId: file.themes.themeId, themes: fileRecords(file.themes.themes, RECORD_KEYS.theme, "Invalid themes.") };
     check(themes);
     result.themes = themes;
   }
@@ -492,37 +499,37 @@ function parseOrganizationFile(input) {
     const settings = {
       language: source.language, logo: source.logo ?? '', portalUrlTemplate: source.portalUrlTemplate ?? '',
       tabNames: Array.isArray(source.tabNames) ? [...source.tabNames] : source.tabNames, hoursPerDay: source.hoursPerDay,
-      statuses: fileRecords(source.statuses, RECORD_KEYS.status, 'Elenco statuses non valido o vuoto.'),
-      urgencies: fileRecords(source.urgencies, RECORD_KEYS.urgency, 'Elenco urgencies non valido o vuoto.')
+      statuses: fileRecords(source.statuses, RECORD_KEYS.status, "Invalid or empty status list."),
+      urgencies: fileRecords(source.urgencies, RECORD_KEYS.urgency, "Invalid or empty urgency list.")
     };
     if (source.fontFamily !== undefined) settings.fontFamily = source.fontFamily;
     if (source.fontSizes !== undefined) {
-      assert(source.fontSizes && typeof source.fontSizes === 'object' && !Array.isArray(source.fontSizes), 'Dimensioni del testo non valide.');
+      assert(source.fontSizes && typeof source.fontSizes === 'object' && !Array.isArray(source.fontSizes), "Invalid text sizes.");
       settings.fontSizes = Object.fromEntries(FONT_SIZE_PARTS.map(({ id }) => [id, source.fontSizes[id] ?? 100]));
     }
-    if (source.highlights !== undefined) settings.highlights = fileRecords(source.highlights, RECORD_KEYS.highlight, 'Evidenziatori non validi.');
-    if (source.tags !== undefined) settings.tags = fileRecords(source.tags, RECORD_KEYS.highlight, 'Tags non validi.');
+    if (source.highlights !== undefined) settings.highlights = fileRecords(source.highlights, RECORD_KEYS.highlight, "Invalid highlighters.");
+    if (source.tags !== undefined) settings.tags = fileRecords(source.tags, RECORD_KEYS.highlight, "Invalid tags.");
     for (const key of ['taskFields', 'issueFields', 'issueColumns']) if (source[key] !== undefined) settings[key] = structuredClone(source[key]);
     if (source.taskColumns !== undefined) {
-      const columns = fileRecords(source.taskColumns, RECORD_KEYS.column, 'Colonne della lista non valide.');
-      assert(columns.every(column => typeof column.id === 'string' && typeof column.visible === 'boolean'), 'Colonne della lista non valide.');
+      const columns = fileRecords(source.taskColumns, RECORD_KEYS.column, "Invalid list columns.");
+      assert(columns.every(column => typeof column.id === 'string' && typeof column.visible === 'boolean'), "Invalid list columns.");
       settings.taskColumns = normalizeTaskColumns(columns, settings.taskFields);
     }
     if (source.savedViews !== undefined) settings.savedViews = structuredClone(source.savedViews);
-    assert(validLanguage(settings.language), 'Lingua non supportata.');
+    assert(validLanguage(settings.language), "Unsupported language.");
     check(settings);
     result.settings = settings;
   }
   if (parts.includes('data')) {
     const source = file.data;
     const content = {
-      statuses: fileRecords(source.statuses, RECORD_KEYS.status, 'Elenco statuses non valido o vuoto.'),
-      urgencies: fileRecords(source.urgencies, RECORD_KEYS.urgency, 'Elenco urgencies non valido o vuoto.'),
-      tasks: fileRecords(source.tasks, RECORD_KEYS.task, 'Elenco attività non valido.'),
-      issues: fileRecords(source.issues, RECORD_KEYS.issue, 'Elenco issue non valido.')
+      statuses: fileRecords(source.statuses, RECORD_KEYS.status, "Invalid or empty status list."),
+      urgencies: fileRecords(source.urgencies, RECORD_KEYS.urgency, "Invalid or empty urgency list."),
+      tasks: fileRecords(source.tasks, RECORD_KEYS.task, "Invalid task list."),
+      issues: fileRecords(source.issues, RECORD_KEYS.issue, "Invalid issue list.")
     };
-    if (source.highlights !== undefined) content.highlights = fileRecords(source.highlights, RECORD_KEYS.highlight, 'Evidenziatori non validi.');
-    if (source.tags !== undefined) content.tags = fileRecords(source.tags, RECORD_KEYS.highlight, 'Tags non validi.');
+    if (source.highlights !== undefined) content.highlights = fileRecords(source.highlights, RECORD_KEYS.highlight, "Invalid highlighters.");
+    if (source.tags !== undefined) content.tags = fileRecords(source.tags, RECORD_KEYS.highlight, "Invalid tags.");
     for (const key of ['taskFields', 'issueFields']) if (source[key] !== undefined) content[key] = structuredClone(source[key]);
     check({ statuses: content.statuses, urgencies: content.urgencies, ...(content.highlights ? { highlights: content.highlights } : {}), tags: content.tags || [], taskFields: columns.fieldsOf(content, 'tasks'), issueFields: columns.fieldsOf(content, 'issues') }, { tasks: content.tasks, issues: content.issues });
     result.data = content;
@@ -558,7 +565,7 @@ function colorOptionRemapper(source, target, add = false, { limit = HIGHLIGHT_LI
     return added.id;
   };
 }
-const tagRemapper = (source, target, add = false) => colorOptionRemapper(source, target, add, { limit: TAG_LIMIT, matchName: true, overflow: 'Troppi tag: riduci il catalogo prima di importare.' });
+const tagRemapper = (source, target, add = false) => colorOptionRemapper(source, target, add, { limit: TAG_LIMIT, matchName: true, overflow: "Too many tags: reduce the catalog before importing." });
 function applyOrganizationImport(current, file, options = {}) {
   const next = structuredClone(current), settings = next.settings;
   const importFields = (source, preferIncoming = false) => Object.fromEntries(['tasks', 'issues'].map(kind => {
@@ -568,7 +575,7 @@ function applyOrganizationImport(current, file, options = {}) {
     return [kind, merged];
   }));
   const wanted = part => Boolean(options[part] && file[part]);
-  assert(['themes', 'settings', 'data'].some(wanted), 'Seleziona almeno una parte da importare.');
+  assert(['themes', 'settings', 'data'].some(wanted), "Select at least one part to import.");
   if (wanted('settings')) {
     const incoming = structuredClone(file.settings);
     const maps = importFields(incoming, true);
@@ -598,6 +605,7 @@ function applyOrganizationImport(current, file, options = {}) {
   }
   if (wanted('themes')) {
     for (const theme of structuredClone(file.themes.themes)) {
+      theme.name = modernThemeName(theme);
       const index = settings.themes.findIndex(existing => existing.id === theme.id);
       if (index >= 0) settings.themes[index] = theme; else settings.themes.push(theme);
     }
@@ -651,7 +659,7 @@ function importedOrganizationData(file, options = {}, fallbackLanguage = 'it') {
   }
   return applyOrganizationImport(base, file, { ...options, logo: true, dataMode: 'replace' });
 }
-function uniqueOrganizationName(name, existingNames, fallback = 'Organizzazione importata') {
+function uniqueOrganizationName(name, existingNames, fallback = "Imported organization") {
   const base = String(name ?? '').trim().slice(0, 100).trim() || fallback;
   const taken = new Set(existingNames.map(existing => existing.trim().toLowerCase()));
   if (!taken.has(base.toLowerCase())) return base;
@@ -744,7 +752,7 @@ function reorderTaskSequences(tasks, visibleIds, from, to) {
   const byId = new Map(tasks.map(task => [task.id, task]));
   assert(new Set(visibleIds).size === visibleIds.length && visibleIds.every(id => byId.has(id))
     && Number.isInteger(from) && Number.isInteger(to) && from >= 0 && to >= 0 && from < visibleIds.length && to < visibleIds.length,
-  'La lista è cambiata. Riprova il riordino.');
+  "The list has changed. Try reordering again.");
   if (from === to) return;
   const ids = [...visibleIds], visible = new Set(ids);
   ids.splice(to, 0, ids.splice(from, 1)[0]);
@@ -760,7 +768,7 @@ function nextReleaseDate(tasks, referenceDate = today()) {
   }, '');
 }
 function extractThemePalette(pixels) {
-  assert(pixels && pixels.length > 0 && pixels.length % 4 === 0, 'Immagine priva di pixel validi.');
+  assert(pixels && pixels.length > 0 && pixels.length % 4 === 0, "The image has no valid pixels.");
   const bins = new Map();
   for (let i = 0; i < pixels.length; i += 4) {
     const alpha = pixels[i + 3] / 255;
@@ -832,7 +840,7 @@ function themeFromLogo(pixels) {
 }
 const core = {
   APP_NAME, initialData, baseData, demoData, demoReleaseDates, validateData, migrateArchive, validateArchive, createOrganization, matchIssues, indexIssues, findDuplicates, sortTasks, dateColor, today, validLanguage,
-  extractThemePalette, themeFromLogo, normalizeUrl, isWebUrl, validPortalTemplate, portalUrl,
+  extractThemePalette, themeFromLogo, normalizeUrl, isWebUrl, validPortalTemplate, hasPortalPlaceholder, portalUrl,
   ORGANIZATION_FILE_KINDS, organizationExport, organizationFileName, situationFileName, parseOrganizationFile, applyOrganizationImport, importedOrganizationData, uniqueOrganizationName,
   FONT_SIZE_PARTS, FONT_SIZE_STEP, FONT_FAMILIES, DEFAULT_FONT_FAMILY, validFontFamily, defaultFontSizes, clampFontSize, defaultThemes,
   HIGHLIGHT_LIMIT, defaultHighlights, TASK_COLUMN_IDS, defaultTaskColumns, normalizeTaskColumns, TAG_LIMIT, TAG_NAME_MAX, nextReleaseDate, reorderTaskSequences

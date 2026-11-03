@@ -35,16 +35,16 @@ function encodeDib(rgba, size) {
 
 // Every Windows component can draw DIB entries; PNG is used only at 256 px, as Windows expects.
 function encodeIco(images) {
-  if (!Array.isArray(images) || !images.length) fail('Immagini dell’icona non valide.');
+  if (!Array.isArray(images) || !images.length) fail('Invalid icon images.');
   const sizes = new Set();
   const entries = images.map(({ size, rgba, png }) => {
-    if (!Number.isInteger(size) || size < 1 || size > 256 || sizes.has(size)) fail('Dimensioni dell’icona non valide.');
+    if (!Number.isInteger(size) || size < 1 || size > 256 || sizes.has(size)) fail('Invalid icon dimensions.');
     sizes.add(size);
     if (size === 256) {
-      if (!Buffer.isBuffer(png) || !isPng(png)) fail('L’icona a 256 px deve essere un PNG.');
+      if (!Buffer.isBuffer(png) || !isPng(png)) fail('The 256 px icon must be a PNG.');
       return { size, data: png };
     }
-    if (!rgba || rgba.length !== size * size * 4) fail('Pixel dell’icona non validi.');
+    if (!rgba || rgba.length !== size * size * 4) fail('Invalid icon pixels.');
     return { size, data: encodeDib(rgba, size) };
   }).sort((a, b) => a.size - b.size);
   const header = Buffer.alloc(6 + entries.length * 16);
@@ -66,9 +66,9 @@ function encodeIco(images) {
 const describe = (width, data) => ({ size: width || 256, format: isPng(data) ? 'png' : 'dib', data });
 
 function parseIco(file) {
-  if (!Buffer.isBuffer(file) || file.length < 6 || file.readUInt16LE(0) !== 0 || file.readUInt16LE(2) !== 1) fail('File ICO non valido.');
+  if (!Buffer.isBuffer(file) || file.length < 6 || file.readUInt16LE(0) !== 0 || file.readUInt16LE(2) !== 1) fail('Invalid ICO file.');
   const count = file.readUInt16LE(4);
-  if (!count || file.length < 6 + count * 16) fail('File ICO non valido.');
+  if (!count || file.length < 6 + count * 16) fail('Invalid ICO file.');
   return Array.from({ length: count }, (_, index) => {
     const at = 6 + index * 16, length = file.readUInt32LE(at + 8), offset = file.readUInt32LE(at + 12);
     if (offset + length > file.length) fail('File ICO troncato.');
@@ -78,11 +78,11 @@ function parseIco(file) {
 
 // Icon groups of a Windows executable, in resource order: Explorer shows the first one.
 function readExecutableIcons(file) {
-  if (!Buffer.isBuffer(file) || file.length < 64 || file.toString('ascii', 0, 2) !== 'MZ') fail('Eseguibile Windows non valido.');
+  if (!Buffer.isBuffer(file) || file.length < 64 || file.toString('ascii', 0, 2) !== 'MZ') fail('Invalid Windows executable.');
   const pe = file.readUInt32LE(0x3c);
-  if (pe + 24 > file.length || file.readUInt32BE(pe) !== 0x50450000) fail('Eseguibile Windows non valido.');
+  if (pe + 24 > file.length || file.readUInt32BE(pe) !== 0x50450000) fail('Invalid Windows executable.');
   const sectionCount = file.readUInt16LE(pe + 6), optional = pe + 24, magic = file.readUInt16LE(optional);
-  if (magic !== 0x10b && magic !== 0x20b) fail('Eseguibile Windows non valido.');
+  if (magic !== 0x10b && magic !== 0x20b) fail('Invalid Windows executable.');
   const directory = optional + (magic === 0x20b ? 112 : 96) + 2 * 8;
   const resourceRva = file.readUInt32LE(directory);
   if (!resourceRva) return [];
@@ -93,7 +93,7 @@ function readExecutableIcons(file) {
   });
   const offsetOf = rva => {
     const section = sections.find(s => rva >= s.address && rva < s.address + Math.max(s.virtualSize, s.rawSize));
-    if (!section) fail('Risorse dell’eseguibile non leggibili.');
+    if (!section) fail('Unreadable executable resources.');
     return rva - section.address + section.raw;
   };
   const base = offsetOf(resourceRva);
@@ -115,9 +115,9 @@ function readExecutableIcons(file) {
     if (!typeEntry) return [];
     return entries(typeEntry.offset).filter(entry => entry.directory).map(entry => {
       const language = entries(entry.offset).find(item => !item.directory);
-      if (!language) fail('Risorse dell’eseguibile non leggibili.');
+      if (!language) fail('Unreadable executable resources.');
       const at = offsetOf(file.readUInt32LE(language.offset)), size = file.readUInt32LE(language.offset + 4);
-      if (at + size > file.length) fail('Risorse dell’eseguibile troncate.');
+      if (at + size > file.length) fail('Truncated executable resources.');
       return { id: entry.id, data: file.subarray(at, at + size) };
     });
   };
@@ -126,7 +126,7 @@ function readExecutableIcons(file) {
     id,
     images: Array.from({ length: data.readUInt16LE(4) }, (_, index) => {
       const at = 6 + index * 14, image = images.get(data.readUInt16LE(at + 12));
-      if (!image) fail('Icona dell’eseguibile incompleta.');
+      if (!image) fail('Incomplete executable icon.');
       return describe(data[at], image);
     })
   }));
@@ -135,21 +135,21 @@ function readExecutableIcons(file) {
 // The executable's main icon must contain exactly the images of the ICO file.
 function verifyExecutableIcon(executable, ico) {
   const [main] = readExecutableIcons(executable);
-  if (!main) fail('L’eseguibile non contiene alcuna icona.');
+  if (!main) fail('The executable does not contain an icon.');
   const expected = parseIco(ico), actual = new Map(main.images.map(image => [image.size, image]));
   const missing = expected.filter(image => !actual.get(image.size)?.data.equals(image.data)).map(image => `${image.size}px`);
-  if (missing.length || actual.size !== expected.length) fail(`Icona dell’eseguibile diversa da quella dell’app (${missing.join(', ') || 'formati in più'}).`);
+  if (missing.length || actual.size !== expected.length) fail(`The executable icon does not match the app icon (${missing.join(', ') || 'extra formats'}).`);
   return expected.map(({ size, format }) => ({ size, format }));
 }
 
 if (require.main === module) {
   try {
     const [option, icoPath, ...executables] = process.argv.slice(2);
-    if (option !== '--verify' || !icoPath || !executables.length) fail('Uso: node app-icon.js --verify build/icon.ico <file.exe>...');
+    if (option !== '--verify' || !icoPath || !executables.length) fail('Usage: node app-icon.js --verify build/icon.ico <file.exe>...');
     const ico = fs.readFileSync(icoPath);
     for (const executable of executables) {
       const formats = verifyExecutableIcon(fs.readFileSync(executable), ico);
-      console.log(`Icona verificata: ${executable} (${formats.map(format => `${format.size}px ${format.format}`).join(', ')})`);
+      console.log(`Verified icon: ${executable} (${formats.map(format => `${format.size}px ${format.format}`).join(', ')})`);
     }
   } catch (error) {
     console.error(error.message);

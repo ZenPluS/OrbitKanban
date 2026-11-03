@@ -12,7 +12,7 @@ try {
   fs.mkdirSync(path.join(folder, 'data'));
   fs.writeFileSync(path.join(folder, 'data', 'workspace.json'), JSON.stringify(initialData()));
   fs.mkdirSync(path.join(folder, 'data', 'languages'));
-  fs.writeFileSync(path.join(folder, 'data', 'languages', 'de.json'), JSON.stringify({ format: 'orbitkanban-language', version: 1, code: 'de', name: 'Deutsch', locale: 'de-DE', messages: { Impostazioni: 'Einstellungen', 'Salva impostazioni': 'Einstellungen speichern' } }));
+  fs.writeFileSync(path.join(folder, 'data', 'languages', 'de.json'), JSON.stringify({ format: 'orbitkanban-language', version: 1, code: 'de', name: 'Deutsch', locale: 'de-DE', messages: { Settings: 'Einstellungen', 'Save settings': 'Einstellungen speichern' } }));
   fs.writeFileSync(path.join(folder, 'data', 'languages', 'broken.json'), '{ broken');
   const result = spawnSync(executable, args, {
     stdio: 'inherit',
@@ -24,12 +24,12 @@ try {
   exitCode = result.status ?? 1;
   if (exitCode === 0) {
     const report = JSON.parse(fs.readFileSync(path.join(folder, 'smoke-result.json'), 'utf8'));
-    if (!report.ok || report.checks.length < 506) throw new Error('Rapporto smoke test incompleto.');
+    if (!report.ok || report.checks.length < 506) throw new Error('Smoke test report is incomplete.');
     const stored = validateArchive(JSON.parse(fs.readFileSync(path.join(folder, 'data', 'workspace.json'), 'utf8')));
-    if (stored.organizations.length !== 2 || !stored.organizations.every(o => o.data.settings.logo.startsWith('data:image/png;base64,'))) throw new Error('Archivio multi-organizzazione incompleto.');
+    if (stored.organizations.length !== 2 || !stored.organizations.every(o => o.data.settings.logo.startsWith('data:image/png;base64,'))) throw new Error('Multi-organization archive is incomplete.');
     const template = fs.readFileSync(path.join(folder, 'data', 'languages', 'en.template.json'));
-    if (!template.equals(fs.readFileSync(path.join(__dirname, 'languages', 'en.json')))) throw new Error('Modello della lingua inglese non scritto nella cartella lingue.');
-    console.log(`Verificato archivio su disco e backup: ${report.checks.length} controlli UI superati.`);
+    if (!template.equals(fs.readFileSync(path.join(__dirname, 'languages', 'en.json')))) throw new Error('English language template was not written to the languages folder.');
+    console.log(`Verified on-disk archive and backup: ${report.checks.length} UI checks passed.`);
   }
 } finally {
   fs.rmSync(folder, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });

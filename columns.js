@@ -9,15 +9,15 @@ const fieldsOf = (settings, kind) => settings[kind === 'tasks' ? 'taskFields' : 
 const validDate = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
 const choices = field => field.options.map(option => typeof option === 'string' ? { id: option, name: option, color: '#a392ff' } : { ...option });
 function validateFields(fields) {
-  assert(Array.isArray(fields) && fields.length <= FIELD_LIMIT, 'Elenco colonne personalizzate non valido.');
+  assert(Array.isArray(fields) && fields.length <= FIELD_LIMIT, "Invalid custom column list.");
   const ids = new Set(), names = new Set();
   for (const field of fields) {
-    assert(field && /^custom-[a-z0-9-]{1,80}$/i.test(field.id) && typeof field.name === 'string' && field.name.trim() && field.name.length <= 60 && TYPES.includes(field.type), 'Colonna personalizzata non valida.');
-    assert(!ids.has(field.id) && !names.has(key(field.name)), 'Nomi e identificativi delle colonne devono essere univoci.');
+    assert(field && /^custom-[a-z0-9-]{1,80}$/i.test(field.id) && typeof field.name === 'string' && field.name.trim() && field.name.length <= 60 && TYPES.includes(field.type), "Invalid custom column.");
+    assert(!ids.has(field.id) && !names.has(key(field.name)), "Column names and identifiers must be unique.");
     ids.add(field.id); names.add(key(field.name));
-    assert(Array.isArray(field.options) && field.options.length <= 100, 'Opzioni della colonna non valide.');
+    assert(Array.isArray(field.options) && field.options.length <= 100, "Invalid column options.");
     const options = choices(field);
-    assert(options.every(option => option && typeof option.id === 'string' && option.id.trim() && option.id.length <= 200 && typeof option.name === 'string' && option.name.trim() && option.name.length <= 60 && /^#[0-9a-f]{6}$/i.test(option.color)) && new Set(options.map(option => option.id)).size === options.length && new Set(options.map(option => key(option.name))).size === options.length, 'Opzioni della colonna non valide.');
+    assert(options.every(option => option && typeof option.id === 'string' && option.id.trim() && option.id.length <= 200 && typeof option.name === 'string' && option.name.trim() && option.name.length <= 60 && /^#[0-9a-f]{6}$/i.test(option.color)) && new Set(options.map(option => option.id)).size === options.length && new Set(options.map(option => key(option.name))).size === options.length, "Invalid column options.");
   }
   return fields;
 }
@@ -38,7 +38,7 @@ function validateValue(value, field, optionIds) {
       break;
     default: valid = typeof value === 'string' && value.length <= 200000;
   }
-  assert(valid, 'Valore della colonna personalizzata non valido.');
+  assert(valid, "Invalid custom column value.");
 }
 function validateCustomData(data) {
   for (const kind of ['tasks', 'issues']) {
@@ -46,9 +46,9 @@ function validateCustomData(data) {
     const options = new Map(fields.map(field => [field.id, new Set(choices(field).map(option => option.id))]));
     for (const record of data[kind]) {
       if (record.customFields === undefined) continue;
-      assert(ownObject(record.customFields), 'Valori delle colonne personalizzate non validi.');
+      assert(ownObject(record.customFields), "Invalid custom column values.");
       for (const [id, value] of Object.entries(record.customFields)) {
-        assert(known.has(id), 'Colonna personalizzata mancante nella configurazione.');
+        assert(known.has(id), "A custom column is missing from settings.");
         validateValue(value, known.get(id), options.get(id));
       }
     }
@@ -115,7 +115,7 @@ function mergeFields(target, source, preferIncoming = false) {
   for (const incoming of source) {
     let field = fields.find(field => key(field.name) === key(incoming.name));
     if (field) {
-      assert(field.type === incoming.type, 'Una colonna con lo stesso nome ha un tipo diverso.');
+      assert(field.type === incoming.type, "A column with the same name has a different type.");
       const options = choices(field), values = new Map();
       for (const option of choices(incoming)) {
         let match = (preferIncoming && options.find(existing => existing.id === option.id)) || options.find(existing => key(existing.name) === key(option.name));

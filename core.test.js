@@ -12,7 +12,7 @@ test('font choices are validated and migrate without changing existing data', ()
   for (const font of FONT_FAMILIES) { data.settings.fontFamily = font.id; validateData(data); }
   for (const value of ['', null, 'unknown', 'Arial; color: red', {}]) {
     data.settings.fontFamily = value;
-    assert.throws(() => validateData(data), /Font/);
+    assert.throws(() => validateData(data), /font/i);
   }
   delete data.settings.fontFamily;
   assert.equal(migrateArchive(data).organizations[0].data.settings.fontFamily, DEFAULT_FONT_FAMILY);
@@ -48,7 +48,7 @@ test('row reordering renumbers Sequence and preserves fields and filtered-out po
   reorderTaskSequences(tasks, ['c', 'a'], 0, 0);
   assert.deepEqual(tasks, before);
   for (const [ids, from, to] of [[['missing', 'a'], 0, 1], [['a', 'a'], 0, 1], [['a', 'c'], -1, 0], [['a', 'c'], 0, 2]]) {
-    assert.throws(() => reorderTaskSequences(tasks, ids, from, to), /lista è cambiata/);
+    assert.throws(() => reorderTaskSequences(tasks, ids, from, to), /list has changed/i);
     assert.deepEqual(tasks, before);
   }
 });
@@ -106,9 +106,9 @@ test('older archives gain missing presets without overwriting active, custom or 
   assert.deepEqual(roundtrip, upgraded);
   const bad = structuredClone(legacy);
   bad.settings.themes[0].accent = 'invalid';
-  assert.throws(() => migrateArchive(bad), /Temi non validi/);
+  assert.throws(() => migrateArchive(bad), /invalid themes/i);
   bad.settings.themes = [];
-  assert.throws(() => migrateArchive(bad), /Temi non validi/);
+  assert.throws(() => migrateArchive(bad), /invalid themes/i);
 });
 test('demo releases are on Wednesdays every two weeks from January 2025 up to the next release', () => {
   const { past, next } = demoReleaseDates(new Date(2026, 4, 20, 10));
@@ -338,6 +338,24 @@ test('legacy archive migrates without losing task IDs, settings, associations or
   assert.equal(archive.organizations[0].data.settings.appName, undefined);
   assert.deepEqual(legacy, original);
 });
+test('legacy archives without an app title name their only organization in the archive language', () => {
+  const italian = initialData(), english = initialData();
+  english.settings.language = 'en';
+  assert.equal(migrateArchive(italian).organizations[0].name, 'Organizzazione principale');
+  assert.equal(migrateArchive(english).organizations[0].name, 'Main organization');
+});
+test('the renamed built-in theme drops its old Italian name in archives and imported files', () => {
+  const legacy = initialData();
+  legacy.settings.themes.find(theme => theme.id === 'daylight').name = 'Luce';
+  legacy.settings.themes.push({ id: 'luce', name: 'Luce', background: '#ffffff', surface: '#f0f0f0', text: '#111111', accent: '#2255aa' });
+  const themes = migrateArchive(legacy).organizations[0].data.settings.themes;
+  assert.equal(themes.find(theme => theme.id === 'daylight').name, 'Daylight');
+  assert.equal(themes.find(theme => theme.id === 'luce').name, 'Luce');
+  const source = baseData('en');
+  source.settings.themes.find(theme => theme.id === 'daylight').name = 'Luce';
+  const file = parseOrganizationFile(organizationExport({ name: 'Source', data: source }, 'themes'));
+  assert.equal(applyOrganizationImport(baseData('it'), file, { themes: true }).settings.themes.find(theme => theme.id === 'daylight').name, 'Daylight');
+});
 test('new organizations have independent empty workspaces and localized defaults', () => {
   const first = createOrganization('First', 'it'), second = createOrganization('Second', 'en');
   assert.equal(second.data.settings.tabNames[0], 'Tasks');
@@ -398,48 +416,50 @@ test('invalid organization archives, logo sources and unsupported languages are 
     assert.throws(() => validateArchive(invalid));
   }
   assert.throws(() => createOrganization(' '));
-  assert.throws(() => createOrganization('Bad language', 'english'), /Lingua/);
+  assert.throws(() => createOrganization('Bad language', 'english'), /unsupported language/i);
   const portable = structuredClone(archive);
   portable.organizations[0].data.settings.language = 'pt-BR';
   assert.equal(validateArchive(portable).organizations[0].data.settings.language, 'pt-BR');
 });
 
 test('portal links are built from the organization template, with per-task override and optional link', () => {
-  const settings = { portalUrlTemplate: 'https://jira.de.com/browse/{codice}' };
+  const settings = { portalUrlTemplate: 'https://jira.de.com/browse/{code}' };
   assert.equal(portalUrl({ code: ' PRJ-7 ', url: '' }, settings), 'https://jira.de.com/browse/PRJ-7');
   assert.equal(portalUrl({ code: 'PRJ 7/A', url: '' }, settings), 'https://jira.de.com/browse/PRJ%207%2FA');
-  assert.equal(portalUrl({ code: 'X-1', url: '' }, { portalUrlTemplate: 'https://qualcosa.net/<codice>/dettaglio?ref={CODE}' }), 'https://qualcosa.net/X-1/dettaglio?ref=X-1');
-  assert.equal(portalUrl({ code: 'PRJ-7', url: 'https://altro.it/7' }, settings), 'https://altro.it/7');
+  assert.equal(portalUrl({ code: 'X-1', url: '' }, { portalUrlTemplate: 'https://something.net/<code>/details?ref={CODE}' }), 'https://something.net/X-1/details?ref=X-1');
+  // Templates saved before the source moved to English use the Italian placeholder.
+  assert.equal(portalUrl({ code: 'X-1', url: '' }, { portalUrlTemplate: 'https://something.net/<codice>/dettaglio?ref={codice}' }), 'https://something.net/X-1/dettaglio?ref=X-1');
+  assert.equal(portalUrl({ code: 'PRJ-7', url: 'https://other.com/7' }, settings), 'https://other.com/7');
   assert.equal(portalUrl({ code: 'PRJ-7', url: '' }, { portalUrlTemplate: '' }), '');
   assert.equal(portalUrl({ code: ' ', url: '' }, settings), '');
-  assert.equal(normalizeUrl(' jira.de.com/{codice} '), 'https://jira.de.com/{codice}');
-  assert.equal(normalizeUrl('http://intranet:8080/{codice}'), 'http://intranet:8080/{codice}');
+  assert.equal(normalizeUrl(' jira.de.com/{code} '), 'https://jira.de.com/{code}');
+  assert.equal(normalizeUrl('http://intranet:8080/{code}'), 'http://intranet:8080/{code}');
   assert.equal(normalizeUrl(''), '');
-  for (const valid of ['', 'https://jira.de.com/browse/{codice}', 'http://qualcosa.net/{code}/x', 'https://{codice}.portal.com']) assert.ok(validPortalTemplate(valid), valid);
-  for (const invalid of ['https://jira.de.com/browse/', 'ftp://host/{codice}', 'javascript:alert(1)//{codice}', 'https:// spazio/{codice}', 'jira.de.com/{codice}']) assert.ok(!validPortalTemplate(invalid), invalid);
+  for (const valid of ['', 'https://jira.de.com/browse/{code}', 'http://something.net/{code}/x', 'https://{code}.portal.com', 'https://jira.de.com/browse/{codice}']) assert.ok(validPortalTemplate(valid), valid);
+  for (const invalid of ['https://jira.de.com/browse/', 'ftp://host/{code}', 'javascript:alert(1)//{code}', 'https:// space/{code}', 'jira.de.com/{code}']) assert.ok(!validPortalTemplate(invalid), invalid);
   assert.ok(isWebUrl('https://jira.de.com/browse/PRJ-1') && !isWebUrl('javascript:alert(1)') && !isWebUrl('https://') && !isWebUrl(42));
   const data = initialData();
   data.tasks[0].url = '';
-  data.settings.portalUrlTemplate = 'https://jira.de.com/browse/{codice}';
+  data.settings.portalUrlTemplate = 'https://jira.de.com/browse/{code}';
   assert.equal(validateData(data), data);
   data.settings.portalUrlTemplate = 'https://jira.de.com/browse/';
-  assert.throws(() => validateData(data), /\{codice\}/);
+  assert.throws(() => validateData(data), /\{code\}/);
 });
 test('existing archives gain an empty portal link template without losing task links', () => {
   const legacy = initialData();
   delete legacy.settings.portalUrlTemplate;
-  legacy.tasks[0].url = 'https://azienda.atlassian.net/browse/PRJ-1042';
+  legacy.tasks[0].url = 'https://company.atlassian.net/browse/PRJ-1042';
   const archive = migrateArchive(legacy);
   const settings = archive.organizations[0].data.settings;
   assert.equal(settings.portalUrlTemplate, '');
-  assert.equal(portalUrl(archive.organizations[0].data.tasks[0], settings), 'https://azienda.atlassian.net/browse/PRJ-1042');
-  assert.equal(createOrganization('Nuova').data.settings.portalUrlTemplate, '');
+  assert.equal(portalUrl(archive.organizations[0].data.tasks[0], settings), 'https://company.atlassian.net/browse/PRJ-1042');
+  assert.equal(createOrganization('New').data.settings.portalUrlTemplate, '');
 });
 
 const sampleOrganization = () => {
   const data = demoData('it', new Date(2026, 4, 20, 10));
   data.settings.logo = 'data:image/png;base64,iVBORw0KGgo=';
-  data.settings.portalUrlTemplate = 'https://jira.de.com/browse/{codice}';
+  data.settings.portalUrlTemplate = 'https://jira.de.com/browse/{code}';
   return { id: 'org-1', name: 'Àcme Srl / Team #1', data };
 };
 const sections = file => ['themes', 'settings', 'data'].filter(part => part in file);
@@ -468,7 +488,7 @@ test('organization exports contain only the requested parts as independent copie
   files.themes.themes.themes[0].accent = '#000000';
   assert.notEqual(organization.data.tasks[0].code, 'CHANGED');
   assert.notEqual(organization.data.settings.themes[0].accent, '#000000');
-  assert.throws(() => organizationExport(organization, 'backup'), /non supportato/);
+  assert.throws(() => organizationExport(organization, 'backup'), /unsupported/i);
 });
 test('organization file names are portable slugs with the localized part and date', () => {
   assert.equal(organizationFileName('Àcme Srl / Team #1', 'themes', 'it', '2026-05-20'), 'OrbitKanban-acme-srl-team-1-temi-2026-05-20.json');
@@ -477,7 +497,7 @@ test('organization file names are portable slugs with the localized part and dat
   assert.equal(organizationFileName('Acme', 'organization', 'en', '2026-05-20'), 'OrbitKanban-acme-organization-2026-05-20.json');
   assert.equal(organizationFileName('***', 'data', 'it', '2026-05-20'), 'OrbitKanban-organizzazione-dati-2026-05-20.json');
   assert.match(organizationFileName('x'.repeat(200), 'themes', 'en'), /^OrbitKanban-x{60}-themes-\d{4}-\d{2}-\d{2}\.json$/);
-  assert.throws(() => organizationFileName('Acme', 'backup'), /non supportato/);
+  assert.throws(() => organizationFileName('Acme', 'backup'), /unsupported/i);
   assert.equal(situationFileName('Àcme Srl / Team #1', 'it', '2026-05-20'), 'OrbitKanban-acme-srl-team-1-situazione-2026-05-20.xlsx');
   assert.equal(situationFileName('Acme', 'en', '2026-05-20'), 'OrbitKanban-acme-situation-2026-05-20.xlsx');
   assert.equal(situationFileName('***', 'it', '2026-05-20'), 'OrbitKanban-organizzazione-situazione-2026-05-20.xlsx');
@@ -495,26 +515,26 @@ test('organization files are validated, stripped of unknown fields and never con
   assert.ok(!('extra' in parsed) && !('script' in parsed.themes.themes[0]) && !('themes' in parsed.settings) && !('injected' in parsed.data.tasks[0]));
   assert.deepEqual(parsed.data.tasks.map(t => t.id), organization.data.tasks.map(t => t.id));
   assert.equal(parseOrganizationFile('\uFEFF' + JSON.stringify(organizationExport(organization, 'themes'))).themes.themeId, organization.data.settings.themeId);
-  assert.deepEqual([parseOrganizationFile({ ...file, appVersion: '<b>', exportedAt: 'ieri' }).appVersion, parseOrganizationFile({ ...file, exportedAt: 'ieri' }).exportedAt], ['', '']);
-  assert.throws(() => parseOrganizationFile('{ rotto'), /JSON valido/);
-  assert.throws(() => parseOrganizationFile('[]'), /esportazione di organizzazione/);
-  assert.throws(() => parseOrganizationFile(JSON.stringify(migrateArchive(initialData()))), /backup completo/);
-  assert.throws(() => parseOrganizationFile(initialData()), /backup completo/);
-  assert.throws(() => migrateArchive(file), /Importa da file/);
-  assert.throws(() => parseOrganizationFile({ ...file, format: 'altro' }), /esportazione di organizzazione/);
-  assert.throws(() => parseOrganizationFile({ ...file, version: 2 }), /più recente/);
-  assert.throws(() => parseOrganizationFile({ ...file, version: 0 }), /Versione del file/);
-  assert.throws(() => parseOrganizationFile({ ...file, kind: 'archive' }), /non supportato/);
-  assert.throws(() => parseOrganizationFile({ ...file, data: undefined }), /non contiene i dati/);
-  assert.throws(() => parseOrganizationFile({ ...file, organization: { name: 'x'.repeat(101) } }), /Nome organizzazione/);
+  assert.deepEqual([parseOrganizationFile({ ...file, appVersion: '<b>', exportedAt: 'yesterday' }).appVersion, parseOrganizationFile({ ...file, exportedAt: 'yesterday' }).exportedAt], ['', '']);
+  assert.throws(() => parseOrganizationFile('{ broken'), /valid JSON/i);
+  assert.throws(() => parseOrganizationFile('[]'), /organization export/i);
+  assert.throws(() => parseOrganizationFile(JSON.stringify(migrateArchive(initialData()))), /full archive backup/i);
+  assert.throws(() => parseOrganizationFile(initialData()), /full archive backup/i);
+  assert.throws(() => migrateArchive(file), /organization export/i);
+  assert.throws(() => parseOrganizationFile({ ...file, format: 'other' }), /organization export/i);
+  assert.throws(() => parseOrganizationFile({ ...file, version: 2 }), /newer version/i);
+  assert.throws(() => parseOrganizationFile({ ...file, version: 0 }), /file version/i);
+  assert.throws(() => parseOrganizationFile({ ...file, kind: 'archive' }), /unsupported export type/i);
+  assert.throws(() => parseOrganizationFile({ ...file, data: undefined }), /does not contain data/i);
+  assert.throws(() => parseOrganizationFile({ ...file, organization: { name: 'x'.repeat(101) } }), /organization name/i);
   const broken = (change, pattern) => { const copy = structuredClone(file); change(copy); assert.throws(() => parseOrganizationFile(copy), pattern); };
-  broken(copy => { copy.data.tasks[0].statusId = 'inesistente'; }, /Stato o urgenza/);
-  broken(copy => { copy.data.tasks = 'tutte'; }, /Elenco attività/);
-  broken(copy => { copy.themes.themeId = 'inesistente'; }, /Tema selezionato/);
-  broken(copy => { copy.themes.themes[0].accent = 'red'; }, /Temi non validi/);
-  broken(copy => { copy.settings.logo = 'data:image/svg+xml;base64,AAAA'; }, /Logo non valido/);
-  broken(copy => { copy.settings.language = 'fr_FR'; }, /Lingua/);
-  broken(copy => { copy.settings.portalUrlTemplate = 'javascript:alert(1)//{codice}'; }, /modello del link/);
+  broken(copy => { copy.data.tasks[0].statusId = 'nonexistent'; }, /status or urgency/i);
+  broken(copy => { copy.data.tasks = 'all'; }, /invalid task list/i);
+  broken(copy => { copy.themes.themeId = 'nonexistent'; }, /selected theme/i);
+  broken(copy => { copy.themes.themes[0].accent = 'red'; }, /invalid themes/i);
+  broken(copy => { copy.settings.logo = 'data:image/svg+xml;base64,AAAA'; }, /invalid logo/i);
+  broken(copy => { copy.settings.language = 'fr_FR'; }, /unsupported language/i);
+  broken(copy => { copy.settings.portalUrlTemplate = 'javascript:alert(1)//{code}'; }, /portal link template/i);
 });
 test('importing settings remaps existing tasks by name, then position, and keeps the logo unless requested', () => {
   const current = demoData('it', new Date(2026, 4, 20, 10));
@@ -522,7 +542,7 @@ test('importing settings remaps existing tasks by name, then position, and keeps
   const [todo, doing, review, done] = current.settings.statuses.map(status => status.id);
   const source = baseData('en');
   source.settings.statuses = [{ id: 'x-done', name: ` ${current.settings.statuses[3].name.toUpperCase()} `, color: '#00aa00', highlight: false }, { id: 'x-open', name: 'Open', color: '#0000aa', highlight: true }];
-  Object.assign(source.settings, { logo: 'data:image/png;base64,BBBB', portalUrlTemplate: 'https://jira.example.com/{codice}', hoursPerDay: 7 });
+  Object.assign(source.settings, { logo: 'data:image/png;base64,BBBB', portalUrlTemplate: 'https://jira.example.com/{code}', hoursPerDay: 7 });
   const file = parseOrganizationFile(organizationExport({ name: 'Source', data: source }, 'settings'));
   const result = applyOrganizationImport(current, file, { settings: true });
   const expectedStatus = { [todo]: 'x-done', [doing]: 'x-open', [review]: 'x-open', [done]: 'x-done' };
@@ -532,11 +552,11 @@ test('importing settings remaps existing tasks by name, then position, and keeps
     assert.equal(imported.urgencyId, source.settings.urgencies[current.settings.urgencies.findIndex(u => u.id === original.urgencyId)].id);
   }
   assert.deepEqual(result.issues, current.issues);
-  assert.deepEqual([result.settings.language, result.settings.portalUrlTemplate, result.settings.hoursPerDay, result.settings.tabNames], ['en', 'https://jira.example.com/{codice}', 7, source.settings.tabNames]);
+  assert.deepEqual([result.settings.language, result.settings.portalUrlTemplate, result.settings.hoursPerDay, result.settings.tabNames], ['en', 'https://jira.example.com/{code}', 7, source.settings.tabNames]);
   assert.deepEqual([result.settings.logo, result.settings.themeId, result.settings.themes], [current.settings.logo, current.settings.themeId, current.settings.themes]);
   assert.equal(applyOrganizationImport(current, file, { settings: true, logo: true }).settings.logo, 'data:image/png;base64,BBBB');
   assert.equal(current.settings.language, 'it');
-  assert.throws(() => applyOrganizationImport(current, file, { themes: true, data: true }), /almeno una parte/);
+  assert.throws(() => applyOrganizationImport(current, file, { themes: true, data: true }), /at least one part/i);
 });
 test('importing themes merges by identifier and activates the file theme only on request', () => {
   const current = baseData('it'), source = baseData('en');
@@ -589,12 +609,12 @@ test('new organizations created from files keep the statuses, logo and language 
   const themesOnly = importedOrganizationData(exported('themes'), { themes: true }, 'en');
   assert.deepEqual([themesOnly.settings.language, themesOnly.settings.themeId, themesOnly.tasks], ['en', 'midnight', []]);
   assert.ok(themesOnly.settings.themes.some(theme => theme.id === 'aurora'));
-  assert.throws(() => importedOrganizationData(full, {}, 'it'), /almeno una parte/);
+  assert.throws(() => importedOrganizationData(full, {}, 'it'), /at least one part/i);
 });
 test('imported organization names stay unique, case-insensitive and within limits', () => {
   assert.equal(uniqueOrganizationName('Acme', ['Beta']), 'Acme');
   assert.equal(uniqueOrganizationName(' acme ', ['Acme', 'ACME (2)']), 'acme (3)');
-  assert.equal(uniqueOrganizationName('', ['Organizzazione importata']), 'Organizzazione importata (2)');
+  assert.equal(uniqueOrganizationName('', ['Imported organization'], 'Imported organization'), 'Imported organization (2)');
   assert.equal(uniqueOrganizationName(undefined, [], 'Imported organization'), 'Imported organization');
   const long = uniqueOrganizationName('x'.repeat(120), ['x'.repeat(100)]);
   assert.deepEqual([long.length, long.endsWith('x (2)')], [100, true]);
@@ -610,11 +630,11 @@ test('text sizes have per-part limits in 5% steps and older archives get the def
   for (const change of invalid) {
     const copy = structuredClone(data);
     change(copy.settings.fontSizes);
-    assert.throws(() => validateData(copy), /Dimensioni del testo non valide/);
+    assert.throws(() => validateData(copy), /invalid text sizes/i);
   }
   const notAnObject = structuredClone(data);
   notAnObject.settings.fontSizes = [];
-  assert.throws(() => validateData(notAnObject), /Dimensioni del testo non valide/);
+  assert.throws(() => validateData(notAnObject), /invalid text sizes/i);
   const legacy = initialData();
   delete legacy.settings.fontSizes;
   assert.equal(validateData(legacy), legacy);
@@ -622,7 +642,7 @@ test('text sizes have per-part limits in 5% steps and older archives get the def
   const archive = migrateArchive(initialData());
   delete archive.organizations[0].data.settings.fontSizes;
   assert.deepEqual(validateArchive(archive).organizations[0].data.settings.fontSizes, defaultFontSizes());
-  assert.deepEqual(createOrganization('Nuova', 'en').data.settings.fontSizes, defaultFontSizes());
+  assert.deepEqual(createOrganization('New', 'en').data.settings.fontSizes, defaultFontSizes());
 });
 test('text sizes travel with settings exports while older or partial files stay safe', () => {
   const organization = sampleOrganization();
@@ -644,10 +664,10 @@ test('text sizes travel with settings exports while older or partial files stay 
   const partial = organizationExport(organization, 'settings');
   partial.settings.fontSizes = { tables: 120, unknown: 300 };
   assert.deepEqual(parseOrganizationFile(partial).settings.fontSizes, { ...defaultFontSizes(), tables: 120 });
-  for (const fontSizes of [{ ...defaultFontSizes(), tables: 400 }, { ...defaultFontSizes(), base: 'grande' }, [], null]) {
+  for (const fontSizes of [{ ...defaultFontSizes(), tables: 400 }, { ...defaultFontSizes(), base: 'large' }, [], null]) {
     const broken = organizationExport(organization, 'settings');
     broken.settings.fontSizes = fontSizes;
-    assert.throws(() => parseOrganizationFile(broken), /Dimensioni del testo non valide/);
+    assert.throws(() => parseOrganizationFile(broken), /invalid text sizes/i);
   }
   const full = parseOrganizationFile(organizationExport(organization, 'organization'));
   assert.deepEqual(importedOrganizationData(full, { themes: true, settings: true, data: true }, 'it').settings.fontSizes, organization.data.settings.fontSizes);
@@ -689,16 +709,16 @@ test('highlighters and task columns are validated', () => {
     data => { data.settings.highlights = Array.from({ length: HIGHLIGHT_LIMIT + 1 }, (_, index) => ({ id: `h${index}`, name: `H${index}`, color: '#ffffff' })); },
     data => { data.settings.highlights = 'giallo'; }
   ];
-  for (const breakIt of broken) { const data = baseData('it'); breakIt(data); assert.throws(() => validateData(data), /Evidenziatori non validi/); }
+  for (const breakIt of broken) { const data = baseData('it'); breakIt(data); assert.throws(() => validateData(data), /invalid highlighters/i); }
   for (const columns of [[], [{ id: 'code', visible: false }], [{ id: 'code', visible: 'si' }], [{ id: 'code', visible: true }, { id: 'code', visible: true }], 'code']) {
     const data = baseData('it');
     data.settings.taskColumns = columns;
-    assert.throws(() => validateData(data), /Colonne della lista non valide/);
+    assert.throws(() => validateData(data), /invalid list columns/i);
   }
   const data = baseData('it');
   data.settings.highlights = [];
   data.tasks = [{ id: 't1', code: 'PRJ-1', sequence: 1, url: '', description: '', notes: '', releaseDate: '', statusId: data.settings.statuses[0].id, urgencyId: data.settings.urgencies[0].id, effortHours: 0, hidden: false, highlightId: 42 }];
-  assert.throws(() => validateData(data), /Evidenziazione attività non valida/);
+  assert.throws(() => validateData(data), /invalid task highlight/i);
   data.tasks[0].highlightId = 'missing';
   assert.equal(validateData(data), data);
 });
@@ -718,7 +738,7 @@ test('task columns keep the saved order and restore missing columns in their def
 });
 test('saved views are portable settings and normalize safely in older archives', () => {
   const data = baseData('it'), savedView = {
-    id: 'release-next', name: 'Prossima release', search: 'ORBIT', statusFilter: data.settings.statuses[0].id,
+    id: 'release-next', name: 'Next release', search: 'ORBIT', statusFilter: data.settings.statuses[0].id,
     highlightFilter: '__any', showHidden: false, duplicatesOnly: false,
     sort: [{ key: 'releaseDate', direction: 'asc' }, { key: 'sequence', direction: 'desc' }],
     columns: [{ id: 'code', visible: true }, { id: 'releaseDate', visible: true }]
@@ -750,11 +770,11 @@ test('invalid saved view names, filters, sorts, and columns are rejected', () =>
     const view = { id: 'v1', name: 'Valid', search: '', statusFilter: '', highlightFilter: '', showHidden: false, duplicatesOnly: false, sort: [{ key: 'sequence', direction: 'asc' }], columns: defaultTaskColumns() };
     mutate(view);
     data.settings.savedViews = [view];
-    assert.throws(() => validateData(data), /Viste salvate non valide/);
+    assert.throws(() => validateData(data), /invalid saved views/i);
   }
   const duplicateNames = baseData('it');
-  duplicateNames.settings.savedViews = ['Vista', 'vista'].map((name, i) => ({ id: `v${i}`, name, search: '', statusFilter: '', highlightFilter: '', showHidden: false, duplicatesOnly: false, sort: [{ key: 'sequence', direction: 'asc' }], columns: defaultTaskColumns() }));
-  assert.throws(() => validateData(duplicateNames), /Viste salvate non valide/);
+  duplicateNames.settings.savedViews = ['View', 'view'].map((name, i) => ({ id: `v${i}`, name, search: '', statusFilter: '', highlightFilter: '', showHidden: false, duplicatesOnly: false, sort: [{ key: 'sequence', direction: 'asc' }], columns: defaultTaskColumns() }));
+  assert.throws(() => validateData(duplicateNames), /invalid saved views/i);
 });
 test('demo data highlights a mix of open and recently released tasks', () => {
   const data = demoData('it', new Date(2026, 4, 20, 10));
@@ -769,7 +789,7 @@ test('demo data highlights a mix of open and recently released tasks', () => {
 test('highlighters and columns travel with settings and data exports', () => {
   const organization = sampleOrganization();
   const settings = organization.data.settings;
-  settings.highlights.push({ id: 'h-purple', name: 'Cliente VIP', color: '#9b6bff' });
+  settings.highlights.push({ id: 'h-purple', name: 'VIP customer', color: '#9b6bff' });
   settings.taskColumns = normalizeTaskColumns([{ id: 'highlight', visible: true }, { id: 'link', visible: true }]);
   const task = organization.data.tasks.find(item => !item.highlightId);
   task.highlightId = 'h-purple';
@@ -784,8 +804,9 @@ test('highlighters and columns travel with settings and data exports', () => {
   assert.equal(dataOnly.tasks.find(item => item.id === task.id).highlightId, 'h-purple');
 
   // Merging data into an organization that lacks a color adds it; same names are matched instead of duplicated.
+  const highlightName = id => settings.highlights.find(item => item.id === id).name;
   const target = baseData('it');
-  target.settings.highlights = [{ id: 'mine-yellow', name: 'attenzione', color: '#ffee00' }];
+  target.settings.highlights = [{ id: 'mine-yellow', name: highlightName('highlight-yellow').toLowerCase(), color: '#ffee00' }];
   const merged = applyOrganizationImport(target, parseOrganizationFile(organizationExport(organization, 'data')), { data: true, dataMode: 'merge' });
   assert.deepEqual(merged.settings.highlights.map(item => item.id).sort(), ['highlight-blue', 'highlight-green', 'highlight-red', 'h-purple', 'mine-yellow'].sort());
   const yellow = organization.data.tasks.find(item => item.highlightId === 'highlight-yellow');
@@ -794,7 +815,7 @@ test('highlighters and columns travel with settings and data exports', () => {
   // Importing a configuration remaps the current tasks by name and drops colors that no longer exist.
   const current = structuredClone(organization.data);
   const incoming = organizationExport(organization, 'settings');
-  incoming.settings.highlights = [{ id: 'other-red', name: 'BLOCCANTE', color: '#ff0000' }];
+  incoming.settings.highlights = [{ id: 'other-red', name: highlightName('highlight-red').toUpperCase(), color: '#ff0000' }];
   const applied = applyOrganizationImport(current, parseOrganizationFile(incoming), { settings: true });
   const red = organization.data.tasks.find(item => item.highlightId === 'highlight-red');
   assert.equal(applied.tasks.find(item => item.id === red.id).highlightId, 'other-red');
@@ -824,7 +845,7 @@ test('organization files from previous versions still import and keep current hi
   assert.equal(parseOrganizationFile(unknown).settings.taskColumns.find(column => column.id === 'code').visible, false);
   const bad = organizationExport(organization, 'data');
   bad.data.highlights = [{ id: 'x', name: 'X', color: 'giallo' }];
-  assert.throws(() => parseOrganizationFile(bad), /Evidenziatori non validi/);
+  assert.throws(() => parseOrganizationFile(bad), /invalid highlighters/i);
 });
 
 test('duplicates are detected by incident in associations and in the tasks they resolve to', () => {

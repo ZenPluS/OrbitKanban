@@ -24,7 +24,7 @@
         body: body === undefined ? undefined : JSON.stringify(body)
       });
     } catch {
-      throw codedError('offline', 'OrbitKanban non è raggiungibile: riapri l’app sul PC e ricarica la pagina.');
+      throw codedError('offline', "OrbitKanban is not reachable: reopen the app on the PC and reload the page.");
     }
     if (!response.ok) {
       const payload = await response.json().catch(() => ({}));
@@ -85,15 +85,15 @@
       if (!file) return null;
       let archive;
       try { archive = JSON.parse(await file.text()); }
-      catch { throw new Error(say('Il file selezionato non è un archivio JSON valido.')); }
-      if (!confirm(say('Sostituire tutte le organizzazioni, i dati e le impostazioni? Il precedente archivio sarà conservato in workspace.json.bak.'))) return null;
+      catch { throw new Error(say("The selected file is not a valid JSON archive.")); }
+      if (!confirm(say("Replace all organizations, data and settings? The previous archive will be kept in workspace.json.bak."))) return null;
       return request('/api/import', { archive }).then(track);
     },
     backups: async (operation = 'list', fileName) => operation === 'list'
       ? request('/api/backups')
       : request('/api/backups', { operation, fileName }).then(track),
     async openLink(url) {
-      if (!/^https?:\/\/\S+$/i.test(String(url))) throw new Error('URL non valido.');
+      if (!/^https?:\/\/\S+$/i.test(String(url))) throw new Error("Invalid URL.");
       window.open(url, '_blank', 'noopener,noreferrer');
       return url;
     },

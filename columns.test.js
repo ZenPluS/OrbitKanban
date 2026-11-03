@@ -3,23 +3,23 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const C = require('./columns');
 const { baseData, validateData, migrateArchive, organizationExport, parseOrganizationFile, applyOrganizationImport, normalizeTaskColumns, findDuplicates } = require('./core');
-const field = (type, name = type) => ({ id: `custom-${type}`, name, type, options: ['select', 'multiselect'].includes(type) ? ['Uno', 'Due'] : [] });
+const field = (type, name = type) => ({ id: `custom-${type}`, name, type, options: ['select', 'multiselect'].includes(type) ? ['One', 'Two'] : [] });
 const task = data => ({ id: 't', code: 'A', sequence: 1, url: '', description: '', notes: '', releaseDate: '', statusId: data.settings.statuses[0].id, urgencyId: data.settings.urgencies[0].id, effortHours: 0, hidden: false });
 
 test('custom field types validate real values, including zero, false and blank cells', () => {
-  const values = { text: 'Testo', richtext: '<p>Testo</p>', number: -2.5, date: '2028-02-29', select: 'Uno', multiselect: ['Uno', 'Due'], url: 'https://example.com', effort: 0, boolean: false };
+  const values = { text: 'Text', richtext: '<p>Text</p>', number: -2.5, date: '2028-02-29', select: 'One', multiselect: ['One', 'Two'], url: 'https://example.com', effort: 0, boolean: false };
   for (const type of C.TYPES) {
     C.validateFields([field(type)]);
     C.validateValue(values[type], field(type));
     C.validateValue('', field(type));
     assert.throws(() => C.validateValue({ bad: true }, field(type)));
   }
-  for (const [type, value] of [['date', '2027-02-29'], ['number', Infinity], ['effort', -1], ['select', 'Tre'], ['multiselect', ['Uno', 'Uno']], ['url', 'javascript:alert(1)']]) assert.throws(() => C.validateValue(value, field(type)));
+  for (const [type, value] of [['date', '2027-02-29'], ['number', Infinity], ['effort', -1], ['select', 'Three'], ['multiselect', ['One', 'One']], ['url', 'javascript:alert(1)']]) assert.throws(() => C.validateValue(value, field(type)));
 });
 test('invalid field names, identifiers, options and excessive schemas are rejected', () => {
   assert.throws(() => C.validateFields([field('text'), { ...field('number'), name: 'TEXT' }]));
   assert.throws(() => C.validateFields([{ ...field('text'), id: '__proto__' }]));
-  assert.throws(() => C.validateFields([{ ...field('select'), options: ['Uno', 'uno'] }]));
+  assert.throws(() => C.validateFields([{ ...field('select'), options: ['One', 'one'] }]));
   C.validateFields([{ ...field('select'), options: [] }]);
   assert.throws(() => C.validateFields([{ ...field('select'), options: [{ id: 'a', name: 'A', color: 'bad' }] }]));
   assert.throws(() => C.validateFields(Array.from({ length: 31 }, (_, i) => ({ ...field('text'), id: `custom-${i}`, name: String(i) }))));
@@ -38,13 +38,13 @@ test('custom column order, visibility, values and filtered saved views survive a
   data.settings.issueFields = [field('select')];
   data.settings.taskColumns = normalizeTaskColumns([{ id: 'custom-number', visible: true }, { id: 'code', visible: true }], data.settings.taskFields);
   data.tasks.push({ ...task(data), customFields: { 'custom-number': 12 } });
-  data.issues.push({ id: 'i', code: 'A', incident: 'INC', problem: '', customFields: { 'custom-select': 'Due' } });
-  data.settings.savedViews = [{ id: 'v', name: 'Vista', search: '', statusFilter: '', highlightFilter: '', showHidden: false, duplicatesOnly: false, sort: [{ key: 'custom-number', direction: 'desc' }], columns: data.settings.taskColumns, columnFilters: { 'custom-number': { ...C.emptyFilter(), min: '10' } } }];
+  data.issues.push({ id: 'i', code: 'A', incident: 'INC', problem: '',   customFields: { 'custom-select': 'Two' } });
+    data.settings.savedViews = [{ id: 'v', name: 'View', search: '', statusFilter: '', highlightFilter: '', showHidden: false, duplicatesOnly: false, sort: [{ key: 'custom-number', direction: 'desc' }], columns: data.settings.taskColumns, columnFilters: { 'custom-number': { ...C.emptyFilter(), min: '10' } } }];
   validateData(data);
   const exported = parseOrganizationFile(organizationExport({ name: 'Org', data }, 'organization'));
   const imported = applyOrganizationImport(baseData(), exported, { settings: true, data: true });
   assert.equal(imported.tasks[0].customFields['custom-number'], 12);
-  assert.equal(imported.issues[0].customFields['custom-select'], 'Due');
+  assert.equal(imported.issues[0].customFields['custom-select'], 'Two');
   assert.deepEqual(imported.settings.taskColumns, data.settings.taskColumns);
   assert.equal(imported.settings.savedViews[0].columnFilters['custom-number'].min, '10');
 });
@@ -62,7 +62,7 @@ test('data-only imports carry schemas and remap values by field name without ove
 test('filter semantics support contains, choice intersections, numeric/date ranges and empty cells', () => {
   const f = C.emptyFilter();
   assert.ok(C.matchesFilter('Alpha Beta', { ...f, text: 'BETA' }, 'text'));
-  assert.ok(C.matchesFilter(['Uno', 'Due'], { ...f, values: ['Due'] }, 'multiselect'));
+  assert.ok(C.matchesFilter(['One', 'Two'], { ...f, values: ['Two'] }, 'multiselect'));
   assert.ok(!C.matchesFilter(0, { ...f, min: '1' }, 'number'));
   assert.ok(C.matchesFilter(0, { ...f, empty: 'filled', max: '0' }, 'number'));
   assert.ok(C.matchesFilter(false, { ...f, values: ['false'] }, 'boolean'));
@@ -110,27 +110,27 @@ test('identical issue cleanup preserves different custom values and compares obj
 test('malformed custom schemas and removal of still-used options are rejected', () => {
   const data = baseData();
   data.settings.taskFields = null;
-  assert.throws(() => validateData(data), /colonne personalizzate/);
+  assert.throws(() => validateData(data), /invalid custom column list/i);
   data.settings.taskFields = [field('select')];
-  data.tasks = [{ ...task(data), customFields: { 'custom-select': 'Uno' } }];
-  data.settings.taskFields[0].options = ['Due'];
-  assert.throws(() => validateData(data), /colonna personalizzata/);
+  data.tasks = [{ ...task(data), customFields: { 'custom-select': 'One' } }];
+  data.settings.taskFields[0].options = ['Two'];
+  assert.throws(() => validateData(data), /invalid custom column/i);
   const file = organizationExport({ name: 'Invalid', data: baseData() }, 'data');
   file.data.taskFields = null;
-  assert.throws(() => parseOrganizationFile(file), /colonne personalizzate/);
+  assert.throws(() => parseOrganizationFile(file), /invalid custom column list/i);
 });
 test('legacy choice labels migrate to stable ids without losing assignments', () => {
   const data = baseData();
   data.settings.taskFields = [field('multiselect')];
-  data.tasks = [{ ...task(data), customFields: { 'custom-multiselect': ['Uno', 'Due'] } }];
+  data.tasks = [{ ...task(data), customFields: { 'custom-multiselect': ['One', 'Two'] } }];
   const migrated = migrateArchive(data).organizations[0].data;
   assert.deepEqual(migrated.settings.taskFields[0].options, [
-    { id: 'Uno', name: 'Uno', color: '#a392ff' }, { id: 'Due', name: 'Due', color: '#a392ff' }
+    { id: 'One', name: 'One', color: '#a392ff' }, { id: 'Two', name: 'Two', color: '#a392ff' }
   ]);
   migrated.settings.taskFields[0].options[0].name = 'Renamed';
   migrated.settings.taskFields[0].options[0].color = '#123456';
   validateData(migrated);
-  assert.deepEqual(migrated.tasks[0].customFields['custom-multiselect'], ['Uno', 'Due']);
+  assert.deepEqual(migrated.tasks[0].customFields['custom-multiselect'], ['One', 'Two']);
 });
 test('colored choice schemas, values and saved filters roundtrip and remap option identifiers', () => {
   const source = baseData(), target = baseData();
