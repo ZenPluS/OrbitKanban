@@ -841,6 +841,18 @@ function hexToRgb(color) {
   return digits.match(/.{2}/g).map(channel => parseInt(channel, 16));
 }
 const rgbToHex = channels => '#' + channels.map(channel => Math.round(Math.min(255, Math.max(0, channel))).toString(16).padStart(2, '0')).join('');
+function hexToHsv(color) {
+  const [r, g, b] = hexToRgb(color).map(channel => channel / 255);
+  const max = Math.max(r, g, b), delta = max - Math.min(r, g, b);
+  const sector = !delta ? 0 : max === r ? (g - b) / delta : max === g ? (b - r) / delta + 2 : (r - g) / delta + 4;
+  return { h: (sector * 60 + 360) % 360, s: max ? delta / max * 100 : 0, v: max * 100 };
+}
+function hsvToHex({ h, s, v }) {
+  assert([h, s, v].every(Number.isFinite) && h >= 0 && h <= 360 && s >= 0 && s <= 100 && v >= 0 && v <= 100, "Invalid color.");
+  const chroma = v / 100 * s / 100, hue = h / 60 % 6, x = chroma * (1 - Math.abs(hue % 2 - 1)), m = v / 100 - chroma;
+  const channels = [[chroma, x, 0], [x, chroma, 0], [0, chroma, x], [0, x, chroma], [x, 0, chroma], [chroma, 0, x]][Math.floor(hue)];
+  return rgbToHex(channels.map(channel => (channel + m) * 255));
+}
 const srgbToLinear = channel => { const value = channel / 255; return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4; };
 const linearToSrgb = value => 255 * (value <= 0.0031308 ? 12.92 * value : 1.055 * value ** (1 / 2.4) - 0.055);
 function relativeLuminance(color) {
@@ -965,7 +977,7 @@ function themeFromLogo(pixels) {
 }
 const core = {
   APP_NAME, initialData, baseData, demoData, demoReleaseDates, validateData, migrateArchive, validateArchive, createOrganization, matchIssues, indexIssues, findDuplicates, sortTasks, dateColor, today, validLanguage,
-  extractThemePalette, themeFromLogo, themeFromImage, accessibleThemePalette, shiftToContrast, contrastRatio, relativeLuminance, onAccentColor, iconPalette, iconInk, ICON_FAMILIES, WCAG_TEXT_CONTRAST, WCAG_GRAPHIC_CONTRAST,
+  extractThemePalette, themeFromLogo, themeFromImage, accessibleThemePalette, shiftToContrast, contrastRatio, relativeLuminance, hexToHsv, hsvToHex, onAccentColor, iconPalette, iconInk, ICON_FAMILIES, WCAG_TEXT_CONTRAST, WCAG_GRAPHIC_CONTRAST,
   normalizeUrl, isWebUrl, validPortalTemplate, hasPortalPlaceholder, portalUrl,
   ORGANIZATION_FILE_KINDS, organizationExport, organizationFileName, situationFileName, parseOrganizationFile, applyOrganizationImport, importedOrganizationData, uniqueOrganizationName,
   FONT_SIZE_PARTS, FONT_SIZE_STEP, FONT_FAMILIES, DEFAULT_FONT_FAMILY, validFontFamily, defaultFontSizes, clampFontSize, defaultThemes,

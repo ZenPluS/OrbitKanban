@@ -5,6 +5,30 @@ const { APP_NAME, initialData, baseData, demoData, demoReleaseDates, validateDat
 const { defaultThemes } = require('./core');
 const { reorderTaskSequences } = require('./core');
 const { FONT_FAMILIES, DEFAULT_FONT_FAMILY } = require('./core');
+const { hexToHsv, hsvToHex } = require('./core');
+
+test('picker HSV conversion handles endpoints, achromatic colors and short HEX', () => {
+  for (const [hex, hsv] of [
+    ['#000000', { h: 0, s: 0, v: 0 }], ['#ffffff', { h: 0, s: 0, v: 100 }],
+    ['#ff0000', { h: 0, s: 100, v: 100 }], ['#00ff00', { h: 120, s: 100, v: 100 }],
+    ['#0000ff', { h: 240, s: 100, v: 100 }]
+  ]) {
+    assert.deepEqual(hexToHsv(hex), hsv);
+    assert.equal(hsvToHex(hsv), hex);
+  }
+  assert.equal(hsvToHex({ h: 360, s: 100, v: 100 }), '#ff0000');
+  assert.equal(hsvToHex(hexToHsv('#AbC')), '#aabbcc');
+});
+test('picker HSV roundtrips preserve RGB values without cumulative drift', () => {
+  for (let r = 0; r < 256; r += 17) for (let g = 0; g < 256; g += 17) for (let b = 0; b < 256; b += 17) {
+    const color = '#' + [r, g, b].map(channel => channel.toString(16).padStart(2, '0')).join('');
+    assert.equal(hsvToHex(hexToHsv(color)), color);
+  }
+});
+test('picker color conversion rejects invalid channels and HEX strings', () => {
+  for (const color of ['', '#12', '#abcd', '#aabbccdd', '#zzzzzz', 'red', null]) assert.throws(() => hexToHsv(color), /Invalid color/);
+  for (const values of [{ h: -1, s: 0, v: 0 }, { h: 361, s: 0, v: 0 }, { h: 0, s: 101, v: 0 }, { h: 0, s: 0, v: -1 }, { h: 0, s: NaN, v: 0 }, {}]) assert.throws(() => hsvToHex(values), /Invalid color/);
+});
 
 test('font choices are validated and migrate without changing existing data', () => {
   const data = baseData();

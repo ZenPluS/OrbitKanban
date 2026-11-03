@@ -1,6 +1,6 @@
 # OrbitKanban — workspace portable
 
-App desktop locale per Windows 10/11 a 64 bit, **versione 2.22.0**. Nessun account, server esterno o collegamento a Internet necessario per l'uso. **Il nome dell'app è sempre OrbitKanban e non è configurabile.** Tutte le impostazioni del workspace appartengono alla singola organizzazione. Mentre l'app è aperta puoi usarla anche **dal browser dello stesso PC**, con più organizzazioni aperte contemporaneamente in schede diverse.
+App desktop locale per Windows 10/11 a 64 bit, **versione 2.23.0**. Nessun account, server esterno o collegamento a Internet necessario per l'uso. **Il nome dell'app è sempre OrbitKanban e non è configurabile.** Tutte le impostazioni del workspace appartengono alla singola organizzazione. Mentre l'app è aperta puoi usarla anche **dal browser dello stesso PC**, con più organizzazioni aperte contemporaneamente in schede diverse.
 
 ## Avvio e condivisione
 
@@ -313,6 +313,16 @@ Le impostazioni sono organizzate in **schede**: a sinistra un menu raggruppa le 
 - **Esporta e importa organizzazione**: temi, configurazione e dati dell'organizzazione attiva in file separati, oppure tutto insieme, con importazione selettiva in questa o in una nuova organizzazione (vedi **Esporta e importa per organizzazione**).
 - **Esporta backup** e **Importa backup**: l'intero archivio JSON, incluse tutte le organizzazioni, i loghi, i temi e le impostazioni. L'importazione richiede conferma e sostituisce l'archivio; un file non valido viene rifiutato.
 - “Svuota attività e issue” elimina anche gli esempi iniziali, mantenendo impostazioni e temi.
+
+### Selettore colori integrato
+
+Dalla **2.23.0**, tutti i colori delle etichette (predefinite e personalizzate, per attività e issue) e dei quattro campi del tema usano lo **stesso selettore personalizzato**, al posto della finestra di sistema. Sfondo, bordi, pulsanti e font seguono l'app, anche nel browser e senza connessione.
+
+- Trascina nell'area colore oppure regola **Tonalità, Saturazione e Luminosità** con i cursori, utilizzabili anche con le frecce della tastiera.
+- Inserisci un codice **HEX** di 3 o 6 cifre, con o senza `#`, oppure scegli un campione dei colori del tema e della palette predefinita. I codici non validi sono segnalati e non possono essere applicati.
+- L'anteprima è immediata. **Applica** o `Invio` accettano la scelta; **Annulla**, `Esc` o un clic esterno ripristinano il colore precedente. Il campione accanto al codice HEX permette di tornare al colore iniziale senza chiudere il selettore.
+- **Salva impostazioni** conserva le scelte nell'archivio portable: conferma prima il colore con **Applica**. Durante la modifica di un tema, il selettore mantiene i propri colori iniziali per restare leggibile anche se la nuova palette ha poco contrasto. I colori manuali non vengono corretti automaticamente.
+- La finestra rimane entro lo schermo, scorre quando lo spazio è poco e mantiene la navigazione da tastiera al proprio interno. La galleria aggiorna solo il tema modificato durante il trascinamento, senza ricostruire tutte le anteprime.
 
 ### Font dell'interfaccia
 

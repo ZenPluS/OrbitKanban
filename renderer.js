@@ -5,6 +5,7 @@ const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;
 const uid = () => crypto.randomUUID();
 const { reorderTaskSequences, indexIssues } = window.OrbitaCore;
 const { FONT_FAMILIES, DEFAULT_FONT_FAMILY } = window.OrbitaCore;
+const { hexToHsv, hsvToHex } = window.OrbitaCore;
 const CustomColumns = window.OrbitaColumns, Csv = window.OrbitaCsv;
 const hasColumn = (id, kind = 'tasks', settings = data.settings) => CustomColumns.hasColumn(settings, kind, id);
 const configuredColumns = (kind = 'tasks', settings = data.settings, input) => CustomColumns.listColumns(settings, kind, input);
@@ -308,6 +309,155 @@ window.addEventListener('scroll', event => {
   if (menu.closest('#modal')) positionTagMenu(menu); else closeTagMenu();
 }, true);
 window.addEventListener('resize', () => closeTagMenu());
+let activeColorPicker;
+function colorControl(color, label, attributes, showValue = false) {
+  const title = `${t("Color")}: ${label} (${color.toUpperCase()})`;
+  return `<button type="button" class="color-control" ${attributes} value="${color}" style="--picked-color:${color}" data-color-label="${esc(label)}" aria-label="${esc(title)}" title="${esc(title)}" aria-haspopup="dialog" aria-expanded="false" aria-controls="color-picker"><span class="color-control-swatch" aria-hidden="true"></span>${showValue ? `<span class="color-control-value">${color.toUpperCase()}</span>` : ''}${ico('chevron-down')}</button>`;
+}
+function updateColorControl(button, color) {
+  button.value = color;
+  button.style.setProperty('--picked-color', color);
+  const value = button.querySelector('.color-control-value');
+  if (value) value.textContent = color.toUpperCase();
+  button.title = `${t("Color")}: ${button.dataset.colorLabel} (${color.toUpperCase()})`;
+  button.setAttribute('aria-label', button.title);
+}
+function closeColorPicker(accept = false, restoreFocus = false) {
+  const picker = activeColorPicker;
+  if (!picker) return;
+  activeColorPicker = null;
+  picker.menu.remove();
+  picker.button.setAttribute('aria-expanded', 'false');
+  if (!accept && picker.button.value !== picker.initial) {
+    picker.button.value = picker.initial;
+    picker.button.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  if (restoreFocus && picker.button.isConnected) picker.button.focus({ preventScroll: true });
+}
+function positionColorPicker() {
+  if (!activeColorPicker) return;
+  const { button, menu } = activeColorPicker, rect = button.getBoundingClientRect();
+  const below = rect.bottom + 6, above = rect.top - menu.offsetHeight - 6;
+  menu.style.left = `${Math.max(8, Math.min(rect.left, innerWidth - menu.offsetWidth - 8))}px`;
+  menu.style.top = `${Math.max(8, Math.min(below + menu.offsetHeight <= innerHeight - 8 ? below : above, innerHeight - menu.offsetHeight - 8))}px`;
+}
+function openColorPicker(button) {
+  const same = activeColorPicker?.button === button;
+  closeColorPicker();
+  closeTagMenu(); closeMarkMenu();
+  if (same) return;
+  const initial = button.value, theme = settingsDraft.themes.find(theme => theme.id === settingsDraft.themeId);
+  let hsv = hexToHsv(initial);
+  const menu = document.createElement('form');
+  menu.id = 'color-picker';
+  menu.className = 'color-picker';
+  menu.setAttribute('popover', 'manual');
+  menu.setAttribute('role', 'dialog');
+  menu.setAttribute('aria-labelledby', 'color-picker-title');
+  // Keep the picker legible while previewing potentially low-contrast theme colors.
+  const style = getComputedStyle(document.documentElement);
+  for (const name of ['background', 'surface', 'text', 'accent', 'muted', 'border', 'on-accent']) menu.style.setProperty(`--${name}`, style.getPropertyValue(`--${name}`));
+  const swatches = [...new Set([theme.background, theme.surface, theme.text, theme.accent, ...highlightPalette].map(color => color.toLowerCase()))];
+  menu.innerHTML = ui`<div class="color-picker-heading"><div><small>Choose color</small><h3 id="color-picker-title">${esc(button.dataset.colorLabel)}</h3></div><button type="button" class="icon-button" data-color-cancel aria-label="Close">${ico('close')}</button></div>
+    <div class="color-plane" role="img" aria-label="Drag to adjust saturation and brightness, or use the sliders below."><span class="color-plane-thumb"></span></div>
+    <label class="color-slider-label" for="color-hue"><span>Hue</span><output id="color-hue-value"></output></label><input id="color-hue" class="color-slider color-hue" type="range" min="0" max="360" step="1">
+    <div class="color-picker-channels">${[['s', "Saturation"], ['v', "Brightness"]].map(([key, label]) => `<div><label class="color-slider-label" for="color-${key}"><span>${esc(t(label))}</span><output id="color-${key}-value"></output></label><input id="color-${key}" class="color-slider" type="range" min="0" max="100" step="1"></div>`).join('')}</div>
+    <div class="color-picker-entry"><button type="button" class="color-original" style="--picked-color:${initial}" title="Restore original color" aria-label="Restore original color"></button><label class="field" for="color-hex">HEX<input id="color-hex" type="text" maxlength="7" spellcheck="false" autocomplete="off" aria-describedby="color-error"></label></div>
+    <p id="color-error" class="color-error" aria-live="polite" hidden>Enter a HEX color with 3 or 6 digits, for example #A392FF.</p>
+    <div class="color-picker-swatches" role="group" aria-label="Theme colors and presets">${swatches.map(color => `<button type="button" class="color-preset" data-color-preset="${color}" style="--picked-color:${color}" aria-label="${color.toUpperCase()}" title="${color.toUpperCase()}"></button>`).join('')}</div>
+    <div class="color-picker-actions"><button type="button" class="button small" data-color-cancel>Cancel</button><button type="submit" class="button small primary">Apply</button></div>`;
+  document.body.append(menu);
+  activeColorPicker = { menu, button, initial };
+  const hex = menu.querySelector('#color-hex'), plane = menu.querySelector('.color-plane');
+  function update(fromText = false) {
+    const color = hsvToHex(hsv), pureHue = hsvToHex({ h: hsv.h, s: 100, v: 100 });
+    menu.style.setProperty('--picked-color', color);
+    plane.style.backgroundColor = pureHue;
+    plane.style.setProperty('--color-s', `${hsv.s}%`);
+    plane.style.setProperty('--color-v', `${100 - hsv.v}%`);
+    for (const [id, value] of [['hue', hsv.h], ['s', hsv.s], ['v', hsv.v]]) {
+      menu.querySelector(`#color-${id}`).value = Math.round(value);
+      menu.querySelector(`#color-${id}-value`).textContent = `${Math.round(value)}${id === 'hue' ? '\u00b0' : '%'}`;
+    }
+    menu.querySelector('#color-s').style.backgroundImage = `linear-gradient(to right, #fff, ${pureHue})`;
+    menu.querySelector('#color-v').style.backgroundImage = `linear-gradient(to right, #000, ${hsvToHex({ ...hsv, v: 100 })})`;
+    if (!fromText) hex.value = color.toUpperCase();
+    menu.querySelectorAll('[data-color-preset]').forEach(preset => preset.setAttribute('aria-pressed', String(preset.dataset.colorPreset === color)));
+    hex.setAttribute('aria-invalid', 'false');
+    menu.querySelector('#color-error').hidden = true;
+    menu.querySelector('[type="submit"]').disabled = false;
+    if (button.value !== color) {
+      button.value = color;
+      button.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  }
+  function choose(color) {
+    const next = hexToHsv(color);
+    hsv = { ...next, h: next.s ? next.h : hsv.h };
+    update();
+  }
+  hex.oninput = () => {
+    const value = hex.value.trim();
+    if (!/^#?(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(value)) {
+      hex.setAttribute('aria-invalid', 'true');
+      menu.querySelector('#color-error').hidden = false;
+      menu.querySelector('[type="submit"]').disabled = true;
+      positionColorPicker();
+      return;
+    }
+    const next = hexToHsv(value.startsWith('#') ? value : '#' + value);
+    hsv = { ...next, h: next.s ? next.h : hsv.h };
+    update(true);
+  };
+  for (const [id, key] of [['hue', 'h'], ['s', 's'], ['v', 'v']]) menu.querySelector(`#color-${id}`).oninput = event => { hsv[key] = Number(event.target.value); update(); };
+  let pointerId = null;
+  const drag = event => {
+    const bounds = plane.getBoundingClientRect(), clamp = value => Math.max(0, Math.min(1, value));
+    hsv.s = clamp((event.clientX - bounds.left) / bounds.width) * 100;
+    hsv.v = (1 - clamp((event.clientY - bounds.top) / bounds.height)) * 100;
+    update();
+  };
+  plane.onpointerdown = event => {
+    if (event.button !== 0 || !event.isPrimary) return;
+    event.preventDefault();
+    pointerId = event.pointerId;
+    plane.setPointerCapture(pointerId);
+    drag(event);
+  };
+  plane.onpointermove = event => { if (event.pointerId === pointerId) drag(event); };
+  plane.onpointerup = event => { if (event.pointerId === pointerId) { drag(event); plane.releasePointerCapture(pointerId); pointerId = null; } };
+  plane.onlostpointercapture = plane.onpointercancel = () => { pointerId = null; };
+  menu.querySelectorAll('[data-color-preset]').forEach(preset => preset.onclick = () => choose(preset.dataset.colorPreset));
+  menu.querySelector('.color-original').onclick = () => choose(initial);
+  menu.querySelectorAll('[data-color-cancel]').forEach(cancel => cancel.onclick = () => closeColorPicker(false, true));
+  menu.onsubmit = event => {
+    event.preventDefault();
+    if (hex.getAttribute('aria-invalid') === 'true') { hex.focus(); return; }
+    closeColorPicker(true, true);
+  };
+  menu.onkeydown = event => {
+    event.stopPropagation();
+    if (event.key === 'Escape') { event.preventDefault(); closeColorPicker(false, true); }
+    if (event.key === 'Tab') {
+      const inputs = [...menu.querySelectorAll('button:not(:disabled), input')], index = inputs.indexOf(document.activeElement);
+      if (event.shiftKey && index === 0 || !event.shiftKey && index === inputs.length - 1) {
+        event.preventDefault(); inputs[event.shiftKey ? inputs.length - 1 : 0].focus();
+      }
+    }
+  };
+  update();
+  menu.showPopover();
+  button.setAttribute('aria-expanded', 'true');
+  positionColorPicker();
+  hex.focus({ preventScroll: true }); hex.select();
+}
+document.addEventListener('pointerdown', event => {
+  if (activeColorPicker && !activeColorPicker.menu.contains(event.target) && !event.target.closest('.color-control')) closeColorPicker();
+}, true);
+window.addEventListener('scroll', event => {
+  if (activeColorPicker && !activeColorPicker.menu.contains(event.target)) positionColorPicker();
+}, true);
+window.addEventListener('resize', positionColorPicker);
 function matchesHighlightFilter(task) {
   if (!highlightFilter) return true;
   if (highlightFilter === '__any') return Boolean(highlightOf(task));
@@ -396,6 +546,7 @@ function applyTheme() {
   $('.brand-icon').classList.add('has-logo');
 }
 function render() {
+  closeColorPicker();
   closeMarkMenu();
   closeTagMenu();
   const content = $('#content'), nextView = ['tasks', 'issues', 'milestones', 'kanban', 'settings'][view];
@@ -596,6 +747,7 @@ function settingsNav() {
   return `<nav class="settings-nav" aria-label="${esc(t("Settings sections"))}">${groups.map((group, index) => `<div class="settings-nav-group" role="group" aria-labelledby="settings-group-${index}"><span class="settings-nav-label" id="settings-group-${index}">${esc(t(group))}</span>${tabs.filter(tab => tab.group === group).map(tab => `<button type="button" class="settings-tab" id="settings-tab-${tab.id}" data-settings-tab="${tab.id}" aria-controls="${tab.panel}"><span class="settings-tab-icon" aria-hidden="true">${ico(tab.icon, tab.family)}</span><span class="settings-tab-text">${esc(tab.custom ? tab.label : t(tab.label))}</span><span class="settings-tab-dot" role="img" aria-label="${esc(t("Unsaved changes"))}" title="${esc(t("Unsaved changes"))}" hidden></span></button>`).join('')}</div>`).join('')}</nav>`;
 }
 function showSettingsTab(id, reveal = false) {
+  closeColorPicker();
   const tabs = allSettingsTabs(), selected = tabs.find(tab => tab.id === id) || settingsTabs[0];
   document.querySelectorAll('.settings-section').forEach(panel => { panel.hidden = true; });
   settingsTab = selected.id;
@@ -651,6 +803,7 @@ function refreshSettingsState() {
   $('#settings-page')?.style.setProperty('--unsaved-offset', changed ? `${banner.offsetHeight + 12}px` : '0px');
 }
 async function saveSettings() {
+  closeColorPicker();
   try {
     if ($('#logo-file')?.disabled || $('#theme-image-file')?.disabled || $('#create-logo-file')?.disabled) throw new Error(t("Loading image…"));
     const settings = structuredClone(collectSettings());
@@ -1676,6 +1829,7 @@ function columnsDialog(kind = 'tasks') {
   });
 }
 function openModal(html) {
+  closeColorPicker();
   closeTagMenu();
   $('#modal-content').innerHTML = html;
   $('#modal').showModal();
@@ -2764,6 +2918,7 @@ function setOptionCatalog(key, list) {
   else throw new Error(t("This column no longer exists."));
 }
 function drawOptionLists() {
+  closeColorPicker();
   for (const custom of choiceSettingsTabs()) {
     const key = custom.id, list = optionCatalog(key);
     if (!document.getElementById(`${key}-list`)) continue;
@@ -2771,15 +2926,22 @@ function drawOptionLists() {
       const count = data[custom.kind].filter(row => { const value = CustomColumns.valueOf(row, custom.field); return Array.isArray(value) ? value.includes(id) : value === id; }).length;
       return `<span class="option-usage" title="${esc(t("Rows with this label"))}">${count}</span>`;
     };
-    document.getElementById(`${key}-list`).innerHTML = list.map((item, index) => ui`<div class="option-row">${dragHandle(item.name)}<span class="order-number">${String(index + 1).padStart(2, '0')}</span><input type="color" aria-label="Color ${esc(item.name)}" data-color="${key}:${esc(item.id)}" value="${item.color}"><input class="option-name" aria-label="Option name" maxlength="60" data-option-name="${key}:${esc(item.id)}" value="${esc(item.name)}">${usage(item.id)}${key === 'statuses' ? ui`<button class="icon-button star ${item.highlight ? 'selected' : ''}" data-highlight="${esc(item.id)}" title="Highlight tasks with this status" aria-pressed="${item.highlight}">${ico(item.highlight ? 'star' : 'star-line')}</button>` : ''}<button class="icon-button" data-move="${key}:${esc(item.id)}:-1" ${index === 0 ? 'disabled' : ''} title="Move up">${ico('arrow-up')}</button><button class="icon-button" data-move="${key}:${esc(item.id)}:1" ${index === list.length - 1 ? 'disabled' : ''} title="Move down">${ico('arrow-down')}</button><button class="icon-button delete-option" data-remove="${key}:${esc(item.id)}" title="Delete option">${ico('close')}</button></div>`).join('') || `<p class="muted option-empty">${esc(t("No labels. Add one to get started."))}</p>`;
+    document.getElementById(`${key}-list`).innerHTML = list.map((item, index) => ui`<div class="option-row">${dragHandle(item.name)}<span class="order-number">${String(index + 1).padStart(2, '0')}</span>${colorControl(item.color, item.name, `data-color="${key}:${esc(item.id)}"`)}<input class="option-name" aria-label="Option name" maxlength="60" data-option-name="${key}:${esc(item.id)}" value="${esc(item.name)}">${usage(item.id)}${key === 'statuses' ? ui`<button class="icon-button star ${item.highlight ? 'selected' : ''}" data-highlight="${esc(item.id)}" title="Highlight tasks with this status" aria-pressed="${item.highlight}">${ico(item.highlight ? 'star' : 'star-line')}</button>` : ''}<button class="icon-button" data-move="${key}:${esc(item.id)}:-1" ${index === 0 ? 'disabled' : ''} title="Move up">${ico('arrow-up')}</button><button class="icon-button" data-move="${key}:${esc(item.id)}:1" ${index === list.length - 1 ? 'disabled' : ''} title="Move down">${ico('arrow-down')}</button><button class="icon-button delete-option" data-remove="${key}:${esc(item.id)}" title="Delete option">${ico('close')}</button></div>`).join('') || `<p class="muted option-empty">${esc(t("No labels. Add one to get started."))}</p>`;
     const choiceAdd = document.querySelector(`[data-add-choice="${key}"]`);
     if (choiceAdd) choiceAdd.disabled = list.length >= (key === 'highlights' ? HIGHLIGHT_LIMIT : TAG_LIMIT);
     sortable(document.getElementById(`${key}-list`), '.option-row', (from, to) => { list.splice(to, 0, ...list.splice(from, 1)); drawOptionLists(); refreshSettingsState(); });
   }
   function optionId(value) { const [key, ...parts] = value.split(':'); return [key, parts.join(':')]; }
   function itemAt(value) { const [key, id] = optionId(value); return optionCatalog(key).find(x => x.id === id); }
-  document.querySelectorAll('[data-color]').forEach(input => input.oninput = () => { itemAt(input.dataset.color).color = input.value; });
-  document.querySelectorAll('[data-option-name]').forEach(input => input.oninput = () => { itemAt(input.dataset.optionName).name = input.value; });
+  document.querySelectorAll('[data-color]').forEach(button => {
+    button.onclick = () => openColorPicker(button);
+    button.oninput = () => { itemAt(button.dataset.color).color = button.value; updateColorControl(button, button.value); refreshSettingsState(); };
+  });
+  document.querySelectorAll('[data-option-name]').forEach(input => input.oninput = () => {
+    itemAt(input.dataset.optionName).name = input.value;
+    const button = input.closest('.option-row').querySelector('.color-control');
+    button.dataset.colorLabel = input.value; updateColorControl(button, button.value);
+  });
   document.querySelectorAll('[data-highlight]').forEach(b => b.onclick = () => {
     const item = settingsDraft.statuses.find(s => s.id === b.dataset.highlight); item.highlight = !item.highlight; drawOptionLists();
   });
@@ -2813,6 +2975,18 @@ function drawThemeChoices() {
     document.querySelector(`#theme-list [data-theme="${CSS.escape(b.dataset.theme)}"]`)?.focus({ preventScroll: true });
   });
 }
+function updateThemeChoice(theme) {
+  const choice = document.querySelector(`#theme-list [data-theme="${CSS.escape(theme.id)}"]`);
+  if (!choice) return;
+  choice.querySelector('.theme-kind').textContent = t(themeKind(theme));
+  themeFields.forEach(([key, label], index) => {
+    choice.querySelector('.theme-mock').style.setProperty(`--mock-${key}`, theme[key]);
+    const swatch = choice.querySelectorAll('.theme-swatches i')[index];
+    swatch.style.background = theme[key];
+    swatch.title = `${t(label)}: ${theme[key]}`;
+    swatch.setAttribute('aria-label', swatch.title);
+  });
+}
 function revealChosenTheme() {
   const list = $('#theme-list'), chosen = list?.querySelector('.theme-choice.chosen');
   if (!chosen || !list.clientHeight) return;
@@ -2838,14 +3012,18 @@ async function loadThemeImage(file, canvas) {
   } finally { bitmap.close(); }
 }
 function drawThemes() {
+  closeColorPicker();
   drawThemeChoices();
   const theme = settingsDraft.themes.find(t => t.id === settingsDraft.themeId);
   paintTheme(theme);
-  $('#theme-editor').innerHTML = ui`<div class="theme-edit"><h3 class="theme-edit-title">Edit theme</h3><label class="field">Theme name<input id="theme-name" value="${esc(theme.name)}"></label><div class="theme-colors">${themeFields.map(([key, label]) => `<label><input type="color" value="${theme[key]}" data-theme-color="${key}">${t(label)}</label>`).join('')}</div>
+  $('#theme-editor').innerHTML = ui`<div class="theme-edit"><h3 class="theme-edit-title">Edit theme</h3><label class="field">Theme name<input id="theme-name" value="${esc(theme.name)}"></label><div class="theme-colors">${themeFields.map(([key, label]) => `<div class="theme-color-field"><span>${esc(t(label))}</span>${colorControl(theme[key], t(label), `data-theme-color="${key}"`, true)}</div>`).join('')}</div>
     <div class="image-picker"><label class="field">Generate 4 colors from an image<input id="theme-image-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp"></label><p class="muted">Upload an image: background, surfaces, text and accent are extracted and assigned automatically. You can then adjust them with the color controls. Transparency is shown on white. Colors are adjusted as little as possible to meet WCAG AA contrast.</p><canvas id="theme-image-canvas" hidden role="img" aria-label="Image used to automatically generate the four theme colors"></canvas><label class="field">Optional adjustment: color to sample with a click<select id="theme-image-target">${themeFields.map(([key, label]) => `<option value="${key}">${t(label)}</option>`).join('')}</select></label><output id="theme-image-result" aria-live="polite">The image stays local and is not saved: only colors are stored in the theme.</output></div>
     <small class="muted">Live preview: the theme is applied to the app immediately. Save settings to keep it, otherwise the previous one remains.</small>${themePresets.has(theme.id) ? ui`<button class="button small" id="reset-theme">Restore built-in theme</button>` : ui`<button class="button small" id="delete-theme">Delete theme</button>`}</div>`;
   $('#theme-name').oninput = e => { theme.name = e.target.value; drawThemeChoices(); };
-  document.querySelectorAll('[data-theme-color]').forEach(input => input.oninput = () => { theme[input.dataset.themeColor] = input.value; drawThemeChoices(); paintTheme(theme); });
+  document.querySelectorAll('[data-theme-color]').forEach(button => {
+    button.onclick = () => openColorPicker(button);
+    button.oninput = () => { theme[button.dataset.themeColor] = button.value; updateColorControl(button, button.value); updateThemeChoice(theme); paintTheme(theme); refreshSettingsState(); };
+  });
   const canvas = $('#theme-image-canvas'), fileInput = $('#theme-image-file'), result = $('#theme-image-result');
   fileInput.onchange = action(async () => {
     const file = fileInput.files[0];
@@ -2859,9 +3037,9 @@ function drawThemes() {
         const palette = themeFromImage(context.getImageData(0, 0, canvas.width, canvas.height).data);
         for (const [key] of themeFields) {
           theme[key] = palette[key];
-          document.querySelector(`[data-theme-color="${key}"]`).value = palette[key];
+          updateColorControl(document.querySelector(`[data-theme-color="${key}"]`), palette[key]);
         }
-        drawThemeChoices(); paintTheme(theme); refreshSettingsState();
+        updateThemeChoice(theme); paintTheme(theme); refreshSettingsState();
         const contrastNote = palette.adjusted.length
           ? fillText("Adjusted as little as possible for WCAG AA contrast: {0}.", palette.adjusted.map(role => t(themeFields.find(([key]) => key === role)[1]).toLowerCase()).join(', '))
           : t("The extracted colors already meet WCAG AA contrast.");
@@ -2927,6 +3105,8 @@ document.addEventListener('keydown', e => {
 window.runSmokeTests = async () => {
   const checks = [];
   function check(condition, name) { if (!condition) throw new Error(name); checks.push(name); }
+  const enterColor = color => { $('#color-hex').value = color; $('#color-hex').dispatchEvent(new Event('input', { bubbles: true })); };
+  const pickColor = (button, color) => { button.click(); enterColor(color); $('#color-picker').requestSubmit(); };
   const doubleClick = element => element.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true, button: 0 }));
   const tick = () => new Promise(resolve => setTimeout(resolve));
   const pointer = (target, type, x, y) => target.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, composed: true, clientX: x, clientY: y, pointerId: 7, isPrimary: true, pointerType: 'mouse', button: 0, buttons: type === 'pointerup' ? 0 : 1 }));
@@ -2985,6 +3165,56 @@ window.runSmokeTests = async () => {
   openModal('<p>OrbitKanban</p>');
   check($('#modal').clientWidth < editWidth, 'Other dialogs keep a compact layout');
   $('#modal').close();
+  {
+    const baseline = structuredClone(data);
+    view = 4; render(); showSettingsTab('statuses');
+    const button = $('#statuses-list [data-color]'), initial = button.value, statusId = settingsDraft.statuses[0].id;
+    check(button.tagName === 'BUTTON' && !document.querySelector('input[type="color"]') && document.querySelectorAll('.theme-colors .color-control').length === 4, 'Labels and all four theme roles use themed controls instead of native color pickers');
+    button.click();
+    const bounds = $('#color-picker').getBoundingClientRect();
+    check($('#color-picker').matches(':popover-open') && document.activeElement === $('#color-hex') && button.getAttribute('aria-expanded') === 'true' && bounds.left >= 8 && bounds.right <= innerWidth - 7 && bounds.top >= 8 && bounds.bottom <= innerHeight - 7, 'Color picker opens above clipping containers, fits the viewport and focuses HEX');
+    enterColor('#xyz');
+    check($('#color-hex').getAttribute('aria-invalid') === 'true' && !$('#color-error').hidden && $('#color-picker [type="submit"]').disabled && button.value === initial, 'Invalid HEX displays an error and cannot modify or apply a color');
+    $('#color-picker').requestSubmit();
+    check(Boolean($('#color-picker')), 'Invalid color cannot be submitted through Enter');
+    enterColor('AbC');
+    check(button.value === '#aabbcc' && settingsDraft.statuses[0].color === '#aabbcc' && button.style.getPropertyValue('--picked-color') === '#aabbcc', 'Short HEX normalizes to six digits and immediately previews the label swatch');
+    $('#color-hex').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    check(!$('#color-picker') && button.value === initial && settingsDraft.statuses[0].color === initial && document.activeElement === button && button.getAttribute('aria-expanded') === 'false', 'Escape restores the original color, expanded state and trigger focus');
+    button.click(); enterColor('#000000');
+    for (const [id, value] of [['hue', 220], ['s', 100], ['v', 100]]) {
+      const slider = $(`#color-${id}`); slider.value = value; slider.dispatchEvent(new Event('input'));
+    }
+    check(button.value === '#0055ff' && $('#color-hue-value').textContent === '220\u00b0', 'Hue, saturation and brightness controls preserve hue through black');
+    $('.color-original').click();
+    check(button.value === initial, 'Original-color swatch restores the starting color without closing');
+    const preset = $('[data-color-preset]'), presetColor = preset.dataset.colorPreset;
+    preset.click();
+    check(button.value === presetColor && preset.getAttribute('aria-pressed') === 'true', 'Theme and preset swatches select exact colors and expose selection');
+    const last = $('#color-picker [type="submit"]');
+    last.focus(); last.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
+    check(document.activeElement === $('#color-picker button'), 'Keyboard focus wraps inside the color picker');
+    $('#color-picker [data-color-cancel]').click();
+    check(button.value === initial && !$('#color-picker'), 'Cancel closes the picker without retaining the preview');
+    button.click(); enterColor('#123456');
+    document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    check(button.value === initial && !$('#color-picker'), 'Clicking outside cancels the preview');
+    button.click(); enterColor('#123456'); showSettingsTab('themes');
+    check(button.value === initial && !$('#color-picker'), 'Switching settings sections cancels an open color preview');
+    const accent = $('[data-theme-color="accent"]'), originalAccent = accent.value;
+    accent.click();
+    const pickerBackground = getComputedStyle($('#color-picker')).backgroundColor;
+    enterColor('#12ab34');
+    check(document.documentElement.style.getPropertyValue('--accent') === '#12ab34' && accent.querySelector('.color-control-value').textContent === '#12AB34' && getComputedStyle($('#color-picker')).backgroundColor === pickerBackground, 'Theme editing retains live preview and updates the HEX trigger while keeping the picker stable');
+    $('#color-picker [data-color-cancel]').click();
+    check(document.documentElement.style.getPropertyValue('--accent') === originalAccent && accent.value === originalAccent, 'Cancel also restores the app theme preview');
+    showSettingsTab('statuses');
+    pickColor(button, '#123456');
+    check(!$('#color-picker') && settingsDraft.statuses[0].color === '#123456' && data.settings.statuses[0].color === initial, 'Apply accepts the preview without prematurely saving settings');
+    await saveSettings();
+    check((await workspaceApi.load()).data.settings.statuses.find(status => status.id === statusId).color === '#123456', 'Applied custom color persists in the portable archive on Save settings');
+    await commit(baseline); view = 0; render();
+  }
   {
     const baseline = structuredClone(data), taskId = data.tasks.find(task => !task.hidden).id, issueId = data.issues[0].id;
     view = 4; render(); showSettingsTab('custom-columns');
@@ -3233,7 +3463,7 @@ window.runSmokeTests = async () => {
     showSettingsTab(optionKey);
     const labelInput = document.querySelector(`#${optionKey}-list [data-option-name]`), colorInput = document.querySelector(`#${optionKey}-list [data-color]`);
     labelInput.value = 'Renamed label'; labelInput.dispatchEvent(new Event('input', { bubbles: true }));
-    colorInput.value = '#12ab34'; colorInput.dispatchEvent(new Event('input', { bubbles: true }));
+    pickColor(colorInput, '#12ab34');
     $(`#${optionKey}-list [data-move="${optionKey}:${chosenId}:1"]`).click();
     $('#save-settings').click(); await waitFor(() => !saving && data.settings.taskFields.find(field => field.id === taskFields.multiselect.id).options[1].name === 'Renamed label');
     check(edited().customFields[taskFields.multiselect.id].includes(chosenId) && customText([chosenId], data.settings.taskFields.find(field => field.id === taskFields.multiselect.id)) === 'Renamed label', 'Rename, color, and reorder preserve assignments using stable IDs');
@@ -3601,7 +3831,7 @@ window.runSmokeTests = async () => {
   view = 4; render(); showSettingsTab('tags');
   setTagName(tagTwo, 'SMOKE-TAG Updated');
   const tagColor = document.querySelector(`[data-color="tags:${tagTwo}"]`);
-  tagColor.value = '#12ab34'; tagColor.dispatchEvent(new Event('input', { bubbles: true }));
+  pickColor(tagColor, '#12ab34');
   document.querySelector(`[data-move="tags:${tagTwo}:-1"]`).click();
   $('#save-settings-inline').click();
   await waitFor(() => !saving && data.settings.tags.find(tag => tag.id === tagTwo).name === 'SMOKE-TAG Updated');
@@ -4079,8 +4309,7 @@ window.runSmokeTests = async () => {
   $('#add-theme').click();
   $('#theme-name').value = 'Test theme';
   $('#theme-name').dispatchEvent(new Event('input'));
-  document.querySelector('[data-theme-color="accent"]').value = '#ff8844';
-  document.querySelector('[data-theme-color="accent"]').dispatchEvent(new Event('input'));
+  pickColor(document.querySelector('[data-theme-color="accent"]'), '#ff8844');
   check([...document.querySelectorAll('.theme-swatches')].every(swatches => swatches.children.length === 4), "Theme previews show all four colors");
   check(document.querySelector(`.theme-choice.chosen [aria-label="${t("Accent")}: #ff8844"]`), 'Preview updates immediately from the color picker');
   const paletteImage = async colors => {
