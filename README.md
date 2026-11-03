@@ -1,6 +1,6 @@
 # OrbitKanban — workspace portable
 
-App desktop locale per Windows 10/11 a 64 bit, **versione 2.18.1**. Nessun account, server esterno o collegamento a Internet necessario per l'uso. **Il nome dell'app è sempre OrbitKanban e non è configurabile.** Tutte le impostazioni del workspace appartengono alla singola organizzazione. Mentre l'app è aperta puoi usarla anche **dal browser dello stesso PC**, con più organizzazioni aperte contemporaneamente in schede diverse.
+App desktop locale per Windows 10/11 a 64 bit, **versione 2.19.0**. Nessun account, server esterno o collegamento a Internet necessario per l'uso. **Il nome dell'app è sempre OrbitKanban e non è configurabile.** Tutte le impostazioni del workspace appartengono alla singola organizzazione. Mentre l'app è aperta puoi usarla anche **dal browser dello stesso PC**, con più organizzazioni aperte contemporaneamente in schede diverse.
 
 ## Avvio e condivisione
 
@@ -175,11 +175,16 @@ Ogni data ha un colore deterministico condiviso tra lista e milestone: lo stesso
 Dalla **2.16.0**, ogni intestazione delle liste **Attività** e **Issue collegate** ha il pulsante **▽ Filtra colonna**:
 
 - testo, descrizione, note e link: ricerca **Contiene**, senza distinzione tra maiuscole e minuscole;
-- numeri, effort e date: intervallo **Da / A**, con estremi inclusi; l'effort si filtra in ore;
+- numeri ed effort: intervallo **Da / A**, con estremi inclusi; l'effort si filtra in ore;
+- date (release date e colonne personalizzate di tipo data): dalla **2.19.0** non si digitano più, si scelgono tra quelle presenti (vedi sotto);
 - stati, urgenze, evidenziatori, tag e altri elenchi: selezione di uno o più valori; basta che la cella contenga una delle scelte;
-- tutte le colonne: celle vuote, valorizzate oppure entrambe. **Solo vuote** ignora gli altri criteri della stessa colonna.
+- tutte le colonne tranne le date: celle vuote, valorizzate oppure entrambe. **Solo vuote** ignora gli altri criteri della stessa colonna.
 
-I filtri di colonne diverse si combinano con **AND**, insieme alla ricerca e ai filtri già presenti. La barra sopra la tabella mostra i filtri attivi, anche se la colonna viene nascosta; puoi modificarli, rimuoverne uno o premere **Azzera filtri colonne**. Restano passando tra i tab, ma si azzerano cambiando organizzazione o ripristinando l'archivio. Le **viste salvate** delle attività conservano anche i filtri per colonna.
+Il filtro di una colonna data elenca, ciascuna con il suo colore e il numero di righe, **Non assegnata** (righe senza data) e tutte le date presenti fra le righe mostrate dagli altri filtri; restano elencate anche le date già spuntate che nel frattempo sono sparite. **Seleziona tutte** e **Deseleziona tutte** agiscono sull'intero elenco. In alternativa, o in aggiunta, **Da** e **A** scelgono un intervallo fra le stesse date, estremi inclusi: date spuntate, **Non assegnata** e intervallo si sommano, quindi una riga compare se soddisfa almeno una delle scelte. Spuntare tutte le date senza **Non assegnata** significa «solo righe con data», valido anche per le date aggiunte in seguito; spuntare tutto rimuove il filtro. Prima della 2.19.0 la data si digitava nel campo nativo del browser, il cui formato dipende dalla lingua del sistema (mese/giorno in inglese): una data inserita come giorno/mese poteva quindi non trovare righe.
+
+**Viste per release**: il menu delle viste della lista attività contiene, oltre alle **Viste salvate**, una vista automatica per ogni release date, con il numero di attività: **Prossime release** (da oggi in avanti, in ordine crescente, più **Non assegnata** per le attività senza data) e **Release passate** (dalla più recente). Le date seguono le attività mostrate, comprese quelle nascoste solo se **Nascoste** è attivo, e si aggiornano subito quando aggiungi o sposti una release. Aprire una vista per release azzera ricerca, stato, evidenziazione, duplicati e filtri per colonna e filtra la release date su quel giorno, mantenendo colonne, ordinamento e nascoste; modificare poi un filtro esce dalla vista. Le viste per release non occupano posti tra le 30 viste salvate e non vengono scritte nell'archivio.
+
+I filtri di colonne diverse si combinano con **AND**, insieme alla ricerca e ai filtri già presenti. La barra sopra la tabella mostra i filtri attivi con un breve riepilogo dei valori scelti, anche se la colonna viene nascosta; puoi modificarli, rimuoverne uno o premere **Azzera filtri colonne**. Restano passando tra i tab, ma si azzerano cambiando organizzazione o ripristinando l'archivio. Le **viste salvate** delle attività conservano anche i filtri per colonna.
 
 In **Impostazioni → Colonne personalizzate** puoi aggiungere fino a **30 colonne per ciascuna lista**, indipendenti per organizzazione:
 

@@ -73,6 +73,9 @@ function normalizeColumns(columns, defaults, fields = []) {
 }
 const issueDefaults = () => ['code', 'incident', 'problem', 'linked'].map(id => ({ id, visible: true }));
 const normalizeIssueColumns = (columns, fields = []) => normalizeColumns(columns, issueDefaults(), fields);
+// Filter value that selects the cells without a value, next to the real values of the column.
+const EMPTY_VALUE = '__empty__';
+const FILTER_VALUES_MAX = 1000;
 function validFilters(filters, ids, types = {}) {
   const bound = (value, type) => value === '' || (type === 'date' ? validDate(value) : ['number', 'effort'].includes(type) && value.trim() !== '' && Number.isFinite(Number(value)));
   return filters === undefined || (ownObject(filters) && Object.entries(filters).every(([id, filter]) => ids.includes(id) && ownObject(filter)
@@ -80,7 +83,8 @@ function validFilters(filters, ids, types = {}) {
     && typeof filter.min === 'string' && filter.min.length <= 40 && typeof filter.max === 'string' && filter.max.length <= 40
     && bound(filter.min, types[id]) && bound(filter.max, types[id])
     && (!filter.min || !filter.max || (types[id] === 'date' ? filter.min <= filter.max : Number(filter.min) <= Number(filter.max)))
-    && Array.isArray(filter.values) && filter.values.length <= 100 && filter.values.every(value => typeof value === 'string' && value.length <= 200)));
+    && Array.isArray(filter.values) && filter.values.length <= FILTER_VALUES_MAX && filter.values.every(value => typeof value === 'string' && value.length <= 200)
+    && (types[id] !== 'date' || filter.values.every(value => value === EMPTY_VALUE || validDate(value)))));
 }
 const emptyFilter = () => ({ text: '', min: '', max: '', values: [], empty: 'any' });
 const activeFilter = filter => filter && Boolean(filter.text || filter.min || filter.max || filter.values.length || filter.empty !== 'any');
@@ -89,7 +93,14 @@ function matchesFilter(value, filter, type) {
   const empty = value === undefined || value === null || value === '' || (Array.isArray(value) && !value.length);
   if (filter.empty === 'empty') return empty;
   if (filter.empty === 'filled' && empty) return false;
-  if (empty) return !filter.text && !filter.min && !filter.max && !filter.values.length;
+  if (type === 'date') {
+    // Ticked dates, the From/To range and "without date" add up: a row passes when it matches any of them.
+    const dates = filter.values.filter(item => item !== EMPTY_VALUE), range = Boolean(filter.min || filter.max);
+    if (!dates.length && !range && !filter.values.includes(EMPTY_VALUE)) return true;
+    if (empty) return filter.values.includes(EMPTY_VALUE);
+    return dates.includes(value) || (range && (!filter.min || value >= filter.min) && (!filter.max || value <= filter.max));
+  }
+  if (empty) return filter.values.includes(EMPTY_VALUE) || (!filter.text && !filter.min && !filter.max && !filter.values.length);
   const values = Array.isArray(value) ? value.map(String) : [String(value)];
   if (filter.values.length && !values.some(value => filter.values.includes(value))) return false;
   if (filter.text && !values.some(value => value.toLocaleLowerCase().includes(filter.text.toLocaleLowerCase()))) return false;
@@ -136,7 +147,7 @@ function remapValues(values, mapping, valueMappings = new Map(), filters = false
   }));
 }
 const valuesKey = values => JSON.stringify(Object.entries(values || {}).sort(([a], [b]) => a.localeCompare(b)));
-const api = { TYPES, FIELD_LIMIT, fieldsOf, choices, validateFields, validateValue, validateCustomData, normalizeColumns, normalizeIssueColumns, validDate, validFilters, emptyFilter, activeFilter, matchesFilter, mergeFields, remapValues, valuesKey };
+const api = { TYPES, FIELD_LIMIT, EMPTY_VALUE, FILTER_VALUES_MAX, fieldsOf, choices, validateFields, validateValue, validateCustomData, normalizeColumns, normalizeIssueColumns, validDate, validFilters, emptyFilter, activeFilter, matchesFilter, mergeFields, remapValues, valuesKey };
 if (typeof module !== 'undefined') module.exports = api;
 else globalThis.OrbitaColumns = api;
 })();

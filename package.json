@@ -1,6 +1,6 @@
 {
   "name": "orbitkanban-portable",
-  "version": "2.18.1",
+  "version": "2.19.0",
   "description": "Workspace attività, issue, milestone e kanban completamente locale",
   "main": "main.js",
   "author": "OrbitKanban",

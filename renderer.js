@@ -844,7 +844,61 @@ function filterHeader(id, kind) {
 }
 function columnFilterBar(kind) {
   const ids = Object.keys(columnFilters[kind]);
-  return ids.length ? `<div class="column-filter-bar">${ids.map(id => `<button class="button small" data-filter-column="${esc(id)}">${esc(columnName(id, kind))} ▾</button>`).join('')}<button class="button small subtle" data-clear-column-filters>${esc(t('Azzera filtri colonne'))}</button></div>` : '';
+  return ids.length ? `<div class="column-filter-bar">${ids.map(id => {
+    const summary = filterSummary(id, kind, columnFilters[kind][id]), short = summary.length > 48 ? `${summary.slice(0, 47)}…` : summary;
+    return `<button class="button small" data-filter-column="${esc(id)}" title="${esc(`${columnName(id, kind)}: ${summary}`)}">${esc(columnName(id, kind))}${short ? `: <span class="filter-summary">${esc(short)}</span>` : ''} ▾</button>`;
+  }).join('')}<button class="button small subtle" data-clear-column-filters>${esc(t('Azzera filtri colonne'))}</button></div>` : '';
+}
+// Readable text of one column filter, shared by the filter bar and the Excel summary.
+function filterSummary(id, kind, filter) {
+  const spec = filterSpec(id, kind), empty = CustomColumns.EMPTY_VALUE;
+  if (spec.type === 'date') {
+    if (filter.empty === 'empty') return t('Non assegnata');
+    const dates = filter.values.filter(value => value !== empty).sort().map(formatDate);
+    const range = filter.min || filter.max ? `${filter.min ? formatDate(filter.min) : '…'} → ${filter.max ? formatDate(filter.max) : '…'}` : '';
+    const parts = [...dates, filter.values.includes(empty) && t('Non assegnata'), range].filter(Boolean);
+    return parts.length ? parts.join(', ') : filter.empty === 'filled' ? t('Tutte le date') : '';
+  }
+  const values = filter.values.map(value => value === empty ? t('Non assegnata') : spec.type === 'boolean' ? t(value === 'true' ? 'Sì' : 'No') : spec.options?.find(option => String(option.value) === value)?.name || value);
+  return [filter.text && `${t('Contiene')}: ${filter.text}`, filter.min && `${t('Da')}: ${filter.min}`, filter.max && `${t('A')}: ${filter.max}`, values.join(', '), filter.empty !== 'any' && t(filter.empty === 'empty' ? 'Solo vuote' : 'Solo valorizzate')].filter(Boolean).join(', ');
+}
+// Rows the other filters would show, so a column's choices and counts match what applying it would give.
+function filterCandidates(id, kind) {
+  const all = columnFilters[kind];
+  columnFilters[kind] = Object.fromEntries(Object.entries(all).filter(([key]) => key !== id));
+  try { return kind === 'issues' ? filteredIssues() : filteredTasks(); } finally { columnFilters[kind] = all; }
+}
+function dateFilterChoices(id, kind) {
+  const counts = new Map();
+  let empty = 0;
+  for (const record of filterCandidates(id, kind)) {
+    const value = columnValue(record, id, kind);
+    if (value) counts.set(value, (counts.get(value) || 0) + 1); else empty++;
+  }
+  return { dates: [...counts.keys()].sort(), counts, empty };
+}
+// Dates are picked from the ones in the list instead of typed, because the native date input follows the browser's locale (mm/dd in English).
+function dateFilterFields(filter, choices) {
+  const empty = CustomColumns.EMPTY_VALUE, onlyEmpty = filter.empty === 'empty';
+  const anyDate = filter.empty === 'filled' && !filter.values.length && !filter.min && !filter.max;
+  const checked = new Set(onlyEmpty ? [empty] : anyDate ? choices.dates : filter.values);
+  const min = onlyEmpty ? '' : filter.min, max = onlyEmpty ? '' : filter.max;
+  const dates = [...new Set([...choices.dates, ...filter.values.filter(value => value !== empty)])].sort();
+  const bounds = [...new Set([...choices.dates, min, max].filter(Boolean))].sort();
+  const option = (value, label, color, count) => `<label class="date-filter-option"><input type="checkbox" name="values" value="${esc(value)}" ${checked.has(value) ? 'checked' : ''}><span class="date-pill" style="--date:${color}">◷ ${esc(label)}</span><span class="tiny-count">${count}</span></label>`;
+  const bound = (name, selected) => `<select name="${name}"><option value="">—</option>${bounds.map(date => `<option value="${date}" ${date === selected ? 'selected' : ''}>${esc(formatDate(date))}</option>`).join('')}</select>`;
+  return `<fieldset class="field full filter-options date-filter-options"><legend>${esc(t('Date presenti'))}</legend>
+      <div class="filter-option-tools"><button type="button" class="button small" data-check-dates="all">${esc(t('Seleziona tutte'))}</button><button type="button" class="button small subtle" data-check-dates="none">${esc(t('Deseleziona tutte'))}</button></div>
+      ${option(empty, t('Non assegnata'), '#929bb2', choices.empty)}${dates.map(date => option(date, formatDate(date), dateColor(date), choices.counts.get(date) || 0)).join('')}</fieldset>
+    <label class="field">${esc(t('Da'))}${bound('min', min)}</label><label class="field">${esc(t('A'))}${bound('max', max)}</label>
+    <p class="full filter-note">${esc(t('Le date spuntate e l’intervallo si sommano: una riga compare se soddisfa almeno una delle due scelte.'))}</p>`;
+}
+function dateFilterFromForm(fields, choices) {
+  const values = fields.getAll('values').map(String), min = String(fields.get('min') || ''), max = String(fields.get('max') || '');
+  const dates = values.filter(value => value !== CustomColumns.EMPTY_VALUE), withEmpty = values.includes(CustomColumns.EMPTY_VALUE), filter = CustomColumns.emptyFilter();
+  if (!min && !max && withEmpty && !dates.length) return { ...filter, empty: 'empty' };
+  if (!min && !max && choices.dates.length && choices.dates.every(date => dates.includes(date))) return withEmpty ? filter : { ...filter, empty: 'filled' };
+  return { ...filter, min, max, values };
 }
 function wireColumnFilters(kind) {
   document.querySelectorAll('#content [data-filter-column]').forEach(button => button.onclick = () => columnFilterDialog(button.dataset.filterColumn, kind));
@@ -852,19 +906,24 @@ function wireColumnFilters(kind) {
   if (clear) clear.onclick = () => { columnFilters[kind] = {}; clearActiveSavedView(); rerenderPreservingView(); };
 }
 function columnFilterDialog(id, kind) {
-  const filter = structuredClone(columnFilters[kind][id] || CustomColumns.emptyFilter()), spec = filterSpec(id, kind);
-  const range = ['number', 'effort', 'date'].includes(spec.type), options = spec.type === 'boolean' ? [{ value: 'true', name: t('Sì') }, { value: 'false', name: t('No') }] : spec.options;
+  const filter = structuredClone(columnFilters[kind][id] || CustomColumns.emptyFilter()), spec = filterSpec(id, kind), isDate = spec.type === 'date';
+  const range = ['number', 'effort'].includes(spec.type), options = spec.type === 'boolean' ? [{ value: 'true', name: t('Sì') }, { value: 'false', name: t('No') }] : spec.options;
+  const choices = isDate && dateFilterChoices(id, kind);
   openModal(`<form id="column-filter-form"><div class="modal-heading"><h2>${esc(t('Filtra colonna') + ': ' + columnName(id, kind))}</h2></div><div class="form-grid">
-    ${range ? `<label class="field">${esc(t('Da'))}<input name="min" type="${spec.type === 'date' ? 'date' : 'number'}" step="any" value="${esc(filter.min)}"></label><label class="field">${esc(t('A'))}<input name="max" type="${spec.type === 'date' ? 'date' : 'number'}" step="any" value="${esc(filter.max)}"></label>` :
+    ${isDate ? dateFilterFields(filter, choices) :
+      range ? `<label class="field">${esc(t('Da'))}<input name="min" type="number" step="any" value="${esc(filter.min)}"></label><label class="field">${esc(t('A'))}<input name="max" type="number" step="any" value="${esc(filter.max)}"></label>` :
       options ? `<fieldset class="field full filter-options"><legend>${esc(t('Valori ammessi'))}</legend>${options.map(option => `<label><input type="checkbox" name="values" value="${esc(option.value)}" ${filter.values.includes(String(option.value)) ? 'checked' : ''}> ${esc(option.name)}</label>`).join('')}</fieldset>` :
         `<label class="field full">${esc(t('Contiene'))}<input name="text" maxlength="200" value="${esc(filter.text)}"></label>`}
-    <label class="field full">${esc(t('Celle vuote'))}<select name="empty">${[['any', 'Tutte'], ['empty', 'Solo vuote'], ['filled', 'Solo valorizzate']].map(([value, label]) => `<option value="${value}" ${value === filter.empty ? 'selected' : ''}>${esc(t(label))}</option>`).join('')}</select></label>
+    ${isDate ? '' : `<label class="field full">${esc(t('Celle vuote'))}<select name="empty">${[['any', 'Tutte'], ['empty', 'Solo vuote'], ['filled', 'Solo valorizzate']].map(([value, label]) => `<option value="${value}" ${value === filter.empty ? 'selected' : ''}>${esc(t(label))}</option>`).join('')}</select></label>`}
     </div><div class="modal-actions"><button type="button" class="button" id="clear-one-filter">${esc(t('Rimuovi filtro'))}</button><span class="spacer"></span><button type="button" class="button" data-close>${esc(t('Annulla'))}</button><button class="button primary" type="submit">${esc(t('Applica'))}</button></div></form>`);
   const apply = value => { if (CustomColumns.activeFilter(value)) columnFilters[kind][id] = value; else delete columnFilters[kind][id]; clearActiveSavedView(); $('#modal').close(); rerenderPreservingView(); };
   $('#clear-one-filter').onclick = () => apply(CustomColumns.emptyFilter());
+  document.querySelectorAll('#column-filter-form [data-check-dates]').forEach(button => button.onclick = () => {
+    document.querySelectorAll('#column-filter-form input[name="values"]').forEach(box => { box.checked = button.dataset.checkDates === 'all'; });
+  });
   $('#column-filter-form').onsubmit = action(event => {
     event.preventDefault();
-    const fields = new FormData(event.target), next = { text: String(fields.get('text') || '').trim(), min: String(fields.get('min') || ''), max: String(fields.get('max') || ''), values: fields.getAll('values'), empty: fields.get('empty') };
+    const fields = new FormData(event.target), next = isDate ? dateFilterFromForm(fields, choices) : { text: String(fields.get('text') || '').trim(), min: String(fields.get('min') || ''), max: String(fields.get('max') || ''), values: fields.getAll('values'), empty: fields.get('empty') };
     if (next.min && next.max && (spec.type === 'date' ? next.min > next.max : Number(next.min) > Number(next.max))) throw new Error(t('Il limite minimo supera il massimo.'));
     if (!CustomColumns.validFilters({ [id]: next }, [id], { [id]: spec.type })) throw new Error(t('Filtro colonna non valido.'));
     apply(next);
@@ -887,7 +946,7 @@ function sortedRows(tasks) {
 function renderTasks() {
   const hidden = data.tasks.filter(t => t.hidden).length, highlights = highlightsOf(), columns = shownColumns(), duplicateCount = duplicatesOf().tasks.size;
   const savedViews = data.settings.savedViews || [];
-  if (activeSavedViewId && !savedViews.some(saved => saved.id === activeSavedViewId)) activeSavedViewId = '';
+  if (activeSavedViewId && !savedViews.some(saved => saved.id === activeSavedViewId) && !releaseViewIds().includes(activeSavedViewId)) activeSavedViewId = '';
   if (duplicatesOnly && !duplicateCount) duplicatesOnly = false;
   if (highlightFilter && !['__any', '__none'].includes(highlightFilter) && !highlights.some(h => h.id === highlightFilter)) highlightFilter = '';
   if (highlighter && highlighter !== 'erase' && !highlights.some(h => h.id === highlighter)) highlighter = '';
@@ -897,7 +956,7 @@ function renderTasks() {
   if (!sort.length) sort = [{ key: 'releaseDate', direction: 'asc' }];
   const highlightOptions = [['', 'Tutte le evidenziazioni'], ['__any', 'Solo evidenziate'], ['__none', 'Senza evidenziazione']].map(([value, label]) => `<option value="${value}" ${value === highlightFilter ? 'selected' : ''}>${esc(t(label))}</option>`).join('') +
     highlights.map(h => `<option value="${esc(h.id)}" ${h.id === highlightFilter ? 'selected' : ''}>● ${esc(h.name)}</option>`).join('');
-  const savedViewOptions = `<option value="">${esc(t('Viste salvate…'))}</option>` + savedViews.map(saved => `<option value="${esc(saved.id)}" ${saved.id === activeSavedViewId ? 'selected' : ''}>${esc(saved.name)}</option>`).join('');
+  const savedViewOptions = `<option value="">${esc(t('Scegli una vista…'))}</option>` + (savedViews.length ? `<optgroup label="${esc(t('Viste salvate'))}">${savedViews.map(saved => `<option value="${esc(saved.id)}" ${saved.id === activeSavedViewId ? 'selected' : ''}>${esc(saved.name)}</option>`).join('')}</optgroup>` : '') + releaseViewOptions();
   const headers = columns.map(id => {
     const def = columnDef(id), label = esc(def.header || (def.field ? def.name : t(def.name))), current = def.sort && sort.find(s => s.key === def.sort);
     const title = def.header ? ` title="${esc(t(def.name))}"` : '';
@@ -917,7 +976,12 @@ function renderTasks() {
   $('#highlight-filter').onchange = event => { highlightFilter = event.target.value; clearActiveSavedView(); drawTaskRows(); };
   $('#show-hidden').onchange = event => { showHidden = event.target.checked; clearActiveSavedView(); drawTaskRows(); };
   $('#duplicates-only').onchange = event => { duplicatesOnly = event.target.checked; clearActiveSavedView(); drawTaskRows(); };
-  $('#saved-view-select').onchange = action(async event => { if (event.target.value) await applySavedView(event.target.value); });
+  $('#saved-view-select').onchange = action(async event => {
+    const id = event.target.value;
+    if (!id) return;
+    if ((data.settings.savedViews || []).some(saved => saved.id === id) || !id.startsWith(RELEASE_VIEW)) await applySavedView(id);
+    else applyReleaseView(id);
+  });
   $('#saved-view-manage').onclick = () => openSavedViews();
   $('#columns-button').onclick = () => columnsDialog();
   $('#reset-sort').onclick = () => { sort = [{ key: 'releaseDate', direction: 'asc' }]; clearActiveSavedView(); renderTasks(); };
@@ -950,6 +1014,37 @@ function renderTasks() {
   $('#bulk-edit').onclick = () => bulkDialog([...selectedTasks]);
   $('#bulk-excel').onclick = () => excelDialog({ scope: 'selected' });
   $('#bulk-clear').onclick = () => clearSelection();
+}
+// Every release date gets a ready-made view; ids are "release:<date>" ("release:" for tasks without a date) and are never stored.
+const RELEASE_VIEW = 'release:';
+function releaseViewGroups() {
+  const counts = new Map();
+  let unassigned = 0;
+  for (const task of data.tasks) {
+    if (task.hidden && !showHidden) continue;
+    if (task.releaseDate) counts.set(task.releaseDate, (counts.get(task.releaseDate) || 0) + 1); else unassigned++;
+  }
+  const day = today(), dates = [...counts.keys()].sort();
+  return { upcoming: dates.filter(date => date >= day), past: dates.filter(date => date < day).reverse(), counts, unassigned };
+}
+function releaseViewIds(groups = releaseViewGroups()) {
+  return [...groups.upcoming, ...groups.past, ...(groups.unassigned ? [''] : [])].map(date => RELEASE_VIEW + date);
+}
+function releaseViewOptions(groups = releaseViewGroups()) {
+  const option = (date, label, count) => `<option value="${esc(RELEASE_VIEW + date)}" ${RELEASE_VIEW + date === activeSavedViewId ? 'selected' : ''}>${esc(`${label} (${count})`)}</option>`;
+  const upcoming = groups.upcoming.map(date => option(date, `◷ ${formatDate(date)}`, groups.counts.get(date))).join('') + (groups.unassigned ? option('', `◌ ${t('Non assegnata')}`, groups.unassigned) : '');
+  const past = groups.past.map(date => option(date, `◷ ${formatDate(date)}`, groups.counts.get(date))).join('');
+  return (upcoming ? `<optgroup label="${esc(t('Prossime release'))}">${upcoming}</optgroup>` : '') + (past ? `<optgroup label="${esc(t('Release passate'))}">${past}</optgroup>` : '');
+}
+function applyReleaseView(id) {
+  const date = id.slice(RELEASE_VIEW.length);
+  if (!releaseViewIds().includes(id)) throw new Error(t('La vista salvata non esiste più.'));
+  search = ''; statusFilter = ''; highlightFilter = ''; duplicatesOnly = false;
+  columnFilters.tasks = { releaseDate: date ? { ...CustomColumns.emptyFilter(), values: [date] } : { ...CustomColumns.emptyFilter(), empty: 'empty' } };
+  activeSavedViewId = id;
+  $('#modal').open && $('#modal').close();
+  render();
+  notify(fillText('Vista «{0}» applicata.', `Release ${date ? formatDate(date) : t('Non assegnata')}`));
 }
 function clearActiveSavedView() {
   if (!activeSavedViewId) return;
@@ -1019,7 +1114,7 @@ function renderSavedViewList() {
   list.innerHTML = savedViews.length ? savedViews.map(saved => `<article class="saved-view-item"><div class="saved-view-info"><strong>${esc(saved.name)}</strong><small>${esc(savedViewSummary(saved))}</small></div><button type="button" class="button small primary" data-view-action="apply" data-view-id="${esc(saved.id)}">${esc(t('Apri'))}</button><button type="button" class="button small" data-view-action="update" data-view-id="${esc(saved.id)}">${esc(t('Aggiorna'))}</button><button type="button" class="button small danger" data-view-action="delete" data-view-id="${esc(saved.id)}" aria-label="${esc(fillText('Elimina vista {0}', saved.name))}">✕</button></article>`).join('') : `<p class="backup-empty">${esc(t('Non hai ancora salvato viste.'))}</p>`;
 }
 function openSavedViews() {
-  openModal(ui`<div class="modal-heading"><div><div class="eyebrow">${esc(t('ATTIVITÀ'))}</div><h2>${esc(t('Viste salvate'))}</h2></div><button type="button" class="icon-button" data-close aria-label="Chiudi">✕</button></div><p class="section-description">${esc(t('Salva filtri, ordinamento e colonne per riapplicarli con un clic. Le viste appartengono solo a questa organizzazione.'))}</p><form id="saved-view-form" class="form-grid"><label class="field full">${esc(t('Nome vista'))}<input name="name" maxlength="60" required autocomplete="off" placeholder="${esc(t('Es. Prossima release'))}"></label><div class="modal-actions full"><span class="spacer"></span><button type="submit" class="button primary">${esc(t('Salva vista corrente'))}</button></div></form><div class="saved-view-list" id="saved-view-list"></div>`);
+  openModal(ui`<div class="modal-heading"><div><div class="eyebrow">${esc(t('ATTIVITÀ'))}</div><h2>${esc(t('Viste salvate'))}</h2></div><button type="button" class="icon-button" data-close aria-label="Chiudi">✕</button></div><p class="section-description">${esc(t('Salva filtri, ordinamento e colonne per riapplicarli con un clic. Le viste appartengono solo a questa organizzazione.'))}</p><p class="filter-note">${esc(t('Le viste per ogni release date si creano da sole: le trovi nel menu delle viste, in «Prossime release» e «Release passate».'))}</p><form id="saved-view-form" class="form-grid"><label class="field full">${esc(t('Nome vista'))}<input name="name" maxlength="60" required autocomplete="off" placeholder="${esc(t('Es. Prossima release'))}"></label><div class="modal-actions full"><span class="spacer"></span><button type="submit" class="button primary">${esc(t('Salva vista corrente'))}</button></div></form><div class="saved-view-list" id="saved-view-list"></div>`);
   const form = $('#saved-view-form');
   form.onsubmit = action(async event => { event.preventDefault(); await saveSavedView(new FormData(form).get('name')); });
   $('#saved-view-list').onclick = action(async event => {
@@ -1942,12 +2037,7 @@ function excelTasks(scope) {
   return sortedRows(scope === 'all' ? data.tasks : filteredTasks());
 }
 function columnFilterDescriptions(kind) {
-  return Object.entries(columnFilters[kind]).map(([id, filter]) => {
-    const spec = filterSpec(id, kind);
-    const values = filter.values.map(value => spec.type === 'boolean' ? t(value === 'true' ? 'Sì' : 'No') : spec.options?.find(option => String(option.value) === value)?.name || value);
-    const parts = [filter.text && `${t('Contiene')}: ${filter.text}`, filter.min && `${t('Da')}: ${filter.min}`, filter.max && `${t('A')}: ${filter.max}`, values.join(', '), filter.empty !== 'any' && t(filter.empty === 'empty' ? 'Solo vuote' : 'Solo valorizzate')].filter(Boolean);
-    return `${columnName(id, kind)}: ${parts.join(', ')}`;
-  });
+  return Object.entries(columnFilters[kind]).map(([id, filter]) => `${columnName(id, kind)}: ${filterSummary(id, kind, filter)}`);
 }
 function activeFilterText(kind = 'tasks') {
   if (kind === 'issues') return [issueSearch && `${t('Ricerca')}: ${issueSearch}`, issueDuplicatesOnly && t('Solo duplicati'), ...columnFilterDescriptions(kind)].filter(Boolean).join(' · ') || t('Nessuno');
@@ -2919,7 +3009,39 @@ window.runSmokeTests = async () => {
     const dated = data.tasks.find(task => task.releaseDate && !task.hidden), sameDay = data.tasks.filter(task => !task.hidden && task.releaseDate === dated.releaseDate).length;
     await setColumnFilter('releaseDate', 'tasks', { min: dated.releaseDate, max: dated.releaseDate });
     check(filteredTasks().length === sameDay && document.querySelectorAll('#task-rows tr[data-task-row]').length === sameDay && $('#row-count').textContent.startsWith(String(sameDay)) && tableShowsRows('#task-rows tr[data-task-row]'), 'Filtro sulla release date dello stesso giorno mostra le righe di quella data');
-    $('[data-clear-column-filters]').click();
+    const visibleDated = data.tasks.filter(task => !task.hidden), presentDates = [...new Set(visibleDated.map(task => task.releaseDate).filter(Boolean))].sort(), unassignedCount = visibleDated.filter(task => !task.releaseDate).length;
+    columnFilterDialog('releaseDate', 'tasks');
+    const dateBoxes = () => [...document.querySelectorAll('#column-filter-form input[name="values"]')];
+    check($('#column-filter-form').elements.min.tagName === 'SELECT' && !$('#column-filter-form input[type="date"]') && !$('#column-filter-form').elements.empty && [...$('#column-filter-form').elements.max.options].slice(1).map(option => option.value).join() === presentDates.join(), 'Filtro data senza digitazione: Da e A scelgono tra le date presenti');
+    check(dateBoxes()[0].value === CustomColumns.EMPTY_VALUE && dateBoxes().slice(1).map(box => box.value).join() === presentDates.join() && $('#column-filter-form .date-filter-option .tiny-count').textContent === String(unassignedCount) && dateBoxes().every(box => !box.checked), 'Elenco del filtro data con Non assegnata, ogni data presente e i conteggi');
+    $('#column-filter-form').elements.min.value = ''; $('#column-filter-form').elements.max.value = '';
+    $(`#column-filter-form input[name="values"][value="${dated.releaseDate}"]`).checked = true;
+    $('#column-filter-form').requestSubmit(); await tick();
+    check(filteredTasks().length === sameDay && columnFilters.tasks.releaseDate.values.join() === dated.releaseDate && !columnFilters.tasks.releaseDate.min && tableShowsRows('#task-rows tr[data-task-row]') && $('.column-filter-bar').textContent.includes(formatDate(dated.releaseDate)), 'Spunta di una data presente mostra le sue righe e la barra filtri riporta la data');
+    columnFilterDialog('releaseDate', 'tasks');
+    check(dateBoxes().filter(box => box.checked).map(box => box.value).join() === dated.releaseDate, 'Riapertura del filtro data mostra la data già spuntata');
+    $('#column-filter-form [data-check-dates="none"]').click();
+    $(`#column-filter-form input[value="${CustomColumns.EMPTY_VALUE}"]`).checked = true;
+    $('#column-filter-form').requestSubmit(); await tick();
+    check(columnFilters.tasks.releaseDate.empty === 'empty' && filteredTasks().length === unassignedCount && filteredTasks().every(task => !task.releaseDate), 'Non assegnata mostra solo le attività senza release date');
+    columnFilterDialog('releaseDate', 'tasks');
+    $('#column-filter-form [data-check-dates="all"]').click();
+    $(`#column-filter-form input[value="${CustomColumns.EMPTY_VALUE}"]`).checked = false;
+    $('#column-filter-form').requestSubmit(); await tick();
+    check(columnFilters.tasks.releaseDate.empty === 'filled' && !columnFilters.tasks.releaseDate.values.length && filteredTasks().length === visibleDated.length - unassignedCount, 'Tutte le date senza Non assegnata diventa «solo con data», valido anche per date future');
+    columnFilterDialog('releaseDate', 'tasks');
+    check(dateBoxes().slice(1).every(box => box.checked) && !dateBoxes()[0].checked, 'Il filtro «solo con data» riaperto spunta tutte le date presenti');
+    $('#column-filter-form [data-check-dates="all"]').click();
+    $('#column-filter-form').requestSubmit(); await tick();
+    check(!columnFilters.tasks.releaseDate && filteredTasks().length === visibleDated.length, 'Seleziona tutte, Non assegnata compresa, rimuove il filtro data');
+    if (presentDates.length > 1) {
+      columnFilterDialog('releaseDate', 'tasks');
+      $('#column-filter-form').elements.min.value = presentDates[1]; $('#column-filter-form').elements.max.value = presentDates[0];
+      $('#column-filter-form').requestSubmit(); await tick();
+      check($('#modal').open && !columnFilters.tasks.releaseDate, 'Intervallo date invertito rifiutato senza applicare il filtro');
+      $('#modal').close();
+    }
+    check(!$('.column-filter-bar') && !Object.keys(columnFilters.tasks).length, 'Senza filtri attivi la barra dei filtri di colonna scompare');
     await csvImportDialog(new File(['code;releaseDate\nBAD;2027-02-29'], 'invalid.csv'), 'tasks');
     check($('#csv-import').disabled && $('#csv-status').textContent.includes('1') && data.tasks.length === baseline.tasks.length, 'CSV invalido mostra gli errori e non importa alcuna riga');
     $('#modal').close();
@@ -3108,6 +3230,39 @@ window.runSmokeTests = async () => {
   clearHistory(activeOrganizationId);
   render();
   check(!(data.settings.savedViews || []).some(saved => saved.name === 'Smoke saved view'), 'Vista salvata eliminata senza lasciare dati di prova');
+  {
+    const releaseState = { search, statusFilter, highlightFilter, showHidden, duplicatesOnly, filters: structuredClone(columnFilters.tasks) };
+    showHidden = false; view = 0; render();
+    const day = today(), shownDates = [...new Set(data.tasks.filter(task => !task.hidden && task.releaseDate).map(task => task.releaseDate))].sort();
+    const releaseOptions = () => [...$('#saved-view-select').querySelectorAll(`option[value^="${RELEASE_VIEW}"]`)];
+    const groupOf = date => $('#saved-view-select').querySelector(`option[value="${RELEASE_VIEW}${date}"]`)?.parentElement.label;
+    check(releaseOptions().map(option => option.value.slice(RELEASE_VIEW.length)).filter(Boolean).sort().join() === shownDates.join() && shownDates.every(date => groupOf(date) === t(date >= day ? 'Prossime release' : 'Release passate')), 'Una vista automatica per ogni release date, divisa tra prossime e passate');
+    const unassignedTasks = data.tasks.filter(task => !task.hidden && !task.releaseDate).length;
+    check(Boolean(groupOf('')) === unassignedTasks > 0 && (!unassignedTasks || releaseOptions().find(option => option.value === RELEASE_VIEW).textContent.endsWith(`(${unassignedTasks})`)), 'Vista automatica per le attività senza release date con il conteggio');
+    const tasksOn = date => data.tasks.filter(task => !task.hidden && task.releaseDate === date).length;
+    const releaseDate = shownDates.find(date => date >= day && tasksOn(date) > 1) || shownDates.find(date => tasksOn(date) > 1);
+    search = 'not-a-release'; statusFilter = data.settings.statuses[0].id; render();
+    $('#saved-view-select').value = RELEASE_VIEW + releaseDate;
+    $('#saved-view-select').dispatchEvent(new Event('change', { bubbles: true }));
+    await waitFor(() => activeSavedViewId === RELEASE_VIEW + releaseDate);
+    check(!search && !statusFilter && filteredTasks().length === tasksOn(releaseDate) && document.querySelectorAll('#task-rows tr[data-task-row]').length === tasksOn(releaseDate) && $('#saved-view-select').value === RELEASE_VIEW + releaseDate && $('.column-filter-bar').textContent.includes(formatDate(releaseDate)), 'Vista release mostra solo le attività di quella data e resta selezionata');
+    const moved = data.tasks.find(task => !task.hidden && task.releaseDate === releaseDate), farDate = '2099-12-30';
+    await commit(next => { next.tasks.find(task => task.id === moved.id).releaseDate = farDate; });
+    render();
+    check(groupOf(farDate) === t('Prossime release') && $('#saved-view-select').value === RELEASE_VIEW + releaseDate && filteredTasks().length === tasksOn(releaseDate), 'Una nuova release date crea subito la sua vista e la vista attiva si aggiorna');
+    await commit(next => { next.tasks.find(task => task.id === moved.id).releaseDate = releaseDate; });
+    if (unassignedTasks) {
+      applyReleaseView(RELEASE_VIEW);
+      check(filteredTasks().length === unassignedTasks && filteredTasks().every(task => !task.releaseDate) && $('#saved-view-select').value === RELEASE_VIEW, 'Vista release «Non assegnata» mostra le attività da pianificare');
+    }
+    $('#show-hidden').click();
+    check(!activeSavedViewId && $('#saved-view-select').value === '', 'Modificare i filtri lascia la vista release, come per le viste salvate');
+    ({ search, statusFilter, highlightFilter, showHidden, duplicatesOnly } = releaseState);
+    columnFilters.tasks = releaseState.filters;
+    activeSavedViewId = '';
+    clearHistory(activeOrganizationId);
+    render();
+  }
   check(initialTaskCount > 200 && visibleTasks().length < initialTaskCount && document.querySelectorAll('#task-rows tr').length === visibleTasks().length, 'Caricamento dati dimostrativi con righe già rilasciate nascoste');
   const demoReleases = [...new Set(data.tasks.map(t => t.releaseDate).filter(Boolean))].sort();
   check(demoReleases[0] === '2025-01-01' && demoReleases.length > 40 && demoReleases.every((date, i) => new Date(`${date}T12:00:00Z`).getUTCDay() === 3 && (!i || Date.parse(date) - Date.parse(demoReleases[i - 1]) === 14 * 86400000)), 'Milestone dimostrative ogni due settimane di mercoledì da gennaio 2025');
@@ -3944,6 +4099,13 @@ window.runSmokeTests = async () => {
   view = 0; render();
   check($('#new-task').textContent.includes('New task') && $('#search').placeholder.startsWith('Search'), 'Lista attività e ricerca tradotte');
   check($('.highlighter-label').textContent.includes('Highlighter') && $('#columns-button').textContent.includes('Columns') && $('#highlight-filter').options[0].textContent === 'All highlights' && $('.activity-table th[data-column="description"] .column-heading > span').textContent === 'Description', 'Evidenziatore e colonne tradotti in inglese');
+  check($('#saved-view-select').options[0].textContent === 'Choose a view…' && [...$('#saved-view-select').querySelectorAll('optgroup')].every(group => ['Saved views', 'Upcoming releases', 'Past releases'].includes(group.label)), 'Menu viste e gruppi delle release tradotti in inglese');
+  columnFilterDialog('releaseDate', 'tasks');
+  check($('#column-filter-form legend').textContent === 'Dates in the list' && $('#column-filter-form .date-filter-option').textContent.includes('Unassigned') && $('#column-filter-form [data-check-dates="all"]').textContent === 'Select all' && $('#column-filter-form .filter-note').textContent.startsWith('Ticked dates') && $('#column-filter-form').textContent.includes('From'), 'Filtro data tradotto in inglese con Unassigned');
+  $('#modal').close();
+  openSavedViews();
+  check($('#modal-content h2').textContent === 'Saved views' && $('#modal-content .filter-note').textContent.startsWith('A view for every release date'), 'Viste salvate e nota sulle viste release in inglese');
+  $('#modal').close();
   taskDialog();
   check($('#task-form').textContent.includes('Portal code') && $('#task-form').textContent.includes('Effort in days') && $('#task-form').textContent.includes('1 day'), 'Dialog attività, editor e unità in inglese');
   check(data.settings.tags.length === 0 && !$('.tag-choice') && !$('.task-tags'), 'Catalogo tag isolato e selettore assente dalla scheda attività');

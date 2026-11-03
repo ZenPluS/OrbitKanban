@@ -2423,6 +2423,46 @@ th .column-heading .column-filter-button.active {
 .filter-options input {
   width: auto;
 }
+.date-filter-options {
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 6px 10px;
+  max-height: min(340px, 42vh);
+}
+.filter-option-tools {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.date-filter-option {
+  justify-content: flex-start;
+  padding: 3px 4px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.date-filter-option:hover,
+.date-filter-option:has(input:checked) {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.date-filter-option .date-pill {
+  padding: 4px 7px;
+}
+.date-filter-option .tiny-count {
+  margin-left: auto;
+}
+.filter-note {
+  margin: 0;
+  font-size: calc(12px * var(--fs));
+  line-height: 1.5;
+  color: var(--muted);
+}
+.section-description + .filter-note {
+  margin: -14px 0 18px;
+}
+.column-filter-bar .filter-summary {
+  font-weight: 400;
+  opacity: 0.8;
+}
 td.custom-cell {
   min-width: 140px;
   max-width: 320px;

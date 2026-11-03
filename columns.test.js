@@ -73,6 +73,30 @@ test('filter semantics support contains, choice intersections, numeric/date rang
   assert.ok(!C.validFilters({ sequence: { ...f, min: '5', max: '2' } }, ['sequence'], { sequence: 'number' }));
   assert.ok(!C.validFilters({ releaseDate: { ...f, min: '2027-02-29' } }, ['releaseDate'], { releaseDate: 'date' }));
 });
+test('date filters combine picked dates, unassigned cells and the range as alternatives', () => {
+  const f = C.emptyFilter(), E = C.EMPTY_VALUE, type = 'date';
+  const picked = { ...f, values: ['2026-06-03', '2026-07-01'] };
+  assert.ok(C.matchesFilter('2026-06-03', picked, type));
+  assert.ok(!C.matchesFilter('2026-06-04', picked, type));
+  assert.ok(!C.matchesFilter('', picked, type));
+  const withEmpty = { ...picked, values: [...picked.values, E] };
+  assert.ok(C.matchesFilter('', withEmpty, type) && C.matchesFilter(undefined, withEmpty, type) && C.matchesFilter('2026-07-01', withEmpty, type));
+  const onlyEmpty = { ...f, values: [E] };
+  assert.ok(C.matchesFilter('', onlyEmpty, type) && !C.matchesFilter('2026-06-03', onlyEmpty, type));
+  const sameDay = { ...f, min: '2026-06-03', max: '2026-06-03' };
+  assert.ok(C.matchesFilter('2026-06-03', sameDay, type) && !C.matchesFilter('2026-06-02', sameDay, type) && !C.matchesFilter('', sameDay, type));
+  const union = { ...f, min: '2026-08-01', values: ['2026-06-03', E] };
+  assert.deepEqual(['2026-06-03', '2026-06-04', '2026-08-01', '2027-01-01', ''].map(value => C.matchesFilter(value, union, type)), [true, false, true, true, true]);
+  assert.ok(!C.matchesFilter('', { ...f, empty: 'filled' }, type) && C.matchesFilter('2026-06-03', { ...f, empty: 'filled' }, type));
+  assert.ok(C.matchesFilter('', { ...f, empty: 'empty', values: ['2026-06-03'] }, type) && !C.matchesFilter('2026-06-03', { ...f, empty: 'empty', values: ['2026-06-03'] }, type));
+  assert.ok(C.matchesFilter('', { ...f, values: [E] }, 'select') && !C.matchesFilter('a', { ...f, values: [E] }, 'select'));
+  const ids = ['releaseDate'], types = { releaseDate: 'date' };
+  assert.ok(C.validFilters({ releaseDate: union }, ids, types));
+  assert.ok(C.validFilters({ releaseDate: { ...f, values: Array.from({ length: 400 }, (_, day) => new Date(Date.UTC(2026, 0, 1 + day)).toISOString().slice(0, 10)) } }, ids, types));
+  assert.ok(!C.validFilters({ releaseDate: { ...f, values: ['03/06/2026'] } }, ids, types));
+  assert.ok(!C.validFilters({ releaseDate: { ...f, values: ['2026-02-30'] } }, ids, types));
+  assert.ok(!C.validFilters({ releaseDate: { ...f, values: Array(C.FILTER_VALUES_MAX + 1).fill('2026-06-03') } }, ids, types));
+});
 test('identical issue cleanup preserves different custom values and compares object keys independently of order', () => {
   const issues = [
     { id: '1', code: 'A', incident: 'INC', problem: '', customFields: { 'custom-a': 1, 'custom-b': 2 } },
