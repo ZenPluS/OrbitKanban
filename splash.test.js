@@ -58,6 +58,7 @@ test('loading window uses the same native icon as the application', async () => 
   });
   assert.equal(splash.window.options.icon, icon);
   assert.equal(splash.window.options.show, false);
+  assert.equal(splash.window.options.skipTaskbar, true);
   assert.equal(splash.window.file, path.join(__dirname, 'splash.html'));
 });
 test('main window starts with the organization theme background', () => {

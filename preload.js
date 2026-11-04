@@ -13,6 +13,13 @@ contextBridge.exposeInMainWorld('workspace', {
   openLink: url => ipcRenderer.invoke('open-link', url),
   openDataFolder: () => ipcRenderer.invoke('open-data-folder'),
   languages: (operation = 'info') => ipcRenderer.invoke('languages', operation),
+  updates: (operation = 'info', value) => ipcRenderer.invoke('updates', operation, value),
+  createShortcut: () => ipcRenderer.invoke('create-shortcut'),
+  onUpdate: callback => {
+    const listener = (_, info) => callback(info);
+    ipcRenderer.on('update-changed', listener);
+    return () => ipcRenderer.removeListener('update-changed', listener);
+  },
   browserAccess: (operation, organizationId) => ipcRenderer.invoke('browser-access', operation, organizationId),
   ready: () => ipcRenderer.send('app-ready'),
   titleBarOverlay: process.argv.includes('--orbitkanban-title-bar=overlay'),

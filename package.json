@@ -1,6 +1,6 @@
 {
   "name": "orbitkanban-portable",
-  "version": "2.23.1",
+  "version": "2.45.0",
   "description": "A fully local workspace for tasks, issues, milestones, and Kanban.",
   "main": "main.js",
   "author": "OrbitKanban",
@@ -11,7 +11,7 @@
     "prestart": "npm run icon",
     "start": "electron .",
     "test": "node --test",
-    "check": "node --check main.js && node --check preload.js && node --check core.js && node --check columns.js && node --check icons.js && node --check csv.js && node --check i18n.js && node --check xlsx.js && node --check languages.js && node --check renderer.js && node --check workspace-store.js && node --check web-server.js && node --check web-bridge.js && node --check smoke-web.js && node --check splash.js && node --check window-chrome.js && node --check splash-preload.js && node --check splash-image.js && node --check app-icon.js && node --check make-splash.js && node --check build.js && node --check github-release.js",
+    "check": "node --check main.js && node --check portable.js && node --check updater.js && node --check update-launcher.js && node --check preload.js && node --check core.js && node --check columns.js && node --check icons.js && node --check csv.js && node --check i18n.js && node --check xlsx.js && node --check languages.js && node --check renderer.js && node --check workspace-store.js && node --check web-server.js && node --check web-bridge.js && node --check smoke-web.js && node --check smoke-windows.js && node --check splash.js && node --check window-chrome.js && node --check splash-preload.js && node --check splash-image.js && node --check app-icon.js && node --check make-splash.js && node --check build.js && node --check github-release.js",
     "presmoke": "npm run icon",
     "smoke": "node smoke.js",
     "splash": "electron make-splash.js",
@@ -28,6 +28,10 @@
     "asar": true,
     "files": [
       "main.js",
+      "portable.js",
+      "updater.js",
+      "update-launcher.js",
+      "install-update.ps1",
       "preload.js",
       "core.js",
       "columns.js",
@@ -42,6 +46,7 @@
       "web-server.js",
       "web-bridge.js",
       "smoke-web.js",
+      "smoke-windows.js",
       "splash.js",
       "window-chrome.js",
       "splash-preload.js",
@@ -67,6 +72,7 @@
       "signExecutable": false
     },
     "portable": {
+      "unpackDirName": false,
       "artifactName": "OrbitKanban-Portable.exe",
       "splashImage": "build/splash.bmp"
     }

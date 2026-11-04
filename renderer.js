@@ -27,6 +27,7 @@ const HISTORY_LIMIT = 20, undoHistory = new Map(), redoHistory = new Map();
 let activeSavedViewId = '', backupRequest = 0;
 let languageInfo = { folder: '', template: '', languages: [], errors: [] };
 let milestoneDay = '';
+let updateState = { supported: false, phase: 'idle', autoCheck: true, version: '', percent: 0, error: '', releaseUrl: 'https://github.com/ZenPluS/OrbitKanban/releases' }, updateSubscribed = false;
 // Tasks ticked in the list for bulk edit or export; kept across filters and dropped when they no longer exist.
 const selectedTasks = new Set();
 let selectionAnchor = '';
@@ -724,7 +725,8 @@ const settingsTabs = [
   { id: 'custom-columns', group: "Workflow", icon: 'column-plus', label: "Column management", panel: 'custom-columns-panel', keys: ['taskFields', 'issueFields', 'taskColumns', 'issueColumns', 'deletedTaskColumns', 'deletedIssueColumns'] },
   { id: 'transfer', group: "Data & access", icon: 'transfer', label: "Export and import organization", panel: 'transfer-panel', keys: [] },
   { id: 'storage', group: "Data & access", icon: 'database', label: "Data that travels with you", panel: 'storage-panel', keys: [] },
-  { id: 'browser', group: "Data & access", icon: 'globe', label: "Browser access", panel: 'browser-panel', keys: [] }
+  { id: 'browser', group: "Data & access", icon: 'globe', label: "Browser access", panel: 'browser-panel', keys: [] },
+  { id: 'updates', group: "Data & access", icon: 'reset', label: "App & updates", panel: 'updates-panel', keys: [] }
 ];
 function choiceSettingsTabs() {
   return ['tasks', 'issues'].flatMap((kind, index) => CustomColumns.schemaOf(settingsDraft || data.settings, kind).filter(field => ['select', 'multiselect'].includes(field.type)).map(field => {
@@ -2728,6 +2730,48 @@ function wireCustomColumns() {
   }
   syncColumns();
 }
+function updatesPanel() {
+  return ui`<section class="panel settings-section full" id="updates-panel"><h2>App & updates</h2><p class="section-description">Updates and shortcuts apply to this portable copy, not to one organization. GitHub receives no workspace data. Downloading and installing always require your action.</p><p>Installed version: <strong>${esc(appVersion)}</strong></p><p id="update-status" role="status" aria-live="polite"></p><progress id="update-progress" max="100" hidden aria-label="Update download progress"></progress><label class="field checkbox-field"><input type="checkbox" id="update-auto"><span>Check for updates at startup</span></label><div class="storage-actions"><button type="button" class="button" id="update-check">Check for updates</button><button type="button" class="button" id="update-download" hidden>Download update</button><button type="button" class="button primary" id="update-install" hidden>Install and restart</button><button type="button" class="button" id="update-release">View releases</button></div><hr><h3>Windows shortcut</h3><p class="section-description">Create a shortcut to the portable launcher, not the temporary app. Remove old broken pins, then pin the new shortcut or the running app once. Moving the portable folder requires recreating its shortcut.</p><button type="button" class="button" id="create-shortcut">Create desktop shortcut</button></section>`;
+}
+function drawUpdateState() {
+  if (!$('#update-status')) return;
+  const state = updateState, supported = !browserMode() && state.supported, busy = ['checking', 'downloading', 'installing'].includes(state.phase);
+  const messages = {
+    idle: "Ready to check for updates.", checking: "Checking GitHub releases…", available: "A new version is available.",
+    latest: "You are using the latest version.", downloading: "Downloading update…", ready: "Update verified and ready to install.",
+    installing: "The app is restarting to install an update.", error: "Update failed."
+  };
+  $('#update-status').textContent = !supported ? t(browserMode() ? "Manage updates from the desktop app. Browser tabs reconnect after it restarts." : "Updates can only be installed from the Windows portable app.") :
+    `${t(messages[state.phase] || messages.idle)}${state.version ? ` v${state.version}` : ''}${state.phase === 'downloading' ? ` (${state.percent}%)` : ''}${state.error ? ` ${t(state.error)}` : ''}`;
+  $('#update-progress').hidden = state.phase !== 'downloading';
+  $('#update-progress').value = state.percent;
+  $('#update-check').disabled = !supported || busy;
+  $('#update-auto').disabled = !supported || busy;
+  $('#update-auto').checked = state.autoCheck;
+  $('#update-download').hidden = !supported || state.phase !== 'available';
+  $('#update-install').hidden = !supported || state.phase !== 'ready';
+  $('#update-download').disabled = $('#update-download').hidden;
+  $('#update-install').disabled = $('#update-install').hidden;
+  $('#create-shortcut').disabled = browserMode() || !window.workspace?.createShortcut || busy;
+}
+function adoptUpdateState(state) {
+  const announce = state.phase === 'available' && (updateState.phase !== 'available' || state.version !== updateState.version);
+  updateState = state;
+  drawUpdateState();
+  if (announce) notify("A new version is available.", false, `v${state.version} — ${t("App & updates")}`);
+}
+function wireUpdates() {
+  drawUpdateState();
+  $('#update-check').onclick = action(async () => adoptUpdateState(await workspaceApi.updates('check')));
+  $('#update-download').onclick = action(async () => adoptUpdateState(await workspaceApi.updates('download')));
+  $('#update-install').onclick = action(() => withSavedSettings(async () => adoptUpdateState(await workspaceApi.updates('install'))));
+  $('#update-auto').onchange = action(async () => {
+    try { adoptUpdateState(await workspaceApi.updates('auto-check', $('#update-auto').checked)); }
+    finally { drawUpdateState(); }
+  });
+  $('#update-release').onclick = action(() => workspaceApi.openLink(updateState.releaseUrl));
+  $('#create-shortcut').onclick = action(async () => { if (await workspaceApi.createShortcut()) notify("Shortcut created. You can now pin it to the taskbar."); });
+}
 function renderSettings() {
   settingsDraft = structuredClone(data.settings);
   settingsBase = structuredClone(data.settings);
@@ -2738,7 +2782,7 @@ function renderSettings() {
   settingsDraft.issueColumns = configuredColumns('issues', settingsDraft);
   const organization = organizations.find(o => o.id === activeOrganizationId);
   $('#content').innerHTML = '<div id="settings-page">' + heading(t("Settings"), "Names, workflows and colors. Configure your workspace and take it anywhere.", ui`<button class="button primary" id="save-settings">Save settings</button>`) +
-    ui`<div class="unsaved-banner" id="unsaved-banner" role="status" aria-live="polite" hidden><span class="unsaved-icon" aria-hidden="true">${ico('warning')}</span><div class="unsaved-text"><strong>You have unsaved settings.</strong> Changes, including the previewed theme and text sizes, take effect only when you save. If you leave without saving, the previous configuration remains.<span class="unsaved-where" id="unsaved-where"></span></div><div class="unsaved-actions"><button type="button" class="button small" id="discard-settings">Discard changes</button><button type="button" class="button primary small" id="save-settings-inline">Save</button></div></div><div class="info-banner"><strong>${APP_NAME}</strong> · Organization configuration: <strong>${esc(organization.name)}</strong><br>All settings below apply only to the selected organization.</div>
+    ui`<div class="unsaved-banner" id="unsaved-banner" role="status" aria-live="polite" hidden><span class="unsaved-icon" aria-hidden="true">${ico('warning')}</span><div class="unsaved-text"><strong>You have unsaved settings.</strong> Changes, including the previewed theme and text sizes, take effect only when you save. If you leave without saving, the previous configuration remains.<span class="unsaved-where" id="unsaved-where"></span></div><div class="unsaved-actions"><button type="button" class="button small" id="discard-settings">Discard changes</button><button type="button" class="button primary small" id="save-settings-inline">Save</button></div></div><div class="info-banner"><strong>${APP_NAME}</strong> · Organization configuration: <strong>${esc(organization.name)}</strong><br>Organization settings apply only to the selected organization. App & updates applies to this portable copy.</div>
     <div class="settings-layout">${settingsNav()}<div class="settings-panels"><section class="panel settings-section full" id="organizations-panel"><h2>Organizations</h2><p class="section-description">Data and settings are isolated per organization. Your selection is saved automatically.</p>
     <details id="create-organization-section"><summary>New organization</summary><form id="create-organization"><div class="form-grid"><label class="field">Organization name<input name="name" required maxlength="100"></label><label class="field">Interface language<select name="language">${languageOptions(data.settings.language)}</select></label><label class="field full checkbox-field demo-field"><input type="checkbox" name="demo"><span>Include demo data<small>Biweekly milestones since January 2025 with sample tasks, issues, notes and hidden rows.</small></span></label><div class="field full"><label for="create-logo-file">New organization logo</label><input id="create-logo-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp"><small>Choose a logo during creation: it will be stored with the organization and automatically generate its theme.</small><div id="create-logo-preview"></div><output id="create-logo-result" aria-live="polite"></output><button type="button" class="button small" id="clear-create-logo">Remove logo</button></div></div><div class="organization-actions"><button class="button primary" type="submit">Create organization</button></div></form></details>
     <button class="button danger small" id="delete-organization" ${organizations.length === 1 ? 'disabled' : ''}>Delete organization</button></section>
@@ -2751,7 +2795,8 @@ function renderSettings() {
     <section class="panel settings-section" id="columns-panel"><h2>List columns</h2><p class="section-description">Choose which columns the task list shows and in what order. Hiding a column does not delete any data. You can also do this with the “Columns” button above the table.</p><div id="columns-editor"></div><button type="button" class="button" id="reset-columns">${ico('reset')}Restore default columns</button></section>${customColumnsPanel()}
     <section class="panel settings-section full" id="browser-panel"><h2>Browser access</h2><p class="section-description">While OrbitKanban is open you can also work from a browser on this PC, with different organizations in separate tabs. Changes sync in real time between the app and the tabs.</p><code class="data-path" id="browser-url">${esc(browserUrl || t("Not available"))}</code><div class="storage-actions"><button class="button" id="browser-open" ${browserUrl ? '' : 'disabled'}>${ico('globe')}${t(browserMode() ? "Open in new tab" : "Open in browser")}</button><button class="button" id="browser-copy" ${browserUrl ? '' : 'disabled'}>${t(browserMode() ? "Copy address" : "Copy access link")}</button></div><p class="muted">${t(browserMode() ? "You are using OrbitKanban from the browser: the app on the PC must stay open. Each tab can show a different organization." : "Reachable only from this computer (127.0.0.1) and protected by a personal key: the access link contains the key, do not share it. Closing the app disconnects the browser tabs.")}</p></section>
     ${transferPanel()}<section class="panel settings-section full" id="storage-panel"><div class="storage-heading"><div><h2>Data that travels with you</h2><p class="section-description">Local JSON archive with an automatic copy of the previous save.</p></div><span class="readonly-badge">100% LOCAL</span></div><code class="data-path">${esc(dataFolder)}</code><div class="storage-actions"><button class="button" id="export-data">${ico('export')}Export backup</button><button class="button" id="import-data">${ico('import')}Import backup</button><button class="button" id="open-folder">Open data folder</button><span class="spacer"></span><button class="button danger" id="clear-data">Clear tasks and issues</button></div><div class="backup-section"><div class="storage-heading"><div><h3>Automatic backups</h3><p class="section-description">One copy per day, kept in the data folder for the last 14 days. You can restore one without losing the current archive: the standard .bak backup is created first.</p></div><button type="button" class="button small" id="refresh-backups">Refresh backups</button></div><p id="backup-status" class="muted" role="status" aria-live="polite"></p><div id="backup-list"></div></div><p class="muted">To share the app, close it and copy the executable together with the data folder. Do not run copies using the same data folder at the same time.</p></section></div></div></div>`;
-      showSettingsTab(settingsTab); wireSettingsNav();
+      $('.settings-panels').insertAdjacentHTML('beforeend', updatesPanel());
+      showSettingsTab(settingsTab); wireSettingsNav(); wireUpdates();
       drawOptionLists(); drawThemes(); drawLogoPreview(); wireOrganizationCreation(); drawPortalPreview(); wireFontSizes(); wireLanguages();
       columnEditor($('#columns-editor'), settingsDraft.taskColumns, 'tasks', settingsDraft);
       $('#reset-columns').onclick = () => { settingsDraft.taskColumns.splice(0, settingsDraft.taskColumns.length, ...configuredColumns('tasks', settingsDraft, [])); columnEditor($('#columns-editor'), settingsDraft.taskColumns, 'tasks', settingsDraft); };
@@ -4133,6 +4178,24 @@ window.runSmokeTests = async () => {
   const savedAccent = data.settings.themes.find(theme => theme.id === data.settings.themeId).accent;
   check($('#unsaved-banner').hidden && !settingsChanged() && accent() === savedAccent, 'No warning appears when settings have not changed');
   check(defaultThemes().length === 40 && defaultThemes().every(theme => data.settings.themes.some(saved => saved.id === theme.id)) && $('#reset-theme') && !$('#delete-theme') && [...document.querySelectorAll('#theme-list .theme-kind')].filter(label => label.textContent === t("Built-in")).length === 40, "Catalog of 40 default themes is available without importing");
+  {
+    const original = updateState;
+    const visible = selector => $(selector).getClientRects().length > 0;
+    showSettingsTab('updates');
+    check($('#update-check').disabled && $('#update-auto').disabled && !visible('#update-download') && !visible('#update-install') && $('#update-status').textContent.includes(t("Updates can only be installed from the Windows portable app.")), 'Source and smoke builds cannot download or install real updates');
+    const testState = { ...original, supported: true, version: '99.0.0' };
+    adoptUpdateState({ ...testState, phase: 'available' });
+    check(visible('#update-download') && !$('#update-download').disabled && !visible('#update-install') && $('#update-install').disabled && !$('#update-check').disabled, 'Available update offers download but not install');
+    adoptUpdateState({ ...testState, phase: 'downloading', percent: 42 });
+    check(visible('#update-progress') && $('#update-progress').value === 42 && $('#update-check').disabled && $('#update-auto').disabled && !visible('#update-download') && !visible('#update-install'), 'Download progress is accessible and blocks duplicate actions');
+    adoptUpdateState({ ...testState, phase: 'ready' });
+    check(visible('#update-install') && !$('#update-install').disabled && !visible('#update-download') && !visible('#update-progress'), 'Only verified downloads offer install and restart');
+    adoptUpdateState({ ...testState, phase: 'error', error: 'Update checksum or size does not match. Nothing was installed.' });
+    check(!visible('#update-install') && $('#update-install').disabled && $('#update-status').textContent.includes(t('Update checksum or size does not match. Nothing was installed.')), 'Failed updates show the error without an install action');
+    adoptUpdateState(original);
+    showSettingsTab('themes');
+    check(!settingsChanged(), 'Application update state does not dirty organization settings');
+  }
   const previewTheme = data.settings.themes.find(theme => theme.id !== data.settings.themeId && theme.accent !== savedAccent);
   document.querySelector(`[data-theme="${previewTheme.id}"]`).click();
   await new Promise(resolve => setTimeout(resolve));
@@ -4724,6 +4787,10 @@ async function boot() {
     catch (error) { console.error('Languages not loaded:', error); }
     const loaded = await workspaceApi.load();
     adoptSnapshot(loaded); render(); subscribe();
+    if (!browserMode() && window.workspace.updates) {
+      if (!updateSubscribed) { window.workspace.onUpdate(adoptUpdateState); updateSubscribed = true; }
+      adoptUpdateState(await workspaceApi.updates());
+    }
   } catch (error) {
     $('#content').innerHTML = ui`<section class="fatal-error"><h1>Cannot open the workspace</h1><p>${esc(t(error.message))}</p><p>Check folder write permissions and preserve the existing archive before making changes.</p><button class="button" id="retry-load">Retry</button></section>`;
     $('#retry-load').onclick = boot;

@@ -8,6 +8,7 @@ Function orbitKanbanLauncherPage
   Push $1
   Push $2
   Push $3
+  System::Call 'shell32::SetCurrentProcessExplicitAppUserModelID(w "local.orbita.workspace")'
   ; The launcher hides its own "Installing" window only once extraction starts, so that window used to flash over the splash bitmap:
   ; WS_EX_LAYERED | WS_EX_TOOLWINDOW without WS_EX_APPWINDOW, then LWA_ALPHA with alpha 0 keeps it invisible and off the taskbar.
   System::Call "user32::GetWindowLong(p $HWNDPARENT, i -20) i .r0"
@@ -25,6 +26,10 @@ Function orbitKanbanLauncherPage
     StrCmp $1 0 done
     System::Call "user32::GetWindowThreadProcessId(p r1, *i .r0)"
     StrCmp $0 $3 0 findBitmapWindow
+  System::Call "user32::GetWindowLong(p r1, i -20) i .r0"
+  IntOp $0 $0 | 0x80
+  IntOp $0 $0 & 0xFFFBFFFF
+  System::Call "user32::SetWindowLong(p r1, i -20, i r0)"
   File "/oname=$PLUGINSDIR\splash-bar.avi" "${__FILEDIR__}\splash-bar.avi"
   ; ICC_ANIMATE_CLASS
   System::Call "*(i 8, i 0x80) p .r2"

@@ -16,6 +16,8 @@ build({
     const [defines, commands] = Array.isArray(options) ? options : [];
     if (defines?.SPLASH_IMAGE && commands && 'Unicode' in commands) {
       if (!commands.Icon) throw new Error('The portable launcher icon is not configured.');
+      // Some builder versions ignore unpackDirName:false. Omit the define so NSIS uses its per-launch $PLUGINSDIR.
+      delete defines.UNPACK_DIR_NAME;
       commands['!include'] = `"${launcherHook}"`;
       hooked = true;
     }

@@ -2821,6 +2821,8 @@ footer button,
 .task-tags-button > .muted { flex: 1 1 auto; min-width: 0; }
 .task-tags-button > .ico { width: calc(14px * var(--fs)); height: calc(14px * var(--fs)); color: var(--muted); }
 .task-edit-layout:not(:has(.task-edit-text)) { grid-template-columns: 1fr; }
+#update-progress { width: min(540px, 100%); accent-color: var(--accent); }
+#updates-panel [hidden] { display: none; }
 .color-control {
   display: inline-flex;
   align-items: center;

@@ -23,7 +23,7 @@ function createSplash({ BrowserWindow, screen, appRoot, title, icon, version = '
   const window = new BrowserWindow({
     width, height, useContentSize: true, title, icon,
     x: Math.round(area.x + (area.width - width) / 2), y: Math.round(area.y + (area.height - height) / 2),
-    show: false, frame: false, resizable: false, maximizable: false, fullscreenable: false, closable: false,
+    show: false, frame: false, resizable: false, maximizable: false, fullscreenable: false, closable: false, skipTaskbar: true,
     backgroundColor: SPLASH_BACKGROUND,
     webPreferences: { preload: path.join(appRoot, 'splash-preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: false }
   });

@@ -1,6 +1,6 @@
 # OrbitKanban — workspace portable
 
-App desktop locale per Windows 10/11 a 64 bit, **versione 2.23.1**. Nessun account, server esterno o collegamento a Internet necessario per l'uso. **Il nome dell'app è sempre OrbitKanban e non è configurabile.** Tutte le impostazioni del workspace appartengono alla singola organizzazione. Mentre l'app è aperta puoi usarla anche **dal browser dello stesso PC**, con più organizzazioni aperte contemporaneamente in schede diverse.
+App desktop locale per Windows 10/11 a 64 bit, **versione 2.45.0**. Nessun account, server esterno o collegamento a Internet necessario per lavorare sui dati; Internet serve solo per cercare e scaricare gli aggiornamenti facoltativi da GitHub. **Il nome dell'app è sempre OrbitKanban e non è configurabile.** Le impostazioni del workspace appartengono alla singola organizzazione; aggiornamenti e collegamenti Windows valgono per l'intera copia portable. Mentre l'app è aperta puoi usarla anche **dal browser dello stesso PC**, con più organizzazioni aperte contemporaneamente in schede diverse.
 
 ## Avvio e condivisione
 
@@ -14,9 +14,26 @@ Windows potrebbe mostrare un avviso SmartScreen perché l'eseguibile non è firm
 
 L'icona dell'eseguibile portable, della finestra e della barra delle applicazioni usa lo **stesso logo OrbitKanban** mostrato nella schermata di caricamento e nell'app. I loghi personalizzati delle organizzazioni continuano a comparire nella sidebar e nella scheda del browser; non sostituiscono l'icona Windows dell'app.
 
+Dalla **2.45.0** la finestra principale comunica a Windows il percorso e l'icona del **launcher portable originale** per il pin e la riapertura. Le schermate di caricamento non hanno una voce separata nella barra. L'estrazione temporanea rimane necessaria per il pacchetto Electron a singolo file, ma non deve diventare il collegamento dell'utente: i processi interni non sono app o workspace separati. Ogni avvio usa una directory temporanea isolata, così un secondo doppio clic torna all'app aperta senza cancellarne i file.
+
+**Per correggere i pin creati dalle vecchie versioni:** rimuovili dalla barra, apri il nuovo portable e fissalo di nuovo, oppure usa **Impostazioni → App e aggiornamenti → Crea collegamento sul desktop** e fissa quel collegamento. Il collegamento usa l'identità applicativa, l'icona del launcher e il suo percorso stabile. Se sposti o rinomini l'eseguibile devi ricreare il collegamento; gli aggiornamenti integrati mantengono invece lo stesso percorso.
+
 L'eseguibile portable estrae i file dell'app in una cartella temporanea a ogni avvio: è la parte che richiede qualche secondo. Appena fai doppio clic compare la **schermata di caricamento**, sempre in inglese, con logo, versione e una **barra di caricamento infinita** che scorre senza fermarsi fin dal primo istante, già durante l'estrazione. Quando l'app parte, la stessa schermata, nella stessa posizione, prosegue con la stessa animazione finché l'organizzazione non è pronta; non ci sono fasi numerate, perché la durata di ogni passaggio dipende dal PC. Tra la schermata del launcher e quella dell'app può esserci un passaggio di qualche decimo di secondo. La finestra principale compare solo quando l'organizzazione è già disegnata, con lo sfondo del suo tema. Se il sistema chiede di ridurre le animazioni, la barra non scorre ma pulsa lentamente. Il pacchetto include soltanto le risorse di Chromium per italiano e inglese, così l'estrazione è più leggera.
 
 L'archivio è `data/workspace.json`; `workspace.json.bak` contiene il salvataggio precedente e le copie giornaliere sono in `data/backups`. Cache, log e la chiave dell'accesso da browser (`data/runtime/browser-access-token`) restano anch'essi nella cartella `data`. Non usare l'app direttamente dentro un archivio ZIP e non aprire più copie dell'eseguibile sullo stesso archivio condiviso: per lavorare in più finestre usa l'[accesso da browser](#accesso-da-browser), che passa sempre dall'unica app aperta. È un'app monoutente, non un sistema di collaborazione in rete.
+
+### Aggiornamenti da GitHub
+
+La **2.45.0** introduce **Impostazioni → App e aggiornamenti**:
+
+- Controllo della release stabile più recente di [ZenPluS/OrbitKanban](https://github.com/ZenPluS/OrbitKanban/releases), senza token, account o servizi aggiuntivi. Il controllo all'avvio è attivo per impostazione iniziale e si può disattivare; la preferenza viene salvata subito in `data/updates/settings.json`, per l'intera copia portable. Offline l'app continua a funzionare normalmente e l'errore di ricerca viene mostrato nella sezione aggiornamenti.
+- **Cerca aggiornamenti** non scarica nulla. **Scarica aggiornamento** mostra l'avanzamento e verifica dimensione e SHA-256 dichiarati da GitHub, accettando solo l'eseguibile portable della repository e redirect HTTPS verso gli host GitHub degli allegati. Versioni precedenti, pre-release e pacchetti non verificabili non vengono installati.
+- **Installa e riavvia** richiede conferma, dopo aver salvato o scartato le impostazioni locali. Prima di continuare salva anche gli editor nelle schede browser. Viene creata una copia completa dell'archivio; un piccolo helper PowerShell attende la chiusura dell'app e del launcher, ricontrolla l'hash, sostituisce atomicamente il solo eseguibile e riapre l'app. Non servono privilegi amministrativi: la cartella deve essere scrivibile.
+- I file scaricati, l'eseguibile precedente (`previous.exe`), il backup (`workspace-before-update.json`) e il risultato dell'installazione restano nella sottocartella identificata in `data/updates`. Dopo aver verificato il nuovo avvio, puoi eliminare quelle sottocartelle per recuperare spazio. Non eliminare `settings.json` se vuoi conservare la preferenza del controllo automatico.
+- Download corrotti e file bloccati non sostituiscono il launcher. Se Windows non riesce ad avviare il nuovo eseguibile, l'helper tenta di ripristinare il precedente e segnala l'errore. In caso di problemi è sempre possibile chiudere l'app e sostituire manualmente l'eseguibile, conservando `data`.
+- Solo l'app desktop portable può installare: dal browser viene indicato di tornare al desktop. L'accesso browser si interrompe durante il riavvio. L'app non invia a GitHub attività, issue, temi, loghi o percorsi locali; contatta soltanto API e download pubblici. La verifica SHA-256 protegge l'integrità del download, non sostituisce una firma digitale del produttore: l'avviso SmartScreen può ancora comparire.
+
+Per passare dalle versioni precedenti alla **2.45.0** occorre un ultimo aggiornamento manuale. Quelli successivi saranno disponibili dall'app. Il salto di numerazione è intenzionale; questa release non cambia il formato dell'archivio.
 
 ## Organizzazioni, logo e lingua
 
@@ -398,6 +415,8 @@ La versione dell'app è definita in `package.json` ed è mostrata nella barra la
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\build-and-push.ps1 -Message "Descrizione della modifica"
 ```
+
+Lo script è [versionato nella repository](build-and-push.ps1). Non contiene percorsi del computer dello sviluppatore: ricava la cartella del progetto da `$PSScriptRoot` e costruisce i percorsi di sorgenti, build e strumenti con `Join-Path`. I percorsi assoluti eventualmente stampati nei log sono risolti sul PC che esegue la build, non salvati nel codice. Un test impedisce di introdurre percorsi Windows hardcoded.
 
 Funziona anche con Windows PowerShell 5.1 (`powershell -File …`). Lo script:
 

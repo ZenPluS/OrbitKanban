@@ -16,12 +16,15 @@ try {
   fs.writeFileSync(path.join(folder, 'data', 'languages', 'broken.json'), '{ broken');
   const result = spawnSync(executable, args, {
     stdio: 'inherit',
-    // NSIS deletes its fixed extraction directory: isolate TEMP as well as application data.
+    // Isolate the launcher's extraction and helper files as well as application data.
     env: { ...process.env, ORBITA_SMOKE_DIR: folder, TEMP: folder, TMP: folder, TMPDIR: folder },
     timeout: 120000
   });
   if (result.error) throw result.error;
   exitCode = result.status ?? 1;
+  if (exitCode !== 0 && fs.existsSync(path.join(folder, 'smoke-error.json'))) {
+    throw new Error(JSON.parse(fs.readFileSync(path.join(folder, 'smoke-error.json'), 'utf8')).error);
+  }
   if (exitCode === 0) {
     const report = JSON.parse(fs.readFileSync(path.join(folder, 'smoke-result.json'), 'utf8'));
     if (!report.ok || report.checks.length < 506) throw new Error('Smoke test report is incomplete.');

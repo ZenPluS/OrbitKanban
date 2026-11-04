@@ -3,6 +3,8 @@
     Builds and tests OrbitKanban and, only if everything passes, commits, pushes and publishes a GitHub release.
 
 .DESCRIPTION
+    All project paths are resolved from $PSScriptRoot; no workstation path is required.
+    It can be invoked from another current directory with a relative path to this script.
     Sequence (any build or test failure stops the script before the commit):
       1. Git checks: active branch, reachable remote, no operation in progress, branch not behind the remote,
          no file that must stay unversioned among the changes (data, builds, dependencies, executables, files over 5 MB).

@@ -9,7 +9,11 @@ const { createWebServer, DEFAULT_PORT } = require('./web-server');
 const { createSplash, splashHoldTime, windowBackground, SPLASH_STATUS } = require('./splash');
 const { createLanguageStore } = require('./languages');
 const { TITLE_BAR_ARGUMENT, TITLE_BAR_HEIGHT, themeColors, titleBarOverlay } = require('./window-chrome');
+const { APP_ID, launcherPath, relaunchDetails, shortcutDetails } = require('./portable');
+const { createUpdater } = require('./updater');
+const { launchInstaller } = require('./update-launcher');
 app.setName(APP_NAME);
+if (process.platform === 'win32') app.setAppUserModelId(APP_ID);
 // On Windows the app draws its own title bar: the top bar drags the window and the caption buttons follow the theme.
 const customTitleBar = process.platform === 'win32';
 let windowChrome = null;
@@ -23,6 +27,8 @@ const root = smoke ? (process.env.ORBITA_SMOKE_DIR || path.join(os.tmpdir(), `or
   (process.env.PORTABLE_EXECUTABLE_DIR || (app.isPackaged ? path.dirname(app.getPath('exe')) : __dirname));
 const dataFolder = path.join(root, 'data');
 const runtimeFolder = path.join(dataFolder, 'runtime');
+const launcher = process.platform === 'win32' ? launcherPath({ packaged: app.isPackaged, executable: app.getPath('exe'), portableFile: process.env.PORTABLE_EXECUTABLE_FILE }) : null;
+const portableFile = launcher && process.env.PORTABLE_EXECUTABLE_FILE ? launcher : null;
 app.setPath('userData', runtimeFolder);
 app.setPath('sessionData', runtimeFolder);
 app.setAppLogsPath(path.join(dataFolder, 'logs'));
@@ -43,6 +49,27 @@ function revealMainWindow(reason) {
 const store = createWorkspaceStore({ dataFolder, extras: () => ({ appVersion: app.getVersion(), browserUrl: webServer.url }) });
 const languages = createLanguageStore({ dataFolder });
 const message = (text, organizationId) => store.message(text, organizationId);
+let updateShutdown = false;
+const updater = createUpdater({
+  currentVersion: app.getVersion(), dataFolder, portableFile: smoke ? null : portableFile,
+  install: async update => {
+    const answer = await dialog.showMessageBox(win, {
+      type: 'question', buttons: [message("Cancel"), message("Install and restart")], defaultId: 0, cancelId: 0,
+      message: message("Install the downloaded update?"),
+      detail: message("OrbitKanban and browser access will close. Saved data will be backed up and kept. Save any open editors in browser tabs before continuing.")
+    });
+    if (answer.response !== 1) return false;
+    updateShutdown = true;
+    try {
+      await store.idle();
+      await store.exportTo(path.join(update.directory, 'workspace-before-update.json'));
+      await launchInstaller(update);
+      app.quit();
+      return true;
+    } catch (error) { updateShutdown = false; throw error; }
+  }
+});
+updater.on('change', info => { if (win && !win.isDestroyed()) win.webContents.send('update-changed', info); });
 async function languageOperation(operation = 'info') {
   if (operation === 'reload') return languages.reload();
   if (operation === 'open-folder') {
@@ -67,8 +94,12 @@ const webServer = createWebServer({
   languages: languageOperation
 });
 function handle(channel, handler) {
-  ipcMain.handle(channel, async (_, ...args) => {
-    try { return await handler(...args); }
+  ipcMain.handle(channel, async (event, ...args) => {
+    try {
+      if (!win || event.sender !== win.webContents || event.senderFrame !== win.webContents.mainFrame) throw new Error('Unsupported request.');
+      if (updateShutdown) throw new Error(message("The app is restarting to install an update."));
+      return await handler(...args);
+    }
     catch (error) {
       if (!['conflict', 'missing-organization'].includes(error.code)) console.error(`Operation ${channel} failed:`, error);
       return { __error: true, message: error.message, code: error.code || '' };
@@ -76,6 +107,23 @@ function handle(channel, handler) {
   });
 }
 handle('load', organizationId => store.load(organizationId));
+handle('updates', async (operation = 'info', value) => {
+  if (operation === 'info') return updater.snapshot();
+  if (operation === 'check') return updater.check();
+  if (operation === 'download') return updater.download();
+  if (operation === 'install') return updater.apply();
+  if (operation === 'auto-check') return updater.setAutoCheck(value);
+  throw new Error(message("Unsupported operation."));
+});
+handle('create-shortcut', async () => {
+  if (!launcher) throw new Error(message("Shortcuts are available in the packaged Windows app."));
+  const result = smoke ? { filePath: path.join(root, 'OrbitKanban.lnk') } : await dialog.showSaveDialog(win, {
+    defaultPath: path.join(app.getPath('desktop'), 'OrbitKanban.lnk'), filters: [{ name: 'Windows shortcut', extensions: ['lnk'] }]
+  });
+  if (result.canceled || !result.filePath) return false;
+  if (!shell.writeShortcutLink(result.filePath, 'create', shortcutDetails(launcher))) throw new Error(message("Could not create the shortcut."));
+  return true;
+});
 ipcMain.on('app-ready', event => { if (win && event.sender === win.webContents) revealMainWindow('renderer'); });
 ipcMain.on('window-chrome', (event, request) => {
   if (!customTitleBar || !win || win.isDestroyed() || event.sender !== win.webContents) return;
@@ -161,7 +209,6 @@ else {
   app.whenReady().then(async () => {
     const icon = nativeImage.createFromPath(path.join(__dirname, 'app-logo.png'));
     if (icon.isEmpty()) throw new Error('The application icon is missing or invalid. Run npm run icon during development.');
-    if (process.platform === 'win32') app.setAppUserModelId('local.orbita.workspace');
     splash = createSplash({ BrowserWindow, screen, appRoot: __dirname, title: APP_NAME, icon, version: app.getVersion(), show: !smoke });
     try { await languages.reload(); }
     catch (error) { console.error('Additional languages could not be loaded:', error); }
@@ -177,6 +224,7 @@ else {
       ...(customTitleBar ? { titleBarStyle: 'hidden', titleBarOverlay: windowChrome } : { autoHideMenuBar: true }),
       webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, additionalArguments: customTitleBar ? [TITLE_BAR_ARGUMENT] : [] }
     });
+    if (launcher) win.setAppDetails(relaunchDetails(launcher));
     // The default menu keeps its shortcuts, but Alt must not slide a native menu bar under the custom title bar.
     if (customTitleBar) win.setMenuBarVisibility(false);
     win.on('closed', () => splash?.close());
@@ -190,6 +238,12 @@ else {
     });
     win.webContents.on('will-navigate', event => event.preventDefault());
     await win.loadFile('index.html');
+    if (!smoke) {
+      appReady.then(async () => {
+        try { const state = await updater.init(); if (state.supported && state.autoCheck) await updater.check(); }
+        catch (error) { console.error('Automatic update check failed:', error); }
+      });
+    }
     if (smoke) {
       try {
         if (await appReady !== 'renderer') throw new Error('The interface did not signal that it was ready.');
@@ -220,6 +274,32 @@ else {
           'Splash screen displays an animated indeterminate loading bar',
           'Splash screen closes when the interface is ready'
         ];
+        if (launcher) {
+          await require('./smoke-windows').verifyTaskbar(win, launcher);
+          splashChecks.push('Native Windows taskbar properties relaunch the portable launcher with its persistent icon');
+          const shortcut = path.join(root, 'OrbitKanban.lnk');
+          if (!shell.writeShortcutLink(shortcut, 'create', shortcutDetails(launcher))) throw new Error('Could not create the test shortcut.');
+          const actual = shell.readShortcutLink(shortcut);
+          if (actual.target !== launcher || actual.icon !== launcher || actual.appUserModelId !== APP_ID) throw new Error('The shortcut does not point to the persistent launcher with the correct identity.');
+          await fs.unlink(shortcut);
+          splashChecks.push('Windows shortcut targets the stable executable and icon with the application identity');
+          const helperSource = path.join(__dirname, 'install-update.ps1'), helperCopy = path.join(root, 'install-copy.ps1');
+          await fs.copyFile(helperSource, helperCopy);
+          if (!(await fs.readFile(helperCopy)).equals(await fs.readFile(helperSource))) throw new Error('The packaged update helper could not be extracted.');
+          await fs.unlink(helperCopy);
+          splashChecks.push('Update helper can be copied out of the packaged archive before shutdown');
+        }
+        if (portableFile) {
+          await new Promise((resolve, reject) => {
+            const child = require('node:child_process').spawn(portableFile, ['--smoke-test'], { windowsHide: true, stdio: 'ignore' });
+            const timer = setTimeout(() => { child.kill(); reject(new Error('Second portable launch did not return to the existing app.')); }, 45000);
+            child.once('error', error => { clearTimeout(timer); reject(error); });
+            child.once('exit', code => { clearTimeout(timer); if (code === 0) resolve(); else reject(new Error(`Second portable launch failed (${code}).`)); });
+          });
+          await fs.access(app.getPath('exe'));
+          await fs.access(path.join(__dirname, 'index.html'));
+          splashChecks.push('Second portable launch reuses the app without deleting its extracted runtime');
+        }
         await new Promise(resolve => setTimeout(resolve, 1200));
         const result = await win.webContents.executeJavaScript('window.runSmokeTests()');
         if (!result.ok) throw new Error('UI smoke test failed.');
@@ -253,7 +333,11 @@ else {
         await fs.writeFile(path.join(root, 'smoke-result.json'), JSON.stringify(result));
         await webServer.close();
         app.exit(0);
-      } catch (error) { console.error(error); app.exit(1); }
+      } catch (error) {
+        console.error(error);
+        await fs.writeFile(path.join(root, 'smoke-error.json'), JSON.stringify({ error: error.stack || error.message }));
+        app.exit(1);
+      }
     }
   }).catch(error => { splash?.close(); dialog.showErrorBox('Startup failed', error.message); app.exit(1); });
 }
