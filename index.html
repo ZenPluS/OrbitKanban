@@ -14,6 +14,7 @@
   <script defer src="i18n.js"></script>
   <script defer src="xlsx.js"></script>
   <script defer src="csv.js"></script>
+  <script defer src="guide.js"></script>
   <script defer src="renderer.js"></script>
 </head>
 <body>
@@ -23,6 +24,7 @@
     <div class="workspace-label">WORKSPACE <span>LOCAL</span></div>
     <nav id="navigation" aria-label="Main views"></nav>
     <div class="sidebar-bottom">
+      <button id="guide-button" class="nav-button" title="Open the guide (F1)" aria-keyshortcuts="F1"><span class="nav-icon"><svg class="ico ico-rose" aria-hidden="true" focusable="false"><use href="#i-book"/></svg></span> Guide</button>
       <button id="settings-button" class="nav-button"><span class="nav-icon"><svg class="ico ico-slate" aria-hidden="true" focusable="false"><use href="#i-settings"/></svg></span> Settings</button>
       <div class="local-card"><span class="connection-dot"></span><div><strong>Only on your device</strong><small>Your data. Always with you.</small></div></div>
       <div class="version">PORTABLE EDITION <span id="app-version"></span></div>

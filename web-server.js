@@ -17,6 +17,7 @@ const STATIC_FILES = new Map([
   ['/columns.js', 'text/javascript; charset=utf-8'],
   ['/icons.js', 'text/javascript; charset=utf-8'],
   ['/csv.js', 'text/javascript; charset=utf-8'],
+  ['/guide.js', 'text/javascript; charset=utf-8'],
   ['/i18n.js', 'text/javascript; charset=utf-8'],
   ['/xlsx.js', 'text/javascript; charset=utf-8'],
   ['/renderer.js', 'text/javascript; charset=utf-8'],

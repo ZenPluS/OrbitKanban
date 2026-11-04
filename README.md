@@ -1,437 +1,637 @@
-# OrbitKanban — workspace portable
+# OrbitKanban
 
-App desktop locale per Windows 10/11 a 64 bit, **versione 2.45.0**. Nessun account, server esterno o collegamento a Internet necessario per lavorare sui dati; Internet serve solo per cercare e scaricare gli aggiornamenti facoltativi da GitHub. **Il nome dell'app è sempre OrbitKanban e non è configurabile.** Le impostazioni del workspace appartengono alla singola organizzazione; aggiornamenti e collegamenti Windows valgono per l'intera copia portable. Mentre l'app è aperta puoi usarla anche **dal browser dello stesso PC**, con più organizzazioni aperte contemporaneamente in schede diverse.
+**A portable, offline-first task workspace for Windows.** OrbitKanban keeps release tasks, their linked incidents and problems, a milestone timeline and a read-only kanban board in a single executable that carries its data with it. There is no installer, account or server: copy the executable and its `data` folder, and the whole workspace moves with you.
 
-## Avvio e condivisione
-
-1. Copia `OrbitKanban-Portable.exe` in una cartella scrivibile, per esempio su una chiavetta o sul Desktop. Evita `Program Files` e cartelle di sola lettura.
-2. Apri l'eseguibile. Al primo avvio viene creata la cartella `data` accanto all'eseguibile, con un'organizzazione dimostrativa completa (vedi [Dati dimostrativi](#dati-dimostrativi)).
-3. Per spostare o condividere tutto, **chiudi l'app e copia insieme l'eseguibile e la cartella `data`**. Copiare soltanto l'eseguibile crea un workspace nuovo.
-
-Windows potrebbe mostrare un avviso SmartScreen perché l'eseguibile non è firmato digitalmente. L'app non richiede privilegi di amministratore. Il file eseguibile è `OrbitKanban-Portable.exe`. Per aggiornare una versione precedente, chiudi l'app e affianca il nuovo eseguibile alla cartella `data` esistente: non è necessario rinominare o ricreare l'archivio.
-
-### Schermata di caricamento
-
-L'icona dell'eseguibile portable, della finestra e della barra delle applicazioni usa lo **stesso logo OrbitKanban** mostrato nella schermata di caricamento e nell'app. I loghi personalizzati delle organizzazioni continuano a comparire nella sidebar e nella scheda del browser; non sostituiscono l'icona Windows dell'app.
-
-Dalla **2.45.0** la finestra principale comunica a Windows il percorso e l'icona del **launcher portable originale** per il pin e la riapertura. Le schermate di caricamento non hanno una voce separata nella barra. L'estrazione temporanea rimane necessaria per il pacchetto Electron a singolo file, ma non deve diventare il collegamento dell'utente: i processi interni non sono app o workspace separati. Ogni avvio usa una directory temporanea isolata, così un secondo doppio clic torna all'app aperta senza cancellarne i file.
-
-**Per correggere i pin creati dalle vecchie versioni:** rimuovili dalla barra, apri il nuovo portable e fissalo di nuovo, oppure usa **Impostazioni → App e aggiornamenti → Crea collegamento sul desktop** e fissa quel collegamento. Il collegamento usa l'identità applicativa, l'icona del launcher e il suo percorso stabile. Se sposti o rinomini l'eseguibile devi ricreare il collegamento; gli aggiornamenti integrati mantengono invece lo stesso percorso.
-
-L'eseguibile portable estrae i file dell'app in una cartella temporanea a ogni avvio: è la parte che richiede qualche secondo. Appena fai doppio clic compare la **schermata di caricamento**, sempre in inglese, con logo, versione e una **barra di caricamento infinita** che scorre senza fermarsi fin dal primo istante, già durante l'estrazione. Quando l'app parte, la stessa schermata, nella stessa posizione, prosegue con la stessa animazione finché l'organizzazione non è pronta; non ci sono fasi numerate, perché la durata di ogni passaggio dipende dal PC. Tra la schermata del launcher e quella dell'app può esserci un passaggio di qualche decimo di secondo. La finestra principale compare solo quando l'organizzazione è già disegnata, con lo sfondo del suo tema. Se il sistema chiede di ridurre le animazioni, la barra non scorre ma pulsa lentamente. Il pacchetto include soltanto le risorse di Chromium per italiano e inglese, così l'estrazione è più leggera.
-
-L'archivio è `data/workspace.json`; `workspace.json.bak` contiene il salvataggio precedente e le copie giornaliere sono in `data/backups`. Cache, log e la chiave dell'accesso da browser (`data/runtime/browser-access-token`) restano anch'essi nella cartella `data`. Non usare l'app direttamente dentro un archivio ZIP e non aprire più copie dell'eseguibile sullo stesso archivio condiviso: per lavorare in più finestre usa l'[accesso da browser](#accesso-da-browser), che passa sempre dall'unica app aperta. È un'app monoutente, non un sistema di collaborazione in rete.
-
-### Aggiornamenti da GitHub
-
-La **2.45.0** introduce **Impostazioni → App e aggiornamenti**:
-
-- Controllo della release stabile più recente di [ZenPluS/OrbitKanban](https://github.com/ZenPluS/OrbitKanban/releases), senza token, account o servizi aggiuntivi. Il controllo all'avvio è attivo per impostazione iniziale e si può disattivare; la preferenza viene salvata subito in `data/updates/settings.json`, per l'intera copia portable. Offline l'app continua a funzionare normalmente e l'errore di ricerca viene mostrato nella sezione aggiornamenti.
-- **Cerca aggiornamenti** non scarica nulla. **Scarica aggiornamento** mostra l'avanzamento e verifica dimensione e SHA-256 dichiarati da GitHub, accettando solo l'eseguibile portable della repository e redirect HTTPS verso gli host GitHub degli allegati. Versioni precedenti, pre-release e pacchetti non verificabili non vengono installati.
-- **Installa e riavvia** richiede conferma, dopo aver salvato o scartato le impostazioni locali. Prima di continuare salva anche gli editor nelle schede browser. Viene creata una copia completa dell'archivio; un piccolo helper PowerShell attende la chiusura dell'app e del launcher, ricontrolla l'hash, sostituisce atomicamente il solo eseguibile e riapre l'app. Non servono privilegi amministrativi: la cartella deve essere scrivibile.
-- I file scaricati, l'eseguibile precedente (`previous.exe`), il backup (`workspace-before-update.json`) e il risultato dell'installazione restano nella sottocartella identificata in `data/updates`. Dopo aver verificato il nuovo avvio, puoi eliminare quelle sottocartelle per recuperare spazio. Non eliminare `settings.json` se vuoi conservare la preferenza del controllo automatico.
-- Download corrotti e file bloccati non sostituiscono il launcher. Se Windows non riesce ad avviare il nuovo eseguibile, l'helper tenta di ripristinare il precedente e segnala l'errore. In caso di problemi è sempre possibile chiudere l'app e sostituire manualmente l'eseguibile, conservando `data`.
-- Solo l'app desktop portable può installare: dal browser viene indicato di tornare al desktop. L'accesso browser si interrompe durante il riavvio. L'app non invia a GitHub attività, issue, temi, loghi o percorsi locali; contatta soltanto API e download pubblici. La verifica SHA-256 protegge l'integrità del download, non sostituisce una firma digitale del produttore: l'avviso SmartScreen può ancora comparire.
-
-Per passare dalle versioni precedenti alla **2.45.0** occorre un ultimo aggiornamento manuale. Quelli successivi saranno disponibili dall'app. Il salto di numerazione è intenzionale; questa release non cambia il formato dell'archivio.
-
-## Organizzazioni, logo e lingua
-
-Il menu a tendina sotto il nome fisso **OrbitKanban** seleziona l'organizzazione attiva. **Ogni organizzazione ha un archivio di attività e issue distinto**, insieme al proprio nome, ai nomi dei tab, agli stati, alle urgenze, ai temi, alle dimensioni del testo, all'effort, al logo e alla lingua. Il passaggio aggiorna immediatamente tutte le viste, il logo e i colori, senza mai cambiare il nome dell'app. Il logo dell'app appare all'avvio e come fallback per le organizzazioni senza logo; se l'organizzazione selezionata ha un logo, viene mostrato quello. Ricerca e filtri vengono azzerati al cambio, e la selezione resta memorizzata per il prossimo avvio.
-
-**Gestisci organizzazioni** apre la relativa sezione di **Impostazioni**. Da **Nuova organizzazione** scegli nome, lingua e logo prima di premere **Crea organizzazione**. L'anteprima mostra il logo e i quattro colori del tema che verrà generato: organizzazione, logo e tema vengono salvati insieme, senza un secondo passaggio. Il logo è facoltativo; se omesso viene utilizzato quello dell'app. Le nuove organizzazioni sono vuote, senza attività o issue condivise, a meno di selezionare **Includi dati dimostrativi**.
-
-Per rinominare l'organizzazione attiva modifica **Nome organizzazione** e premi **Salva impostazioni**; il nome viene aggiornato anche nel menu. Puoi eliminarla con **Elimina organizzazione**, dopo conferma; deve restarne almeno una. Se cambi organizzazione con impostazioni non salvate, puoi salvarle, scartarle o annullare il cambio. Non esiste un collegamento tra codici uguali appartenenti a organizzazioni diverse.
-
-Nelle impostazioni, **Carica logo e genera tema** accetta PNG, JPEG, WebP, GIF e BMP fino a 15 MB. Il logo viene convertito in PNG, ridimensionato a un massimo di 512 pixel per lato e incorporato nell'archivio, senza dipendenze dal file originale. Dai suoi colori viene generato e selezionato il tema dedicato **Tema dal logo**, modificabile come gli altri temi. Per mantenere leggibilità anche con loghi monocromatici, testo e accento possono essere schiariti o scuriti e le superfici differenziate dallo sfondo. Una nuova immagine aggiorna quel tema solo per l'organizzazione attiva. Il tema generato viene applicato subito in anteprima; per conservare logo e tema premi **Salva impostazioni**. **Rimuovi logo** ripristina il simbolo predefinito senza eliminare il tema.
-
-Il selettore **Lingua dell'interfaccia**, nella scheda **Lingua & traduzioni** delle impostazioni, offre **Italiano**, **English** e le lingue aggiunte da file (vedi [Lingue e traduzioni](#lingue-e-traduzioni)). La lingua viene salvata per organizzazione e si applica con **Salva impostazioni** a navigazione, comandi, dialog, date e unità dell'effort. I contenuti e i nomi personalizzati dei tab, degli stati, delle urgenze e dei temi non vengono tradotti né rinominati. Alla creazione viene proposta la lingua attuale, modificabile nel modulo; i nomi iniziali seguono la lingua scelta.
-
-I vecchi archivi e backup a organizzazione singola vengono migrati automaticamente nella prima organizzazione, preservando attività, associazioni e impostazioni. Il formato nuovo è versione 2 e non va aperto con versioni precedenti dell'app. L'esportazione include **tutte le organizzazioni**, i loghi e le lingue; l'importazione sostituisce **l'intero archivio**, non soltanto l'organizzazione attiva. **Svuota attività e issue** agisce invece solo sull'organizzazione corrente. Per salvare o condividere **una sola organizzazione** usa invece **Esporta e importa organizzazione**, descritta nella sezione seguente.
-
-## Lingue e traduzioni
-
-Ogni lingua è un singolo file JSON. Le lingue integrate sono `languages/it.json` e `languages/en.json` nel pacchetto dell'app; chiunque può aggiungerne una partendo da quella inglese, senza ricostruire l'eseguibile:
-
-1. In **Impostazioni → Lingua & traduzioni** premi **Apri cartella lingue**. Si apre `data/languages`, accanto all'archivio, che contiene `en.template.json`: la traduzione inglese completa da usare come modello, riscritta a ogni apertura se l'app viene aggiornata.
-2. Copia il modello con il codice della nuova lingua, per esempio `de.json`, `fr.json` o `pt-BR.json`, e aggiorna `code` (uguale al nome del file), `name` (il nome mostrato nel selettore, per esempio `Deutsch`) e `locale` (usato per date e numeri, per esempio `de-DE`).
-3. Traduci solo i **valori**. Le chiavi sono il testo originale inglese e non vanno modificate; i segnaposto come `{0}` vanno mantenuti. `messages` contiene i testi dell'interfaccia, `terms` i nomi iniziali di stati, urgenze e tab e i testi dei dati dimostrativi, `plurals` i conteggi con le forme `zero`, `one`, `two`, `few`, `many` e `other` (obbligatoria). I testi lasciati vuoti o eliminati restano in inglese, quindi si può tradurre anche un poco alla volta.
-4. Premi **Ricarica lingue**: la nuova lingua compare nel selettore con l'etichetta **Aggiunta da file**. Sceglila e premi **Salva impostazioni**.
-
-Un file con il codice di una lingua integrata, per esempio `en.json` o `it.json`, sostituisce solo i testi che contiene ed è segnalato come **Personalizzata da file**. I file non validi, con JSON errato, codice diverso dal nome del file o più grandi di 2 MB, vengono ignorati ed elencati in **File lingua ignorati** con il motivo, senza bloccare l'app. La cartella `data/languages` viaggia con la cartella `data`; se un'organizzazione usa una lingua non presente su un altro PC, il selettore la indica come **non installata** e i testi sono mostrati in inglese finché il file non viene copiato. Le lingue valgono anche per l'accesso da browser. La schermata di caricamento resta sempre in inglese.
-
-## Esporta e importa per organizzazione
-
-In **Impostazioni → Esporta e importa organizzazione** puoi salvare l'organizzazione attiva in **file JSON separati**, da conservare, condividere con un collega o reimportare qui o in un'altra copia di OrbitKanban:
-
-| Pulsante | Contenuto del file |
+| | |
 | --- | --- |
-| **Esporta temi** | tutti i temi dell'organizzazione, con i quattro colori, e il tema attivo |
-| **Esporta configurazione** | lingua, modello del link al portale, nomi dei tab, ore per giorno, font e dimensioni del testo, stati con colori ed evidenziazione, urgenze, evidenziatori, colonne della lista e logo |
-| **Esporta dati** | attività e issue, con il colore evidenziatore di ogni riga, insieme a stati, urgenze ed evidenziatori per poterle riassociare |
-| **Esporta tutto** | temi, configurazione e dati in un unico file |
+| **Current version** | 2.46.0 |
+| **Platform** | Windows 10 / 11, 64-bit |
+| **Distribution** | Single portable executable, `OrbitKanban-Portable.exe` |
+| **Network** | Not required. Used only for optional update checks against GitHub |
+| **Downloads** | [GitHub Releases](https://github.com/ZenPluS/OrbitKanban/releases) |
 
-I file si chiamano `OrbitKanban-<organizzazione>-<temi|configurazione|dati|organizzazione>-<data>.json` (tradotti nella lingua dell'organizzazione, per esempio in inglese `themes`, `settings`, `data`, `organization`). Nell'app desktop viene chiesto dove salvarli, proponendo la cartella dell'app; dal browser vengono scaricati. Se ci sono impostazioni non salvate, prima di esportare o importare puoi salvarle o scartarle: il file riflette sempre la configurazione salvata.
+## Table of contents
 
-**Importa da file…** accetta un file esportato da OrbitKanban, fino a 32 MB. Il file viene verificato prima di qualsiasi modifica: file non validi, file creati da una versione più recente dell'app e backup completi dell'archivio, da importare con **Importa backup**, vengono rifiutati con un messaggio chiaro; i campi sconosciuti vengono ignorati. La finestra di importazione mostra organizzazione di origine, data di esportazione e versione dell'app, e propone solo le parti presenti nel file:
+- [Highlights](#highlights)
+- [Getting started](#getting-started)
+  - [Requirements](#requirements)
+  - [First launch](#first-launch)
+  - [Moving and sharing the workspace](#moving-and-sharing-the-workspace)
+  - [Splash screen and taskbar](#splash-screen-and-taskbar)
+- [In-app guide](#in-app-guide)
+- [Portable data and backups](#portable-data-and-backups)
+- [Organizations](#organizations)
+- [The four views](#the-four-views)
+  - [Tasks](#tasks)
+  - [Linked issues](#linked-issues)
+  - [Milestones](#milestones)
+  - [Kanban](#kanban)
+- [Working with the lists](#working-with-the-lists)
+  - [Sorting and manual order](#sorting-and-manual-order)
+  - [Search, column filters and views](#search-column-filters-and-views)
+  - [Hiding rows](#hiding-rows)
+  - [Highlights and tags](#highlights-and-tags)
+  - [Duplicate detection](#duplicate-detection)
+  - [Bulk edit](#bulk-edit)
+  - [Undo and redo](#undo-and-redo)
+- [Columns](#columns)
+  - [Custom columns](#custom-columns)
+  - [Removable built-in columns](#removable-built-in-columns)
+  - [Column labels](#column-labels)
+- [Portal links](#portal-links)
+- [Settings](#settings)
+- [Appearance](#appearance)
+  - [Themes](#themes)
+  - [Color picker](#color-picker)
+  - [Fonts](#fonts)
+  - [Text size](#text-size)
+  - [Icons and controls](#icons-and-controls)
+- [Languages and translations](#languages-and-translations)
+- [Import and export](#import-and-export)
+  - [Full backup](#full-backup)
+  - [Organization export and import](#organization-export-and-import)
+  - [CSV import](#csv-import)
+  - [Excel export](#excel-export)
+- [Browser access](#browser-access)
+- [Updates](#updates)
+- [Keyboard shortcuts](#keyboard-shortcuts)
+- [Privacy and security](#privacy-and-security)
+- [Troubleshooting](#troubleshooting)
+- [Development](#development)
+  - [Prerequisites and scripts](#prerequisites-and-scripts)
+  - [Project structure](#project-structure)
+  - [Build, test and release](#build-test-and-release)
+- [Release history](#release-history)
 
-- **Temi**: i temi con lo stesso identificativo vengono aggiornati, gli altri aggiunti. L'opzione **Attiva il tema «…»**, con l'anteprima dei quattro colori, rende subito attivo il tema del file.
-- **Configurazione**: sostituisce quella attuale. I file creati prima della versione 2.2.0 non contengono le dimensioni del testo: in quel caso restano quelle attuali. Le attività esistenti restano e vengono associate agli stati e alle urgenze del file con lo stesso nome, senza distinzione tra maiuscole e minuscole, altrimenti a quelli nella stessa posizione. Il logo attuale viene sostituito solo selezionando **Sostituisci anche il logo**.
-- **Dati**: con **Aggiungi e aggiorna** le attività con lo stesso identificativo vengono aggiornate e le altre aggiunte; le issue già presenti, con stesso codice, incident e problem, non vengono duplicate. Reimportare lo stesso file quindi non crea doppioni. Con **Sostituisci tutto** attività e issue attuali vengono sostituite da quelle del file. Stati e urgenze delle attività importate seguono la stessa regola: prima per nome, poi per posizione. Il colore evidenziatore di una riga viene riassociato per identificativo e poi per nome; se non esiste nell'organizzazione la riga resta senza evidenziazione. I file creati prima della versione 2.6.0 non contengono evidenziatori né colonne: la configurazione importata usa i colori e le colonne predefiniti e, con **Aggiungi e aggiorna**, le righe già presenti mantengono la propria evidenziazione.
+## Highlights
 
-In **Dove importare** scegli **In questa organizzazione** oppure **In una nuova organizzazione**, proposta automaticamente per i file creati con **Esporta tutto**. Il nome suggerito è quello dell'organizzazione di origine, reso univoco se necessario, per esempio `Acme (2)`. La nuova organizzazione riceve le parti selezionate: con i dati arrivano anche stati e urgenze del file, con la configurazione anche lingua e logo; ciò che non importi parte dai valori iniziali. L'organizzazione attuale non viene modificata. Gli identificativi di attività, issue e temi vengono mantenuti, così gli scambi ripetuti tra due copie dell'app aggiornano le stesse righe. Prima di importare nell'organizzazione corrente, se vuoi poter tornare indietro, esporta l'organizzazione completa o un backup.
+- **Truly portable.** The executable and a `data` folder next to it are the whole installation, with automatic daily backups.
+- **Four views**: Tasks, Linked issues, Milestones and Kanban. Each tab name is configurable per organization.
+- **Automatic issue matching.** Incidents and problems recorded in Linked issues are resolved onto tasks by their portal code.
+- **Multiple organizations**, each with its own data, settings, logo, theme and language.
+- **Flexible lists**: multi-level sorting, drag-and-drop ordering, per-column filters, saved views, row highlights, tags, duplicate detection, bulk edit, and undo/redo.
+- **Custom columns** of nine types; every built-in column can also be removed.
+- **40 built-in themes**, custom themes, and palettes generated from an image or logo with WCAG AA contrast.
+- **Imports and exports**: CSV import with validation, Excel workbooks, and per-organization JSON exports.
+- **Browser access** from the same PC, with live sync across windows.
+- **Built-in guide** covering every feature, opened with `F1`.
+- **Verified updates** from GitHub releases, with automatic rollback if an install fails.
+- **Translatable**: English and Italian are included, and more languages can be added with a JSON file.
 
-## Dati dimostrativi
+## Getting started
 
-Il primo avvio crea un'organizzazione di esempio pensata per mostrare tutte le funzioni:
+### Requirements
 
-- **una milestone ogni due settimane, con rilascio di mercoledì**, dal 1° gennaio 2025 fino a oggi, più la prossima release già pianificata;
-- oltre 200 attività con codici portale, progressivi, urgenze e stati diversi, effort in giorni e ore, descrizioni e note in rich text;
-- le release passate sono completate; le attività completate da più di otto settimane sono **nascoste dalla lista** ma restano visibili in Milestone e Kanban;
-- l'ultima release è in verifica, la prossima ha attività da fare, in corso e in verifica; alcune attività senza data formano il backlog;
-- oltre 150 issue: problem condivisi da più incident, codici scritti in minuscolo, issue con solo problem e alcuni codici senza attività corrispondente;
-- link generati dal modello `https://jira.example.com/browse/{code}` e, per i codici `CHG…`, link specifici a un secondo portale;
-- un tema aggiuntivo **Aurora**.
+- Windows 10 or 11, 64-bit.
+- A writable folder, such as the Desktop, a documents folder or a USB drive. Avoid `Program Files` and read-only locations.
+- No administrator rights, runtime or internet connection are needed.
 
-I dati sono generati in modo deterministico rispetto alla data del primo avvio e vengono creati **solo se non esiste già un archivio**: aggiornando l'app, la cartella `data` esistente non viene toccata. Per vedere gli esempi accanto ai tuoi dati crea una nuova organizzazione con **Includi dati dimostrativi**; potrai eliminarla in qualsiasi momento. **Svuota attività e issue** rimuove gli esempi dell'organizzazione corrente mantenendone le impostazioni.
+### First launch
 
-## Accesso da browser
+1. Download `OrbitKanban-Portable.exe` from the [latest release](https://github.com/ZenPluS/OrbitKanban/releases/latest).
+2. Place it in a writable folder and run it.
+3. On first launch OrbitKanban creates a `data` folder next to the executable with a complete demo organization (see below).
 
-Mentre OrbitKanban è aperto, l'app espone la stessa interfaccia anche al browser **di questo PC** all'indirizzo `http://127.0.0.1:47821` (se la porta è occupata ne viene scelta automaticamente un'altra, visibile nelle impostazioni).
+Windows SmartScreen may show a warning because the executable is not digitally signed. Choose **More info → Run anyway** if you trust the source.
 
-- Il pulsante **Apri nel browser** sotto il selettore delle organizzazioni apre l'organizzazione corrente nel browser predefinito. Dal browser lo stesso pulsante diventa **Apri in nuova scheda**.
-- Ogni scheda mostra l'organizzazione scelta dal proprio menu, indipendentemente dall'app e dalle altre schede: puoi tenere **più organizzazioni aperte contemporaneamente**. Il titolo della scheda riporta il nome dell'organizzazione e l'indirizzo (`?org=…`) può essere salvato nei preferiti.
-- Le modifiche si **sincronizzano in tempo reale** tra app e schede, senza ricaricare. Se due finestre modificano la stessa organizzazione quasi insieme, la seconda modifica viene riapplicata sui dati aggiornati invece di sovrascriverli. Le impostazioni che stai modificando e non hai ancora salvato non vengono perse quando arrivano aggiornamenti da altre finestre.
-- In **Impostazioni → Accesso da browser** trovi l'indirizzo e il comando **Copia link di accesso**.
-- Il server ascolta **solo su 127.0.0.1**: non è raggiungibile da altri computer della rete. Il primo accesso usa un link con una chiave personale, poi il browser ricorda la sessione con un cookie protetto. **Non condividere il link di accesso**: contiene la chiave. Eliminando `data/runtime/browser-access-token` ad app chiusa la chiave viene rigenerata e le sessioni precedenti vengono invalidate.
-- Chiudendo l'app le schede mostrano **App non raggiungibile** e non possono salvare; riaprendo l'app e ricaricando la pagina si riprende a lavorare. Archivio principale e copie di sicurezza restano nella cartella portable `data`.
-- Dal browser funzionano anche esportazione (download del backup), importazione, esportazione e importazione per organizzazione (i file vengono scaricati dal browser) e apertura dei link al portale in una nuova scheda.
+The demo organization shows every feature with realistic data:
 
-## Link al portale
+- one milestone every two weeks, released on Wednesdays, from 1 January 2025 to today, plus the next planned release;
+- more than 200 tasks covering all urgencies, statuses, efforts in days and hours, and rich-text descriptions and notes;
+- older completed tasks hidden from the list but still visible in Milestones and Kanban, and a backlog of unscheduled tasks;
+- more than 150 linked issues, including problems shared by several incidents, lowercase codes, problem-only rows and codes with no matching task;
+- portal links generated from `https://jira.example.com/browse/{code}`, plus specific links to a second portal for `CHG…` codes;
+- an extra **Aurora** theme.
 
-Ogni organizzazione ha il proprio **Modello del link** in **Impostazioni → Link al portale**. Inserisci l'indirizzo del portale e metti il segnaposto `{codice}` nel punto in cui va il codice dell'attività, per esempio `https://jira.azienda.com/browse/{codice}` oppure `qualcosa.net/{codice}/dettaglio`. Sono accettati anche `{code}`, `<codice>` e `<code>`, senza distinzione tra maiuscole e minuscole; il segnaposto può comparire più volte. Se manca lo schema viene aggiunto `https://`. Sotto il campo un'anteprima mostra il link generato con un codice reale e segnala un modello senza segnaposto o non valido, che non può essere salvato. Il modello vale solo per l'organizzazione attiva: un'altra organizzazione può usare un portale diverso o nessuno.
+Demo data is created only when no workspace exists yet, so updating the app never touches an existing `data` folder. To explore the demo next to your own data, create a new organization with **Include demo data**. **Clear tasks and issues** removes the demo content from the current organization and keeps its settings.
 
-Nell'attività il link non è più obbligatorio. Con il campo **Link specifico (facoltativo)** vuoto il link viene costruito dal codice portale tramite il modello, e si aggiorna da solo se cambi il modello o il codice. Un link specifico, utile per ticket su un altro portale, ha la precedenza sul modello; se coincide con quello generato non viene memorizzato separatamente. Il codice viene inserito nell'URL con la codifica necessaria per spazi e caratteri speciali. Senza modello e senza link specifico l'attività semplicemente non mostra il collegamento.
+### Moving and sharing the workspace
 
-L'icona **apri esterno** (freccia che esce da un riquadro) accanto al codice nella lista attività, nelle card delle milestone e del kanban, il link nel dialog dell'attività e l'anteprima nelle impostazioni **aprono la pagina nel browser predefinito del PC**, anche con clic centrale o `Ctrl+clic`; l'app non naviga mai all'interno della propria finestra. Vengono aperti solo indirizzi `http://` e `https://`.
+**Close the app, then copy the executable and the `data` folder together.** Copying only the executable starts a new, empty workspace.
 
-## Le quattro viste
+- Do not run the app from inside a ZIP archive.
+- Do not open several copies of the executable on the same shared `data` folder. To work in several windows, use [browser access](#browser-access), which always goes through the single running app.
+- OrbitKanban is a single-user tool, not a networked collaboration system.
 
-Le intestazioni e i riepiloghi sono compatti in tutte le schede. Tabelle, milestone e kanban occupano lo spazio rimanente della finestra e scorrono al proprio interno; le dimensioni del testo configurate restano rispettate. Su finestre basse o con caratteri grandi, anche l'area contenuti può scorrere per mantenere accessibili tutti i comandi.
+### Splash screen and taskbar
 
-Il testo dell'interfaccia non viene selezionato trascinando il mouse, come in un'app desktop. La selezione e il copia/incolla restano disponibili nei campi di testo, nella ricerca e negli editor rich text.
+The portable executable extracts the app to a private temporary folder on every launch. A splash screen with the app logo, version and an animated progress bar appears immediately and stays until the organization is ready. The splash screen is always in English. When Windows asks to reduce motion, the bar pulses slowly instead of moving. Only the English and Italian Chromium resources are packaged, which keeps extraction fast.
 
-Dalla **2.13.0**, su Windows la finestra non usa più la barra del titolo di sistema: la **barra superiore dell'app** (percorso, stato dell'archivio) fa da barra del titolo e i pulsanti **riduci a icona, ingrandisci e chiudi** prendono sfondo e colore del testo del **tema attivo**, anche durante l'anteprima di un tema. Trascina la barra superiore o il logo in alto a sinistra per spostare la finestra; doppio clic per ingrandirla o ripristinarla. L'altezza segue le dimensioni del testo configurate e, con una finestra di dialogo aperta, i pulsanti si oscurano insieme alla pagina. Nella versione browser non cambia nulla.
+Since 2.45.0 the main window reports the **original portable launcher** to Windows as its identity, path and icon. Pinning the running app to the taskbar therefore pins the launcher, not the temporary extraction. A second double-click brings the open app to the front.
 
-Nelle liste **Attività** e **Issue collegate**, fai **doppio clic su una cella della riga** per aprire la relativa finestra di modifica. Restano disponibili i pulsanti di modifica e il clic sul codice; link e pulsanti mantengono le proprie azioni. Con un evidenziatore attivo, i clic continuano a colorare le righe senza aprire l'editor. Il Kanban resta in sola lettura.
+> **Pins created by older versions** may point to the temporary extraction and show a blank icon. Unpin them, start the new version and pin it again. Alternatively, use **Settings → App & updates → Create desktop shortcut** and pin that shortcut. Recreate the shortcut if you move or rename the executable. Built-in updates keep the same path.
 
-Dalla **2.15.0**, la creazione e la modifica delle attività usano una **finestra larga**: proprietà, link e associazioni a sinistra, descrizione e note a destra. Sul desktop i campi sono visibili insieme; i testi lunghi scorrono dentro i rispettivi editor e **Salva, Annulla ed Elimina restano sempre accessibili**. Su schermi stretti i gruppi tornano in colonna e scorre solo il contenuto, rispettando le dimensioni del testo configurate.
+## In-app guide
 
-Ricerca e cambi di vista riutilizzano le anteprime rich text già elaborate e il formattatore delle date. Le associazioni incident/problem vengono indicizzate una sola volta per ogni ricerca, lista o esportazione, evitando di rileggere tutte le issue per ogni attività. La cache delle anteprime è limitata in memoria, non viene salvata e non altera la sanitizzazione o il contenuto dell'archivio.
+The **Guide** button at the bottom of the sidebar, or `F1` from anywhere, opens a complete feature reference inside the app.
 
-Dalla **2.12.0**, salvataggi, eliminazioni e cambio di visibilità conservano lo scorrimento orizzontale e verticale della vista corrente, compresi ricerca delle issue e filtri. Descrizione e note mostrano direttamente nella tabella fino a tre righe di testo, andando a capo anche con parole o URL molto lunghi; il suggerimento al passaggio del mouse contiene il testo completo. Un clic apre l'editor rich text, senza alterare il contenuto salvato.
+- **17 sections**: getting started, organizations, every view, search and filters, highlights and tags, bulk edit, duplicates, columns, appearance, settings, data and backups, browser access, updates and keyboard shortcuts.
+- **Search box** that filters topics instantly; accents and letter case are ignored.
+- **Section navigation** that tracks your scroll position, and **Go to…** buttons that open the related view or settings tab directly.
+- Follows the organization language, active theme, font and text size, and works the same in browser access.
 
-- **Attività**: creazione e modifica tramite “Nuova attività”, codice o descrizione. Progressivo automatico ma modificabile; codice portale con link facoltativo (vedi **Link al portale**); descrizione e note rich text; urgenza, stato, effort in giorni e ore, release date e associazioni incident/problem automatiche. I numeri progressivi possono essere duplicati intenzionalmente. Scorciatoia: `Ctrl+N`.
-- **Issue collegate**: ogni riga associa un codice portale a un incident e/o problem. Sono consentiti più incident per problem e più righe per codice. Il confronto del codice ignora spazi esterni e maiuscole/minuscole. Nelle attività le associazioni vengono aggregate senza duplicati; non è necessaria alcuna connessione a JIRA.
-- **Milestone**: timeline orizzontale per data di release, con tutte le attività della tappa. Scorre sia in larghezza sia in altezza; il codice apre la modifica. Le attività senza data compaiono in “Da pianificare”. Include anche le attività nascoste dalla lista, contrassegnate dall'etichetta “Nascosta in lista” e da un bordo tratteggiato.
-- **Kanban**: sola lettura, una colonna per ogni stato e nello stesso ordine configurato nelle impostazioni. Si modifica lo stato dalla lista attività. Mostra anche le attività nascoste dalla lista, con la stessa etichetta.
+## Portable data and backups
 
-Nelle **Milestone**, la prima data di release **da oggi in avanti** è avvolta da una colonna evidenziata con bordo, sfondo ed etichetta **Prossima release**; se la data è oggi compare **Release di oggi**. La selezione dipende dalla data locale del PC, non dallo stato o dalla visibilità delle attività, e mantiene i colori originali delle date e delle righe. All'apertura della vista la colonna viene portata in vista; il pulsante con la prossima data nell'intestazione permette di ritrovarla dopo aver scorso lo storico. Le sincronizzazioni mantengono lo scorrimento scelto dall'utente. L'indicatore si aggiorna con i dati e al cambio di giorno (entro un minuto, senza interrompere un editor aperto). Se restano solo release passate o attività senza data, nessuna colonna viene evidenziata e compare **Nessuna release in programma**.
+Everything OrbitKanban stores lives in the `data` folder next to the executable:
 
-L'ordinamento iniziale delle attività è per release crescente, con date mancanti in fondo. Clic sulle intestazioni per cambiare verso; `Maiusc+clic` per ordinamenti a più livelli. Descrizione e note non sono ordinabili. Urgenza e stato vengono ordinati in base all'ordine delle rispettive opzioni, non alfabeticamente. Il pulsante “Release” ripristina l'ordinamento iniziale. Ricerca e filtri della lista non limitano le altre viste.
-
-La **ricerca globale** in alto (`Ctrl+K`) cerca attività e issue per codice, incident e problem, oltre ai contenuti descrittivi e alle date di release; selezionando un risultato si apre direttamente la relativa modifica. Nella lista attività puoi **salvare fino a 30 viste per organizzazione**: ciascuna conserva ricerca, filtri, attività nascoste/duplicate, ordinamento e colonne, e si riapplica dal menu delle viste salvate.
-
-Le modifiche salvate possono essere annullate con **Annulla** (`Ctrl+Z`) e ripristinate con **Ripristina** (`Ctrl+Y` o `Ctrl+Maiusc+Z`). La cronologia conserva fino a 20 operazioni per organizzazione finché l'app resta aperta; non modifica le azioni non ancora salvate e viene azzerata al riavvio o quando i dati cambiano in un'altra finestra.
-
-Per un **ordine manuale**, trascina la maniglia accanto alla casella di selezione di una riga, oppure usa le frecce su/giù con il focus sulla maniglia. La tabella scorre automaticamente avvicinandosi ai bordi e `Esc` annulla il trascinamento. Al rilascio l'ordine viene salvato, i campi **Progressivo / Sequence** vengono rinumerati da 1 per tutte le attività e la vista passa a **Sequence crescente**, anche se la relativa colonna è nascosta. Con filtri attivi vengono riordinate soltanto le righe mostrate: le altre conservano le proprie posizioni nell'ordine globale, pur ricevendo i nuovi progressivi. I valori manuali precedenti, anche duplicati, vengono quindi sostituiti dalla numerazione consecutiva. Le nuove Sequence restano nell'archivio e negli export; all'avvio resta predefinito l'ordinamento per release, selezionando l'intestazione Progressivo ritrovi l'ordine manuale.
-
-Il pulsante circolare a destra della riga la nasconde **solo dalla lista attività**, senza eliminarla: è utile, per esempio, per togliere dalla lista le attività già rilasciate in produzione. Le attività nascoste restano visibili in **Milestone** e **Kanban**, contrassegnate da “Nascosta in lista”. Attiva “Nascoste” nella lista per ritrovarle e ripristinarle. Il contatore del tab e le statistiche della lista escludono le righe nascoste. Le associazioni issue restano sempre disponibili.
-
-## Tags delle attività
-
-La **2.7.0** aggiunge la colonna **Tags**, visibile anche aggiornando gli archivi esistenti. In **Impostazioni → Tags** crea il catalogo della singola organizzazione: ogni tag ha nome e colore, e l'ordine si cambia trascinando le righe o con le frecce (vedi [Riordino con trascinamento](#riordino-con-trascinamento)). Sono disponibili fino a **100 tag**, con nomi univoci (senza distinzione tra maiuscole e minuscole) di massimo **60 caratteri**. Premi **Salva impostazioni** per applicare le modifiche.
-
-Clicca la cella **Tags** di un'attività (la freccia in fondo alla cella indica il menu) per aprire il menu multiselezione direttamente nella lista: spunta uno o più tag e premi **Applica**. **Annulla**, `Esc` o un clic fuori dal menu scartano la scelta; deselezionandoli tutti e applicando l'attività resta senza tag. Dalla **2.12.0** i tag non sono più modificabili nella scheda attività: salvare la scheda conserva le assegnazioni della lista. Per le nuove attività, assegna i tag dopo il primo salvataggio; resta disponibile anche la modifica multipla. La ricerca della lista trova i nomi dei tag; dal pulsante **Colonne** puoi nascondere o spostare la colonna senza cancellare le assegnazioni.
-
-Rinominare, ricolorare o riordinare un tag aggiorna la sua visualizzazione nelle righe che lo usano. Eliminare un tag e salvare lo rimuove anche dalle attività nascoste, senza eliminare attività o altri tag. Le modifiche non salvate possono essere annullate come per le altre impostazioni.
-
-Catalogo e assegnazioni restano locali, separati per organizzazione e sincronizzati con le schede del browser. Viaggiano con backup ed esportazioni di configurazione, dati o organizzazione completa. Importando dati, i tag vengono associati per identificativo/nome e quelli mancanti vengono aggiunti; in caso di collisione di identificativo viene preservato il significato del tag. I vecchi archivi si aprono con un catalogo vuoto e senza assegnazioni, senza cambiare il formato dell'archivio. I vecchi file importati in modalità **Aggiungi e aggiorna** non cancellano i tag già assegnati.
-
-## Rilevamento duplicati
-
-Dalla **2.9.0** l'app segnala i possibili duplicati usando come chiave l'**incident**, confrontato come i codici portale: senza distinzione tra maiuscole e minuscole e ignorando gli spazi esterni. Le associazioni senza incident (solo problem) non sono mai considerate duplicate. Il controllo è solo una segnalazione: nulla viene bloccato, unito o eliminato automaticamente, e il formato dell'archivio non cambia, quindi funziona subito anche sugli archivi esistenti.
-
-- **Issue collegate**: un'associazione è un possibile duplicato quando il suo incident compare in più righe. Le righe coinvolte hanno l'incident evidenziato in ambra con l'icona dei duplicati (due fogli sovrapposti) e l'elenco delle altre righe nel suggerimento; cliccandolo la lista mostra solo le associazioni con quell'incident. Il filtro **Duplicati** mostra tutte le associazioni coinvolte. Le righe che ripetono esattamente codice portale, incident, problem e valori personalizzati di un'altra sono marcate **identica**: il pulsante **Rimuovi identiche** le elimina dopo conferma, lasciando la prima di ogni gruppo; incident e problem delle attività non cambiano.
-- **Attività**: un'attività è un possibile duplicato quando un suo incident è collegato, tramite le associazioni, anche ad altre attività (con codice portale diverso o uguale). La riga riceve l'icona dei duplicati nella colonna azioni e l'incident evidenziato nella colonna Incident; cliccandoli la lista mostra le attività che lo condividono. Il filtro **Duplicati** include anche le attività **nascoste**, così un duplicato già rilasciato non sfugge.
-- La barra laterale mostra sull'icona di **Attività** e **Issue collegate** un contatore ambra degli elementi coinvolti.
-- Durante l'inserimento o la modifica, la finestra dell'attività (al cambio del codice portale) e quella dell'associazione (al cambio di codice, incident o problem) avvisano subito se si sta creando un duplicato, indicando con quali righe; il salvataggio resta comunque possibile.
-
-## Evidenziatori e colonne della lista
-
-Ci sono due modi, indipendenti, per far risaltare le righe:
-
-- **Per stato (automatico)**: la ★ accanto a uno stato in **Impostazioni → Stati** evidenzia tutte le attività in quello stato.
-- **Per riga (manuale), con gli evidenziatori**: colori con un nome, per esempio *Attenzione*, *Bloccante*, *Da discutere* e *Pronta*, da assegnare alle singole righe. La riga riceve uno sfondo tenue e una barra laterale del colore scelto; l'evidenziatore prevale sulla ★ dello stato.
-
-Per evidenziare le righe:
-
-- **Barra Evidenziatore** sopra la tabella: scegli un colore e clicca sulle righe da colorare; cliccando una riga che ha già quel colore lo togli. **Gomma** rimuove l'evidenziazione dalle righe cliccate. Clicca di nuovo il colore attivo o premi `Esc` per terminare; in questa modalità il clic sulla riga non apre la modifica.
-- **Pallino ●** nella colonna azioni a fine riga, sempre visibile anche quando la tabella scorre in orizzontale: apre un menu con tutti i colori e **Nessuna evidenziazione**.
-- Campo **Evidenziazione** nella finestra di modifica dell'attività.
-- Il filtro **Tutte le evidenziazioni** mostra solo le righe evidenziate, quelle senza evidenziazione o quelle di un colore; la ricerca trova anche il nome del colore. L'evidenziazione compare anche nelle card di **Milestone** e **Kanban**.
-
-Gli evidenziatori si gestiscono in **Impostazioni → Evidenziatori**: nome, colore, aggiunta, riordino ed eliminazione, fino a 16 colori per organizzazione. Accanto a ogni colore è indicato quante attività lo usano; eliminandolo, al salvataggio quelle righe tornano senza evidenziazione.
-
-Le colonne della lista si scelgono con il pulsante **▥ Colonne** nella barra della lista o in **Impostazioni → Colonne della lista**: spunta le colonne da mostrare e cambiane l'ordine trascinandole o con le frecce; **Ripristina predefinite** torna alla disposizione iniziale. Oltre alle colonne di sempre sono disponibili, inizialmente nascoste, **Link portale**, con l'indirizzo cliccabile, ed **Evidenziazione**, ordinabile in base all'ordine degli evidenziatori. Nascondere una colonna non cancella i dati e la colonna delle azioni resta sempre presente; se le nascondi tutte, il codice portale torna visibile. La disposizione è salvata per organizzazione.
-
-Ogni data ha un colore deterministico condiviso tra lista e milestone: lo stesso giorno mantiene lo stesso colore, indipendentemente dallo stato e dalla posizione. Non è un indicatore di scadenza.
-
-## Filtri per colonna e colonne personalizzate
-
-Dalla **2.16.0**, ogni intestazione delle liste **Attività** e **Issue collegate** ha il pulsante **▽ Filtra colonna**:
-
-- testo, descrizione, note e link: ricerca **Contiene**, senza distinzione tra maiuscole e minuscole;
-- numeri ed effort: intervallo **Da / A**, con estremi inclusi; l'effort si filtra in ore;
-- date (release date e colonne personalizzate di tipo data): dalla **2.19.0** non si digitano più, si scelgono tra quelle presenti (vedi sotto);
-- stati, urgenze, evidenziatori, tag e altri elenchi: selezione di uno o più valori; basta che la cella contenga una delle scelte;
-- tutte le colonne tranne le date: celle vuote, valorizzate oppure entrambe. **Solo vuote** ignora gli altri criteri della stessa colonna.
-
-Il filtro di una colonna data elenca, ciascuna con il suo colore e il numero di righe, **Non assegnata** (righe senza data) e tutte le date presenti fra le righe mostrate dagli altri filtri; restano elencate anche le date già spuntate che nel frattempo sono sparite. **Seleziona tutte** e **Deseleziona tutte** agiscono sull'intero elenco. In alternativa, o in aggiunta, **Da** e **A** scelgono un intervallo fra le stesse date, estremi inclusi: date spuntate, **Non assegnata** e intervallo si sommano, quindi una riga compare se soddisfa almeno una delle scelte. Spuntare tutte le date senza **Non assegnata** significa «solo righe con data», valido anche per le date aggiunte in seguito; spuntare tutto rimuove il filtro. Prima della 2.19.0 la data si digitava nel campo nativo del browser, il cui formato dipende dalla lingua del sistema (mese/giorno in inglese): una data inserita come giorno/mese poteva quindi non trovare righe.
-
-**Viste per release**: il menu delle viste della lista attività contiene, oltre alle **Viste salvate**, una vista automatica per ogni release date, con il numero di attività: **Prossime release** (da oggi in avanti, in ordine crescente, più **Non assegnata** per le attività senza data) e **Release passate** (dalla più recente). Le date seguono le attività mostrate, comprese quelle nascoste solo se **Nascoste** è attivo, e si aggiornano subito quando aggiungi o sposti una release. Aprire una vista per release azzera ricerca, stato, evidenziazione, duplicati e filtri per colonna e filtra la release date su quel giorno, mantenendo colonne, ordinamento e nascoste; modificare poi un filtro esce dalla vista. Le viste per release non occupano posti tra le 30 viste salvate e non vengono scritte nell'archivio.
-
-I filtri di colonne diverse si combinano con **AND**, insieme alla ricerca e ai filtri già presenti. La barra sopra la tabella mostra i filtri attivi con un breve riepilogo dei valori scelti, anche se la colonna viene nascosta; puoi modificarli, rimuoverne uno o premere **Azzera filtri colonne**. Restano passando tra i tab, ma si azzerano cambiando organizzazione o ripristinando l'archivio. Le **viste salvate** delle attività conservano anche i filtri per colonna.
-
-In **Impostazioni → Gestione colonne** puoi gestire le colonne predefinite e aggiungere fino a **30 colonne personalizzate per ciascuna lista**, indipendenti per organizzazione:
-
-| Tipo | Valore |
+| Path | Content |
 | --- | --- |
-| Testo / Testo formattato | Testo semplice o rich text |
-| Numero | Numero intero o decimale, anche negativo |
-| Data | Data di calendario, con colore deterministico |
-| Elenco a scelta singola / multipla | Etichette con nome e colore, configurate nella sezione dedicata |
-| Link | Indirizzo HTTP/HTTPS cliccabile |
-| Effort (ore) | Numero di ore non negativo |
-| Sì / No | Sì, no oppure non compilato |
+| `data/workspace.json` | The workspace: all organizations, tasks, issues, settings, themes and logos |
+| `data/workspace.json.bak` | The previous save |
+| `data/backups/` | Daily snapshots of the whole workspace; the 14 most recent are kept |
+| `data/languages/` | Optional translation files and the English template |
+| `data/updates/` | Update preference, downloads and rollback copies |
+| `data/runtime/` | Cache, logs and the browser access key |
 
-Il tipo si sceglie alla creazione e non cambia successivamente, per proteggere i dati. Nomi (massimo 60 caratteri), opzioni e ordine sono modificabili; nomi e opzioni devono essere univoci senza distinzione di maiuscole. Gli elenchi accettano fino a 100 etichette, oppure possono restare vuoti.
+A daily backup is written before the first change of each day. **Settings → Data that travels with you** lists the backups with date and size. Restoring one asks for confirmation and replaces all organizations and settings; the current state is first saved to `workspace.json.bak`. Read and write errors are always reported, and a corrupted workspace is never silently replaced.
 
-Dalla **2.18.0**, **Salva impostazioni** include anche nome e tipo delle nuove colonne ancora compilate nei moduli, senza obbligare a premere prima **Aggiungi colonna**. Quest'ultimo permette di prepararne altre o configurare subito le etichette. Le colonne in attesa attivano l'avviso di modifiche non salvate; un nome non valido o duplicato blocca tutto il salvataggio senza svuotare i moduli. Se un'altra finestra modifica le definizioni mentre le impostazioni sono aperte, il salvataggio della vecchia bozza viene bloccato esplicitamente per non cancellare colonne e valori: annulla la bozza e ripeti le modifiche sulla configurazione aggiornata.
+The workspace format is version 2 (multi-organization). It cannot be opened by 1.x releases. Older single-organization workspaces and backups are migrated automatically.
 
-Dalla **2.17.0**, ogni colonna a scelta genera automaticamente una propria scheda sotto **Impostazioni → Etichette delle colonne**, identificata dal nome della colonna e dalla lista di appartenenza. **Gestisci etichette e colori** apre la scheda: come per i Tags, puoi aggiungere etichette, modificarne nome e colore, trascinarle o usare le frecce per riordinarle ed eliminarle. Rinomine e riordini conservano le assegnazioni tramite identificativi stabili; le eliminazioni rimuovono le selezioni dalle righe solo con **Salva impostazioni**, e sono annullabili.
+## Organizations
 
-Le colonne a scelta multipla mostrano le stesse **pillole colorate e lo stesso dropdown con caselle dei Tags**, sia direttamente nelle righe di attività e issue sia negli editor. **Applica** nella tabella salva le selezioni senza aprire la scheda; nell'editor aggiorna solo il modulo, da confermare con il suo pulsante Salva. Le colonne a scelta singola mostrano anch'esse etichette colorate. I vecchi valori testuali vengono convertiti senza perdere le selezioni; etichette, colori e ordine sono portatili e rispettati anche da ricerca, filtri, CSV ed Excel.
+The menu under the **OrbitKanban** name in the sidebar switches the active organization. Each organization has its **own tasks and issues** and its own tab names, statuses, urgencies, highlights, tags, columns, themes, font, text sizes, hours per day, portal link, logo and language. Switching updates every view immediately and resets search and filters. The selection is remembered for the next launch. Identical codes in different organizations are never linked.
 
-I valori si compilano nelle finestre di modifica di attività e issue, sono ricercabili e vengono salvati insieme all'archivio. Le colonne si mostrano, nascondono e riordinano con **▥ Colonne** su entrambe le liste. Nelle attività, numero, data, effort, sì/no ed elenco singolo sono anche ordinabili. Eliminare una definizione richiede conferma e rimuove i suoi valori soltanto con **Salva impostazioni**; la modifica è annullabile. La modifica multipla dei campi standard conserva i valori personalizzati.
+- **Manage organizations** opens the related settings tab.
+- **New organization** asks for a name, language and optional logo. A preview shows the logo and the four colors of the theme that will be generated. New organizations start empty unless **Include demo data** is selected.
+- Rename an organization by editing its name and pressing **Save settings**. **Delete organization** asks for confirmation, and at least one organization must remain.
+- If you switch organization with unsaved settings, you can save them, discard them or stay.
 
-Schemi e valori viaggiano nei backup, nei file dell'organizzazione e nell'export dei soli dati. In importazione, colonne con lo stesso nome e tipo vengono riutilizzate; tipi diversi con lo stesso nome producono un errore. Gli archivi precedenti si aprono senza perdere dati. Non usare versioni precedenti alla 2.17.0 per modificare archivi aggiornati con le etichette colorate.
+**Upload logo and generate theme** accepts PNG, JPEG, WebP, GIF and BMP files up to 15 MB. The logo is converted to PNG, scaled to at most 512 px per side and embedded in the workspace, so the original file is no longer needed. Its colors generate a **Theme from logo**. Text and accent are adjusted to WCAG AA contrast, and surfaces are separated from the background, so even monochrome logos produce a readable theme. The theme is previewed immediately and kept with **Save settings**. **Remove logo** restores the default symbol without deleting the theme. The application name is always OrbitKanban and is not configurable.
 
-### Colonne predefinite eliminabili e impostazioni unificate
+## The four views
 
-Dalla **2.22.0**, tutte le colonne predefinite di **Attività** e **Issue collegate** sono eliminabili da **Gestione colonne**, esattamente come quelle personalizzate. Le impostazioni restano specifiche della singola organizzazione.
+All views share compact headers. Their tables, timeline and board fill the window and scroll internally while respecting the configured text sizes. On Windows the app draws its own title bar: drag the top bar or logo to move the window, and double-click to maximize or restore it. The minimize, maximize and close buttons follow the active theme.
 
-- **Elimina** richiede conferma e prepara la rimozione; solo **Salva impostazioni** cancella i valori. **Annulla modifiche** ripristina la configurazione precedente. Nascondere una colonna dal selettore **Colonne**, invece, conserva sempre i dati e i relativi editor.
-- Le colonne eliminate non tornano al riavvio, applicando una vista salvata o ripristinando l'ordine della tabella. **Ripristina colonna**, disponibile nella gestione della lista, recupera una definizione predefinita e il suo catalogo, **non i valori cancellati**.
-- Stati, urgenze, evidenziazioni, tag e scelte personalizzate hanno lo **stesso editor** sotto **Etichette delle colonne**: nomi, colori, conteggio degli utilizzi, trascinamento, frecce e cancellazione. Le schede compaiono solo per le colonne esistenti, anche se nascoste nella tabella. Per Stato resta disponibile la stella dell'evidenziazione automatica.
-- Eliminare un'etichetta e salvare toglie quella selezione dalle righe, comprese le nascoste. Le scelte singole diventano **Non assegnata**; nelle multiple restano le altre etichette. Anche Stato e Urgenza possono avere un catalogo vuoto. La kanban include una colonna per le attività senza stato quando necessario.
-- Eliminare un campo rimuove i relativi controlli da moduli, modifica multipla, filtri, ricerca ed Excel. Le viste salvate vengono ripulite senza eliminare la vista. La configurazione del portale compare solo se esiste **Link portale**; le ore per giorno solo se rimane almeno un campo effort, anche personalizzato.
-- Senza **Release date**, le viste automatiche per release e la timeline non sono disponibili; senza **Stato**, non lo è la kanban. Le viste mostrano un messaggio con il collegamento alla gestione colonne e i relativi fogli Excel sono disabilitati. Senza **Progressivo**, il trascinamento delle attività non è disponibile.
-- È possibile eliminare tutte le colonne: righe e azioni di modifica restano disponibili. I campi ripristinati possono restare vuoti; codice portale, incident e problem non sono più obbligatori nei moduli manuali. I codici vuoti non generano collegamenti tra attività e issue.
-- Backup ed esportazioni conservano le eliminazioni. Importare **impostazioni** applica lo schema importato; importare **solo dati** in un'organizzazione esistente conserva le sue eliminazioni e scarta i valori dei campi rimossi. Una nuova organizzazione creata dai soli dati eredita anche le colonne eliminate della sorgente.
+### Tasks
 
-Gli archivi precedenti conservano tutte le colonne e i valori esistenti. Dopo aver usato le eliminazioni o le scelte senza assegnazione, usa **OrbitKanban 2.22.0 o successivo** per aprire o modificare l'archivio.
+The main list. Each task can have:
 
-## Importazione CSV
+| Field | Description |
+| --- | --- |
+| Portal code | The identifier in the source portal, such as JIRA |
+| Sequence | Insertion number, assigned automatically and editable; duplicates are allowed |
+| Portal link | Generated from the organization template, or a specific link (see [Portal links](#portal-links)) |
+| Description and notes | Rich text with bold, italic, underline and lists |
+| Urgency and status | Configurable, ordered pick-lists |
+| Effort | Days and hours, stored in hours using the organization's hours-per-day setting (8 by default) |
+| Incident and problem | Resolved automatically from [Linked issues](#linked-issues) |
+| Release date | Each date gets a deterministic color: the same day always has the same color, everywhere |
+| Highlight and tags | See [Highlights and tags](#highlights-and-tags) |
 
-Il pulsante **Importa CSV** nelle due liste aggiunge righe all'organizzazione attiva, senza sostituire o aggiornare implicitamente quelle esistenti:
+Create tasks with **New task** or `Ctrl+N`. Open the editor by double-clicking a row or clicking the portal code. The wide editor shows properties and links on the left, and description and notes on the right, with **Save**, **Cancel** and **Delete** always within reach. Descriptions and notes show up to three lines in the table, and hovering shows the full text.
 
-1. Scegli un file `.csv` o `.tsv` (massimo **16 MB**, **100 colonne**, **10.000 righe dati**).
-2. Verifica separatore (automatico, virgola, punto e virgola o tab), codifica (**UTF-8**, **Windows-1252** o **UTF-16 LE**) e presenza della riga di intestazioni.
-3. Mappa ogni colonna sul campo desiderato, standard o personalizzato; **Non importare** la ignora. I nomi comuni italiani/inglesi sono riconosciuti automaticamente. Lo stesso campo non può essere mappato due volte.
-4. Controlla l'anteprima delle prime dieci righe valide e gli errori per riga/colonna. **Nessun dato viene salvato finché tutti gli errori non sono risolti.**
-5. Premi **Importa righe**. L'intera importazione si può annullare con `Ctrl+Z`.
+### Linked issues
 
-Il CSV propone solo colonne esistenti e richiede almeno una destinazione. È obbligatorio mappare e compilare il **codice portale** se la colonna esiste; nelle issue serve anche almeno un **incident** o **problem** se una delle due colonne esiste. Eliminandole puoi importare anche solo campi personalizzati. Incident e problem sono calcolati nelle attività: importarli dalla lista **Issue collegate** con lo stesso codice portale. I possibili duplicati restano segnalati, non vengono cancellati automaticamente; associazioni con valori personalizzati diversi non sono considerate identiche dalla funzione di pulizia.
+Each row links a **portal code** to an **incident** and/or a **problem**. One problem can have many incidents, and one code can appear in many rows. Codes match tasks case-insensitively, ignoring surrounding spaces. Each task shows the incidents and problems of all matching rows, without duplicates. No connection to JIRA or any other portal is needed.
 
-- Date: `AAAA-MM-GG` oppure `GG/MM/AAAA`, con calendario valido.
-- Numeri: punto o virgola decimale, **senza separatori delle migliaia**. Giorni e ore dell'effort standard vengono sommati usando le ore/giorno dell'organizzazione.
-- Sì/no: `sì`, `no`, `yes`, `true`, `false`, `1`, `0`.
-- Stati, urgenze, evidenziatori e tag: nome o identificativo del catalogo. Scelte multiple e tag sono separati da `|`.
-- Configura prima opzioni e colonne personalizzate; valori mancanti o ambigui nei cataloghi vengono segnalati.
-- Campi non mappati o vuoti mantengono i valori iniziali: stato iniziale, urgenza predefinita, progressivo automatico, visibilità normale e testi vuoti.
-- Le celle tra virgolette possono contenere separatori, virgolette raddoppiate e ritorni a capo; le righe completamente vuote sono ignorate. Una riga con un numero di celle diverso dalle intestazioni viene segnalata.
-- Descrizioni e note sono importate come **testo**, preservando gli a capo: eventuale HTML non viene eseguito. Le righe indicate negli errori sono numerate a partire dalla prima riga dati, escluse intestazioni e righe vuote.
+### Milestones
 
-## Riordino con trascinamento
+A horizontal timeline grouped by release date. It scrolls in both directions and updates automatically when tasks or dates change.
 
-Dalla **2.8.0** stati, urgenze, evidenziatori, tag e colonne della lista (in **Impostazioni** e nella finestra **▥ Colonne**) si riordinano trascinandoli. Afferra la maniglia ⠿ a sinistra della riga, oppure un punto libero della riga come il numero d'ordine o il nome della colonna, e rilasciala nella nuova posizione: le altre righe si spostano per mostrare dove finirà e l'elenco scorre da solo quando arrivi al bordo. Esc durante il trascinamento annulla lo spostamento. I campi di testo e i selettori di colore restano utilizzabili come prima, e trascinare il nome di una colonna non ne cambia la visibilità.
+- The first release from today onward is framed as **Next release**, or as **Today's release** when it falls on the current day. It is based on the PC's local date and refreshes when the day changes. The button in the header scrolls back to it.
+- Tasks without a date appear in **Unscheduled**.
+- Hidden tasks are included, with a dashed border and the **Hidden in list** label.
+- Click the code on a card to edit the task. The pencil button on each milestone bulk edits all its tasks, for example to move a release to another date.
 
-Le frecce ↑ ↓ restano disponibili; da tastiera, con il focus sulla maniglia, i tasti freccia su e giù spostano la riga e la nuova posizione viene annunciata ai lettori di schermo. Come ogni altra impostazione, il nuovo ordine si applica premendo **Salva impostazioni** (nella finestra Colonne, **Applica**): l'ordine degli stati diventa quello delle colonne del kanban.
+### Kanban
 
-## Modifica multipla
+A read-only board with one column per status, in the configured status order. An extra column collects tasks without a status when needed. Hidden tasks are included and labeled. Change statuses from the task list or with bulk edit.
 
-Dalla **2.10.0** la lista attività ha una colonna di caselle a sinistra per selezionare più righe:
+## Working with the lists
 
-- clic sulla casella per selezionare una riga; **Maiusc + clic** seleziona tutte le righe comprese tra l'ultima spuntata e quella cliccata, nell'ordine mostrato;
-- la casella nell'intestazione seleziona o deseleziona tutte le attività mostrate con i filtri attuali;
-- la selezione resta anche cambiando ricerca, filtri, ordinamento o vista: il piè di pagina indica quante attività sono selezionate e quante non sono visibili con i filtri attuali. **Deseleziona** o `Esc` la azzerano. Il clic sulla casella non apre la modifica e non applica l'evidenziatore attivo.
+### Sorting and manual order
 
-Con almeno una riga selezionata compare la barra con **Modifica multipla…**, che apre una finestra con l'elenco delle attività coinvolte (ogni riga si può escludere togliendo la spunta; quando le attività hanno stati diversi, i chip in alto selezionano solo quelle di uno stato) e i campi da cambiare. Ogni campo parte da **— Non modificare —**, quindi viene cambiato solo ciò che scegli:
+- Tasks are sorted by **release date ascending** by default, with empty dates last. The **Release** button restores this order.
+- Click a header to sort and click again to reverse. Use `Shift+click` to add further sort levels.
+- Sequence, portal code, urgency, status, highlight, effort and release date are sortable, along with custom number, date, effort, yes/no and single-choice columns. Urgency, status and highlight sort by their configured order rather than alphabetically. Free-text columns such as description and notes are not sortable.
+- **Manual order:** drag the handle next to a row's checkbox, or press `↑`/`↓` while the handle has focus. `Esc` cancels the drag.
+  - On drop, every task's sequence is renumbered from 1 and the list switches to sequence order.
+  - With filters active, only the visible rows move.
 
-- **Stato** e **Urgenza**;
-- **Release date**: imposta una data, **sposta di N giorni** (anche negativi; le attività senza data restano da pianificare) oppure togli la data;
-- **Evidenziazione**: un colore o **Nessuna evidenziazione**;
-- **Visibilità nella lista**: nascondi o mostra;
-- **Tags**: per ogni tag del catalogo, aggiungi o togli, lasciando invariati gli altri tag delle attività.
+### Search, column filters and views
 
-Il riepilogo in fondo indica a quante attività verranno applicate le modifiche. **Applica** salva tutto in un'unica operazione, sincronizzata con le altre finestre e schede del browser. **Elimina…** cancella le attività spuntate dopo una conferma; le associazioni delle issue collegate restano invariate.
+- **Global search** (`Ctrl+K`, top bar) finds tasks and issues by code, incident, problem, text content and release date. Choosing a result opens its editor.
+- **List search** and the status, highlight and duplicate filters narrow the current list only. They never affect the other views.
+- **Column filters**: the funnel button in every header of both lists filters that column.
+  - Text columns use *contains*.
+  - Numbers and effort use an inclusive *from/to* range; effort is filtered in hours.
+  - Statuses, urgencies, highlights, tags and choice columns match one or more values.
+  - Every column except dates can show only empty or only filled cells.
+  - Date columns list the dates that are present, each with its color and row count, plus **Unassigned**. A *from/to* range can be combined with the checked dates.
+  - Filters on different columns combine with AND. A summary bar lists the active filters and offers **Clear column filters**.
+- **Saved views**: up to 30 per organization. A view stores the search, filters, hidden and duplicate toggles, sort order and visible columns.
+- **Release views**: the views menu also lists every release date automatically, grouped as **Upcoming releases** (including **Unassigned**) and **Past releases**, with task counts. Opening one filters the list to that release. Release views are not stored and do not count toward the 30 saved views.
 
-Anche nella vista **Milestone** ogni tappa ha il pulsante con la matita in alto a destra, che apre la modifica multipla per tutte le attività di quella release (comprese le nascoste), per esempio per spostare l'intera release a un'altra data o chiuderne gli stati. La colonna **Da pianificare** ha lo stesso pulsante per assegnare una data alle attività senza release.
+### Hiding rows
 
-## Esportazione Excel
+The round button at the end of a row hides the task **from the task list only**, for example once it has been released to production. Hidden tasks remain in Milestones, Kanban, issue matching and exports, labeled **Hidden in list**. Turn on **Hidden** in the list toolbar to see and restore them. Tab counters and list statistics exclude hidden rows.
 
-Dalla **2.10.0** il pulsante **⤓ Excel**, presente nell'intestazione di tutte e quattro le viste e nella barra della selezione, esporta la situazione attuale in una cartella di lavoro `.xlsx` apribile con Excel, LibreOffice o Google Fogli. Il file è generato direttamente dall'app, senza componenti aggiuntivi né collegamento a Internet. Nella finestra di esportazione scegli:
+### Highlights and tags
 
-- **Attività da esportare**: come mostrate nella lista (con filtri e ordinamento attuali), tutte comprese le nascoste, oppure solo quelle selezionate;
-- **Colonne dei fogli attività e issue**: quelle visibili nelle rispettive liste, nello stesso ordine, oppure tutte, incluse le personalizzate;
-- **Fogli** da includere.
+There are two independent ways to make rows stand out:
 
-I fogli disponibili, con i nomi dei tab dell'organizzazione:
+- **Status highlight (automatic).** The ★ next to a status highlights every task in that status.
+- **Highlighters (manual).** These are named colors, up to 16 per organization, such as *Attention*, *Blocking* or *Ready*. A highlighter takes precedence over the status star. You can apply one in any of these ways:
+  - pick a color in the **Highlighter** bar and click rows (**Eraser** removes the color; `Esc` stops highlighting);
+  - use the ● menu at the end of a row;
+  - set the **Highlight** field in the task editor.
 
-- **Riepilogo**: organizzazione, data di esportazione, versione dell'app, filtri e ordinamento usati, totali (attività, nascoste, effort in giorni e in ore, release pianificate, da pianificare, prossima release, in evidenza, con incident duplicato) e la ripartizione per stato e per urgenza con conteggi, ore e percentuali.
-- **Attività**: una riga per attività con le colonne scelte. Il codice portale e il link sono collegamenti cliccabili; l'effort compare sia nel formato giorni/ore sia come numero di ore; le release date sono vere date di Excel colorate come nell'app (stessa data, stesso colore); stati, urgenze ed evidenziazioni mantengono i loro colori e le righe evidenziate sono colorate. Gli incident duplicati sono segnalati in ambra e le attività nascoste in corsivo grigio, con la colonna **Nascosta**. Intestazione e codice restano bloccati scorrendo e i filtri di Excel sono già attivi.
-- **Issue collegate**: con **Come mostrate nella lista** rispetta ricerca e filtri delle issue; le altre opzioni esportano tutte le associazioni. Comprende le colonne scelte, il numero di attività collegate e l'indicazione dei duplicati (identica o stesso incident).
-- **Milestone**: una riga per release in ordine di data con stato (passata, prossima, futura), numero di attività, ore, effort, conteggio per stato e codici. La prossima release è evidenziata in giallo; in fondo le attività da pianificare.
-- **Kanban**: una colonna per stato, nell'ordine degli stati, con codice e descrizione delle attività.
+  Highlights also appear on milestone and kanban cards and can be filtered and searched.
 
-Il nome proposto è `OrbitKanban-<organizzazione>-situazione-<data>.xlsx` (in inglese `situation`). Nell'app desktop scegli dove salvarlo; dal browser viene scaricato come un normale file. L'esportazione non modifica i dati e non cambia il formato dell'archivio.
+**Tags** form a catalog of up to 100 colored labels per organization, with unique names of up to 60 characters. Assign several tags to a task from its tags cell in the list and press **Apply**. Bulk edit adds or removes tags across many tasks. Renaming, recoloring or reordering a tag updates every task that uses it. Deleting a tag removes it from all tasks when settings are saved.
 
-Le colonne personalizzate mantengono numeri e date come celle Excel tipizzate, link cliccabili, scelte multiple leggibili e testo formattato convertito in testo con a capo. Il riepilogo riporta anche i filtri per colonna delle due liste.
+### Duplicate detection
 
-## Backup automatici
+The **incident** is the duplicate key, compared like portal codes. Rows with only a problem are never considered duplicates. Detection only flags rows: nothing is blocked, merged or deleted automatically.
 
-OrbitKanban crea una copia portable giornaliera dell'intero archivio prima della prima modifica del giorno e ne conserva le **14 più recenti** in `data/backups`. La lista in **Impostazioni → Dati e accesso** mostra data e dimensione; **Ripristina** richiede conferma e ripristina tutte le organizzazioni e impostazioni. Prima del ripristino, lo stato corrente viene salvato anche in `data/workspace.json.bak`. I backup si spostano e si condividono insieme all'eseguibile e alla cartella `data`; dal browser locale sono consultabili e ripristinabili con le stesse conferme.
+- **Linked issues.** Rows that share an incident show it in amber with a duplicate icon, and clicking it filters the list to that incident. Rows that exactly repeat another row are marked **identical**, and **Remove identical** deletes them after confirmation, keeping the first of each group.
+- **Tasks.** A task is flagged when one of its incidents is linked to other tasks. The **Duplicates** filter includes hidden tasks, so released duplicates are not missed.
+- The sidebar shows an amber counter on both views. The task and issue editors warn while you type.
 
-## Impostazioni
+### Bulk edit
 
-Le impostazioni sono organizzate in **schede**: a sinistra un menu raggruppa le sezioni (**Organizzazione**, **Aspetto**, **Flusso di lavoro**, **Dati e accesso**) e a destra è visibile una sola sezione alla volta, così la pagina resta compatta anche con molti temi. La scheda aperta viene ricordata finché la finestra resta aperta e si può cambiare anche con le frecce della tastiera. Un pallino accanto al nome segnala le schede con modifiche non salvate e la barra di avviso elenca le sezioni modificate con un collegamento diretto; se il salvataggio fallisce viene aperta la scheda del campo da correggere. Con finestre strette il menu diventa una barra orizzontale scorrevole.
+Select tasks with the checkboxes. `Shift+click` selects a range, and the header checkbox selects every visible task. The selection survives searches, filters and view changes; **Deselect** or `Esc` clears it.
 
-- Nome dell'organizzazione e nomi dei quattro tab; il nome dell'app rimane OrbitKanban.
-- **Lingua & traduzioni**: lingua dell'organizzazione, elenco delle lingue disponibili, cartella delle lingue con il modello inglese, ricarica dei file e segnalazione dei file non validi (vedi [Lingue e traduzioni](#lingue-e-traduzioni)).
-- Stati e urgenze, quando le colonne esistono: nomi, colori, aggiunta, eliminazione e riordino con lo stesso editor delle scelte personalizzate, in **Etichette delle colonne**. Eliminare un'opzione usata e salvare lascia senza assegnazione le attività interessate, comprese le nascoste.
-- La stella accanto a uno stato abilita l'evidenziazione automatica delle relative righe.
-- **Evidenziatori** e **Colonne della lista**: colori per evidenziare singole righe e colonne visibili della lista, con il loro ordine (vedi [Evidenziatori e colonne della lista](#evidenziatori-e-colonne-della-lista)).
-- **Tags**: catalogo di etichette con nome, colore e ordine, assegnabili in selezione multipla alle attività (vedi [Tags delle attività](#tags-delle-attività)).
-- Ore per giorno (inizialmente 8): l'effort viene archiviato in ore; cambiare la durata della giornata cambia solo la rappresentazione, non il totale registrato.
-- **40 temi predefiniti** (27 scuri e 13 chiari), oltre alla creazione, modifica ed eliminazione di palette personalizzate (sfondo, superfici, testo e accento). La scheda **Temi & atmosfera** mostra i temi in una **galleria compatta con ricerca per nome**: ogni riquadro ha una miniatura dell'interfaccia, i quattro colori e l'indicazione **Predefinito**, **Predefinito modificato** o **Personalizzato**. La galleria scorre al proprio interno e l'editor del tema scelto resta sempre a fianco. **Crea tema** azzera la ricerca e porta subito al nome del nuovo tema.
-- Ogni anteprima mostra tutti e quattro i colori, nello stesso ordine dei selettori, e si aggiorna durante la modifica. Per ricavare una palette da una foto basta caricare un'immagine: **tutti e quattro i colori vengono estratti e assegnati automaticamente**, senza clic manuali. L'analisi raggruppa i colori rappresentativi e assegna il più scuro allo sfondo, il più chiaro al testo, un colore saturo all'accento e il restante alle superfici. Se l'immagine contiene meno di quattro gruppi di colore, alcuni ruoli condividono lo stesso colore e l'app lo segnala. Dalla **2.21.0** anche la palette estratta rispetta il **contrasto WCAG AA**: testo almeno 4,5:1 su sfondo e superfici, accento almeno 3:1. I colori già conformi restano identici; gli altri vengono ritoccati **il meno possibile**, cambiando solo la luminosità (nello spazio colore OKLCH) e mantenendo la tonalità e, finché i colori dello schermo lo consentono, la saturazione dell'immagine. Lo sfondo non viene mai modificato; la superficie viene schiarita o scurita solo se nessun testo potrebbe raggiungere il contrasto. Il messaggio sotto l'immagine indica quali ruoli sono stati ritoccati. I colori scelti a mano o cliccando sull'immagine non vengono corretti. Puoi ritoccare la palette con i selettori oppure, facoltativamente, scegliendo un ruolo e cliccando sull'immagine. Selezione e modifiche dei temi vengono **applicate subito a tutta l'app come anteprima dal vivo**. Premi **Salva impostazioni** per conservare il tema; se esci dalle impostazioni o premi **Annulla modifiche** senza salvare, torna il tema salvato in precedenza. Sono supportati PNG, JPEG, WebP, GIF (primo fotogramma) e BMP fino a 15 MB; le immagini grandi vengono ridimensionate a un massimo di 1600 pixel per lato. Le trasparenze vengono composte su bianco. L'immagine viene elaborata solo in memoria, non inviata in rete né salvata nell'archivio: i colori scelti restano portable con il tema.
-- **Dimensione del testo**: regola separatamente sette parti dell'interfaccia (**Testo generale**, **Barra laterale**, **Intestazioni di pagina**, **Tabelle**, **Vista milestone**, **Vista kanban** e **Finestre di dialogo**) con un cursore a passi del 5%, accompagnato da un'anteprima realistica della parte. Ogni parte ha limiti propri, pensati per mantenere l'interfaccia leggibile e ordinata: da 80% a 140% per testo generale, intestazioni e finestre di dialogo, da 80% a 130% per la barra laterale e da 80% a 150% per tabelle, milestone e kanban. Le preimpostazioni **Compatta** (85%, vicina alla densità delle versioni precedenti), **Standard** (100%, consigliata), **Ampia** (115%) e **Molto ampia** (130%) regolano tutte le parti insieme; il pulsante di ripristino riporta una sola parte al 100%. Come per i temi, le modifiche vengono **applicate subito a tutta l'app come anteprima** e conservate solo con **Salva impostazioni**. Le dimensioni valgono per l'organizzazione attiva e sono incluse in **Esporta configurazione**. Logo e nome dell'app mantengono sempre la stessa dimensione, mentre la barra laterale si allarga entro un limite e le aree scorrevoli si adattano per lasciare visibile il fondo della tabella.
-- **Esporta e importa organizzazione**: temi, configurazione e dati dell'organizzazione attiva in file separati, oppure tutto insieme, con importazione selettiva in questa o in una nuova organizzazione (vedi **Esporta e importa per organizzazione**).
-- **Esporta backup** e **Importa backup**: l'intero archivio JSON, incluse tutte le organizzazioni, i loghi, i temi e le impostazioni. L'importazione richiede conferma e sostituisce l'archivio; un file non valido viene rifiutato.
-- “Svuota attività e issue” elimina anche gli esempi iniziali, mantenendo impostazioni e temi.
+**Bulk edit…** opens a dialog listing the selected tasks. You can exclude individual tasks, or narrow the list by status with the chips. Every field starts as **— Keep unchanged —**, so only what you choose changes:
 
-### Selettore colori integrato
+- status, urgency and highlight;
+- release date: set a date, shift it by N days, or clear it;
+- visibility in the list;
+- each tag: add it or remove it.
 
-La **2.23.1** corregge i pallini della galleria temi: restano circolari anche nel tema selezionato, con testo compatto e finestra a schermo intero, senza sovrapporsi alla spunta.
+**Apply** saves everything in one operation. **Delete** removes the checked tasks after confirmation; linked issues are not affected.
 
-Dalla **2.23.0**, tutti i colori delle etichette (predefinite e personalizzate, per attività e issue) e dei quattro campi del tema usano lo **stesso selettore personalizzato**, al posto della finestra di sistema. Sfondo, bordi, pulsanti e font seguono l'app, anche nel browser e senza connessione.
+### Undo and redo
 
-- Trascina nell'area colore oppure regola **Tonalità, Saturazione e Luminosità** con i cursori, utilizzabili anche con le frecce della tastiera.
-- Inserisci un codice **HEX** di 3 o 6 cifre, con o senza `#`, oppure scegli un campione dei colori del tema e della palette predefinita. I codici non validi sono segnalati e non possono essere applicati.
-- L'anteprima è immediata. **Applica** o `Invio` accettano la scelta; **Annulla**, `Esc` o un clic esterno ripristinano il colore precedente. Il campione accanto al codice HEX permette di tornare al colore iniziale senza chiudere il selettore.
-- **Salva impostazioni** conserva le scelte nell'archivio portable: conferma prima il colore con **Applica**. Durante la modifica di un tema, il selettore mantiene i propri colori iniziali per restare leggibile anche se la nuova palette ha poco contrasto. I colori manuali non vengono corretti automaticamente.
-- La finestra rimane entro lo schermo, scorre quando lo spazio è poco e mantiene la navigazione da tastiera al proprio interno. La galleria aggiorna solo il tema modificato durante il trascinamento, senza ricostruire tutte le anteprime.
+**Undo** (`Ctrl+Z`) and **Redo** (`Ctrl+Y` or `Ctrl+Shift+Z`) cover saved changes, including CSV imports. The history keeps up to 20 operations per organization while the app is open. It is cleared on restart or when another window changes the data.
 
-### Font dell'interfaccia
+## Columns
 
-In **Impostazioni → Font e dimensione del testo**, dalla **2.18.0** puoi scegliere **33 font**, separati nel menu per disponibilità. L'anteprima si applica subito all'interfaccia, mantenendo le dimensioni indipendenti delle sue parti; **Salva impostazioni** conserva la scelta, **Annulla modifiche** ripristina quella precedente.
+Use **Columns** in each list toolbar, or **Settings → List columns**, to show, hide and reorder columns by drag and drop or with the arrow buttons. **Restore defaults** brings back the initial layout. Hiding a column never deletes data, and the row actions column is always visible. **Portal link** and **Highlight** are optional task columns that are hidden by default.
 
-- **24 inclusi nel portable, disponibili offline senza installazione:** Roboto, Inter, Open Sans, Lato, Montserrat, Poppins, Nunito, Nunito Sans, Raleway, Rubik, Work Sans, Source Sans 3, Noto Sans, DM Sans, Manrope, Fira Sans, Noto Serif, Merriweather, Lora, Playfair Display, Source Serif 4, Roboto Slab, Fira Code e JetBrains Mono.
-- **9 font di sistema, usati se installati sul PC:** Segoe UI (predefinito), Aptos, Arial, Calibri, Verdana, Tahoma, Trebuchet MS, Georgia e Consolas. Aptos e gli altri font proprietari non sono redistribuiti: se mancano viene usata l'alternativa di sistema indicata dalla famiglia.
+### Custom columns
 
-I font liberi provengono da Google Fonts e sono serviti esclusivamente dai file locali, anche nell'accesso da browser: nessuna richiesta a Google durante l'uso. I sottoinsiemi Latin e Latin Extended coprono anche gli accenti; sono inclusi caratteri normali e grassetti (pesi intermedi ove disponibili). Gli altri alfabeti usano i fallback di sistema. Il catalogo WOFF2 occupa circa **2,2 MB**, caricando solo i caratteri necessari alla scelta attiva. [Origini e checksum](fonts/sources.json) e testi delle licenze sono inclusi in [fonts](fonts/): **SIL OFL 1.1**, tranne Roboto Slab con **Apache 2.0**. I file originali distribuiti da Google non sono modificati.
+**Settings → Column management** adds up to **30 custom columns per list**, separately for each organization:
 
-La preferenza è specifica dell'organizzazione e viaggia con archivio, backup ed esportazione della configurazione. I vecchi archivi ricevono Segoe UI; importare una configurazione senza font conserva la scelta attuale.
+| Type | Value |
+| --- | --- |
+| Text / Rich text | Plain or formatted text |
+| Number | Integer or decimal, negative values allowed |
+| Date | Calendar date with deterministic color |
+| Single / Multiple choice | Colored labels managed under **Column labels** |
+| Link | Clickable HTTP/HTTPS address |
+| Effort (hours) | Non-negative number of hours |
+| Yes / No | Yes, no or empty |
 
-### Catalogo dei temi predefiniti
+The type is fixed at creation to protect existing values. Names (up to 60 characters), options and order can be changed. Custom values are edited in the task and issue editors, and they can be searched, filtered, sorted (where meaningful), imported from CSV and exported to Excel. **Save settings** also saves columns still being typed into the forms. Deleting a column removes its values only when settings are saved, and the deletion can be undone.
 
-Dalla **2.11.0** tutte le organizzazioni, nuove o esistenti, hanno questi temi senza importare file:
+### Removable built-in columns
 
-- **Scuri:** Midnight, Ocean, Aurora, Monokai, Dracula, Nord, Solarized Dark, Gruvbox Dark, Tokyo Night, One Dark, Material Ocean, GitHub Dark, Synthwave, Ayu Dark, Everforest, Catppuccin Mocha, Rosé Pine, Forest, Graphite, Obsidian, Deep Space, Blue Hour, Copper, Plum, Burgundy, Desert Night, Emerald.
-- **Chiari:** Daylight, Solarized Light, Gruvbox Light, GitHub Light, Paper, Pearl, Sandstone, Mist, Sage Light, Lavender Light, Rose Quartz, Iceberg, Mint.
+Since 2.22.0 every built-in column of **Tasks** and **Linked issues** can be deleted, just like a custom one.
 
-Le palette incorporano quattro colori distinti: testo con contrasto almeno 4,5:1 e accento almeno 3:1 sia sullo sfondo sia sulle superfici. Queste soglie riguardano i quattro colori della palette, non tutti gli elementi derivati dell'interfaccia.
+- Deleting asks for confirmation. Values are erased only on **Save settings**, and **Discard changes** reverts it. Hiding a column never erases data.
+- **Restore column** brings back a built-in column and its catalog, **but not its erased values**.
+- Settings appear only for columns that exist:
+  - the portal link template requires **Portal link**;
+  - hours per day requires at least one effort column;
+  - the Milestones view and release views require **Release date**;
+  - the Kanban view requires **Status**;
+  - manual ordering requires **Sequence**.
 
-I temi predefiniti si possono modificare per la singola organizzazione; **Ripristina tema predefinito** recupera il nome e i quattro colori originali al posto di eliminarli. Come per ogni modifica del tema, serve **Salva impostazioni** per conservare il ripristino. I temi personali rimangono modificabili ed eliminabili e non diventano parte del catalogo condiviso.
+  When a required column is missing, the affected view shows a link to Column management, and the matching Excel sheet is disabled.
+- Saved views, CSV import, bulk edit, filters, search and Excel adapt to the remaining columns.
 
-Al primo avvio dopo l'aggiornamento vengono aggiunti soltanto i temi mancanti, confrontando gli identificativi: tema attivo, ordine, nomi e colori già salvati non vengono sovrascritti e non si creano duplicati. Le personalizzazioni ai vecchi temi restano riconoscibili come **Predefinito modificato**. Il formato dell'archivio non cambia; il salvataggio dell'aggiornamento conserva la copia precedente nel backup automatico. Temi, modifiche e selezione continuano a viaggiare con la cartella `data` e con le esportazioni.
+Once columns have been deleted, use OrbitKanban 2.22.0 or later with that workspace.
 
-Le modifiche alle impostazioni diventano effettive solo con **Salva impostazioni**. Quando ci sono modifiche non salvate compare in alto una barra di avviso, sempre visibile durante lo scorrimento, con l'elenco delle sezioni modificate e i comandi **Salva** e **Annulla modifiche**; la barra scompare se i valori tornano a coincidere con quelli salvati. Se cambi vista senza salvare, le modifiche vengono scartate e resta la configurazione precedente. Le attività e le associazioni hanno il proprio pulsante di salvataggio. Gli errori di lettura o scrittura vengono mostrati esplicitamente; un archivio corrotto non viene sostituito automaticamente.
+### Column labels
 
-Il rich text supporta grassetto, corsivo, sottolineato ed elenchi. Contenuti attivi, immagini remote e formattazione HTML non supportata vengono rimossi.
+Every single- or multiple-choice column, built-in or custom, gets its own tab under **Settings → Column labels**. Statuses, urgencies, highlights, tags and custom choices therefore share the same editor:
 
-## Icone e controlli
+- names and colors;
+- usage counts;
+- drag-and-drop or arrow reordering;
+- deletion.
 
-Dalla **2.21.0** l'interfaccia usa un unico set di **icone vettoriali** al posto dei simboli testuali. Le icone fanno parte dell'app, funzionano offline e valgono anche per l'accesso da browser.
+Statuses also offer the automatic-highlight star, and the status order defines the kanban columns. Renaming or reordering labels preserves assignments. Deleting a label and saving clears it from every row, including hidden ones. Single-choice values become **Unassigned**, and multiple-choice values keep their other labels.
 
-- Le icone delle funzioni, cioè navigazione, schede delle impostazioni e tipi di esportazione, hanno uno **stile a gradiente** ispirato ai sistemi operativi più recenti. Ogni area ha una propria famiglia di colore (blu, viola, verde acqua, ambra, rosa, verde, ardesia) e una famiglia aggiuntiva segue l'accento del tema.
-- I gradienti **si adattano al tema attivo**. La luminosità viene regolata, mantenendo la tonalità, fino a un contrasto di almeno 3:1 con sfondo e superfici (WCAG AA per gli elementi grafici). I dettagli interni usano il bianco o un inchiostro scuro, secondo quale si legge meglio.
-- Le icone di servizio (chiudi, frecce, ordinamento, filtro, altre azioni) sono **a linea** e prendono il colore del testo, così restano discrete nelle tabelle.
-- I pulsanti seguono una **scala di dimensioni unica**: 32 px per tutti i controlli della barra superiore (ricerca, annulla, ripeti, stato dell'archivio, profilo), 36 px per i pulsanti delle barre degli strumenti, 30 px per i pulsanti piccoli e per quelli con sola icona, 28 px quadrati per le azioni delle righe.
-- L'etichetta dei pulsanti principali, pieni del colore d'accento, sceglie automaticamente un colore con contrasto almeno 4,5:1 sull'accento.
+## Portal links
 
-I simboli testuali restano solo nei menu a tendina, che non possono contenere icone, e in qualche testo descrittivo.
+Each organization has its own link template in **Settings → Portal link**. Put the `{code}` placeholder where the task code belongs, for example `https://jira.example.com/browse/{code}`. `{codice}`, `<code>` and `<codice>` are also accepted, case-insensitively. `https://` is added when no scheme is given. A live preview validates the template, and an invalid template cannot be saved.
 
-## Sviluppo e build
+A task's **Specific link (optional)** overrides the template, which is useful for tickets on another portal. Codes are URL-encoded. External links open in the default browser, never inside the app, and only `http://` and `https://` addresses are opened.
 
-Richiede Node.js con npm soltanto per sviluppare o ricostruire il pacchetto. Il destinatario dell'eseguibile non deve installare Node.js.
+## Settings
 
-La **2.16.0** aggiunge filtri per colonna, schemi personalizzati per attività e issue e importazione CSV con mappatura, anteprima e validazione atomica. `columns.js` condivide schemi e filtri tra Node e interfaccia; `csv.js` contiene parser e conversioni senza dipendenze aggiuntive. I rispettivi test unitari e lo smoke test verificano anche persistenza, viste salvate, annullamento dell'importazione ed Excel.
+Settings are organized in tabs grouped as **Organization**, **Appearance**, **Workflow**, **Column labels** and **Data & access**. Only one tab is visible at a time. Arrow keys move between tabs, and narrow windows turn the menu into a horizontal strip.
+
+Changes take effect only with **Save settings**:
+
+- a sticky bar lists the modified tabs and offers **Save** and **Discard changes**;
+- a dot marks each tab with unsaved changes;
+- if saving fails, the tab with the field to fix opens automatically.
+
+Leaving settings without saving restores the previous configuration. Themes, fonts and text sizes are previewed live.
+
+## Appearance
+
+### Themes
+
+**Settings → Themes & atmosphere** offers a searchable gallery of **40 built-in themes**, 27 dark and 13 light, available in every organization:
+
+- **Dark:** Midnight, Ocean, Aurora, Monokai, Dracula, Nord, Solarized Dark, Gruvbox Dark, Tokyo Night, One Dark, Material Ocean, GitHub Dark, Synthwave, Ayu Dark, Everforest, Catppuccin Mocha, Rosé Pine, Forest, Graphite, Obsidian, Deep Space, Blue Hour, Copper, Plum, Burgundy, Desert Night, Emerald.
+- **Light:** Daylight, Solarized Light, Gruvbox Light, GitHub Light, Paper, Pearl, Sandstone, Mist, Sage Light, Lavender Light, Rose Quartz, Iceberg, Mint.
+
+Every theme has four colors: background, surface, text and accent. Built-in palettes keep text at a contrast of at least 4.5:1 and the accent at least 3:1 against both background and surface. Built-in themes can be modified per organization and reset with **Restore built-in theme**. **Create theme** adds custom themes, which can be edited and deleted.
+
+**Generate from an image.** Load an image and all four colors are extracted and assigned automatically:
+
+- the darkest color becomes the background, the lightest the text, a saturated color the accent, and the remaining one the surface;
+- since 2.21.0 extracted palettes meet **WCAG AA**: colors that already pass are untouched, and others change only in lightness (in OKLCH space), keeping hue and saturation;
+- the background is never changed, and a message lists the adjusted roles.
+
+You can also pick a role and click the image to sample a color manually; manual choices are not corrected. PNG, JPEG, WebP, GIF (first frame) and BMP files up to 15 MB are supported, resized to 1600 px at most. Images are processed in memory only and never stored or uploaded.
+
+### Color picker
+
+Every color in the app (labels, highlighters, tags and theme colors) uses the same built-in picker, styled like the rest of the app:
+
+- a saturation/lightness area and hue, saturation and lightness sliders, all usable with the keyboard;
+- HEX input with 3 or 6 digits, with or without `#`;
+- theme and palette swatches.
+
+**Apply** or `Enter` accepts the color. **Cancel**, `Esc` or clicking outside restores the previous color.
+
+### Fonts
+
+**Settings → Font and text size** offers **33 fonts**:
+
+- **24 bundled fonts that work offline:** Roboto, Inter, Open Sans, Lato, Montserrat, Poppins, Nunito, Nunito Sans, Raleway, Rubik, Work Sans, Source Sans 3, Noto Sans, DM Sans, Manrope, Fira Sans, Noto Serif, Merriweather, Lora, Playfair Display, Source Serif 4, Roboto Slab, Fira Code and JetBrains Mono.
+- **9 system fonts, used when installed:** Segoe UI (default), Aptos, Arial, Calibri, Verdana, Tahoma, Trebuchet MS, Georgia and Consolas. Proprietary fonts are not redistributed; a fallback is used when one is missing.
+
+Bundled fonts come from Google Fonts and are always served from local files, including in browser access. The Latin and Latin Extended subsets total about 2.2 MB. [Sources and checksums](fonts/sources.json) and the license texts (SIL OFL 1.1, and Apache 2.0 for Roboto Slab) are in [fonts](fonts/).
+
+### Text size
+
+Seven parts of the interface can be scaled independently in 5% steps, each with a realistic preview:
+
+- general text, dialogs and page headings: 80–140%;
+- sidebar: 80–130%;
+- tables, milestone view and kanban view: 80–150%.
+
+The **Compact** (85%), **Standard** (100%), **Large** (115%) and **Extra large** (130%) presets set every part at once.
+
+### Icons and controls
+
+The interface uses a single set of vector icons that work offline:
+
+- **Feature icons** (navigation, settings tabs, export types) use colored gradients that adapt to the active theme and keep at least 3:1 contrast.
+- **Command icons** (close, arrows, sort, filter) are line icons in the text color.
+
+Buttons follow one size scale:
+
+- 32 px for top-bar controls;
+- 36 px for toolbar buttons;
+- 30 px for small and icon-only buttons;
+- 28 px for row actions.
+
+## Languages and translations
+
+English and Italian are built in. **Settings → Language & translations** selects the organization language, which applies to the interface, dates and effort units. User content and custom names are never translated.
+
+To add a language without rebuilding the app:
+
+1. Press **Open languages folder** to open `data/languages`, which contains `en.template.json`, the complete English pack.
+2. Copy it as `<code>.json`, for example `de.json`, and set `code`, `name` (shown in the menu) and `locale` (for dates and numbers, such as `de-DE`).
+3. Translate the **values only**. Keys are the English source text, and placeholders such as `{0}` and markers such as `**bold**` must be kept.
+   - `messages` holds interface text;
+   - `terms` holds default names, demo content and the guide;
+   - `plurals` holds counted forms (`zero`, `one`, `two`, `few`, `many`, with `other` required).
+
+   Missing values fall back to English, so translation can be gradual.
+4. Press **Reload languages**, choose the new language, and save.
+
+A file named after a built-in language, such as `it.json`, overrides only the texts it contains. Invalid files (bad JSON, mismatched code, or larger than 2 MB) are listed under **Ignored language files** and skipped. Language files travel with the `data` folder.
+
+## Import and export
+
+### Full backup
+
+**Export backup** saves the entire workspace as JSON, including every organization, logo, theme and setting. **Import backup** replaces the whole workspace after confirmation and rejects invalid files.
+
+### Organization export and import
+
+**Settings → Export and import organization** exports the active organization as separate JSON files:
+
+| Button | Content |
+| --- | --- |
+| **Export themes** | All themes and the active theme |
+| **Export settings** | Language, portal link, tab names, hours per day, font, text sizes, statuses, urgencies, highlighters, tags, columns and logo |
+| **Export data** | Tasks and issues, with the catalogs needed to map them |
+| **Export everything** | All of the above in one file |
+
+**Import from file** accepts OrbitKanban exports up to 32 MB. It validates the file before changing anything and lets you pick which parts to import:
+
+- **Themes** with matching identifiers are updated, and the rest are added.
+- **Settings** replace the current ones. Tasks are remapped to statuses and urgencies by name, then by position. The logo is replaced only if you choose to.
+- **Data** can be imported with **Add and update**, which updates tasks with the same identifier, adds the rest and never duplicates identical issues. **Replace everything** replaces the current tasks and issues instead.
+- The destination can be **this organization** or **a new organization**.
+
+### CSV import
+
+**Import CSV** in either list adds rows from a `.csv` or `.tsv` file (up to 16 MB, 100 columns and 10,000 data rows).
+
+1. Choose the separator (automatic, comma, semicolon or tab), the encoding (UTF-8, Windows-1252 or UTF-16 LE) and whether the file has a header row.
+2. Map each column to a built-in or custom field, or choose **Do not import**. Common English and Italian names are recognized automatically.
+3. Review the preview and the per-cell errors. **Nothing is saved until every error is fixed.**
+4. Press **Import rows**. The whole import can be undone with `Ctrl+Z`.
+
+Accepted values:
+
+| Kind | Accepted format |
+| --- | --- |
+| Dates | `YYYY-MM-DD` or `DD/MM/YYYY` |
+| Numbers | Dot or comma as decimal separator, no thousands separators |
+| Yes/no | `yes`, `no`, `true`, `false`, `1`, `0`, `sì` |
+| Catalogs | Name or identifier; multiple values separated by a vertical bar (`\|`) |
+
+Descriptions and notes are imported as plain text, with line breaks preserved.
+
+### Excel export
+
+The **Excel** button in every view and in the selection bar exports the current situation as an `.xlsx` workbook. You choose which tasks (as shown, all, or selected), which columns (visible or all) and which sheets to include:
+
+| Sheet | Content |
+| --- | --- |
+| **Summary** | Organization, date, app version, active filters, totals, and breakdowns by status and urgency |
+| **Tasks** | One row per task with clickable codes and links, real Excel dates in the app's colors, and colored statuses, urgencies and highlights; header frozen and filters enabled |
+| **Linked issues** | Issues with linked task counts and duplicate markers |
+| **Milestones** | One row per release, with the next release highlighted and unscheduled tasks at the end |
+| **Kanban** | One column per status |
+
+The default file name is `OrbitKanban-<organization>-situation-<date>.xlsx`. The workbook is generated locally with no extra components.
+
+## Browser access
+
+While the app is running, the same interface is available in a browser **on the same PC** at `http://127.0.0.1:47821`. Another port is chosen automatically if that one is busy.
+
+- **Open in browser**, under the organization menu, opens the current organization. Each tab can show a different organization, and its address (`?org=…`) can be bookmarked.
+- Changes sync live between the app and all tabs. Concurrent edits are reapplied on top of fresh data instead of overwriting it, and unsaved settings drafts are preserved.
+- The server listens on **127.0.0.1 only**. The first visit uses a personal access link from **Settings → Browser access → Copy access link**, after which the browser keeps a protected session cookie. **Do not share the access link.** To revoke all sessions, delete `data/runtime/browser-access-token` while the app is closed.
+- When the app closes, tabs show **App not reachable**. Reopen the app and reload the tab to continue.
+- Exports, imports and portal links work in the browser too. Installing updates is available only in the desktop app.
+
+## Updates
+
+**Settings → App & updates** checks the latest stable release of [ZenPluS/OrbitKanban](https://github.com/ZenPluS/OrbitKanban/releases) without any token or account.
+
+- **Check for updates at startup** is on by default. The preference is stored in `data/updates/settings.json` and applies to the whole portable copy.
+- **Check for updates** only checks and never downloads.
+- **Download update** shows progress and verifies the size and SHA-256 digest published by GitHub. It accepts only the portable executable of this repository and HTTPS redirects to GitHub download hosts. Older versions, pre-releases and unverifiable packages are never installed.
+- **Install and restart** asks for confirmation and saves a full copy of the workspace. A small PowerShell helper then waits for the app to close, re-checks the hash, replaces the executable atomically and restarts the app. No administrator rights are needed.
+- If the new version cannot start, the helper restores the previous executable and reports the error. The downloaded file, `previous.exe`, `workspace-before-update.json` and the install log stay in a per-update folder under `data/updates`. Delete those folders once the new version works; keep `settings.json`.
+- You can always update manually: close the app, replace the executable and keep `data`.
+
+Versions earlier than 2.45.0 must be updated manually once. From 2.45.0 onward, updates are available in the app.
+
+## Keyboard shortcuts
+
+| Shortcut | Action |
+| --- | --- |
+| `F1` | Open the in-app guide |
+| `Ctrl+K` | Search tasks and issues |
+| `Ctrl+N` | Create a task from the task list |
+| `Ctrl+Z` | Undo the last change |
+| `Ctrl+Y` / `Ctrl+Shift+Z` | Redo the last undone change |
+| `Esc` | Close a dialog, cancel a drag, stop the highlighter or clear the selection |
+| `Shift+click` | Sort by more columns, or select a range of tasks |
+| Double-click | Edit a task or an association |
+| `↑` / `↓` | Move a row or an option from its drag handle |
+| `Enter` | Open the first global search result, or apply a color |
+
+## Privacy and security
+
+- **No telemetry and no accounts.** Data stays in the local `data` folder.
+- The only network traffic is the optional update check and download, which use GitHub's public API and download hosts. No tasks, issues, themes, logos or local paths are sent.
+- Fonts, icons and images are local. Images used for theme generation are processed in memory only.
+- Rich text is sanitized: active content, remote images and unsupported HTML are removed. CSV descriptions are imported as plain text.
+- Browser access listens on 127.0.0.1 only and requires a secret key.
+- Update packages are verified with SHA-256. The verification protects download integrity but does not replace a code signature, so SmartScreen may still warn about the unsigned executable.
+
+## Troubleshooting
+
+| Symptom | Solution |
+| --- | --- |
+| SmartScreen blocks the first launch | Choose **More info → Run anyway**. The executable is not signed. |
+| The taskbar pin opens a second icon or shows a blank page icon | The pin was created by a version before 2.45.0. Unpin it and pin the running app again, or pin the desktop shortcut from **Settings → App & updates**. |
+| The app starts with an empty workspace | The `data` folder was not copied next to the executable. Close the app and move `data` beside it. |
+| Saving fails with a write error | The folder is read-only, or the app is running from inside a ZIP archive. Move the executable and `data` to a writable folder. |
+| The browser shows **App not reachable** | The desktop app is closed. Start it and reload the tab. |
+| An update fails | The helper restores the previous executable automatically. Rollback files are in `data/updates`. You can also replace the executable manually. |
+| A language does not appear | Check **Ignored language files** in **Settings → Language & translations**. |
+
+## Development
+
+### Prerequisites and scripts
+
+Node.js with npm is required only to develop or build. Recipients of the executable need nothing else.
 
 ```powershell
-npm ci
-npm start
-npm test
-npm run check
-npm run smoke
-npm run icon
-npm run splash
-npm run dist
+npm ci           # install dependencies
+npm start        # run the app from source (data is stored in the project's data folder)
+npm test         # unit tests (node --test)
+npm run check    # syntax check of every source file
+npm run smoke    # end-to-end UI smoke test on an isolated temporary workspace
+npm run icon     # generate app-logo.png and build/icon.ico from app-logo.svg
+npm run splash   # generate the launcher splash image and animation from splash.html
+npm run dist     # build dist/OrbitKanban-Portable.exe
 ```
 
-Il logo sorgente unico è `app-logo.svg`, l'atomo con tre orbite, usato dall'interfaccia, dalla favicon predefinita, dalla schermata di caricamento e dall'icona degli eseguibili. Alle dimensioni più piccole il disegno si semplifica da solo (orbite più spesse, senza elettroni) per restare leggibile. `npm run icon` ne genera la versione PNG trasparente a 512 pixel (`app-logo.png`), usata da Electron per entrambe le finestre, e l'icona Windows `build/icon.ico` con le dimensioni 16, 24, 32, 48, 64, 128 e 256 pixel: fino a 128 pixel in formato bitmap a 32 bit, compatibile con tutte le viste di Esplora risorse, e a 256 pixel in PNG. Entrambi i file sono generati e non versionati; `npm start` e `npm run smoke` li rigenerano automaticamente, così come `npm run splash` prima della build. electron-builder incorpora `build/icon.ico` nel launcher portable e nell'eseguibile interno e `build-and-push.ps1` verifica con `node app-icon.js --verify` che entrambi contengano esattamente quell'icona. La modifica delle risorse dell'eseguibile resta attiva (icona, nome e versione), anche senza firma digitale.
+The application version comes from `package.json` and is shown in the sidebar and splash screen. If the previous executable is still running, use `npm run dist -- --out dist-staging` to build without overwriting it.
 
-Se l'eseguibile precedente è ancora aperto, puoi costruire senza sovrascriverlo con `npm run dist -- --out dist-staging`. Chiudi l'app prima di sostituire l'eseguibile accanto alla cartella `data`.
+All source code, tests, scripts and documentation are in English. Interface text uses the English string as its key, and every new string needs an entry in both `languages/en.json` and `languages/it.json`.
 
-Il pacchetto condivisibile viene generato in `dist/OrbitKanban-Portable.exe`. `npm run dist` esegue prima `npm run splash`, che genera da `splash.html` l'immagine `build/splash.bmp` e l'animazione della barra `build/splash-bar.avi` (con `build/splash-bar.nsh`) mostrate dal launcher durante l'estrazione: modificando la schermata di caricamento, launcher e app restano allineati. Le traduzioni sono in `languages/<codice>.json`: il codice sorgente è interamente in inglese, che è anche la lingua delle chiavi, e l'italiano è un pacchetto linguistico come gli altri (`languages/it.json`); `i18n.js` le carica, `languages.js` aggiunge quelle di `data/languages`. `xlsx.js` scrive le cartelle di lavoro Excel (formato Office Open XML) senza dipendenze esterne e funziona sia nell'interfaccia sia in Node, dove lo verifica `xlsx.test.js`. La build passa da `build.js`, che usa electron-builder come `electron-builder --win portable --x64` e aggiunge al launcher `build/portable-launcher.nsh`: senza, la finestra di installazione di NSIS lampeggerebbe per un istante sopra la schermata di caricamento. Se una versione futura di electron-builder non permettesse più l'aggancio, la build si interrompe con un errore invece di produrre un launcher diverso. In sviluppo l'archivio è nella cartella `data` del progetto. Lo smoke test usa un workspace temporaneo separato, verifica la schermata di caricamento con la barra animata, le lingue aggiunte da file, le quattro viste, la creazione di organizzazioni con logo, le dimensioni del testo, gli evidenziatori e le colonne della lista, il rilevamento dei duplicati per incident in attività e issue, il riordino con trascinamento e da tastiera, la selezione e la modifica multipla, l'esportazione Excel con il contenuto dei fogli, la sincronizzazione tra finestre, l'esportazione e l'importazione per organizzazione, il server browser con i suoi controlli di sicurezza e la persistenza reale senza modificare i dati dell'utente.
+### Project structure
 
-La versione dell'app è definita in `package.json` ed è mostrata nella barra laterale e nella schermata di caricamento. La **2.21.0** applica il **contrasto WCAG AA** anche ai temi generati da un'immagine, ritoccando il meno possibile i colori estratti. Sostituisce inoltre i simboli testuali con **icone vettoriali**, a gradiente per le funzioni e a linea per i comandi, che si adattano al tema, e uniforma le **dimensioni di pulsanti e controlli**, compresi quelli della barra superiore. L'archivio non cambia. La **2.20.0** porta l'intero codice sorgente in inglese, compresi test e script di build: l'interfaccia italiana non cambia e vive nel pacchetto linguistico `languages/it.json`, le cui chiavi sono ora i testi inglesi. L'archivio resta compatibile: i pacchetti lingua personalizzati con le vecchie chiavi italiane e i modelli del link con `{codice}` continuano a funzionare, e il tema **Luce** si chiama ora **Daylight**, con gli stessi colori. La **2.10.0** aggiunge l'**esportazione Excel** della situazione attuale (riepilogo, attività, issue, milestone e kanban in un file `.xlsx`, generato senza nuove dipendenze) e la **modifica multipla** delle attività selezionate o di un'intera milestone; l'archivio non cambia. La **2.9.0** aggiunge il **rilevamento dei duplicati** per incident nella lista attività e nelle issue collegate, con filtro, avvisi durante l'inserimento e rimozione delle associazioni identiche; l'archivio non cambia. La **2.6.0** aggiunge gli **evidenziatori** per colorare le singole righe (barra sopra la tabella, menu del pallino a fine riga, campo nella modifica e filtro), la scelta e l'ordine delle **colonne** della lista con le nuove colonne facoltative Link portale ed Evidenziazione, e mantiene sempre visibile la colonna delle azioni. Archivio e file esportati restano compatibili: i dati della 2.5.0 vengono aperti senza modifiche e ricevono i colori e le colonne predefiniti, mentre la 2.5.0 ignora i nuovi campi. La **2.5.0** sposta le traduzioni in un file per lingua, permette di aggiungere o personalizzare lingue da `data/languages` con la nuova scheda **Lingua & traduzioni**, e rende la schermata di caricamento solo inglese con una barra infinita animata già nel launcher; l'archivio non cambia. La **2.4.0** aggiunge la schermata di caricamento, visibile fin dal doppio clic e aggiornata con le fasi reali dell'avvio, e rende il pacchetto più leggero includendo solo le lingue di Chromium usate dall'app; l'archivio non cambia. La **2.3.0** riorganizza le impostazioni in schede con indicatori delle modifiche non salvate e trasforma l'elenco dei temi in una galleria compatta con ricerca; l'archivio non cambia. La **2.2.0** ingrandisce i testi predefiniti e aggiunge la sezione **Dimensione del testo**, regolabile per organizzazione; l'archivio resta compatibile e le organizzazioni esistenti partono dalla dimensione standard. La **2.1.0** aggiunge l'esportazione e l'importazione per organizzazione in file separati; il formato dell'archivio non cambia, quindi la cartella `data` resta compatibile con la 2.0.0. La **2.0.0** introduce l'accesso da browser con più organizzazioni in parallelo e i nuovi dati dimostrativi; il salto di versione principale riflette anche il formato d'archivio multi-organizzazione (versione 2), non leggibile dalle versioni 1.x.
+| File | Purpose |
+| --- | --- |
+| `main.js`, `preload.js`, `window-chrome.js` | Electron main process, secure bridge and custom title bar |
+| `portable.js`, `splash.js`, `splash.html`, `splash-preload.js` | Portable paths, single instance, taskbar identity and splash screen |
+| `renderer.js`, `index.html`, `styles.css` | User interface |
+| `core.js` | Data model, defaults, validation and migrations |
+| `columns.js`, `csv.js`, `xlsx.js` | Column schemas and filters, CSV parsing, Excel writer (no external dependencies) |
+| `guide.js` | In-app guide content |
+| `icons.js`, `app-logo.svg`, `app-icon.js` | Icon set, app logo and Windows icon generation |
+| `i18n.js`, `languages.js`, `languages/` | Translation engine, external language loader and built-in language packs |
+| `workspace-store.js` | Atomic persistence, backups and organization transfer |
+| `web-server.js`, `web-bridge.js` | Local browser access server and client bridge |
+| `updater.js`, `update-launcher.js`, `install-update.ps1` | Update check, download, verification and installation |
+| `build.js`, `make-splash.js`, `splash-image.js`, `build/` | Packaging with electron-builder and launcher customization |
+| `build-and-push.ps1`, `github-release.js` | Build, test, commit, push and GitHub release pipeline |
+| `smoke.js`, `smoke-web.js`, `smoke-windows.js` | End-to-end smoke tests |
+| `fonts/` | Bundled WOFF2 fonts, sources and licenses |
+| `*.test.js` | Unit tests |
 
-### Build, test, push e release su GitHub
+### Build, test and release
 
-`build-and-push.ps1` chiude una build e, **solo se tutti i test passano**, fa sempre commit, push e pubblicazione della release GitHub con il portable allegato, anche senza modifiche ai sorgenti (con un commit vuoto che registra la build verificata):
+`build-and-push.ps1` is the complete release pipeline. It has no machine-specific paths: everything is resolved from `$PSScriptRoot`, and a test guards against hard-coded Windows paths. It works with PowerShell 7 and Windows PowerShell 5.1.
 
 ```powershell
-pwsh -NoProfile -ExecutionPolicy Bypass -File .\build-and-push.ps1 -Message "Descrizione della modifica"
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\build-and-push.ps1 -Message "Describe the change"
 ```
 
-Lo script è [versionato nella repository](build-and-push.ps1). Non contiene percorsi del computer dello sviluppatore: ricava la cartella del progetto da `$PSScriptRoot` e costruisce i percorsi di sorgenti, build e strumenti con `Join-Path`. I percorsi assoluti eventualmente stampati nei log sono risolti sul PC che esegue la build, non salvati nel codice. Un test impedisce di introdurre percorsi Windows hardcoded.
+The script:
 
-Funziona anche con Windows PowerShell 5.1 (`powershell -File …`). Lo script:
+1. Checks the repository: active branch, no merge or rebase in progress, not behind the remote, and no unwanted files (`data`, `dist`, `node_modules`, executables, archives, or files over 5 MB).
+2. Runs `npm run check`, `npm test` and the smoke test from source.
+3. Builds the portable executable into `dist-staging\<version>` and verifies its version and embedded icon.
+4. Smoke-tests the packaged app and the portable launcher in isolated temporary folders.
+5. Copies the tested executable to `dist\OrbitKanban-Portable.exe`, or to `dist\OrbitKanban-Portable-<version>.exe` when the former is running.
+6. Commits (an empty commit records a verified rebuild), tags `v<version>` for new versions, pushes atomically and verifies the remote.
+7. Creates or updates the GitHub release with `OrbitKanban-Portable.exe`, verifying size and SHA-256 before publishing.
 
-1. controlla il repository: ramo attivo, nessun merge o rebase in corso, ramo non indietro rispetto a `origin` e nessun file da non versionare tra le modifiche (cartelle `data`, `dist`, `node_modules`, eseguibili, archivi, file oltre 5 MB);
-2. esegue `npm run check`, `npm test` e lo smoke test dai sorgenti;
-3. costruisce il portable in `dist-staging\<versione>`, senza toccare l'eseguibile eventualmente aperto, e ne verifica la versione;
-4. esegue sempre lo smoke test dell'app impacchettata (`win-unpacked`) e del launcher portable. Ogni test usa dati e cartella temporanea propri: anche l'estrazione del launcher è isolata, senza cancellare i file di eventuali istanze aperte;
-5. copia l'eseguibile testato in `dist\OrbitKanban-Portable.exe`, oppure in `dist\OrbitKanban-Portable-<versione>.exe` se quello è in esecuzione;
-6. verifica che i file non siano cambiati durante build e test, poi crea sempre un nuovo commit (anche vuoto, con l'elenco dei test superati nel messaggio), crea il tag `v<versione>` se la versione è nuova, esegue sempre un push atomico del ramo e dell'eventuale nuovo tag e controlla il risultato sul remoto;
-7. tramite `github-release.js`, crea la release in bozza o aggiorna quella della stessa versione, carica **OrbitKanban-Portable.exe**, ne confronta dimensione e **SHA-256** con l'asset GitHub e solo dopo pubblica la release. Un allegato già identico viene riutilizzato; quello precedente viene rimosso solo dopo aver verificato il nuovo upload. Le note manuali della release vengono preservate.
+| Option | Effect |
+| --- | --- |
+| `-Message` | Commit subject; defaults to `OrbitKanban <version>` |
+| `-NoDeliver` | Skip copying to `dist`, while still publishing the release |
+| `-NoCoAuthor` | Omit the Copilot `Co-authored-by` trailer |
+| `-Remote` | Use a remote other than `origin` |
 
-Il remoto deve essere su **github.com**. L'accesso viene verificato prima della build, usando `GH_TOKEN`/`GITHUB_TOKEN` oppure le credenziali HTTPS già configurate in **Git Credential Manager**; servono permessi di scrittura **Contents** sul repository (per un token classico, accesso `repo` al repository privato). Non servono GitHub CLI o dipendenze aggiuntive, e i token non vengono scritti nei file né passati negli argomenti dei comandi. Non inserirli nel repository.
+The remote must be on github.com. Credentials come from `GH_TOKEN`/`GITHUB_TOKEN` or Git Credential Manager and need **Contents: write** permission. They are never written to files or passed as command arguments.
 
-Al primo errore lo script si ferma con codice di uscita 1; se falliscono build o test, non esegue commit né push. Se fallisce il push, il commit rimane in locale. Se fallisce la release dopo il push, lo segnala esplicitamente: risolvi l'errore e rilancia lo script per completarla. Senza `-Message` l'oggetto è `OrbitKanban <versione>`. `-NoDeliver` non copia l'eseguibile in `dist` ma **pubblica comunque la release**, `-NoCoAuthor` omette il trailer `Co-authored-by` di Copilot e `-Remote` sceglie un remoto diverso da `origin`.
+Tags are never moved. Bump the version before releasing new sources:
 
-Il tag non viene mai spostato. Per sorgenti nuovi incrementa prima `version` con `npm version patch --no-git-tag-version --ignore-scripts` (oppure `minor`/`major`): lo script rifiuta una versione già taggata con sorgenti diversi. Ripetendo una build degli stessi sorgenti crea il commit di verifica e aggiorna la release esistente. Se GitHub rende la release immutabile e l'eseguibile differisce, occorre una nuova versione.
+```powershell
+npm version minor --no-git-tag-version --ignore-scripts
+```
 
-Usa questo comando al posto di `npm run dist` per chiudere ogni build con test, commit, push e release automatici; `npm run dist` da solo continua a generare soltanto il pacchetto.
+The script refuses to reuse a tagged version for different sources. If a build or test fails, nothing is committed or pushed.
+
+## Release history
+
+| Version | Changes |
+| --- | --- |
+| **2.46.0** | Searchable in-app guide covering every feature (sidebar **Guide**, `F1`); README rewritten in English |
+| **2.45.0** | Verified in-app updates from GitHub releases; single taskbar identity for the portable launcher; desktop shortcut |
+| **2.23.x** | Custom color picker for every color; round theme swatches in every window size |
+| **2.22.0** | Built-in columns can be deleted; unified label editor for statuses, urgencies, highlights, tags and choices |
+| **2.21.0** | WCAG AA contrast for image-generated themes; gradient vector icons; unified control sizes |
+| **2.20.0** | Source code fully in English; Italian moved to its own language pack |
+| **2.19.0** | Date filters pick from existing dates; automatic views per release date |
+| **2.18.0** | 33 interface fonts; pending custom columns saved with settings |
+| **2.17.0** | Colored labels for choice columns |
+| **2.16.0** | Column filters, custom columns and CSV import |
+| **2.15.0** | Wide task editor |
+| **2.13.0** | Themed custom title bar on Windows |
+| **2.12.0** | Scroll position preserved across saves; multi-line previews in tables |
+| **2.11.0** | Catalog of 40 built-in themes |
+| **2.10.0** | Excel export and bulk edit |
+| **2.9.0** | Duplicate detection by incident |
+| **2.8.0** | Drag-and-drop reordering |
+| **2.7.0** | Tags |
+| **2.6.0** | Row highlighters and configurable list columns |
+| **2.5.0** | One file per language; external language packs |
+| **2.4.0** | Splash screen and lighter package |
+| **2.3.0** | Tabbed settings and theme gallery |
+| **2.2.0** | Adjustable text size |
+| **2.1.0** | Per-organization export and import |
+| **2.0.0** | Browser access, multiple organizations (workspace format 2) and new demo data |

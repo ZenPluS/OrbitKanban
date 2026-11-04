@@ -32,6 +32,7 @@ let updateState = { supported: false, phase: 'idle', autoCheck: true, version: '
 const selectedTasks = new Set();
 let selectionAnchor = '';
 let settingsTab = (() => { try { return sessionStorage.getItem('orbitkanban.settingsTab') || ''; } catch { return ''; } })(), themeQuery = '';
+let guideQuery = '', guidePinned = null;
 function unwrap(value) {
   if (value && value.__error) { const error = new Error(value.message); error.code = value.code; throw error; }
   return value;
@@ -550,7 +551,7 @@ function render() {
   closeColorPicker();
   closeMarkMenu();
   closeTagMenu();
-  const content = $('#content'), nextView = ['tasks', 'issues', 'milestones', 'kanban', 'settings'][view];
+  const content = $('#content'), nextView = ['tasks', 'issues', 'milestones', 'kanban', 'settings', 'guide'][view];
   if (content.dataset.workspaceView !== nextView) content.scrollTop = 0;
   content.dataset.workspaceView = nextView;
   applyTheme();
@@ -564,12 +565,14 @@ function render() {
   $('#navigation').innerHTML = data.settings.tabNames.map((name, i) => `<button class="nav-button ${view === i ? 'active' : ''}" data-view="${i}"><span class="nav-icon">${icons[i]}${alert(i)}</span><span>${esc(name)}</span>${i === 0 ? `<span class="nav-count">${visibleTasks().length}</span>` : ''}</button>`).join('');
   document.querySelectorAll('#navigation [data-view]').forEach(button => button.onclick = () => { view = Number(button.dataset.view); render(); });
   $('#settings-button').classList.toggle('active', view === 4);
-  $('#current-tab').textContent = view === 4 ? t("Settings") : data.settings.tabNames[view];
+  $('#guide-button').classList.toggle('active', view === 5);
+  $('#current-tab').textContent = view === 4 ? t("Settings") : view === 5 ? term("Guide") : data.settings.tabNames[view];
   if (view === 0) renderTasks();
   if (view === 1) renderIssues();
   if (view === 2) renderMilestones();
   if (view === 3) renderKanban();
   if (view === 4) renderSettings();
+  if (view === 5) renderGuide();
 }
 function adoptSnapshot(snapshot) {
   if (activeOrganizationId !== snapshot.activeOrganizationId) { columnFilters = { tasks: {}, issues: {} }; issueSearch = ''; }
@@ -600,6 +603,8 @@ function renderChrome() {
   $('.brand small').textContent = t("YOUR PERSONAL WORKSPACE");
   $('.workspace-label').innerHTML = ui`WORKSPACE <span>LOCAL</span>`;
   $('#settings-button').innerHTML = ui`<span class="nav-icon">${ico('settings')}</span> Settings`;
+  $('#guide-button').innerHTML = `<span class="nav-icon">${ico('book')}</span> ${esc(term("Guide"))}`;
+  $('#guide-button').title = term("Open the guide (F1)");
   $('.local-card strong').textContent = t("Only on your device");
   $('.local-card small').textContent = t("Your data. Always with you.");
   $('footer>span').innerHTML = ui`<i class="connection-dot"></i> No cloud. No account. Everything under control.`;
@@ -629,7 +634,7 @@ function settingsDraftPending() {
 }
 function rerenderPreservingView() {
   const page = document.scrollingElement, pageScroll = [page.scrollLeft, page.scrollTop];
-  const selectors = ['#content', '.table-scroll', '.milestone-scroll', '.kanban-scroll', '.theme-gallery', '.settings-nav'];
+  const selectors = ['#content', '.table-scroll', '.milestone-scroll', '.kanban-scroll', '.theme-gallery', '.settings-nav', '.guide-nav'];
   const scrolls = selectors.map(selector => [...document.querySelectorAll(selector)].map(el => [el.scrollLeft, el.scrollTop]));
   const focused = document.activeElement, focusId = focused?.id || '';
   const selection = focusId && typeof focused.selectionStart === 'number' ? [focused.selectionStart, focused.selectionEnd] : null;
@@ -2226,6 +2231,122 @@ function renderKanban() {
       return `<section class="kanban-column" style="--column:${status.color}"><div class="kanban-heading"><span><i></i>${esc(status.name)}</span><b>${items.length}</b></div><div class="kanban-cards">${items.map(t => miniTask(t, true)).join('') || ui`<div class="kanban-empty">Room for upcoming tasks</div>`}</div></section>`;
     }).join('')}</div></div><div class="hint"><span>${ico('lock')}</span> To change a status, use the task list. Configure column order in settings.</div>`;
 }
+// ---- In-app guide (view 5): content and texts come from guide.js, translated as exact terms ----
+const foldText = text => String(text).normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase();
+const fillTerm = (text, value) => term(text).replaceAll('{0}', () => String(value));
+function guideInline(text) {
+  const keys = new Set(window.OrbitaGuide.keyWords().map(term));
+  return esc(term(text))
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/`([^`]+)`/g, (_, value) => {
+      const parts = value.split('+');
+      return parts.every(part => window.OrbitaGuide.isLiteralKey(part) || keys.has(part)) ? parts.map(part => `<kbd>${part}</kbd>`).join('+') : `<code>${value}</code>`;
+    });
+}
+// Settings tabs are resolved from the saved settings, so a leftover draft never adds or hides a destination.
+function guideSettingsTarget(id) {
+  const fixed = settingsTabs.find(tab => tab.id === id);
+  if (fixed) return id !== 'portal' || hasColumn('link') ? t(fixed.label) : '';
+  const field = CustomColumns.schemaOf(data.settings, 'tasks').find(item => item.catalog === id && ['select', 'multiselect'].includes(item.type));
+  return field ? t(field.name) : '';
+}
+function guideSections() {
+  return window.OrbitaGuide.sections.map(section => ({
+    ...section,
+    name: section.tab === undefined ? term(section.title) : data.settings.tabNames[section.tab],
+    go: (section.go || []).map(target => target.view !== undefined
+      ? { attr: `data-guide-view="${target.view}"`, label: data.settings.tabNames[target.view] }
+      : { attr: `data-guide-settings="${esc(target.settings)}"`, label: guideSettingsTarget(target.settings) }).filter(target => target.label)
+  }));
+}
+function guideShortcuts(section) {
+  const combo = keys => `<span class="guide-combo">${keys.map(key => `<kbd>${esc(term(key))}</kbd>`).join('+')}</span>`;
+  return `<table class="guide-shortcuts"><thead><tr><th scope="col">${esc(term("Shortcut"))}</th><th scope="col">${esc(term("Action"))}</th></tr></thead><tbody>${section.shortcuts.map(([combos, description]) => `<tr data-guide-topic><td>${combos.map(combo).join('<span class="guide-or">/</span>')}</td><td>${guideInline(description)}</td></tr>`).join('')}</tbody></table>`;
+}
+function guideSection(section) {
+  const body = section.shortcuts ? guideShortcuts(section) : `<div class="guide-topics">${section.topics.map(topic => `<section class="guide-topic" data-guide-topic><h3>${esc(term(topic.title))}${topic.desktop ? `<span class="guide-badge">${esc(term("Desktop app only"))}</span>` : ''}</h3><ul>${topic.items.map(item => `<li>${guideInline(item)}</li>`).join('')}</ul></section>`).join('')}</div>`;
+  const actions = section.go.length ? `<div class="guide-actions">${section.go.map(target => `<button type="button" class="button small" ${target.attr}>${esc(fillTerm("Go to {0}", target.label))}</button>`).join('')}</div>` : '';
+  return `<article class="panel guide-section" id="guide-${section.id}" data-guide-id="${section.id}" aria-labelledby="guide-${section.id}-title"><header class="guide-section-head"><span class="guide-section-icon" aria-hidden="true">${ico(section.icon, section.family)}</span><div><h2 id="guide-${section.id}-title" tabindex="-1">${esc(section.name)}</h2><p>${guideInline(section.summary)}</p></div></header>${body}${actions}</article>`;
+}
+function renderGuide() {
+  const sections = guideSections();
+  const searchField = `<label class="theme-search guide-search"><span aria-hidden="true">${ico('search')}</span><input type="search" id="guide-search" placeholder="${esc(term("Search the guide…"))}" aria-label="${esc(term("Search the guide"))}" autocomplete="off" spellcheck="false" value="${esc(guideQuery)}"></label>`;
+  $('#content').innerHTML = `<div id="guide-page"><section class="page-heading"><div><h1>${esc(term("Guide"))}<span class="title-dot">.</span></h1><p>${esc(term("Everything OrbitKanban can do, explained step by step."))}</p></div><div class="heading-actions">${searchField}</div></section>
+    <div class="guide-layout"><nav class="guide-nav" aria-label="${esc(term("Guide contents"))}">${sections.map(section => `<button type="button" class="guide-nav-link" data-guide-section="${section.id}"><span class="settings-tab-icon" aria-hidden="true">${ico(section.icon, section.family)}</span><span class="guide-nav-text">${esc(section.name)}</span></button>`).join('')}</nav>
+    <div class="guide-body"><p class="sr-only" id="guide-status" role="status" aria-live="polite"></p><p class="panel guide-empty" id="guide-empty" hidden>${esc(term("No topics match your search."))}</p>${sections.map(guideSection).join('')}</div></div></div>`;
+  $('#guide-search').oninput = event => { guideQuery = event.target.value; guidePinned = null; filterGuide(); };
+  $('#guide-page').addEventListener('click', event => {
+    const link = event.target.closest('[data-guide-section]');
+    if (link) { showGuideSection(link.dataset.guideSection); return; }
+    const target = event.target.closest('[data-guide-view],[data-guide-settings]');
+    if (target?.dataset.guideSettings) openSettingsTab(target.dataset.guideSettings);
+    else if (target) { view = Number(target.dataset.guideView); render(); }
+  });
+  filterGuide();
+}
+function showGuideSection(id) {
+  const section = document.getElementById(`guide-${id}`);
+  if (!section || section.hidden) return;
+  section.scrollIntoView({ block: 'start' });
+  section.querySelector('h2').focus({ preventScroll: true });
+  guidePinned = { id, scrollTop: $('#content').scrollTop };
+  markGuideSection();
+}
+function filterGuide() {
+  const query = foldText(guideQuery.trim());
+  let shown = 0;
+  document.querySelectorAll('.guide-section').forEach(section => {
+    const whole = !query || foldText(section.querySelector('.guide-section-head').textContent).includes(query);
+    let visible = 0;
+    section.querySelectorAll('[data-guide-topic]').forEach(topic => {
+      topic.hidden = !whole && !foldText(topic.textContent).includes(query);
+      if (!topic.hidden) visible++;
+    });
+    section.hidden = !visible;
+    document.querySelector(`[data-guide-section="${section.dataset.guideId}"]`).hidden = !visible;
+    shown += visible;
+  });
+  $('#guide-empty').hidden = shown > 0;
+  $('#guide-status').textContent = query ? fillTerm("Matching topics: {0}", shown) : '';
+  markGuideSection();
+}
+// The contents entry follows the section at the top of the page; a section chosen from the contents stays marked until the page scrolls.
+function markGuideSection() {
+  const content = $('#content');
+  if (view !== 5 || !$('#guide-page')) return;
+  const sections = [...document.querySelectorAll('.guide-section:not([hidden])')];
+  let current = sections[0]?.dataset.guideId;
+  if (guidePinned && guidePinned.scrollTop === content.scrollTop && sections.some(section => section.dataset.guideId === guidePinned.id)) current = guidePinned.id;
+  else {
+    guidePinned = null;
+    const line = content.getBoundingClientRect().top + Math.min(160, content.clientHeight / 3);
+    for (const section of sections) if (section.getBoundingClientRect().top <= line) current = section.dataset.guideId;
+  }
+  const previous = document.querySelector('.guide-nav-link.active')?.dataset.guideSection;
+  document.querySelectorAll('.guide-nav-link').forEach(link => {
+    const active = link.dataset.guideSection === current;
+    link.classList.toggle('active', active);
+    if (active) link.setAttribute('aria-current', 'true'); else link.removeAttribute('aria-current');
+  });
+  // Scrolls only the contents list, never the page, so the marked entry stays visible in both layouts.
+  const nav = $('.guide-nav'), link = document.querySelector('.guide-nav-link.active');
+  if (!link || current === previous) return;
+  const navBox = nav.getBoundingClientRect(), box = link.getBoundingClientRect();
+  if (box.left < navBox.left) nav.scrollLeft -= navBox.left - box.left + 8;
+  else if (box.right > navBox.right) nav.scrollLeft += box.right - navBox.right + 8;
+  if (box.top < navBox.top) nav.scrollTop -= navBox.top - box.top + 8;
+  else if (box.bottom > navBox.bottom) nav.scrollTop += box.bottom - navBox.bottom + 8;
+}
+let guideScrollFrame = 0;
+$('#content').addEventListener('scroll', () => {
+  if (view !== 5 || guideScrollFrame) return;
+  guideScrollFrame = requestAnimationFrame(() => { guideScrollFrame = 0; markGuideSection(); });
+}, { passive: true });
+function openGuide() {
+  if (view === 5) { $('#guide-search')?.focus(); return; }
+  view = 5;
+  render();
+}
 // ---- Excel export of the current situation ----
 const excelButton = () => `<button type="button" class="button excel-button" data-excel-export title="${esc(t("Export the current situation to an Excel file"))}">${ico('excel')}Excel</button>`;
 document.addEventListener('click', event => { if (data && event.target.closest('[data-excel-export]')) excelDialog(); });
@@ -3120,6 +3241,7 @@ function drawThemes() {
   revealChosenTheme();
 }
 $('#settings-button').onclick = () => { view = 4; render(); };
+$('#guide-button').onclick = openGuide;
 $('#folder-button').onclick = action(() => workspaceApi.openDataFolder());
 async function openBrowserAccess() {
   await workspaceApi.browserAccess('open', activeOrganizationId);
@@ -3136,6 +3258,7 @@ $('#modal').addEventListener('close', () => {
 });
 document.addEventListener('keydown', e => {
   const command = e.ctrlKey || e.metaKey, key = e.key.toLowerCase();
+  if (e.key === 'F1' && !command && !e.altKey && !$('#modal').open && data) { e.preventDefault(); openGuide(); return; }
   if (command && key === 'k' && !$('#modal').open && data) { e.preventDefault(); action(() => withSavedSettings(openGlobalSearch))(); return; }
   const editing = e.target.closest?.('input, select, textarea, [contenteditable="true"]');
   if (command && !editing && !$('#modal').open && (key === 'z' || key === 'y')) {
@@ -4163,6 +4286,43 @@ window.runSmokeTests = async () => {
   view = 0; render();
   $('.highlighter-bar [data-manage-highlights]').click();
   check(view === 4 && settingsTab === 'highlights' && !$('#highlights-panel').hidden, "Manage colors opens the Highlighters tab");
+  const guideSectionIds = window.OrbitaGuide.sections.map(section => section.id);
+  const guideSearch = value => { $('#guide-search').value = value; $('#guide-search').dispatchEvent(new Event('input', { bubbles: true })); };
+  const shownGuideSections = () => [...document.querySelectorAll('.guide-section:not([hidden])')].map(section => section.dataset.guideId);
+  const pressF1 = () => { const event = new KeyboardEvent('keydown', { key: 'F1', bubbles: true, cancelable: true }); document.dispatchEvent(event); return event; };
+  view = 0; render();
+  $('#guide-button').click();
+  check(view === 5 && $('#guide-button').classList.contains('active') && !$('#settings-button').classList.contains('active') && $('#current-tab').textContent === term("Guide") && $('#guide-page h1').textContent.startsWith(term("Guide")) && $('#guide-search').placeholder === term("Search the guide…"), "Guide button opens the in-app guide");
+  check(document.querySelectorAll('.guide-section').length === guideSectionIds.length && guideSectionIds.every(id => $(`#guide-${id}`) && $(`.guide-nav-link[data-guide-section="${id}"]`)) && [0, 1, 2, 3].every(i => $(`#guide-${window.OrbitaGuide.sections.find(section => section.tab === i).id}-title`).textContent === data.settings.tabNames[i]), "Guide lists every section in its contents, using the organization's tab names");
+  const guidePageText = $('#guide-page').textContent;
+  check(!guidePageText.includes('**') && !guidePageText.includes('`') && $('#guide-page li strong') && $('#guide-page li kbd') && $('#guide-page li code') && document.querySelectorAll('.guide-shortcuts tbody tr').length === window.OrbitaGuide.sections.find(section => section.shortcuts).shortcuts.length && $('.guide-topic .guide-badge')?.textContent === term("Desktop app only"), "Guide renders bold labels, keys, code, shortcuts and badges");
+  check($('#content').scrollWidth <= $('#content').clientWidth + 1 && [...document.querySelectorAll('.guide-section')].every(section => section.scrollWidth <= section.clientWidth + 1), "Guide fits the window without horizontal scrolling");
+  check($('#guide-kanban [data-guide-settings="statuses"]') && $('#guide-tasks [data-guide-view="0"]').textContent === fillTerm("Go to {0}", data.settings.tabNames[0]), "Guide shortcuts point to views and settings tabs");
+  $('.guide-nav-link[data-guide-section="updates"]').click();
+  check(document.activeElement === $('#guide-updates-title') && $('.guide-nav-link[data-guide-section="updates"]').getAttribute('aria-current') === 'true' && document.querySelectorAll('.guide-nav-link[aria-current]').length === 1 && $('#content').scrollTop > 0, "Guide contents jump to a section and mark it");
+  $('#content').scrollTop = 0;
+  markGuideSection();
+  check($('.guide-nav-link[data-guide-section="start"]').classList.contains('active') && document.querySelectorAll('.guide-nav-link.active').length === 1, "Guide contents follow the page while scrolling");
+  guideSearch('sha-256');
+  check(shownGuideSections().join() === 'updates' && document.querySelectorAll('.guide-section:not([hidden]) [data-guide-topic]:not([hidden])').length === 1 && document.querySelectorAll('.guide-nav-link:not([hidden])').length === 1 && $('#guide-empty').hidden && $('#guide-status').textContent === fillTerm("Matching topics: {0}", 1), "Guide search keeps only matching topics and announces the count");
+  render();
+  check($('#guide-search').value === 'sha-256' && shownGuideSections().join() === 'updates', "Guide search survives a rerender");
+  guideSearch('zzqx-no-topic');
+  check(!shownGuideSections().length && !$('#guide-empty').hidden && $('#guide-status').textContent === fillTerm("Matching topics: {0}", 0), "Guide search shows an empty state when nothing matches");
+  check(foldText('Attività ÈCCO') === 'attivita ecco', "Guide search ignores accents and letter case");
+  guideSearch('');
+  check(shownGuideSections().length === guideSectionIds.length && $('#guide-empty').hidden && !$('#guide-status').textContent, "Clearing the guide search shows every section");
+  view = 0; render();
+  check(pressF1().defaultPrevented && view === 5 && $('#guide-page'), "F1 opens the guide from any view");
+  view = 0; render(); taskDialog();
+  check(!pressF1().defaultPrevented && view === 0 && $('#modal').open, "F1 is ignored while a dialog is open");
+  $('#modal').close();
+  view = 5; render();
+  $('#guide-milestones [data-guide-view="2"]').click();
+  check(view === 2 && !$('#guide-page'), "Guide links open the matching view");
+  view = 5; render();
+  $('#guide-appearance [data-guide-settings="themes"]').click();
+  check(view === 4 && settingsTab === 'themes' && !$('#themes-panel').hidden, "Guide links open the matching settings tab");
   view = 4; render();
   const visibleSettingsPanels = () => allSettingsTabs().filter(tab => !$(`#${tab.panel}`).hidden).map(tab => tab.id);
   check(document.querySelectorAll('.settings-nav .settings-tab').length === allSettingsTabs().length && allSettingsTabs().every(tab => $(`#${tab.panel}`) && $(`#settings-tab-${tab.id}`).getAttribute('aria-controls') === tab.panel) && visibleSettingsPanels().length === 1, "Settings are divided into tabs with only one panel visible");
