@@ -4,7 +4,7 @@
 
 | | |
 | --- | --- |
-| **Current version** | 2.46.0 |
+| **Current version** | 2.47.0 |
 | **Platform** | Windows 10 / 11, 64-bit |
 | **Distribution** | Single portable executable, `OrbitKanban-Portable.exe` |
 | **Network** | Not required. Used only for optional update checks against GitHub |
@@ -67,6 +67,7 @@
 
 - **Truly portable.** The executable and a `data` folder next to it are the whole installation, with automatic daily backups.
 - **Four views**: Tasks, Linked issues, Milestones and Kanban. Each tab name is configurable per organization.
+- **Collapsible sidebar** that folds into a column of icons (**☰** or `Ctrl+B`) to give the views more room.
 - **Automatic issue matching.** Incidents and problems recorded in Linked issues are resolved onto tasks by their portal code.
 - **Multiple organizations**, each with its own data, settings, logo, theme and language.
 - **Flexible lists**: multi-level sorting, drag-and-drop ordering, per-column filters, saved views, row highlights, tags, duplicate detection, bulk edit, and undo/redo.
@@ -141,7 +142,7 @@ Everything OrbitKanban stores lives in the `data` folder next to the executable:
 | `data/backups/` | Daily snapshots of the whole workspace; the 14 most recent are kept |
 | `data/languages/` | Optional translation files and the English template |
 | `data/updates/` | Update preference, downloads and rollback copies |
-| `data/runtime/` | Cache, logs and the browser access key |
+| `data/runtime/` | Cache, logs, the sidebar preference and the browser access key |
 
 A daily backup is written before the first change of each day. **Settings → Data that travels with you** lists the backups with date and size. Restoring one asks for confirmation and replaces all organizations and settings; the current state is first saved to `workspace.json.bak`. Read and write errors are always reported, and a corrupted workspace is never silently replaced.
 
@@ -161,6 +162,8 @@ The menu under the **OrbitKanban** name in the sidebar switches the active organ
 ## The four views
 
 All views share compact headers. Their tables, timeline and board fill the window and scroll internally while respecting the configured text sizes. On Windows the app draws its own title bar: drag the top bar or logo to move the window, and double-click to maximize or restore it. The minimize, maximize and close buttons follow the active theme.
+
+The **☰** button at the left of the top bar, or `Ctrl+B`, folds the sidebar into a column of icons so the views get more room. The icons keep their counters and show their names as tooltips, and the building icon still switches organization. Press the button again to expand the sidebar. The choice travels with the portable data in `data/runtime/`; with browser access, each browser keeps its own.
 
 ### Tasks
 
@@ -499,6 +502,7 @@ Versions earlier than 2.45.0 must be updated manually once. From 2.45.0 onward, 
 | --- | --- |
 | `F1` | Open the in-app guide |
 | `Ctrl+K` | Search tasks and issues |
+| `Ctrl+B` | Collapse or expand the sidebar |
 | `Ctrl+N` | Create a task from the task list |
 | `Ctrl+Z` | Undo the last change |
 | `Ctrl+Y` / `Ctrl+Shift+Z` | Redo the last undone change |
@@ -610,6 +614,7 @@ The script refuses to reuse a tagged version for different sources. If a build o
 
 | Version | Changes |
 | --- | --- |
+| **2.47.0** | Collapsible sidebar: **☰** or `Ctrl+B` folds it into a column of icons with tooltips and counters |
 | **2.46.0** | Searchable in-app guide covering every feature (sidebar **Guide**, `F1`); README rewritten in English |
 | **2.45.0** | Verified in-app updates from GitHub releases; single taskbar identity for the portable launcher; desktop shortcut |
 | **2.23.x** | Custom color picker for every color; round theme swatches in every window size |

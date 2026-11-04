@@ -18,20 +18,20 @@
   <script defer src="renderer.js"></script>
 </head>
 <body>
-  <aside class="sidebar">
+  <aside class="sidebar" id="sidebar">
     <div class="brand"><div class="brand-icon has-logo"><img src="app-logo.svg" alt="OrbitKanban"></div><div><strong id="brand-name">OrbitKanban</strong><small>YOUR PERSONAL WORKSPACE</small></div></div>
-    <div class="organization-switcher"><label for="organization-select">Organization</label><select id="organization-select"></select><button id="manage-organizations" class="button small">Manage organizations</button><button id="open-browser" class="button small">Open in browser</button></div>
+    <div class="organization-switcher"><span class="organization-icon" aria-hidden="true"><svg class="ico ico-violet" aria-hidden="true" focusable="false"><use href="#i-building"/></svg></span><label for="organization-select">Organization</label><select id="organization-select"></select><button id="manage-organizations" class="button small">Manage organizations</button><button id="open-browser" class="button small"><svg class="ico ico-blue" aria-hidden="true" focusable="false"><use href="#i-globe"/></svg><span class="nav-label">Open in browser</span></button></div>
     <div class="workspace-label">WORKSPACE <span>LOCAL</span></div>
     <nav id="navigation" aria-label="Main views"></nav>
     <div class="sidebar-bottom">
-      <button id="guide-button" class="nav-button" title="Open the guide (F1)" aria-keyshortcuts="F1"><span class="nav-icon"><svg class="ico ico-rose" aria-hidden="true" focusable="false"><use href="#i-book"/></svg></span> Guide</button>
-      <button id="settings-button" class="nav-button"><span class="nav-icon"><svg class="ico ico-slate" aria-hidden="true" focusable="false"><use href="#i-settings"/></svg></span> Settings</button>
+      <button id="guide-button" class="nav-button" title="Open the guide (F1)" aria-keyshortcuts="F1"><span class="nav-icon"><svg class="ico ico-rose" aria-hidden="true" focusable="false"><use href="#i-book"/></svg></span><span class="nav-label">Guide</span></button>
+      <button id="settings-button" class="nav-button"><span class="nav-icon"><svg class="ico ico-slate" aria-hidden="true" focusable="false"><use href="#i-settings"/></svg></span><span class="nav-label">Settings</span></button>
       <div class="local-card"><span class="connection-dot"></span><div><strong>Only on your device</strong><small>Your data. Always with you.</small></div></div>
       <div class="version">PORTABLE EDITION <span id="app-version"></span></div>
     </div>
   </aside>
   <main>
-    <header class="topbar"><div><span class="breadcrumb">Workspace</span><span class="separator">/</span><span id="current-tab">Tasks</span></div><div class="topbar-right"><button type="button" class="button subtle topbar-tool global-search-button" id="global-search"><svg class="ico ico-line" aria-hidden="true" focusable="false"><use href="#i-search"/></svg><span id="global-search-label">Search</span><kbd>Ctrl K</kbd></button><button type="button" class="button subtle topbar-tool" id="undo-button" disabled aria-label="Undo (Ctrl+Z)"><svg class="ico ico-line" aria-hidden="true" focusable="false"><use href="#i-undo"/></svg></button><button type="button" class="button subtle topbar-tool" id="redo-button" disabled aria-label="Redo (Ctrl+Y)"><svg class="ico ico-line" aria-hidden="true" focusable="false"><use href="#i-redo"/></svg></button><span id="save-status"><i class="connection-dot"></i> Local archive</span><span class="avatar">ME</span></div></header>
+    <header class="topbar"><div class="topbar-left"><button type="button" class="button subtle topbar-tool" id="sidebar-toggle" aria-controls="sidebar" aria-expanded="true" aria-keyshortcuts="Control+B" aria-label="Sidebar" title="Collapse the sidebar (Ctrl+B)"><svg class="ico ico-line" aria-hidden="true" focusable="false"><use href="#i-menu"/></svg></button><span class="breadcrumb">Workspace</span><span class="separator">/</span><span id="current-tab">Tasks</span></div><div class="topbar-right"><button type="button" class="button subtle topbar-tool global-search-button" id="global-search"><svg class="ico ico-line" aria-hidden="true" focusable="false"><use href="#i-search"/></svg><span id="global-search-label">Search</span><kbd>Ctrl K</kbd></button><button type="button" class="button subtle topbar-tool" id="undo-button" disabled aria-label="Undo (Ctrl+Z)"><svg class="ico ico-line" aria-hidden="true" focusable="false"><use href="#i-undo"/></svg></button><button type="button" class="button subtle topbar-tool" id="redo-button" disabled aria-label="Redo (Ctrl+Y)"><svg class="ico ico-line" aria-hidden="true" focusable="false"><use href="#i-redo"/></svg></button><span id="save-status"><i class="connection-dot"></i> Local archive</span><span class="avatar">ME</span></div></header>
     <div id="content"></div>
     <footer><span><i class="connection-dot"></i> No cloud. No account. Everything under control.</span><button id="folder-button">Open data folder</button></footer>
   </main>

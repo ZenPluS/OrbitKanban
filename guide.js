@@ -19,6 +19,7 @@ const SECTIONS = [
       ] },
       { title: 'Find your way around', items: [
         'The sidebar holds the organization menu, the four views, this **Guide** and **Settings**.',
+        'The menu button **☰** at the left of the top bar, or `Ctrl+B`, folds the sidebar into a column of icons so the views get more space. Hover an icon to see its name; the building icon still switches organization. Press the button again to expand the sidebar; the choice is remembered.',
         'The top bar offers global search, undo and redo, and the archive status. **Open data folder** at the bottom shows where your data lives.',
         'The four views can be renamed for each organization in **Settings → Identity & navigation**.',
         'Press `F1` at any time to open this guide.'
@@ -321,6 +322,7 @@ const SECTIONS = [
     shortcuts: [
       [[['F1']], 'Open this guide'],
       [[['Ctrl', 'K']], 'Search tasks and issues'],
+      [[['Ctrl', 'B']], 'Collapse or expand the sidebar'],
       [[['Ctrl', 'N']], 'Create a task from the task list'],
       [[['Ctrl', 'Z']], 'Undo the last change'],
       [[['Ctrl', 'Y'], ['Ctrl', 'Shift', 'Z']], 'Redo the last undone change'],

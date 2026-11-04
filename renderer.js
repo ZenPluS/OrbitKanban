@@ -531,6 +531,36 @@ if (customTitleBar()) {
   // Page zoom changes the device pixel ratio but not the CSS height of the top bar.
   window.addEventListener('resize', syncWindowChrome);
 }
+// The sidebar can fold into a column of icons so the views get more space; the choice is kept on this device.
+const SIDEBAR_COLLAPSED_KEY = 'orbitkanban.sidebarCollapsed';
+let sidebarCollapsed = (() => { try { return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1'; } catch { return false; } })();
+function applySidebar() {
+  const toggle = $('#sidebar-toggle'), select = $('#organization-select');
+  document.documentElement.classList.toggle('sidebar-collapsed', sidebarCollapsed);
+  toggle.setAttribute('aria-expanded', String(!sidebarCollapsed));
+  toggle.setAttribute('aria-label', t("Sidebar"));
+  toggle.title = t(sidebarCollapsed ? "Expand the sidebar (Ctrl+B)" : "Collapse the sidebar (Ctrl+B)");
+  // In the column the names are hidden, so they become tooltips.
+  for (const button of document.querySelectorAll('#navigation .nav-button, #settings-button, #open-browser')) {
+    if (sidebarCollapsed) button.title = button.querySelector('.nav-label').textContent; else button.removeAttribute('title');
+  }
+  if (sidebarCollapsed) select.title = fillText("Organization: {0}", select.selectedOptions[0]?.textContent ?? ''); else select.removeAttribute('title');
+}
+function toggleSidebar() {
+  const focused = document.activeElement;
+  sidebarCollapsed = !sidebarCollapsed;
+  try { if (sidebarCollapsed) localStorage.setItem(SIDEBAR_COLLAPSED_KEY, '1'); else localStorage.removeItem(SIDEBAR_COLLAPSED_KEY); } catch {}
+  applySidebar();
+  // Controls that only exist in the full sidebar hand the focus to the menu button.
+  if ($('#sidebar').contains(focused) && !focused.getClientRects().length) $('#sidebar-toggle').focus({ preventScroll: true });
+  // The views change width without a window resize, so menus anchored to them follow the resize rules.
+  const focusIn = selector => Boolean(document.querySelector(selector)?.contains(document.activeElement));
+  closeTagMenu(focusIn('#tag-menu'));
+  closeMarkMenu(focusIn('#mark-menu'));
+  positionColorPicker();
+}
+// Set before the first render so a collapsed sidebar does not flash open; render() applies the rest.
+document.documentElement.classList.toggle('sidebar-collapsed', sidebarCollapsed);
 function paintFontSizes(sizes) {
   const values = { ...defaultFontSizes(), ...sizes };
   for (const { id } of FONT_SIZE_PARTS) document.documentElement.style.setProperty(`--fs-${id}`, String(values[id] / 100));
@@ -562,7 +592,7 @@ function render() {
     const label = fillText(i ? "{0} associations with a duplicate incident" : "{0} tasks with a duplicate incident", alerts[i]);
     return `<span class="nav-alert" title="${esc(label)}"><span aria-hidden="true">${alerts[i]}</span><span class="sr-only">${esc(label)}</span></span>`;
   };
-  $('#navigation').innerHTML = data.settings.tabNames.map((name, i) => `<button class="nav-button ${view === i ? 'active' : ''}" data-view="${i}"><span class="nav-icon">${icons[i]}${alert(i)}</span><span>${esc(name)}</span>${i === 0 ? `<span class="nav-count">${visibleTasks().length}</span>` : ''}</button>`).join('');
+  $('#navigation').innerHTML = data.settings.tabNames.map((name, i) => `<button class="nav-button ${view === i ? 'active' : ''}" data-view="${i}"${sidebarCollapsed ? ` title="${esc(name)}"` : ''}><span class="nav-icon">${icons[i]}${alert(i)}</span><span class="nav-label">${esc(name)}</span>${i === 0 ? `<span class="nav-count">${visibleTasks().length}</span>` : ''}</button>`).join('');
   document.querySelectorAll('#navigation [data-view]').forEach(button => button.onclick = () => { view = Number(button.dataset.view); render(); });
   $('#settings-button').classList.toggle('active', view === 4);
   $('#guide-button').classList.toggle('active', view === 5);
@@ -602,8 +632,8 @@ function renderChrome() {
   document.documentElement.lang = data.settings.language;
   $('.brand small').textContent = t("YOUR PERSONAL WORKSPACE");
   $('.workspace-label').innerHTML = ui`WORKSPACE <span>LOCAL</span>`;
-  $('#settings-button').innerHTML = ui`<span class="nav-icon">${ico('settings')}</span> Settings`;
-  $('#guide-button').innerHTML = `<span class="nav-icon">${ico('book')}</span> ${esc(term("Guide"))}`;
+  $('#settings-button').innerHTML = ui`<span class="nav-icon">${ico('settings')}</span><span class="nav-label">Settings</span>`;
+  $('#guide-button').innerHTML = `<span class="nav-icon">${ico('book')}</span><span class="nav-label">${esc(term("Guide"))}</span>`;
   $('#guide-button').title = term("Open the guide (F1)");
   $('.local-card strong').textContent = t("Only on your device");
   $('.local-card small').textContent = t("Your data. Always with you.");
@@ -616,9 +646,10 @@ function renderChrome() {
   $('.organization-switcher label').textContent = t("Organization");
   $('#manage-organizations').textContent = t("Manage organizations");
   $('#organization-select').innerHTML = organizations.map(o => `<option value="${esc(o.id)}" ${o.id === activeOrganizationId ? 'selected' : ''}>${esc(o.name)}</option>`).join('');
-  $('#open-browser').innerHTML = `${ico('globe')}<span>${esc(t(browserMode() ? "Open in new tab" : "Open in browser"))}</span>`;
+  $('#open-browser').innerHTML = `${ico('globe')}<span class="nav-label">${esc(t(browserMode() ? "Open in new tab" : "Open in browser"))}</span>`;
   $('#open-browser').disabled = !browserUrl;
   $('.version').innerHTML = `${browserMode() ? 'BROWSER' : 'PORTABLE'} EDITION <span id="app-version">${esc(appVersion ? `v${appVersion}` : '')}</span>`;
+  applySidebar();
   updateHistoryButtons();
 }
 function renderConnectionStatus() {
@@ -3242,6 +3273,7 @@ function drawThemes() {
 }
 $('#settings-button').onclick = () => { view = 4; render(); };
 $('#guide-button').onclick = openGuide;
+$('#sidebar-toggle').onclick = toggleSidebar;
 $('#folder-button').onclick = action(() => workspaceApi.openDataFolder());
 async function openBrowserAccess() {
   await workspaceApi.browserAccess('open', activeOrganizationId);
@@ -3260,6 +3292,8 @@ document.addEventListener('keydown', e => {
   const command = e.ctrlKey || e.metaKey, key = e.key.toLowerCase();
   if (e.key === 'F1' && !command && !e.altKey && !$('#modal').open && data) { e.preventDefault(); openGuide(); return; }
   if (command && key === 'k' && !$('#modal').open && data) { e.preventDefault(); action(() => withSavedSettings(openGlobalSearch))(); return; }
+  // Rich text keeps Ctrl+B for bold.
+  if (command && key === 'b' && !e.shiftKey && !e.altKey && !$('#modal').open && !e.target.isContentEditable) { e.preventDefault(); if (!e.repeat) toggleSidebar(); return; }
   const editing = e.target.closest?.('input, select, textarea, [contenteditable="true"]');
   if (command && !editing && !$('#modal').open && (key === 'z' || key === 'y')) {
     e.preventDefault();
@@ -3322,6 +3356,49 @@ window.runSmokeTests = async () => {
     await tick();
     check(dimmed && windowChromeSent.dimmed === false, 'Window controls dim with the page while dialogs are open');
   }
+  // Sidebar toggle: the menu button and Ctrl+B fold the sidebar into a column of icons; the smoke run ends with it expanded.
+  const sidebar = $('#sidebar'), sidebarToggle = $('#sidebar-toggle'), sidebarWidth = boxOf('#sidebar').width, tableWidth = boxOf('.table-scroll').width;
+  const sidebarState = folded => document.documentElement.classList.contains('sidebar-collapsed') === folded && !sidebar.inert && sidebarToggle.getAttribute('aria-expanded') === String(!folded) && Math.abs(boxOf('main').left - boxOf('#sidebar').width) < 1;
+  const inRail = () => sidebarState(true), expanded = () => sidebarState(false) && Math.abs(boxOf('#sidebar').width - sidebarWidth) < 1;
+  const tooltipTargets = () => [...document.querySelectorAll('#navigation .nav-button, #settings-button, #open-browser, #organization-select')];
+  const insideRail = element => { const box = element.getBoundingClientRect(), rail = boxOf('#sidebar'); return box.width > 1 && box.height > 1 && box.left >= rail.left - 0.5 && box.right <= rail.right + 0.5; };
+  const labelHidden = element => element.getBoundingClientRect().width <= 1 && element.getBoundingClientRect().height <= 1;
+  const pressCtrlB = target => { const event = new KeyboardEvent('keydown', { key: 'b', ctrlKey: true, bubbles: true, cancelable: true }); target.dispatchEvent(event); return event.defaultPrevented; };
+  check(expanded() && sidebarWidth > 150 && sidebarToggle.getAttribute('aria-controls') === 'sidebar' && sidebarToggle.getAttribute('aria-keyshortcuts') === 'Control+B' && sidebarToggle.getAttribute('aria-label') === t("Sidebar") && sidebarToggle.title === t("Collapse the sidebar (Ctrl+B)") && sidebarToggle.querySelector('use')?.getAttribute('href') === '#i-menu' && heightOf('#sidebar-toggle') === heightOf('#undo-button') && Math.round(boxOf('#sidebar-toggle').width) === heightOf('#sidebar-toggle') && boxOf('#sidebar-toggle').right < boxOf('.breadcrumb').left && (!customTitleBar() || getComputedStyle(sidebarToggle).getPropertyValue('-webkit-app-region') === 'no-drag') && tooltipTargets().every(element => !element.hasAttribute('title')), 'Menu button sits in the top bar as a square tool before the breadcrumb');
+  sidebarToggle.click();
+  const railWidth = boxOf('#sidebar').width;
+  check(inRail() && sidebarToggle.title === t("Expand the sidebar (Ctrl+B)") && railWidth >= 48 && railWidth < sidebarWidth / 2 && Math.abs(boxOf('.table-scroll').width - tableWidth - (sidebarWidth - railWidth)) < 1 && sidebar.scrollWidth <= sidebar.clientWidth && localStorage.getItem('orbitkanban.sidebarCollapsed') === '1', 'Menu button folds the sidebar into a column of icons and gives the space to the list');
+  const railButtons = [...document.querySelectorAll('#navigation .nav-button, #guide-button, #settings-button')], railCenter = (boxOf('#sidebar').left + boxOf('#sidebar').right) / 2;
+  check(railButtons.length === data.settings.tabNames.length + 2 && railButtons.every(button => { const icon = button.querySelector('.nav-icon'), box = icon.getBoundingClientRect(), label = button.querySelector('.nav-label'); return insideRail(icon) && Math.abs((box.left + box.right) / 2 - railCenter) < 2 && labelHidden(label) && button.title === (button.id === 'guide-button' ? term("Open the guide (F1)") : label.textContent); }) && $('#navigation .nav-button').title === data.settings.tabNames[0] && $('#settings-button').title === t("Settings") && [...document.querySelectorAll('.brand > div:last-child, .local-card')].every(element => !element.getClientRects().length) && insideRail($('.brand-icon')) && insideRail($('#app-version')), 'Column keeps every view icon, the guide and settings, with their names as tooltips');
+  const taskBadge = $('#navigation .nav-count'), listIcon = $('#navigation .nav-icon').getBoundingClientRect();
+  check(insideRail(taskBadge) && taskBadge.textContent === String(visibleTasks().length) && getComputedStyle(taskBadge).position === 'absolute' && taskBadge.getBoundingClientRect().left > (listIcon.left + listIcon.right) / 2 && taskBadge.getBoundingClientRect().top > listIcon.top, 'Task counter becomes a badge on the list icon');
+  $('#navigation [data-view="1"]').click();
+  check(view === 1 && inRail() && $('#navigation [data-view="1"]').classList.contains('active') && $('#navigation [data-view="1"]').title === data.settings.tabNames[1] && $('#settings-button').title === t("Settings") && $('#current-tab').textContent === data.settings.tabNames[1], 'Views open from the column and it stays folded across renders');
+  $('#navigation [data-view="0"]').click();
+  await tick();
+  const organizationIcon = boxOf('.organization-icon'), organizationMenu = boxOf('#organization-select'), activeOrganizationName = organizations.find(o => o.id === activeOrganizationId).name;
+  check(view === 0 && inRail() && insideRail($('.organization-icon')) && ['top', 'left', 'width', 'height'].every(side => Math.abs(organizationIcon[side] - organizationMenu[side]) < 1) && document.elementFromPoint(organizationIcon.left + organizationIcon.width / 2, organizationIcon.top + organizationIcon.height / 2) === $('#organization-select') && $('#organization-select').title === fillText("Organization: {0}", activeOrganizationName) && !$('#manage-organizations').getClientRects().length && insideRail($('#open-browser')) && labelHidden($('#open-browser .nav-label')) && $('#open-browser').title === $('#open-browser .nav-label').textContent, 'Organization menu and browser button stay usable from the column');
+  const editableProbe = document.createElement('div');
+  editableProbe.contentEditable = 'true';
+  $('#content').append(editableProbe);
+  const boldKept = !pressCtrlB(editableProbe) && inRail();
+  editableProbe.remove();
+  openModal('<p>OrbitKanban</p>');
+  const dialogKept = !pressCtrlB($('#modal-content')) && inRail();
+  $('#modal').close();
+  await tick();
+  check(boldKept && dialogKept, 'Ctrl+B is left to rich text and ignored while a dialog is open');
+  check(pressCtrlB(document.body) && expanded() && Math.abs(boxOf('.table-scroll').width - tableWidth) < 1 && localStorage.getItem('orbitkanban.sidebarCollapsed') === null && tooltipTargets().every(element => !element.hasAttribute('title')) && $('#manage-organizations').getClientRects().length > 0 && !labelHidden($('#navigation .nav-label')), 'Ctrl+B expands the sidebar again and restores the layout');
+  const navButton = $('#navigation .nav-button');
+  navButton.focus();
+  pressCtrlB(navButton);
+  const iconFocusKept = inRail() && document.activeElement === navButton;
+  pressCtrlB(navButton);
+  $('#manage-organizations').focus();
+  pressCtrlB($('#manage-organizations'));
+  check(iconFocusKept && inRail() && document.activeElement === sidebarToggle, 'Folding keeps the focus on icons and moves it from hidden controls to the menu button');
+  sidebarToggle.click();
+  check(expanded() && localStorage.getItem('orbitkanban.sidebarCollapsed') === null, 'Menu button expands the sidebar again');
   taskDialog(data.tasks.find(task => !task.hidden));
   const editModal = $('#modal'), editBody = $('.task-edit-layout'), editWidth = editModal.clientWidth;
   check(editWidth >= Math.min(1100, innerWidth * 0.9) && $('.task-edit-fields').getBoundingClientRect().right < $('.task-edit-text').getBoundingClientRect().left, "Wide task editor places properties and text side by side");

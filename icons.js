@@ -57,6 +57,7 @@ const FEATURE = {
 };
 const LINE = {
   search: '<circle cx="10.5" cy="10.5" r="6.3"/><path d="M15.3 15.3l5 5"/>',
+  menu: '<path d="M4 6.5h16M4 12h16M4 17.5h16"/>',
   undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
   redo: '<path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
