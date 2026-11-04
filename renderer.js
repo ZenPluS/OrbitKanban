@@ -534,6 +534,11 @@ if (customTitleBar()) {
 // The sidebar can fold into a column of icons so the views get more space; the choice is kept on this device.
 const SIDEBAR_COLLAPSED_KEY = 'orbitkanban.sidebarCollapsed';
 let sidebarCollapsed = (() => { try { return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1'; } catch { return false; } })();
+const sidebarReducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+let sidebarAnimations = [];
+sidebarReducedMotion.addEventListener('change', () => {
+  if (sidebarReducedMotion.matches) sidebarAnimations.forEach(animation => animation.cancel());
+});
 function applySidebar() {
   const toggle = $('#sidebar-toggle'), select = $('#organization-select');
   document.documentElement.classList.toggle('sidebar-collapsed', sidebarCollapsed);
@@ -548,9 +553,48 @@ function applySidebar() {
 }
 function toggleSidebar() {
   const focused = document.activeElement;
+  const layout = sidebarReducedMotion.matches ? [] : [
+    [$('#sidebar'), ['width', 'paddingLeft', 'paddingRight']],
+    [$('main'), ['width', 'marginLeft']],
+    [$('#toast'), ['left']]
+  ];
+  const propertiesOf = (element, properties) => {
+    const style = getComputedStyle(element);
+    return Object.fromEntries(properties.map(property => [property, style[property]]));
+  };
+  const beforeLayout = layout.map(([element, properties]) => propertiesOf(element, properties));
+  const moving = sidebarReducedMotion.matches ? [] : [
+    ...[...document.querySelectorAll('#navigation, #guide-button, #settings-button, #open-browser, .sidebar .version')].map(element => [element, 'y']),
+    ...[...document.querySelectorAll('.sidebar .nav-icon, .sidebar .nav-count, #open-browser .ico, #app-version')].map(element => [element, 'x']),
+    [$('.sidebar .brand-icon'), 'xy']
+  ];
+  const beforePositions = moving.map(([element]) => element.getBoundingClientRect());
+  // Capture the visible positions before cancelling, so a quick second click reverses smoothly.
+  sidebarAnimations.forEach(animation => animation.cancel());
+  sidebarAnimations = [];
   sidebarCollapsed = !sidebarCollapsed;
   try { if (sidebarCollapsed) localStorage.setItem(SIDEBAR_COLLAPSED_KEY, '1'); else localStorage.removeItem(SIDEBAR_COLLAPSED_KEY); } catch {}
   applySidebar();
+  const motion = { duration: 220, easing: 'cubic-bezier(0.2, 0, 0, 1)' };
+  const afterLayout = layout.map(([element, properties]) => propertiesOf(element, properties));
+  if (!sidebarCollapsed && !sidebarReducedMotion.matches) {
+    // Reveal full-width labels through the growing sidebar instead of wrapping them while it opens.
+    const children = [...$('#sidebar').children].map(element => [element, getComputedStyle(element).width]);
+    sidebarAnimations.push(...children.map(([element, width]) => element.animate([{ minWidth: width }, { minWidth: width }], motion)));
+  }
+  sidebarAnimations.push(...layout.map(([element], index) => element.animate([beforeLayout[index], afterLayout[index]], motion)));
+  // Move icons without scaling them, and compensate for controls changing rows in the compact layout.
+  const afterPositions = moving.map(([element]) => element.getBoundingClientRect());
+  sidebarAnimations.push(...moving.map(([element, axes], index) => {
+    const x = axes.includes('x') ? beforePositions[index].left - afterPositions[index].left : 0;
+    const y = axes.includes('y') ? beforePositions[index].top - afterPositions[index].top : 0;
+    return element.animate([{ transform: `translate(${x}px, ${y}px)` }, { transform: 'translate(0, 0)' }], motion);
+  }));
+  if (!sidebarReducedMotion.matches) {
+    const labels = sidebarCollapsed ? '.sidebar .organization-icon' : '.sidebar .nav-label, .sidebar .brand > div:last-child, .sidebar .organization-switcher label, #organization-select, #manage-organizations, .sidebar .local-card';
+    const fade = sidebarCollapsed ? [{ opacity: 0 }, { opacity: 1 }] : [{ opacity: 0 }, { opacity: 0, offset: 0.8 }, { opacity: 1 }];
+    sidebarAnimations.push(...[...document.querySelectorAll(labels)].map(element => element.animate(fade, motion)));
+  }
   // Controls that only exist in the full sidebar hand the focus to the menu button.
   if ($('#sidebar').contains(focused) && !focused.getClientRects().length) $('#sidebar-toggle').focus({ preventScroll: true });
   // The views change width without a window resize, so menus anchored to them follow the resize rules.
@@ -561,6 +605,7 @@ function toggleSidebar() {
 }
 // Set before the first render so a collapsed sidebar does not flash open; render() applies the rest.
 document.documentElement.classList.toggle('sidebar-collapsed', sidebarCollapsed);
+new ResizeObserver(positionColorPicker).observe($('main'));
 function paintFontSizes(sizes) {
   const values = { ...defaultFontSizes(), ...sizes };
   for (const { id } of FONT_SIZE_PARTS) document.documentElement.style.setProperty(`--fs-${id}`, String(values[id] / 100));
@@ -3364,8 +3409,19 @@ window.runSmokeTests = async () => {
   const insideRail = element => { const box = element.getBoundingClientRect(), rail = boxOf('#sidebar'); return box.width > 1 && box.height > 1 && box.left >= rail.left - 0.5 && box.right <= rail.right + 0.5; };
   const labelHidden = element => element.getBoundingClientRect().width <= 1 && element.getBoundingClientRect().height <= 1;
   const pressCtrlB = target => { const event = new KeyboardEvent('keydown', { key: 'b', ctrlKey: true, bubbles: true, cancelable: true }); target.dispatchEvent(event); return event.defaultPrevented; };
+  const finishSidebarMotion = () => sidebarAnimations.forEach(animation => animation.finish());
+  const seekSidebarMotion = time => sidebarAnimations.forEach(animation => { animation.pause(); animation.currentTime = time; });
   check(expanded() && sidebarWidth > 150 && sidebarToggle.getAttribute('aria-controls') === 'sidebar' && sidebarToggle.getAttribute('aria-keyshortcuts') === 'Control+B' && sidebarToggle.getAttribute('aria-label') === t("Sidebar") && sidebarToggle.title === t("Collapse the sidebar (Ctrl+B)") && sidebarToggle.querySelector('use')?.getAttribute('href') === '#i-menu' && heightOf('#sidebar-toggle') === heightOf('#undo-button') && Math.round(boxOf('#sidebar-toggle').width) === heightOf('#sidebar-toggle') && boxOf('#sidebar-toggle').right < boxOf('.breadcrumb').left && (!customTitleBar() || getComputedStyle(sidebarToggle).getPropertyValue('-webkit-app-region') === 'no-drag') && tooltipTargets().every(element => !element.hasAttribute('title')), 'Menu button sits in the top bar as a square tool before the breadcrumb');
+  const initialIcon = boxOf('#navigation .nav-icon');
   sidebarToggle.click();
+  if (!sidebarReducedMotion.matches) {
+    seekSidebarMotion(0);
+    check(Math.abs(boxOf('#sidebar').width - sidebarWidth) < 1 && Math.abs(boxOf('#navigation .nav-icon').left - initialIcon.left) < 1 && Math.abs(boxOf('#navigation .nav-icon').top - initialIcon.top) < 1, 'Sidebar motion starts at the visible layout without jumping the icons');
+    seekSidebarMotion(110);
+    const middleWidth = boxOf('#sidebar').width, targetWidth = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--fs-sidebar')) * 68;
+    check(sidebarAnimations.every(animation => animation.effect.getTiming().duration === 220) && middleWidth > targetWidth + 1 && middleWidth < sidebarWidth - 1 && Math.abs(boxOf('main').left - middleWidth) < 1 && Math.abs(boxOf('main').right - innerWidth) < 1 && Math.abs(parseFloat(getComputedStyle($('#toast')).left) - (innerWidth + middleWidth) / 2) < 1 && Math.abs(boxOf('#navigation .nav-icon').width - initialIcon.width) < 1, 'Sidebar animates for 220ms with synchronized content and toast, without stretching icons');
+  }
+  finishSidebarMotion();
   const railWidth = boxOf('#sidebar').width;
   check(inRail() && sidebarToggle.title === t("Expand the sidebar (Ctrl+B)") && railWidth >= 48 && railWidth < sidebarWidth / 2 && Math.abs(boxOf('.table-scroll').width - tableWidth - (sidebarWidth - railWidth)) < 1 && sidebar.scrollWidth <= sidebar.clientWidth && localStorage.getItem('orbitkanban.sidebarCollapsed') === '1', 'Menu button folds the sidebar into a column of icons and gives the space to the list');
   const railButtons = [...document.querySelectorAll('#navigation .nav-button, #guide-button, #settings-button')], railCenter = (boxOf('#sidebar').left + boxOf('#sidebar').right) / 2;
@@ -3388,17 +3444,37 @@ window.runSmokeTests = async () => {
   $('#modal').close();
   await tick();
   check(boldKept && dialogKept, 'Ctrl+B is left to rich text and ignored while a dialog is open');
-  check(pressCtrlB(document.body) && expanded() && Math.abs(boxOf('.table-scroll').width - tableWidth) < 1 && localStorage.getItem('orbitkanban.sidebarCollapsed') === null && tooltipTargets().every(element => !element.hasAttribute('title')) && $('#manage-organizations').getClientRects().length > 0 && !labelHidden($('#navigation .nav-label')), 'Ctrl+B expands the sidebar again and restores the layout');
+  const expandedWithShortcut = pressCtrlB(document.body);
+  if (!sidebarReducedMotion.matches) {
+    seekSidebarMotion(110);
+    check(boxOf('#sidebar').width > railWidth + 1 && boxOf('#sidebar').width < sidebarWidth - 1 && Math.abs(boxOf('main').left - boxOf('#sidebar').width) < 1 && Number(getComputedStyle($('#navigation .nav-label')).opacity) > 0 && Number(getComputedStyle($('#navigation .nav-label')).opacity) < 1, 'Expanding slides the sidebar back and fades in the labels');
+  }
+  finishSidebarMotion();
+  check(expandedWithShortcut && expanded() && Math.abs(boxOf('.table-scroll').width - tableWidth) < 1 && localStorage.getItem('orbitkanban.sidebarCollapsed') === null && tooltipTargets().every(element => !element.hasAttribute('title')) && $('#manage-organizations').getClientRects().length > 0 && !labelHidden($('#navigation .nav-label')), 'Ctrl+B expands the sidebar again and restores the layout');
   const navButton = $('#navigation .nav-button');
   navButton.focus();
   pressCtrlB(navButton);
+  finishSidebarMotion();
   const iconFocusKept = inRail() && document.activeElement === navButton;
   pressCtrlB(navButton);
+  finishSidebarMotion();
   $('#manage-organizations').focus();
   pressCtrlB($('#manage-organizations'));
+  finishSidebarMotion();
   check(iconFocusKept && inRail() && document.activeElement === sidebarToggle, 'Folding keeps the focus on icons and moves it from hidden controls to the menu button');
   sidebarToggle.click();
+  finishSidebarMotion();
   check(expanded() && localStorage.getItem('orbitkanban.sidebarCollapsed') === null, 'Menu button expands the sidebar again');
+  if (!sidebarReducedMotion.matches) {
+    sidebarToggle.click();
+    seekSidebarMotion(80);
+    const interruptedWidth = boxOf('#sidebar').width, interruptedIcon = boxOf('#navigation .nav-icon');
+    sidebarToggle.click();
+    seekSidebarMotion(0);
+    check(Math.abs(boxOf('#sidebar').width - interruptedWidth) < 1 && Math.abs(boxOf('#navigation .nav-icon').left - interruptedIcon.left) < 1 && Math.abs(boxOf('#navigation .nav-icon').top - interruptedIcon.top) < 1, 'Rapid toggles reverse the animation from its current position');
+    finishSidebarMotion();
+    check(expanded() && localStorage.getItem('orbitkanban.sidebarCollapsed') === null, 'Interrupted sidebar motion settles in the last requested state');
+  }
   taskDialog(data.tasks.find(task => !task.hidden));
   const editModal = $('#modal'), editBody = $('.task-edit-layout'), editWidth = editModal.clientWidth;
   check(editWidth >= Math.min(1100, innerWidth * 0.9) && $('.task-edit-fields').getBoundingClientRect().right < $('.task-edit-text').getBoundingClientRect().left, "Wide task editor places properties and text side by side");

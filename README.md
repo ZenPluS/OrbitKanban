@@ -4,7 +4,7 @@
 
 | | |
 | --- | --- |
-| **Current version** | 2.47.0 |
+| **Current version** | 2.47.1 |
 | **Platform** | Windows 10 / 11, 64-bit |
 | **Distribution** | Single portable executable, `OrbitKanban-Portable.exe` |
 | **Network** | Not required. Used only for optional update checks against GitHub |
@@ -164,6 +164,8 @@ The menu under the **OrbitKanban** name in the sidebar switches the active organ
 All views share compact headers. Their tables, timeline and board fill the window and scroll internally while respecting the configured text sizes. On Windows the app draws its own title bar: drag the top bar or logo to move the window, and double-click to maximize or restore it. The minimize, maximize and close buttons follow the active theme.
 
 The **☰** button at the left of the top bar, or `Ctrl+B`, folds the sidebar into a column of icons so the views get more room. The icons keep their counters and show their names as tooltips, and the building icon still switches organization. Press the button again to expand the sidebar. The choice travels with the portable data in `data/runtime/`; with browser access, each browser keeps its own.
+
+Opening and closing use a short, 220 ms transition: the views resize with the sidebar, icons move without stretching, and labels fade back in. Clicking again reverses the motion immediately. The system's **reduced motion** preference disables the animation, and restoring the saved layout at startup is always instant.
 
 ### Tasks
 
@@ -614,6 +616,7 @@ The script refuses to reuse a tagged version for different sources. If a build o
 
 | Version | Changes |
 | --- | --- |
+| **2.47.1** | Smooth, reversible sidebar animation with label fades and support for reduced motion |
 | **2.47.0** | Collapsible sidebar: **☰** or `Ctrl+B` folds it into a column of icons with tooltips and counters |
 | **2.46.0** | Searchable in-app guide covering every feature (sidebar **Guide**, `F1`); README rewritten in English |
 | **2.45.0** | Verified in-app updates from GitHub releases; single taskbar identity for the portable launcher; desktop shortcut |
