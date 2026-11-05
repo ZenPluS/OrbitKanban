@@ -6,7 +6,7 @@ const uid = () => crypto.randomUUID();
 const { reorderTaskSequences, indexIssues } = window.OrbitaCore;
 const { FONT_FAMILIES, DEFAULT_FONT_FAMILY } = window.OrbitaCore;
 const { hexToHsv, hsvToHex } = window.OrbitaCore;
-const { taskEditorFields, normalizeTaskEditorLayout } = window.OrbitaCore;
+const { taskEditorFields, normalizeTaskEditorLayout, defaultTaskEditorLayout, TASK_LAYOUT } = window.OrbitaCore;
 const CustomColumns = window.OrbitaColumns, Csv = window.OrbitaCsv;
 const hasColumn = (id, kind = 'tasks', settings = data.settings) => CustomColumns.hasColumn(settings, kind, id);
 const configuredColumns = (kind = 'tasks', settings = data.settings, input) => CustomColumns.listColumns(settings, kind, input);
@@ -805,9 +805,9 @@ const settingsTabs = [
   { id: 'organizations', group: "Organization", icon: 'building', label: "Organizations", panel: 'organizations-panel', keys: [] },
   { id: 'themes', group: "Appearance", icon: 'palette', label: "Themes & atmosphere", panel: 'themes-panel', keys: ['themes', 'themeId'] },
   { id: 'fonts', group: "Appearance", icon: 'font', label: "Font and text size", panel: 'font-size-panel', keys: ['fontSizes', 'fontFamily'] },
-  { id: 'task-layout', group: "Appearance", icon: 'columns', label: "Task editor layout", panel: 'task-layout-panel', keys: ['taskEditorLayout'] },
+  { id: 'task-layout', group: "Appearance", icon: 'columns', label: "Task editor layout", panel: 'task-layout-panel', keys: ['taskEditorLayout', 'requiredTaskColumns'] },
   { id: 'columns', group: "Workflow", icon: 'columns', label: "List columns", panel: 'columns-panel', keys: ['taskColumns'] },
-  { id: 'custom-columns', group: "Workflow", icon: 'column-plus', label: "Column management", panel: 'custom-columns-panel', keys: ['taskFields', 'issueFields', 'taskColumns', 'issueColumns', 'deletedTaskColumns', 'deletedIssueColumns'] },
+  { id: 'custom-columns', group: "Workflow", icon: 'column-plus', label: "Column management", panel: 'custom-columns-panel', keys: ['taskFields', 'issueFields', 'taskColumns', 'issueColumns', 'deletedTaskColumns', 'deletedIssueColumns', 'requiredTaskColumns', 'requiredIssueColumns'] },
   { id: 'transfer', group: "Data & access", icon: 'transfer', label: "Export and import organization", panel: 'transfer-panel', keys: [] },
   { id: 'storage', group: "Data & access", icon: 'database', label: "Data that travels with you", panel: 'storage-panel', keys: [] },
   { id: 'browser', group: "Data & access", icon: 'globe', label: "Browser access", panel: 'browser-panel', keys: [] },
@@ -827,7 +827,7 @@ const allSettingsTabs = () => [
 ];
 // Ordered: the first matching pattern decides which settings tab holds the field to fix.
 // Validation messages are English source text, except those the store localizes in the organization language, so the patterns also list the Italian wording.
-const settingsErrorTabs = [[/custom columns?|deleted columns|columns changed|colonne eliminate|colonne modificate|column options|column names and identifiers|colonn[ae] personalizzat|opzioni della colonna|nomi e identificativi delle colonne/i, 'custom-columns'], [/\btags?\b/i, 'tags'], [/evidenziatori|highlighter/i, 'highlights'], [/colonne della lista|list columns/i, 'columns'], [/link portale|portal link/i, 'portal'], [/dimensioni del testo|text sizes|\bfont\b/i, 'fonts'], [/\b(?:temi|tema|themes?)\b/i, 'themes'], [/urgen/i, 'urgencies'], [/\b(?:stati|status|statuses)\b/i, 'statuses'], [/\b(?:lingua|language)\b/i, 'languages'], [/organizzazione|organization|\btab\b|ore per giorno|hours per day|logo/i, 'identity']];
+const settingsErrorTabs = [[/custom columns?|deleted columns|required columns|colonne obbligatorie|columns changed|colonne eliminate|colonne modificate|column options|column names and identifiers|colonn[ae] personalizzat|opzioni della colonna|nomi e identificativi delle colonne/i, 'custom-columns'], [/\btags?\b/i, 'tags'], [/evidenziatori|highlighter/i, 'highlights'], [/colonne della lista|list columns/i, 'columns'], [/link portale|portal link/i, 'portal'], [/dimensioni del testo|text sizes|\bfont\b/i, 'fonts'], [/\b(?:temi|tema|themes?)\b/i, 'themes'], [/urgen/i, 'urgencies'], [/\b(?:stati|status|statuses)\b/i, 'statuses'], [/\b(?:lingua|language)\b/i, 'languages'], [/organizzazione|organization|\btab\b|ore per giorno|hours per day|logo/i, 'identity']];
 const settingsErrorTab = message => /task editor layout|layout della scheda attività/i.test(String(message)) ? 'task-layout' : settingsErrorTabs.find(([pattern]) => pattern.test(String(message)))?.[1];
 function settingsNav() {
   const tabs = allSettingsTabs(), groups = [...new Set(tabs.map(tab => tab.group))];
@@ -1572,6 +1572,9 @@ function bulkDialog(ids, context = '') {
     if (!hasColumn(id)) form.elements[name].closest('.field').remove();
   }
   if (!hasColumn('tags')) form.querySelector('.bulk-tags')?.remove();
+  // Bulk edit cannot empty a mandatory field.
+  if (CustomColumns.isRequired(settings, 'tasks', 'releaseDate')) form.querySelector('#bulk-release-mode option[value="clear"]')?.remove();
+  if (CustomColumns.isRequired(settings, 'tasks', 'highlight')) form.querySelector('select[name="highlightId"] option[value="__none"]')?.remove();
   if (!hasColumn('releaseDate')) form.querySelectorAll('.bulk-date').forEach(element => element.remove());
   if (!hasColumn('status')) form.querySelectorAll('.bulk-item .pill, [data-bulk-status]').forEach(element => element.remove());
   if (!hasColumn('description')) form.querySelectorAll('.bulk-desc').forEach(element => element.remove());
@@ -1989,10 +1992,10 @@ function wireEditors() {
     el.addEventListener('drop', e => e.preventDefault());
   });
 }
-function customEditors(kind, record) {
+function customEditors(kind, record, wrap = true) {
   const fields = CustomColumns.fieldsOf(data.settings, kind);
   if (!fields.length) return '';
-  return `<section class="custom-edit-fields full"><h3>${esc(t("Custom columns"))}</h3><div class="form-grid">${fields.map(field => {
+  const html = fields.map(field => {
     const value = record.customFields?.[field.id], label = esc(field.name), name = esc(field.id);
     if (field.type === 'richtext') return editor(`editor-${field.id}`, field.name, value || '', false);
     const choice = (value, name, selected) => `<option value="${esc(value)}" ${selected ? 'selected' : ''}>${esc(name)}</option>`;
@@ -2002,7 +2005,8 @@ function customEditors(kind, record) {
     else if (field.type === 'select') input = `<select name="${name}">${choice('', '—', !value)}${CustomColumns.choices(field).map(option => choice(option.id, option.name, option.id === value)).join('')}</select>`;
     else input = `<input name="${name}" type="${field.type === 'date' ? 'date' : ['number', 'effort'].includes(field.type) ? 'number' : 'text'}" ${['number', 'effort'].includes(field.type) ? 'step="any"' : 'maxlength="200000"'} ${field.type === 'effort' ? 'min="0"' : ''} value="${esc(value ?? '')}">`;
     return `<label class="field">${label}${input}${field.type === 'effort' ? `<small>${esc(t("Value in hours"))}</small>` : ''}</label>`;
-  }).join('')}</div></section>`;
+  }).join('');
+  return wrap ? `<section class="custom-edit-fields full"><h3>${esc(t("Custom columns"))}</h3><div class="form-grid">${html}</div></section>` : html;
 }
 function readCustomEditors(form, kind) {
   const values = {}, entries = new FormData(form);
@@ -2099,41 +2103,158 @@ function pruneColumnEditors(form, kind) {
     if (field.type === 'richtext') form.querySelector(`#${field.id}-editor`)?.closest('.field')?.remove();
   }
 }
-function applyTaskEditorLayout(form) {
-  const layout = normalizeTaskEditorLayout(data.settings), body = form.querySelector('.task-edit-layout');
-  const properties = form.querySelector('.task-edit-fields'), text = form.querySelector('.task-edit-text');
-  const elements = new Map();
-  for (const field of CustomColumns.schemaOf(data.settings, 'tasks')) {
+// Marks each editor control's container with the field id, so layouts, designers and required checks can find it.
+function tagFormFields(form, kind) {
+  for (const field of CustomColumns.schemaOf(data.settings, kind)) {
     const element = field.type === 'richtext' ? document.getElementById(field.builtin ? `${field.id}-editor` : `editor-${field.id}`) :
-      field.property ? form.elements[field.property] : form.querySelector(`[name="${field.id}"], [data-choice-field="${field.id}"]`);
-    if (element?.closest) elements.set(field.id, element.closest('.field'));
+      field.property ? form.elements[field.property] : form.querySelector(`[data-choice-field="${CSS.escape(field.id)}"], [name="${CSS.escape(field.id)}"]`);
+    const container = element?.closest?.('.field');
+    if (container) container.dataset.formField = field.id;
   }
+  if (kind !== 'tasks') return;
   const effort = form.elements.days?.closest('.field');
   if (effort) {
     const group = document.createElement('div');
     group.className = 'form-grid task-effort-fields';
+    group.dataset.formField = 'effort';
+    effort.before(group);
     group.append(effort, form.elements.hours.closest('.field'));
-    elements.set('effort', group);
   }
-  elements.set('hidden', form.elements.hidden.closest('.field'));
-  elements.set('matches', form.querySelector('#match-preview'));
-  for (const field of layout.fields) {
-    const element = elements.get(field.id);
-    if (!element) continue;
-    element.dataset.taskField = field.id;
-    element.hidden = !field.visible;
-    element.classList.toggle('full', field.section === 'properties' && field.span === 2);
-    (field.section === 'text' ? text : properties).append(element);
+  form.elements.hidden.closest('.field').dataset.formField = 'hidden';
+  const matches = form.querySelector('#match-preview');
+  if (matches) matches.dataset.formField = 'matches';
+}
+// Fields flow row by row like grid auto placement; explicit rows let rich-text rows take the spare height.
+function placeSectionFields(fields, columnCount, isRich) {
+  let row = 0, column = 0;
+  const richRows = new Set(), placed = fields.map(field => {
+    const span = Math.min(field.span, columnCount);
+    if (column + span > columnCount) { row++; column = 0; }
+    if (isRich(field.id)) richRows.add(row);
+    const place = { ...field, span, column: column + 1, row: row + 1 };
+    column += span;
+    return place;
+  });
+  const rows = fields.length ? row + 1 : 0;
+  return { placed, rows: Array.from({ length: rows }, (_, index) => richRows.has(index) ? 'minmax(min-content, 1fr)' : 'auto').join(' ') };
+}
+const taskLayoutTemplate = columns => columns.map(column => `minmax(0, ${column.width}fr)`).join(' ');
+const richTaskFields = settings => new Set(taskEditorFields(settings).filter(field => field.type === 'richtext').map(field => field.id));
+// Shared by the task editor and the form designer preview, so the designer is what you get.
+function buildTaskLayoutColumns(layout, settings, elementFor, { keepEmpty = false, decorate } = {}) {
+  const rich = richTaskFields(settings), shown = [];
+  for (const [columnIndex, column] of layout.columns.entries()) {
+    const columnElement = document.createElement('div');
+    columnElement.className = 'task-form-column';
+    columnElement.dataset.layoutColumn = String(columnIndex);
+    for (const section of column.sections) {
+      const fields = section.fields.filter(field => elementFor(field.id));
+      if (!fields.length && !keepEmpty) continue;
+      const titled = section.showName && section.name.trim();
+      const sectionElement = document.createElement(titled ? 'section' : 'div');
+      sectionElement.className = 'task-form-section';
+      sectionElement.dataset.section = section.id;
+      if (titled) {
+        const title = document.createElement('h3');
+        title.className = 'task-form-section-title';
+        title.id = `task-section-${section.id}-${uid().slice(0, 8)}`;
+        title.textContent = section.name;
+        sectionElement.setAttribute('aria-labelledby', title.id);
+        sectionElement.append(title);
+      }
+      const grid = document.createElement('div'), { placed, rows } = placeSectionFields(fields, section.columns, id => rich.has(id));
+      grid.className = 'task-form-grid';
+      grid.style.gridTemplateColumns = `repeat(${section.columns}, minmax(0, 1fr))`;
+      grid.style.gridTemplateRows = rows;
+      for (const field of placed) {
+        const element = elementFor(field.id);
+        element.style.gridColumn = `${field.column} / span ${field.span}`;
+        element.style.gridRow = String(field.row);
+        element.classList.toggle('is-rich-field', rich.has(field.id));
+        grid.append(element);
+      }
+      sectionElement.classList.toggle('has-rich', placed.some(field => rich.has(field.id)));
+      sectionElement.append(grid);
+      decorate?.(sectionElement, section, columnIndex);
+      columnElement.append(sectionElement);
+    }
+    if (columnElement.children.length || keepEmpty) shown.push({ width: column.width, element: columnElement });
   }
-  form.querySelector('.custom-edit-fields')?.remove();
-  body.dataset.mode = layout.mode;
-  properties.style.gridTemplateColumns = `repeat(${layout.columns}, minmax(0, 1fr))`;
-  properties.hidden = !layout.fields.some(field => field.visible && field.section === 'properties');
-  text.hidden = !layout.fields.some(field => field.visible && field.section === 'text');
-  text.style.setProperty('--task-text-count', String(layout.fields.filter(field => field.visible && field.section === 'text').length || 1));
-  if (layout.mode === 'text-first') body.prepend(text);
-  body.classList.toggle('single-section', properties.hidden || text.hidden);
-  if (properties.hidden && text.hidden) body.insertAdjacentHTML('beforeend', `<p class="muted">${esc(t("All editor fields are hidden. Change the task editor layout in Settings."))}</p>`);
+  return shown;
+}
+function applyTaskEditorLayout(form) {
+  const layout = normalizeTaskEditorLayout(data.settings), body = form.querySelector('.task-edit-layout'), pool = form.querySelector('.task-edit-pool');
+  tagFormFields(form, 'tasks');
+  const elements = new Map([...pool.querySelectorAll('[data-form-field]')].map(element => [element.dataset.formField, element]));
+  const columns = buildTaskLayoutColumns(layout, data.settings, id => elements.get(id));
+  body.append(...columns.map(column => column.element));
+  body.style.gridTemplateColumns = taskLayoutTemplate(columns);
+  // Fields kept off the form stay in the hidden pool, so their values are saved unchanged.
+  pool.hidden = true;
+  form.style.setProperty('--task-form-width', `${layout.width}px`);
+  if (layout.height) form.style.setProperty('--task-form-height', `${layout.height}px`);
+  form.classList.toggle('fixed-height', layout.height > 0);
+  if (!columns.length) body.insertAdjacentHTML('afterbegin', `<p class="muted task-form-empty">${esc(t("No fields are on this form. Add them with the form designer in Settings › Task editor layout."))}</p>`);
+}
+const REQUIRED_CONTROLS = 'input:not([type="hidden"]):not([type="checkbox"]), select, [contenteditable="true"], [data-choice-field]';
+function markRequiredFields(form, kind) {
+  for (const id of CustomColumns.requiredOf(data.settings, kind)) {
+    const container = form.querySelector(`[data-form-field="${CSS.escape(id)}"]`);
+    if (!container || container.closest('.task-edit-pool')) continue;
+    container.dataset.required = 'true';
+    const host = container.querySelector('.field-label, .task-effort-label, label[for], legend') || container;
+    const text = [...host.childNodes].find(node => node.nodeType === Node.TEXT_NODE && node.textContent.trim());
+    const mark = document.createElement('span');
+    mark.className = 'required-mark';
+    mark.setAttribute('aria-hidden', 'true');
+    mark.title = t("Required");
+    mark.textContent = '*';
+    if (text) { const label = document.createElement('span'); text.replaceWith(label); label.append(text, mark); } else host.prepend(mark);
+    container.querySelectorAll(REQUIRED_CONTROLS).forEach(control => control.setAttribute('aria-required', 'true'));
+  }
+  const clear = event => clearRequiredError(event.target.closest?.('[data-required]'));
+  form.addEventListener('input', clear);
+  form.addEventListener('change', clear);
+}
+function clearRequiredError(container) {
+  if (!container?.classList.contains('is-invalid')) return;
+  container.classList.remove('is-invalid');
+  container.querySelectorAll('.field-error').forEach(error => error.remove());
+  container.querySelectorAll('[aria-invalid]').forEach(control => { control.removeAttribute('aria-invalid'); control.removeAttribute('aria-describedby'); });
+}
+// Mandatory fields are checked only where they appear on the form, like business-required fields in a model-driven form.
+function checkRequiredFields(form, kind, emptyWhen = {}) {
+  const entries = new FormData(form), schema = CustomColumns.schemaOf(data.settings, kind), missing = [];
+  const isEmpty = (id, container) => {
+    if (emptyWhen[id]) return emptyWhen[id]();
+    const rich = container.querySelector('.editable');
+    if (rich) return !plain(rich.innerHTML) && !rich.querySelector('img');
+    if (schema.find(field => field.id === id)?.type === 'multiselect') return !entries.getAll(id).length;
+    return [...container.querySelectorAll('input:not([type="hidden"]):not([type="checkbox"]), select')].every(control => !control.value.trim());
+  };
+  for (const container of form.querySelectorAll('[data-required="true"]')) {
+    clearRequiredError(container);
+    if (!isEmpty(container.dataset.formField, container)) continue;
+    missing.push(container);
+    const error = document.createElement('small');
+    error.className = 'field-error';
+    error.id = `required-error-${uid()}`;
+    error.textContent = t("This field is required.");
+    container.classList.add('is-invalid');
+    container.append(error);
+    container.querySelectorAll(REQUIRED_CONTROLS).forEach(control => {
+      control.setAttribute('aria-invalid', 'true');
+      control.setAttribute('aria-describedby', error.id);
+    });
+  }
+  if (!missing.length) return;
+  const names = missing.map(container => {
+    const field = schema.find(item => item.id === container.dataset.formField);
+    return field.builtin ? t(field.name) : field.name;
+  });
+  missing[0].scrollIntoView({ block: 'nearest' });
+  missing[0].querySelector(REQUIRED_CONTROLS)?.focus();
+  throw new Error(fillText("Fill in the required fields: {0}.", names.join(', ')));
 }
 function taskDialog(existing) {
   const t = existing || {
@@ -2142,9 +2263,9 @@ function taskDialog(existing) {
     effortHours: 0, releaseDate: '', notes: '', hidden: false, highlightId: '', tagIds: []
   };
   const days = Math.floor(t.effortHours / data.settings.hoursPerDay), hours = Math.round((t.effortHours - days * data.settings.hoursPerDay) * 100) / 100;
-  openModal(ui`<form id="task-form"><div class="modal-heading"><div><div class="eyebrow">TASK</div><h2>${tr(existing ? "Edit task" : "A new direction")}</h2></div><button type="button" class="icon-button" data-close aria-label="Close">${ico('close')}</button></div><div class="task-edit-layout"><div class="form-grid task-edit-fields">
+  openModal(ui`<form id="task-form" class="task-form"><div class="modal-heading"><div><div class="eyebrow">TASK</div><h2>${tr(existing ? "Edit task" : "A new direction")}</h2></div><button type="button" class="icon-button" data-close aria-label="Close">${ico('close')}</button></div><div class="task-edit-layout"></div><div class="task-edit-pool">
     <label class="field">Portal code<input name="code" maxlength="200" value="${esc(t.code)}" placeholder="es. PRJ-1042"></label>
-    <label class="field">Sequence *<input name="sequence" type="number" min="0" step="1" required value="${t.sequence}"></label>
+    <label class="field">Sequence<input name="sequence" type="number" min="0" step="1" value="${t.sequence}"></label>
     <label class="field">Urgency<select name="urgencyId">${optionList(data.settings.urgencies, t.urgencyId, "Unassigned")}</select></label>
     <label class="field">Status<select name="statusId">${optionList(data.settings.statuses, t.statusId, "Unassigned")}</select></label>
     <label class="field">Release date<input name="releaseDate" type="date" value="${esc(t.releaseDate)}"></label>
@@ -2154,15 +2275,15 @@ function taskDialog(existing) {
     <div class="field full portal-field"><label for="task-url">Specific link (optional)</label><input id="task-url" name="url" inputmode="url" spellcheck="false" autocomplete="off" maxlength="2000" value="${esc(t.url)}"><small id="portal-link-preview" aria-live="polite"></small></div>
     <label class="field full checkbox-field"><input type="checkbox" name="hidden" ${t.hidden ? 'checked' : ''}> Hide from the task list only (still visible in milestones and kanban)</label>
     <div class="auto-match full" id="match-preview"></div>
-    ${customEditors('tasks', t)}
-    </div><div class="task-edit-text">
+    ${customEditors('tasks', t, false)}
     ${editor('description-editor', "Description", t.description)}
     ${editor('notes-editor', "Notes", t.notes)}
-    </div></div><div class="modal-actions">${existing ? ui`<button type="button" class="button danger" id="delete-task">Delete</button>` : ''}<span class="spacer"></span><button type="button" class="button" data-close>Cancel</button><button type="submit" class="button primary">Save task</button></div></form>`);
+    </div><div class="modal-actions">${existing ? ui`<button type="button" class="button danger" id="delete-task">Delete</button>` : ''}<span class="spacer"></span><button type="button" class="button" data-close>Cancel</button><button type="submit" class="button primary">Save task</button></div></form>`);
   const form = $('#task-form');
   pruneColumnEditors(form, 'tasks');
   if (!hasColumn('code') || !hasColumn('code', 'issues') || !['incident', 'problem'].some(id => hasColumn(id) && hasColumn(id, 'issues'))) $('#match-preview').remove();
   applyTaskEditorLayout(form);
+  markRequiredFields(form, 'tasks');
   const updateMatches = () => {
     if (!$('#match-preview')) return;
     const code = form.elements.code?.value || '', links = matchIssues({ code }, data.issues);
@@ -2190,11 +2311,16 @@ function taskDialog(existing) {
   form.onsubmit = action(async event => {
     event.preventDefault();
     const fields = new FormData(form);
+    checkRequiredFields(form, 'tasks', {
+      effort: () => Number(fields.get('days')) * data.settings.hoursPerDay + Number(fields.get('hours')) <= 0,
+      link: () => !(normalizeUrl(fields.get('url')) || generatedLink())
+    });
     let url = normalizeUrl(fields.get('url'));
     if (url && !isWebUrl(url)) throw new Error("The link must start with http:// or https://.");
     if (url === generatedLink()) url = '';
+    const sequence = String(fields.get('sequence') ?? '').trim();
     const item = {
-      ...t, code: (fields.get('code') || '').trim(), sequence: Number(fields.get('sequence')), url,
+      ...t, code: (fields.get('code') || '').trim(), sequence: Number(sequence), url,
       description: sanitize($('#description-editor')?.innerHTML || ''), notes: sanitize($('#notes-editor')?.innerHTML || ''),
       urgencyId: fields.get('urgencyId') || '', statusId: fields.get('statusId') || '', releaseDate: fields.get('releaseDate') || '',
       effortHours: Math.round((Number(fields.get('days')) * data.settings.hoursPerDay + Number(fields.get('hours'))) * 100) / 100,
@@ -2203,6 +2329,8 @@ function taskDialog(existing) {
     pendingMarks.delete(item.id);
     await commit(next => {
       const index = next.tasks.findIndex(x => x.id === item.id);
+      // An empty sequence takes the next free number, as for new tasks; a deleted sequence column stays empty.
+      if (!sequence && hasColumn('sequence')) item.sequence = Math.max(0, ...next.tasks.filter(x => x.id !== item.id).map(x => x.sequence)) + 1;
       if (index >= 0) next.tasks[index] = { ...item, tagIds: next.tasks[index].tagIds }; else next.tasks.push(item);
     });
     $('#modal').close(); rerenderPreservingView(); notify("Task saved.");
@@ -2275,6 +2403,8 @@ function issueDialog(existing) {
     </div><div class="modal-actions">${existing ? ui`<button type="button" class="button danger" id="delete-issue">Delete</button>` : ''}<span class="spacer"></span><button type="button" class="button" data-close>Cancel</button><button class="button primary" type="submit">Save association</button></div></form>`);
   const form = $('#issue-form');
   pruneColumnEditors(form, 'issues');
+  tagFormFields(form, 'issues');
+  markRequiredFields(form, 'issues');
   // Warns while typing when the incident is already in another association; saving stays possible.
   const updateDuplicate = () => {
     const draft = { id: issue.id, code: form.elements.code?.value || '', incident: form.elements.incident?.value || '', problem: form.elements.problem?.value || '' };
@@ -2286,6 +2416,7 @@ function issueDialog(existing) {
   updateDuplicate(); wireEditors();
   $('#issue-form').onsubmit = action(async e => {
     e.preventDefault();
+    checkRequiredFields(form, 'issues');
     const fields = new FormData(e.target);
     const item = { ...issue, id: issue.id, code: (fields.get('code') || '').trim(), incident: (fields.get('incident') || '').trim(), problem: (fields.get('problem') || '').trim(), customFields: readCustomEditors(form, 'issues') };
     await commit(next => {
@@ -2930,17 +3061,30 @@ function wireCustomColumns() {
     refreshChoiceSettings();
     refreshSettingsState();
   };
+  const draws = [];
+  redrawColumnDefinitions = () => draws.forEach(draw => draw());
   for (const kind of ['tasks', 'issues']) {
     const key = kind === 'tasks' ? 'taskFields' : 'issueFields', columnKey = kind === 'tasks' ? 'taskColumns' : 'issueColumns', container = $(`#custom-definitions-${kind}`);
     const draw = () => {
       const schema = CustomColumns.schemaOf(settingsDraft, kind);
+      // Only the task editor has a configurable form: a required task field left off it is not checked.
+      const placed = kind === 'tasks' ? new Set(normalizeTaskEditorLayout(settingsDraft).columns.flatMap(column => column.sections.flatMap(section => section.fields.map(field => field.id)))) : null;
+      const requiredControl = field => {
+        const allowed = CustomColumns.canRequire(settingsDraft, kind, field.id), on = allowed && CustomColumns.isRequired(settingsDraft, kind, field.id);
+        return `<label class="toggle-label required-toggle" ${allowed ? '' : `title="${esc(t("This field cannot be required."))}"`}><input type="checkbox" data-field-required ${on ? 'checked' : ''} ${allowed ? '' : 'disabled'}> ${esc(t("Required"))}</label>${on && placed && !placed.has(field.id) ? `<small class="required-off">${ico('warning')}${esc(t("not on the form: not checked"))}</small>` : ''}`;
+      };
       container.innerHTML = configuredColumns(kind, settingsDraft).map(column => {
         const field = schema.find(field => field.id === column.id), name = field.builtin ? t(field.name) : field.name;
-        return `<article class="custom-definition" data-field-id="${field.id}" ${field.builtin ? 'data-builtin' : ''}>${dragHandle(name)}<div class="custom-definition-fields">${field.builtin ? `<strong>${esc(name)}</strong>` : `<label class="field">${esc(t("Column name"))}<input data-field-name maxlength="60" value="${esc(name)}"></label>`}<span class="muted">${esc(t(fieldTypeNames[field.type]))}</span>${['select', 'multiselect'].includes(field.type) ? `<button type="button" class="button small" data-goto-settings-tab="${field.catalog || `choice-${kind}-${field.id}`}">${esc(t("Manage labels and colors"))}</button>` : ''}</div><button type="button" class="button small danger" data-delete-field>${esc(t("Delete"))}</button></article>`;
+        return `<article class="custom-definition" data-field-id="${field.id}" ${field.builtin ? 'data-builtin' : ''}>${dragHandle(name)}<div class="custom-definition-fields">${field.builtin ? `<strong>${esc(name)}</strong>` : `<label class="field">${esc(t("Column name"))}<input data-field-name maxlength="60" value="${esc(name)}"></label>`}<span class="muted">${esc(t(fieldTypeNames[field.type]))}</span>${requiredControl(field)}${['select', 'multiselect'].includes(field.type) ? `<button type="button" class="button small" data-goto-settings-tab="${field.catalog || `choice-${kind}-${field.id}`}">${esc(t("Manage labels and colors"))}</button>` : ''}</div><button type="button" class="button small danger" data-delete-field>${esc(t("Delete"))}</button></article>`;
       }).join('');
       container.querySelectorAll('[data-field-id]').forEach(row => {
         const field = schema.find(field => field.id === row.dataset.fieldId), input = row.querySelector('[data-field-name]');
         if (input) input.oninput = event => { field.name = event.target.value; syncColumns(); };
+        row.querySelector('[data-field-required]').onchange = event => {
+          setRequiredColumn(settingsDraft, kind, field.id, event.target.checked);
+          draw(); drawTaskLayoutSettings(); refreshSettingsState();
+          container.querySelector(`[data-field-id="${CSS.escape(field.id)}"] [data-field-required]`)?.focus();
+        };
         row.querySelector('[data-delete-field]').onclick = () => confirmDialog("Delete this column?", t("Column values will be deleted when settings are saved.") + ` (${field.builtin ? t(field.name) : field.name})`, async () => {
           CustomColumns.removeColumn(settingsDraft, kind, field.id);
           draw(); syncColumns();
@@ -2966,55 +3110,594 @@ function wireCustomColumns() {
       CustomColumns.validateFields([...settingsDraft[key], field]);
       settingsDraft[key].push(field); form.reset(); syncColumns(); draw();
     });
+    draws.push(draw);
     draw();
   }
   syncColumns();
 }
+const layoutFieldName = field => field.builtin ? term(field.name) : field.name;
+const layoutSectionLabel = (section, index) => section.name.trim() || fillText("Section {0}", index + 1);
+function layoutSchematic(layout, settings) {
+  const fields = new Map(taskEditorFields(settings).map(field => [field.id, field])), required = new Set(CustomColumns.requiredOf(settings, 'tasks'));
+  return `<div class="layout-mini-columns" style="grid-template-columns:${esc(taskLayoutTemplate(layout.columns))}">${layout.columns.map(column => `<div class="layout-mini-column">${column.sections.map(section => `<div class="layout-mini-section">${section.showName && section.name.trim() ? `<b>${esc(section.name)}</b>` : ''}<div class="layout-mini-grid" style="grid-template-columns:repeat(${section.columns}, minmax(0, 1fr))">${section.fields.map(field => {
+    const definition = fields.get(field.id);
+    return `<span class="layout-mini-field ${definition.type === 'richtext' ? 'is-rich' : ''}" style="grid-column:span ${field.span}">${esc(layoutFieldName(definition))}${required.has(field.id) ? '<i class="required-mark">*</i>' : ''}</span>`;
+  }).join('') || `<span class="layout-mini-empty">${esc(t("Empty section"))}</span>`}</div></div>`).join('')}</div>`).join('')}</div>`;
+}
 function taskLayoutPanel() {
-  return ui`<section class="panel settings-section full" id="task-layout-panel"><h2>Task editor layout</h2><p class="section-description">Arrange the fields in the task editor for this organization. This also applies to new tasks. Hidden fields keep their values; list columns are not changed.</p><div class="form-grid"><label class="field">Arrangement<select id="task-layout-mode"><option value="split">Properties on the left</option><option value="text-first">Text panels on the left</option><option value="stacked">Stacked sections</option></select></label><label class="field">Property columns<select id="task-layout-columns"><option value="1">One column</option><option value="2">Two columns</option></select></label></div><div class="task-layout-designer"><div><h3>Fields and order</h3><p class="muted">Drag the handle or use its arrow keys. Choose a section, width and visibility for each field.</p><div id="task-layout-fields"></div><button type="button" class="button" id="reset-task-layout">${ico('reset')}Restore default layout</button></div><section class="task-layout-preview-panel" aria-labelledby="task-layout-preview-title"><h3 id="task-layout-preview-title">Layout preview</h3><p class="muted">Schematic preview. The editor adapts to the window size.</p><div id="task-layout-preview"></div></section></div></section>`;
+  return `<section class="panel settings-section full" id="task-layout-panel"><h2>${esc(t("Task editor layout"))}</h2><p class="section-description">${esc(t("Design the task form of this organization: drag fields into sections, create new sections and choose the size of the window. Fields left off the form keep their values; list columns are not changed."))}</p><div class="layout-overview"><div class="layout-mini" id="task-layout-mini" aria-hidden="true"></div><div class="layout-overview-side"><dl class="layout-summary" id="task-layout-summary"></dl><div class="storage-actions"><button type="button" class="button primary" id="open-form-designer">${ico('edit')}${esc(t("Open form designer"))}</button><button type="button" class="button" id="reset-task-layout">${ico('reset')}${esc(t("Restore default layout"))}</button></div></div></div><h3>${esc(t("Required fields"))}</h3><p class="muted">${esc(t("A required field must be filled in before saving, but only when it is on the form. Choose required fields in the form designer or in Column management."))}</p><div class="layout-required" id="task-required-summary"></div><button type="button" class="button small" data-goto-settings-tab="custom-columns">${ico('column-plus')}${esc(t("Column management"))}</button></section>`;
 }
 function drawTaskLayoutSettings() {
-  if (!$('#task-layout-fields')) return;
+  if (!$('#task-layout-mini')) return;
   const layout = settingsDraft.taskEditorLayout = normalizeTaskEditorLayout(settingsDraft);
-  const definitions = new Map(taskEditorFields(settingsDraft).map(field => [field.id, field]));
-  const nameOf = field => { const definition = definitions.get(field.id); return definition.builtin ? term(definition.name) : definition.name; };
-  $('#task-layout-mode').value = layout.mode;
-  $('#task-layout-columns').value = String(layout.columns);
-  const preview = () => {
-    const sections = layout.mode === 'text-first' ? ['text', 'properties'] : ['properties', 'text'];
-    const target = $('#task-layout-preview');
-    target.dataset.mode = layout.mode;
-    target.innerHTML = sections.map(section => {
-      const fields = layout.fields.filter(field => field.visible && field.section === section);
-      return `<div class="task-layout-preview-section" ${fields.length ? '' : 'hidden'}><h4>${esc(t(section === 'properties' ? "Properties" : "Text panels"))}</h4><div class="task-layout-preview-grid" style="grid-template-columns:repeat(${section === 'text' ? 1 : layout.columns},minmax(0,1fr))">${fields.map(field => `<div class="task-layout-preview-field ${field.span === 2 ? 'full' : ''}">${esc(nameOf(field))}</div>`).join('')}</div></div>`;
-    }).join('');
-    target.classList.toggle('single-section', !layout.fields.some(field => field.visible && field.section === 'text') || !layout.fields.some(field => field.visible && field.section === 'properties'));
-  };
-  const drawRows = () => {
-    const container = $('#task-layout-fields');
-    container.innerHTML = layout.fields.map(field => {
-      const name = nameOf(field);
-      return `<div class="task-layout-row" data-layout-field="${esc(field.id)}">${dragHandle(name)}<label class="task-layout-visibility"><input type="checkbox" data-layout-visible ${field.visible ? 'checked' : ''}><span>${esc(name)}</span></label><label class="field">${esc(t("Section"))}<select data-layout-section aria-label="${esc(name + ': ' + t("Section"))}"><option value="properties" ${field.section === 'properties' ? 'selected' : ''}>${esc(t("Properties"))}</option><option value="text" ${field.section === 'text' ? 'selected' : ''}>${esc(t("Text panels"))}</option></select></label><label class="field">${esc(t("Width"))}<select data-layout-span ${field.section === 'text' || layout.columns === 1 ? 'disabled' : ''} aria-label="${esc(name + ': ' + t("Width"))}"><option value="1" ${field.span === 1 ? 'selected' : ''}>${esc(t("One column"))}</option><option value="2" ${field.span === 2 ? 'selected' : ''}>${esc(t("Full width"))}</option></select></label></div>`;
-    }).join('');
-    for (const row of container.querySelectorAll('[data-layout-field]')) {
-      const field = layout.fields.find(field => field.id === row.dataset.layoutField);
-      row.querySelector('[data-layout-visible]').onchange = event => { field.visible = event.target.checked; preview(); refreshSettingsState(); };
-      row.querySelector('[data-layout-section]').onchange = event => {
-        field.section = event.target.value;
-        row.querySelector('[data-layout-span]').disabled = field.section === 'text' || layout.columns === 1;
-        preview(); refreshSettingsState();
-      };
-      row.querySelector('[data-layout-span]').onchange = event => { field.span = Number(event.target.value); preview(); refreshSettingsState(); };
-    }
-    sortable(container, '.task-layout-row', (from, to) => { layout.fields.splice(to, 0, ...layout.fields.splice(from, 1)); drawRows(); preview(); }, true);
-  };
-  $('#task-layout-mode').onchange = event => { layout.mode = event.target.value; preview(); refreshSettingsState(); };
-  $('#task-layout-columns').onchange = event => { layout.columns = Number(event.target.value); drawRows(); preview(); refreshSettingsState(); };
+  const fields = taskEditorFields(settingsDraft), names = new Map(fields.map(field => [field.id, layoutFieldName(field)]));
+  const sections = layout.columns.flatMap(column => column.sections), placed = new Set(sections.flatMap(section => section.fields.map(field => field.id)));
+  $('#task-layout-mini').innerHTML = layoutSchematic(layout, settingsDraft);
+  const item = (label, value) => `<div><dt>${esc(t(label))}</dt><dd>${esc(value)}</dd></div>`;
+  $('#task-layout-summary').innerHTML = item("Window size", `${layout.width} × ${layout.height || t("automatic height")} px`) + item("Layout columns", layout.columns.map(column => `${column.width}`).join(' : ')) +
+    item("Sections", sections.length) + item("Fields on the form", fillText("{0} of {1}", placed.size, fields.length));
+  const required = CustomColumns.requiredOf(settingsDraft, 'tasks').filter(id => names.has(id));
+  $('#task-required-summary').innerHTML = required.length ? required.map(id => `<span class="layout-required-chip ${placed.has(id) ? '' : 'is-off'}">${esc(names.get(id))}<i class="required-mark" aria-hidden="true">*</i>${placed.has(id) ? '' : `<small>${esc(t("not on the form: not checked"))}</small>`}</span>`).join('') : `<p class="muted">${esc(t("No required fields."))}</p>`;
+  $('#open-form-designer').onclick = () => openFormDesigner();
   $('#reset-task-layout').onclick = () => {
-    settingsDraft.taskEditorLayout = normalizeTaskEditorLayout(settingsDraft, { mode: 'split', columns: 2, fields: [] });
+    settingsDraft.taskEditorLayout = defaultTaskEditorLayout(settingsDraft);
     drawTaskLayoutSettings(); refreshSettingsState();
+    notify("Default layout restored. Save the settings to apply it.");
   };
-  drawRows(); preview();
+}
+// Required flags live in a list ordered like the columns, so toggling back and forth does not leave unsaved changes.
+function setRequiredColumn(settings, kind, id, required) {
+  const chosen = new Set(CustomColumns.requiredOf(settings, kind));
+  if (required) chosen.add(id); else chosen.delete(id);
+  settings[CustomColumns.requiredKey(kind)] = CustomColumns.schemaOf(settings, kind).map(field => field.id).filter(fieldId => chosen.has(fieldId));
+}
+let redrawColumnDefinitions = () => {};
+const DESIGNER_TYPE_ICONS = { text: '<b>Abc</b>', richtext: '<b>¶</b>', number: '<b>123</b>', date: 'calendar', select: 'chevron-down', multiselect: 'tag', url: 'link', effort: 'clock', boolean: 'check', matches: 'link' };
+const designerTypeIcon = type => { const icon = DESIGNER_TYPE_ICONS[type] || 'list'; return icon.startsWith('<') ? icon : ico(icon); };
+const designerTypeName = field => t(field.id === 'hidden' ? "Checkbox" : field.id === 'matches' ? "Automatic" : fieldTypeNames[field.type] || field.type);
+// Inert copy of the editor controls: same classes as the real form, so sizes in the designer match the task editor.
+function designerControl(field, settings, required) {
+  const mark = required ? '<span class="required-mark" aria-hidden="true">*</span>' : '';
+  const name = `<span>${esc(layoutFieldName(field))}${mark}</span>`;
+  if (field.type === 'richtext') return `<div class="field"><span class="field-label">${name}</span><div class="rich-editor"><div class="rich-toolbar"><button type="button"><b>B</b></button><button type="button"><i>I</i></button><button type="button"><u>U</u></button><button type="button">• List</button><button type="button">1. List</button><button type="button">Tx</button></div><div class="editable"></div></div></div>`;
+  if (field.builtin && field.id === 'effort') return `<div class="form-grid task-effort-fields"><div class="field"><span class="task-effort-label"><span>${esc(t("Effort in days"))}${mark}</span> <small>${esc(fillText("1 day = {0} hours", settings.hoursPerDay))}</small></span><input type="number" value="0" tabindex="-1"></div><div class="field">${esc(t("Additional effort in hours"))}<input type="number" value="0" tabindex="-1"></div></div>`;
+  if (field.id === 'hidden') return `<div class="field checkbox-field"><input type="checkbox" tabindex="-1"> ${esc(t("Hide from the task list only (still visible in milestones and kanban)"))}</div>`;
+  if (field.id === 'matches') return `<div class="auto-match"><span>${ico('link')}${esc(t("Automatic link by portal code"))}</span><div>Incident: <strong>—</strong> Problem: <strong>—</strong></div></div>`;
+  if (field.builtin && field.id === 'link') return `<div class="field portal-field"><span class="field-label">${esc(t("Specific link (optional)"))}${mark}</span><input tabindex="-1" placeholder="https://"><small>${esc(t("Link generated from the organization template"))}</small></div>`;
+  let control;
+  if (field.type === 'multiselect') control = `<button type="button" class="task-tags-button" tabindex="-1"><span class="tag-chips"><span class="muted">+ ${esc(layoutFieldName(field))}</span></span>${ico('chevron-down')}</button>`;
+  else if (['select', 'boolean'].includes(field.type)) control = `<select tabindex="-1"><option>${esc(field.builtin ? t("Unassigned") : '—')}</option></select>`;
+  else control = `<input tabindex="-1" type="${field.type === 'date' ? 'date' : ['number', 'effort'].includes(field.type) ? 'number' : 'text'}">`;
+  return `<div class="field">${name}${control}${field.type === 'effort' ? `<small>${esc(t("Value in hours"))}</small>` : ''}</div>`;
+}
+function designerBackdrop() {
+  const tasks = sortedRows(visibleTasks()).slice(0, 16);
+  const rows = tasks.length ? tasks.map(task => { const status = statusOf(task); return `<div class="designer-ghost-row"><b>${esc(task.code || '—')}</b><span>${esc(plain(task.description || '').slice(0, 90))}</span>${pill(status.name, status.color)}<span>${esc(formatDate(task.releaseDate))}</span></div>`; }).join('')
+    : Array.from({ length: 10 }, () => '<div class="designer-ghost-row"><i></i><i></i><i></i><i></i></div>').join('');
+  return `<div class="designer-ghost-app"><div class="designer-ghost-rail">${icons.map(icon => `<span>${icon}</span>`).join('')}</div><div class="designer-ghost-main"><div class="designer-ghost-heading"><strong>${esc(data.settings.tabNames[0])}</strong><span class="button primary">${ico('plus')}</span></div><div class="designer-ghost-table">${rows}</div></div></div>`;
+}
+const LAYOUT_PRESETS = [[100], [50, 50], [40, 60], [60, 40], [33, 67], [67, 33], [33, 34, 33], [25, 50, 25]];
+function openFormDesigner() {
+  if (!settingsDraft || document.getElementById('form-designer')) return;
+  const organizationId = activeOrganizationId, fields = taskEditorFields(settingsDraft), byId = new Map(fields.map(field => [field.id, field]));
+  const state = { layout: structuredClone(normalizeTaskEditorLayout(settingsDraft)), required: CustomColumns.requiredOf(settingsDraft, 'tasks') };
+  const initial = JSON.stringify(state), undoStack = [], redoStack = [];
+  let selection = { type: 'form' }, lastKey = '', scale = 1, frozen = false, approved = false, drag = null, paletteQuery = '', unusedOnly = false;
+  const dialog = document.createElement('dialog');
+  dialog.id = 'form-designer';
+  dialog.className = 'form-designer';
+  dialog.setAttribute('aria-labelledby', 'form-designer-title');
+  dialog.innerHTML = `<header class="designer-bar"><div class="designer-title"><span class="eyebrow">${esc(t("Form designer"))} · ${esc(organizations.find(o => o.id === organizationId)?.name || '')}</span><h2 id="form-designer-title">${esc(t("Task editor layout"))}</h2></div><div class="designer-tools"><button type="button" class="icon-button" id="designer-undo" title="${esc(t("Undo (Ctrl+Z)"))}" aria-label="${esc(t("Undo (Ctrl+Z)"))}">${ico('undo')}</button><button type="button" class="icon-button" id="designer-redo" title="${esc(t("Redo (Ctrl+Y)"))}" aria-label="${esc(t("Redo (Ctrl+Y)"))}">${ico('redo')}</button><button type="button" class="button" id="designer-reset">${ico('reset')}${esc(t("Restore default layout"))}</button><span class="designer-divider" aria-hidden="true"></span><button type="button" class="button" id="designer-cancel">${esc(t("Cancel"))}</button><button type="button" class="button" id="designer-apply">${ico('check')}${esc(t("Apply"))}</button><button type="button" class="button primary" id="designer-save">${esc(t("Save settings"))}</button></div></header>
+    <div class="designer-body"><aside class="designer-palette" aria-labelledby="designer-fields-title"><div class="designer-palette-head"><h3 id="designer-fields-title">${esc(t("Fields"))}</h3><span class="tiny-count" id="designer-field-count"></span></div><label class="designer-search"><span aria-hidden="true">${ico('search')}</span><input type="search" id="designer-search" placeholder="${esc(t("Search fields…"))}" aria-label="${esc(t("Search fields…"))}" autocomplete="off" spellcheck="false"></label><label class="toggle-label"><input type="checkbox" id="designer-unused"> ${esc(t("Only fields not on the form"))}</label><ul class="designer-field-list" id="designer-fields" aria-labelledby="designer-fields-title"></ul><h3>${esc(t("Components"))}</h3><div class="designer-components">${[1, 2, 3, 4].map(count => `<button type="button" class="designer-component" data-add-section="${count}"><span class="designer-component-icon" aria-hidden="true">${'<i></i>'.repeat(count)}</span>${esc(fillText(count === 1 ? "Section with 1 column" : "Section with {0} columns", count))}</button>`).join('')}</div><p class="muted designer-hint">${esc(t("Drag fields and sections onto the form. With the keyboard: Enter adds the field to the selected section, the arrow keys move the selected item and Delete removes it."))}</p></aside>
+    <div class="designer-canvas"><div class="designer-ghost" aria-hidden="true" inert>${designerBackdrop()}</div><div class="designer-stage" id="designer-stage"><div class="designer-frame" id="designer-frame"><div class="task-form designer-modal" id="designer-modal"><div class="modal-heading" inert><div><div class="eyebrow">TASK</div><h2>${esc(t("Edit task"))}</h2></div><span class="icon-button">${ico('close')}</span></div><div class="task-edit-layout" id="designer-layout" role="group" aria-label="${esc(t("Form preview"))}"></div><div class="modal-actions" inert><span class="button danger">${esc(t("Delete"))}</span><span class="spacer"></span><span class="button">${esc(t("Cancel"))}</span><span class="button primary">${esc(t("Save task"))}</span></div></div>
+      <div class="designer-grip designer-grip-e" data-grip="e" tabindex="0" role="separator" aria-orientation="vertical" aria-label="${esc(t("Window width"))}"></div><div class="designer-grip designer-grip-s" data-grip="s" tabindex="0" role="separator" aria-orientation="horizontal" aria-label="${esc(t("Window height"))}"></div><div class="designer-grip designer-grip-se" data-grip="se" aria-hidden="true"></div></div><p class="designer-size" id="designer-size" aria-live="polite"></p></div></div>
+    <aside class="designer-props" id="designer-props" aria-label="${esc(t("Properties"))}"></aside></div>`;
+  document.body.append(dialog);
+  const $d = selector => dialog.querySelector(selector), stage = $d('#designer-stage'), frame = $d('#designer-frame'), modal = $d('#designer-modal'), body = $d('#designer-layout');
+  const allSections = () => state.layout.columns.flatMap((column, columnIndex) => column.sections.map((section, index) => ({ section, column, columnIndex, index })));
+  const findSection = id => allSections().find(entry => entry.section.id === id);
+  const locate = id => { for (const entry of allSections()) { const fieldIndex = entry.section.fields.findIndex(field => field.id === id); if (fieldIndex >= 0) return { ...entry, fieldIndex }; } return null; };
+  const placedIds = () => new Set(allSections().flatMap(entry => entry.section.fields.map(field => field.id)));
+  const required = id => state.required.includes(id);
+  const announce = message => announceOrder(body, message);
+  const snapshot = () => JSON.stringify(state);
+  const dirty = () => snapshot() !== initial;
+  function mutate(change, key = '', options = {}) {
+    const before = snapshot();
+    change();
+    if (snapshot() === before) return false;
+    if (!key || key !== lastKey) { undoStack.push(before); if (undoStack.length > 100) undoStack.shift(); }
+    redoStack.length = 0;
+    lastKey = key;
+    draw(options);
+    return true;
+  }
+  function restore(from, to) {
+    if (!from.length) return;
+    to.push(snapshot());
+    const saved = JSON.parse(from.pop());
+    state.layout = saved.layout; state.required = saved.required; lastKey = '';
+    if (selection.type === 'section' && !findSection(selection.id)) selection = { type: 'form' };
+    draw();
+  }
+  const unplace = id => { if (!state.layout.unplaced.includes(id)) state.layout.unplaced.push(id); };
+  function detachField(id) {
+    const where = locate(id);
+    if (where) return where.section.fields.splice(where.fieldIndex, 1)[0];
+    state.layout.unplaced = state.layout.unplaced.filter(fieldId => fieldId !== id);
+    return { id, span: byId.get(id).span };
+  }
+  function placeField(id, sectionId, index) {
+    const target = findSection(sectionId)?.section;
+    if (!target || !byId.has(id)) return;
+    const field = detachField(id);
+    target.fields.splice(Math.max(0, Math.min(index, target.fields.length)), 0, { id, span: Math.min(field.span, target.columns) });
+  }
+  function removeField(id) {
+    if (!locate(id)) return;
+    detachField(id); unplace(id);
+  }
+  function newSection(columnCount) {
+    if (allSections().length >= TASK_LAYOUT.sections) throw new Error(fillText("A form can have up to {0} sections.", TASK_LAYOUT.sections));
+    let id;
+    do id = `section-${uid().slice(0, 8)}`; while (findSection(id));
+    return { id, name: t("New section").slice(0, TASK_LAYOUT.sectionName), showName: true, columns: columnCount, fields: [] };
+  }
+  function insertSection(section, columnIndex, index) {
+    const column = state.layout.columns[Math.min(columnIndex, state.layout.columns.length - 1)];
+    column.sections.splice(Math.max(0, Math.min(index, column.sections.length)), 0, section);
+  }
+  function moveSection(id, columnIndex, index) {
+    const where = findSection(id);
+    if (!where) return;
+    where.column.sections.splice(where.index, 1);
+    insertSection(where.section, columnIndex, index);
+  }
+  function deleteSection(id) {
+    const where = findSection(id);
+    if (!where) return;
+    where.section.fields.forEach(field => unplace(field.id));
+    where.column.sections.splice(where.index, 1);
+  }
+  function setLayoutColumns(widths) {
+    const columns = state.layout.columns, kept = widths.map((width, index) => ({ width, sections: columns[index]?.sections || [] }));
+    kept.at(-1).sections.push(...columns.slice(widths.length).flatMap(column => column.sections));
+    state.layout.columns = kept;
+  }
+  // Target section for keyboard and click additions: the selection, else the first section, else a new one.
+  function targetSection() {
+    if (selection.type === 'section' && findSection(selection.id)) return selection.id;
+    if (selection.type === 'field' && locate(selection.id)) return locate(selection.id).section.id;
+    const first = allSections()[0];
+    if (first) return first.section.id;
+    const section = newSection(2);
+    insertSection(section, 0, 0);
+    return section.id;
+  }
+  function addFieldToForm(id) {
+    let sectionId;
+    mutate(() => { sectionId = targetSection(); placeField(id, sectionId, findSection(sectionId).section.fields.length); });
+    selection = { type: 'field', id };
+    draw();
+    focusCanvas('field', id);
+    announce(fillText("“{0}” added to {1}.", layoutFieldName(byId.get(id)), layoutSectionLabel(findSection(sectionId).section, allSections().findIndex(entry => entry.section.id === sectionId))));
+  }
+  function addSection(columnCount, columnIndex, index) {
+    const section = newSection(columnCount);
+    mutate(() => {
+      if (columnIndex === undefined) {
+        const anchor = selection.type === 'section' ? findSection(selection.id) : selection.type === 'field' ? locate(selection.id) : null;
+        if (anchor) { columnIndex = anchor.columnIndex; index = anchor.index + 1; }
+        else { columnIndex = state.layout.columns.length - 1; index = state.layout.columns.at(-1).sections.length; }
+      }
+      insertSection(section, columnIndex, index);
+    });
+    selection = { type: 'section', id: section.id };
+    draw();
+    focusCanvas('section', section.id);
+    announce(t("Section added."));
+  }
+  function moveFieldBy(id, step) {
+    const where = locate(id);
+    if (!where) return;
+    const entries = allSections(), position = entries.findIndex(entry => entry.section.id === where.section.id);
+    mutate(() => {
+      const next = where.fieldIndex + step;
+      if (next >= 0 && next < where.section.fields.length) where.section.fields.splice(next, 0, ...where.section.fields.splice(where.fieldIndex, 1));
+      else if (entries[position + step]) { const target = entries[position + step].section; placeField(id, target.id, step < 0 ? target.fields.length : 0); }
+    });
+    focusCanvas('field', id);
+    const now = locate(id);
+    announce(fillText("Position {0} of {1} in {2}.", now.fieldIndex + 1, now.section.fields.length, layoutSectionLabel(now.section, allSections().findIndex(entry => entry.section.id === now.section.id))));
+  }
+  function moveSectionBy(id, step, across = false) {
+    const where = findSection(id);
+    if (!where) return;
+    mutate(() => {
+      if (across) { const columnIndex = where.columnIndex + step; if (columnIndex >= 0 && columnIndex < state.layout.columns.length) moveSection(id, columnIndex, state.layout.columns[columnIndex].sections.length); }
+      else if (where.index + step >= 0 && where.index + step < where.column.sections.length) moveSection(id, where.columnIndex, where.index + step);
+    });
+    focusCanvas('section', id);
+    const now = findSection(id);
+    announce(fillText("Column {0}, position {1} of {2}.", now.columnIndex + 1, now.index + 1, now.column.sections.length));
+  }
+  function toggleRequired(id, value) {
+    const chosen = new Set(state.required);
+    if (value) chosen.add(id); else chosen.delete(id);
+    state.required = CustomColumns.schemaOf(settingsDraft, 'tasks').map(field => field.id).filter(fieldId => chosen.has(fieldId));
+  }
+  // ---- Drawing ----
+  function designerItem(field) {
+    const item = document.createElement('div');
+    item.className = 'designer-item';
+    item.dataset.designerField = field.id;
+    item.tabIndex = 0;
+    item.setAttribute('role', 'button');
+    item.setAttribute('aria-label', layoutFieldName(field) + (required(field.id) ? ` (${t("Required")})` : ''));
+    item.innerHTML = `<div class="designer-item-body" inert>${designerControl(field, settingsDraft, required(field.id))}</div>`;
+    return item;
+  }
+  function decorateSection(element, section) {
+    const entries = allSections(), index = entries.findIndex(entry => entry.section.id === section.id);
+    element.classList.add('designer-section');
+    element.dataset.designerSection = section.id;
+    element.tabIndex = 0;
+    element.setAttribute('aria-label', `${t("Section")}: ${layoutSectionLabel(section, index)}`);
+    const tab = document.createElement('span');
+    tab.className = 'designer-section-tab';
+    tab.innerHTML = `<span class="designer-grab" aria-hidden="true"></span>${esc(layoutSectionLabel(section, index))} · ${esc(fillText(section.columns === 1 ? "1 column" : "{0} columns", section.columns))}`;
+    element.prepend(tab);
+    if (!section.fields.length) element.querySelector('.task-form-grid').innerHTML = `<p class="designer-empty-section">${esc(t("Drag fields here"))}</p>`;
+  }
+  function drawCanvas() {
+    const focused = document.activeElement, focusField = focused?.dataset?.designerField, focusSection = focused?.dataset?.designerSection;
+    modal.style.setProperty('--task-form-width', `${state.layout.width}px`);
+    modal.style.setProperty('--task-form-height', `${state.layout.height || 720}px`);
+    modal.classList.toggle('fixed-height', state.layout.height > 0);
+    const items = new Map();
+    const columns = buildTaskLayoutColumns(state.layout, settingsDraft, id => {
+      if (!byId.has(id)) return null;
+      if (!items.has(id)) items.set(id, designerItem(byId.get(id)));
+      return items.get(id);
+    }, { keepEmpty: true, decorate: decorateSection });
+    body.replaceChildren(...columns.map(column => column.element));
+    body.style.gridTemplateColumns = taskLayoutTemplate(columns);
+    for (const column of body.querySelectorAll('.task-form-column')) {
+      if (!column.children.length) column.innerHTML = `<p class="designer-empty-column" data-empty-column="${column.dataset.layoutColumn}">${esc(t("Drag a field or a section here"))}</p>`;
+    }
+    markSelection();
+    if (focusField) focusCanvas('field', focusField);
+    else if (focusSection) focusCanvas('section', focusSection);
+    fit();
+  }
+  function markSelection() {
+    dialog.querySelectorAll('.is-selected').forEach(element => element.classList.remove('is-selected'));
+    dialog.querySelectorAll('[aria-pressed]').forEach(element => element.matches('.designer-item, .designer-palette-field') && element.setAttribute('aria-pressed', 'false'));
+    const selector = selection.type === 'field' ? `[data-designer-field="${CSS.escape(selection.id)}"], [data-palette-field="${CSS.escape(selection.id)}"]` : selection.type === 'section' ? `[data-designer-section="${CSS.escape(selection.id)}"]` : '#designer-modal';
+    dialog.querySelectorAll(selector).forEach(element => { element.classList.add('is-selected'); if (element.matches('.designer-item, .designer-palette-field')) element.setAttribute('aria-pressed', 'true'); });
+  }
+  function focusCanvas(type, id) {
+    const element = body.querySelector(type === 'field' ? `[data-designer-field="${CSS.escape(id)}"]` : `[data-designer-section="${CSS.escape(id)}"]`);
+    element?.focus({ preventScroll: true });
+    element?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+  function fit() {
+    const width = state.layout.width + 2, height = modal.offsetHeight;
+    if (!frozen) {
+      const room = { width: stage.clientWidth - 56, height: stage.clientHeight - 90 };
+      scale = Math.max(0.3, Math.min(1, room.width / width, room.height / Math.max(height, 1)));
+    }
+    modal.style.transform = `scale(${scale})`;
+    frame.style.width = `${Math.round(width * scale)}px`;
+    frame.style.height = `${Math.round(height * scale)}px`;
+    // The real task window is capped at 94% of the app window and scrolls beyond that.
+    const limited = height > Math.floor(window.innerHeight * 0.94);
+    $d('#designer-size').textContent = `${state.layout.width} × ${state.layout.height ? `${state.layout.height}` : t("automatic height")} px · ${Math.round(scale * 100)}%` + (limited ? ` · ${t("limited to the window height")}` : '');
+  }
+  function drawPalette() {
+    const placed = placedIds(), needle = paletteQuery.trim().toLocaleLowerCase();
+    $d('#designer-field-count').textContent = `${placed.size}/${fields.length}`;
+    const shown = fields.filter(field => (!unusedOnly || !placed.has(field.id)) && (!needle || layoutFieldName(field).toLocaleLowerCase().includes(needle)));
+    $d('#designer-fields').innerHTML = shown.map(field => {
+      const on = placed.has(field.id), warn = required(field.id) && !on;
+      return `<li><button type="button" class="designer-palette-field ${on ? 'is-placed' : ''}" data-palette-field="${esc(field.id)}" aria-pressed="false" title="${esc(on ? t("On the form: click to select it") : t("Drag onto the form or press Enter to add it"))}"><span class="designer-type" title="${esc(designerTypeName(field))}">${designerTypeIcon(field.type)}</span><span class="designer-palette-name">${esc(layoutFieldName(field))}${required(field.id) ? '<i class="required-mark" aria-hidden="true">*</i>' : ''}<small>${esc(designerTypeName(field))}${required(field.id) ? ` · ${esc(t("Required"))}` : ''}</small></span><span class="designer-palette-state ${warn ? 'is-warning' : ''}" title="${esc(warn ? t("Required but not on the form: it will not be checked.") : '')}">${warn ? ico('warning') : on ? ico('check') : ''}<span class="sr-only">${esc(t(on ? "On the form" : "Not on the form"))}</span></span></button></li>`;
+    }).join('') || `<li class="muted designer-palette-empty">${esc(t(needle ? "No results." : "All fields are on the form."))}</li>`;
+    markSelection();
+  }
+  function drawProps() {
+    const pane = $d('#designer-props'), entries = allSections();
+    const sectionOptions = selected => entries.map((entry, index) => `<option value="${esc(entry.section.id)}" ${entry.section.id === selected ? 'selected' : ''}>${esc((state.layout.columns.length > 1 ? `${fillText("Column {0}", entry.columnIndex + 1)} › ` : '') + layoutSectionLabel(entry.section, index))}</option>`).join('');
+    if (selection.type === 'field' && byId.has(selection.id)) {
+      const field = byId.get(selection.id), where = locate(field.id), allowed = CustomColumns.canRequire(settingsDraft, 'tasks', field.id);
+      pane.innerHTML = `<div class="designer-props-head"><span class="eyebrow">${esc(t("Field properties"))}</span><h3>${esc(layoutFieldName(field))}</h3><span class="muted">${esc(designerTypeName(field))}</span></div>
+        <label class="field">${esc(t("Section"))}<select id="designer-field-section"><option value="">${esc(t("Not on the form"))}</option>${sectionOptions(where?.section.id)}</select></label>
+        <label class="field">${esc(t("Width"))}<select id="designer-field-span" ${where ? '' : 'disabled'}>${Array.from({ length: where?.section.columns || 1 }, (_, index) => `<option value="${index + 1}" ${where && where.section.fields[where.fieldIndex].span === index + 1 ? 'selected' : ''}>${esc(fillText(index ? "{0} columns" : "1 column", index + 1))}</option>`).join('')}</select></label>
+        <label class="checkbox-field designer-check"><input type="checkbox" id="designer-field-required" ${required(field.id) ? 'checked' : ''} ${allowed ? '' : 'disabled'}> ${esc(t("Required"))}</label>
+        <p class="muted designer-note">${esc(t(!allowed ? "This field cannot be required." : required(field.id) && !where ? "Required but not on the form: it will not be checked." : "Required fields must be filled in to save the task."))}</p>
+        ${where ? `<div class="designer-prop-actions"><button type="button" class="button small" id="designer-field-up">${ico('arrow-up')}${esc(t("Move up"))}</button><button type="button" class="button small" id="designer-field-down">${ico('arrow-down')}${esc(t("Move down"))}</button></div><button type="button" class="button danger" id="designer-field-remove">${ico('minus')}${esc(t("Remove from the form"))}</button>` : `<button type="button" class="button primary" id="designer-field-add">${ico('plus')}${esc(t("Add to the form"))}</button>`}`;
+      $d('#designer-field-section').onchange = event => mutate(() => {
+        if (!event.target.value) removeField(field.id);
+        else placeField(field.id, event.target.value, findSection(event.target.value).section.fields.length);
+      });
+      $d('#designer-field-span').onchange = event => mutate(() => { locate(field.id).section.fields[locate(field.id).fieldIndex].span = Number(event.target.value); });
+      $d('#designer-field-required').onchange = event => mutate(() => toggleRequired(field.id, event.target.checked));
+      if (where) {
+        $d('#designer-field-up').onclick = () => moveFieldBy(field.id, -1);
+        $d('#designer-field-down').onclick = () => moveFieldBy(field.id, 1);
+        $d('#designer-field-remove').onclick = () => { mutate(() => removeField(field.id)); announce(fillText("“{0}” removed from the form.", layoutFieldName(field))); };
+      } else $d('#designer-field-add').onclick = () => addFieldToForm(field.id);
+      return;
+    }
+    if (selection.type === 'section' && findSection(selection.id)) {
+      const where = findSection(selection.id), section = where.section, index = entries.findIndex(entry => entry.section.id === section.id);
+      pane.innerHTML = `<div class="designer-props-head"><span class="eyebrow">${esc(t("Section properties"))}</span><h3>${esc(layoutSectionLabel(section, index))}</h3><span class="muted">${esc(fillText(section.fields.length === 1 ? "1 field" : "{0} fields", section.fields.length))}</span></div>
+        <label class="field">${esc(t("Section name"))}<input id="designer-section-name" maxlength="${TASK_LAYOUT.sectionName}" value="${esc(section.name)}"></label>
+        <label class="checkbox-field designer-check"><input type="checkbox" id="designer-section-show" ${section.showName ? 'checked' : ''}> ${esc(t("Show the name on the form"))}</label>
+        <label class="field">${esc(t("Columns"))}<select id="designer-section-columns">${[1, 2, 3, 4].map(count => `<option value="${count}" ${section.columns === count ? 'selected' : ''}>${count}</option>`).join('')}</select></label>
+        ${state.layout.columns.length > 1 ? `<label class="field">${esc(t("Layout column"))}<select id="designer-section-column">${state.layout.columns.map((_, columnIndex) => `<option value="${columnIndex}" ${columnIndex === where.columnIndex ? 'selected' : ''}>${esc(fillText("Column {0}", columnIndex + 1))}</option>`).join('')}</select></label>` : ''}
+        <div class="designer-prop-actions"><button type="button" class="button small" id="designer-section-up" ${where.index ? '' : 'disabled'}>${ico('arrow-up')}${esc(t("Move up"))}</button><button type="button" class="button small" id="designer-section-down" ${where.index < where.column.sections.length - 1 ? '' : 'disabled'}>${ico('arrow-down')}${esc(t("Move down"))}</button></div>
+        <button type="button" class="button danger" id="designer-section-delete">${ico('minus')}${esc(t("Delete section"))}</button><p class="muted designer-note">${esc(t("The fields of a deleted section go back to the field list."))}</p>`;
+      $d('#designer-section-name').oninput = event => mutate(() => { section.name = event.target.value.slice(0, TASK_LAYOUT.sectionName); }, `name:${section.id}`, { props: false });
+      $d('#designer-section-show').onchange = event => mutate(() => { section.showName = event.target.checked; });
+      $d('#designer-section-columns').onchange = event => mutate(() => { section.columns = Number(event.target.value); section.fields.forEach(field => { field.span = Math.min(field.span, section.columns); }); });
+      if ($d('#designer-section-column')) $d('#designer-section-column').onchange = event => mutate(() => moveSection(section.id, Number(event.target.value), state.layout.columns[Number(event.target.value)].sections.length));
+      $d('#designer-section-up').onclick = () => moveSectionBy(section.id, -1);
+      $d('#designer-section-down').onclick = () => moveSectionBy(section.id, 1);
+      $d('#designer-section-delete').onclick = () => { mutate(() => deleteSection(section.id)); selection = { type: 'form' }; draw(); announce(t("Section deleted.")); };
+      return;
+    }
+    selection = { type: 'form' };
+    const layout = state.layout, current = layout.columns.map(column => column.width).join('-');
+    pane.innerHTML = `<div class="designer-props-head"><span class="eyebrow">${esc(t("Form properties"))}</span><h3>${esc(t("Task window"))}</h3><span class="muted">${esc(t("Drag the edges of the window or enter its size."))}</span></div>
+      <label class="field">${esc(t("Width (px)"))}<input type="number" id="designer-width" min="${TASK_LAYOUT.width.min}" max="${TASK_LAYOUT.width.max}" step="10" value="${layout.width}"></label>
+      <label class="checkbox-field designer-check"><input type="checkbox" id="designer-auto-height" ${layout.height ? '' : 'checked'}> ${esc(t("Automatic height (fits the content)"))}</label>
+      <label class="field">${esc(t("Height (px)"))}<input type="number" id="designer-height" min="${TASK_LAYOUT.height.min}" max="${TASK_LAYOUT.height.max}" step="10" value="${layout.height || Math.max(TASK_LAYOUT.height.min, Math.round((modal.offsetHeight - 2) / 10) * 10)}" ${layout.height ? '' : 'disabled'}></label>
+      <fieldset class="designer-presets"><legend>${esc(t("Layout columns"))}</legend>${LAYOUT_PRESETS.map(widths => `<button type="button" class="designer-preset" data-preset="${widths.join('-')}" aria-pressed="${widths.join('-') === current}" title="${esc(widths.join(' : '))}" aria-label="${esc(fillText(widths.length === 1 ? "1 column" : "{0} columns", widths.length) + ' ' + widths.join(' : '))}">${widths.map(width => `<i style="flex:${width}"></i>`).join('')}</button>`).join('')}</fieldset>
+      <div class="designer-column-widths">${layout.columns.map((column, index) => `<label class="field">${esc(fillText("Column {0}", index + 1))}<input type="number" data-column-width="${index}" min="${TASK_LAYOUT.columnWidth.min}" max="${TASK_LAYOUT.columnWidth.max}" step="1" value="${column.width}"></label>`).join('')}</div>
+      <p class="muted designer-note">${esc(t("Column widths are proportional. On narrow windows the columns are stacked."))}</p>`;
+    const number = (input, { min, max }) => { const value = Math.round(Number(input.value)); return Number.isFinite(value) && value >= min && value <= max ? value : null; };
+    $d('#designer-width').oninput = event => { const value = number(event.target, TASK_LAYOUT.width); if (value) mutate(() => { layout.width = value; }, 'width', { props: false }); };
+    $d('#designer-height').oninput = event => { const value = number(event.target, TASK_LAYOUT.height); if (value) mutate(() => { layout.height = value; }, 'height', { props: false }); };
+    for (const id of ['#designer-width', '#designer-height']) $d(id).onchange = () => { lastKey = ''; drawProps(); };
+    $d('#designer-auto-height').onchange = event => mutate(() => { layout.height = event.target.checked ? 0 : Number($d('#designer-height').value) || TASK_LAYOUT.height.min; });
+    dialog.querySelectorAll('[data-preset]').forEach(button => button.onclick = () => mutate(() => setLayoutColumns(button.dataset.preset.split('-').map(Number))));
+    dialog.querySelectorAll('[data-column-width]').forEach(input => {
+      input.oninput = () => { const value = number(input, TASK_LAYOUT.columnWidth); if (value) mutate(() => { layout.columns[Number(input.dataset.columnWidth)].width = value; }, `column:${input.dataset.columnWidth}`, { props: false }); };
+      input.onchange = () => { lastKey = ''; drawProps(); };
+    });
+  }
+  function draw({ props = true } = {}) {
+    drawCanvas(); drawPalette();
+    if (props) drawProps();
+    $d('#designer-undo').disabled = !undoStack.length;
+    $d('#designer-redo').disabled = !redoStack.length;
+  }
+  function select(type, id, { focus = false } = {}) {
+    selection = type === 'form' ? { type } : { type, id };
+    markSelection(); drawProps();
+    if (focus && type !== 'form') focusCanvas(type, id);
+  }
+  // ---- Pointer: drag fields, sections and components; resize the window from its edges ----
+  const indicator = document.createElement('div'), ghost = document.createElement('div');
+  indicator.className = 'designer-drop-indicator'; ghost.className = 'designer-drag-ghost';
+  indicator.hidden = ghost.hidden = true;
+  dialog.append(indicator, ghost);
+  function showIndicator(rect, horizontal) {
+    if (!rect) { indicator.hidden = true; return; }
+    indicator.hidden = false;
+    indicator.classList.toggle('is-horizontal', horizontal);
+    Object.assign(indicator.style, horizontal ? { left: `${rect.left}px`, top: `${rect.top - 2}px`, width: `${rect.width}px`, height: '4px' } : { left: `${rect.left - 2}px`, top: `${rect.top}px`, width: '4px', height: `${rect.height}px` });
+  }
+  function fieldTarget(x, y, id) {
+    const element = document.elementFromPoint(x, y);
+    if (!element || !dialog.contains(element)) return null;
+    if (element.closest('.designer-palette')) return locate(id) ? { type: 'palette' } : null;
+    const empty = element.closest('[data-empty-column]');
+    if (empty) { const box = empty.getBoundingClientRect(); return { type: 'new-section', column: Number(empty.dataset.emptyColumn), rect: { left: box.left, top: box.top + box.height / 2, width: box.width }, horizontal: true }; }
+    let section = element.closest('[data-designer-section]');
+    if (!section) {
+      const column = element.closest('.task-form-column');
+      if (!column) return null;
+      const sections = [...column.querySelectorAll(':scope > [data-designer-section]')];
+      section = sections.find(item => y <= item.getBoundingClientRect().bottom) || sections.at(-1);
+      if (!section) return null;
+    }
+    const items = [...section.querySelectorAll(':scope > .task-form-grid > .designer-item')].filter(item => item.dataset.designerField !== id);
+    let index = items.findIndex(item => { const box = item.getBoundingClientRect(); return y < box.top || (y <= box.bottom && x < box.left + box.width / 2); });
+    if (index < 0) index = items.length;
+    let rect, horizontal = false;
+    if (items[index]) { const box = items[index].getBoundingClientRect(); rect = { left: box.left - 5 * scale, top: box.top, height: box.height }; }
+    else if (items.length) { const box = items.at(-1).getBoundingClientRect(); rect = { left: box.right + 5 * scale, top: box.top, height: box.height }; }
+    else { const box = section.querySelector('.task-form-grid').getBoundingClientRect(); rect = { left: box.left, top: box.top + box.height / 2, width: box.width }; horizontal = true; }
+    return { type: 'section', id: section.dataset.designerSection, index, rect, horizontal };
+  }
+  function sectionTarget(x, y, id) {
+    const element = document.elementFromPoint(x, y), column = element && dialog.contains(element) && element.closest('.task-form-column');
+    if (!column) return null;
+    const sections = [...column.querySelectorAll(':scope > [data-designer-section]')].filter(item => item.dataset.designerSection !== id);
+    let index = sections.findIndex(item => { const box = item.getBoundingClientRect(); return y < box.top + box.height / 2; });
+    if (index < 0) index = sections.length;
+    const columnBox = column.getBoundingClientRect(), gap = 9 * scale;
+    const top = sections[index] ? sections[index].getBoundingClientRect().top - gap : sections.length ? sections.at(-1).getBoundingClientRect().bottom + gap : columnBox.top + 12;
+    return { type: 'column', column: Number(column.dataset.layoutColumn), index, rect: { left: columnBox.left, top, width: columnBox.width }, horizontal: true };
+  }
+  function autoScroll() {
+    if (!drag?.active) return;
+    const box = stage.getBoundingClientRect(), edge = 48;
+    const dy = drag.y < box.top + edge ? -12 : drag.y > box.bottom - edge ? 12 : 0, dx = drag.x < box.left + edge && drag.x > box.left ? -12 : drag.x > box.right - edge && drag.x < box.right ? 12 : 0;
+    if (dx || dy) { stage.scrollBy(dx, dy); updateDrag(); }
+    drag.frame = requestAnimationFrame(autoScroll);
+  }
+  function updateDrag() {
+    ghost.style.transform = `translate(${drag.x + 14}px, ${drag.y + 12}px)`;
+    drag.target = drag.source.type === 'field' ? fieldTarget(drag.x, drag.y, drag.source.id) : sectionTarget(drag.x, drag.y, drag.source.id);
+    dialog.classList.toggle('is-removing', drag.target?.type === 'palette');
+    showIndicator(drag.target?.rect, drag.target?.horizontal);
+  }
+  function endDrag(apply) {
+    const current = drag;
+    drag = null;
+    cancelAnimationFrame(current.frame);
+    for (const [type, listener] of Object.entries(current.listeners)) window.removeEventListener(type, listener, true);
+    indicator.hidden = ghost.hidden = true;
+    dialog.classList.remove('is-dragging', 'is-removing');
+    dialog.querySelectorAll('.is-drag-source').forEach(element => element.classList.remove('is-drag-source'));
+    if (!current.active) { current.click?.(); return; }
+    const { source, target } = current;
+    if (!apply || !target) return;
+    if (source.type === 'field') {
+      const name = layoutFieldName(byId.get(source.id));
+      if (target.type === 'palette') { mutate(() => removeField(source.id)); announce(fillText("“{0}” removed from the form.", name)); return; }
+      if (target.type === 'new-section') {
+        const section = newSection(byId.get(source.id).type === 'richtext' ? 1 : 2);
+        mutate(() => { insertSection(section, target.column, 0); placeField(source.id, section.id, 0); });
+      } else mutate(() => placeField(source.id, target.id, target.index));
+      select('field', source.id, { focus: true });
+      announce(fillText("“{0}” moved.", name));
+      return;
+    }
+    if (source.type === 'new-section') { addSection(source.columns, target.column, target.index); return; }
+    mutate(() => moveSection(source.id, target.column, target.index));
+    select('section', source.id, { focus: true });
+    announce(t("Section moved."));
+  }
+  function beginPointer(event, source, click) {
+    if (drag || event.button !== 0 || !event.isPrimary) return;
+    const listeners = {
+      pointermove: move => {
+        if (move.pointerId !== event.pointerId) return;
+        drag.x = move.clientX; drag.y = move.clientY;
+        if (!drag.active && Math.hypot(drag.x - event.clientX, drag.y - event.clientY) < 4) return;
+        move.preventDefault();
+        if (!drag.active) {
+          drag.active = true;
+          dialog.classList.add('is-dragging');
+          source.element?.classList.add('is-drag-source');
+          ghost.textContent = source.label;
+          ghost.hidden = false;
+          drag.frame = requestAnimationFrame(autoScroll);
+        }
+        updateDrag();
+      },
+      pointerup: up => { if (up.pointerId === event.pointerId) endDrag(true); },
+      pointercancel: () => endDrag(false),
+      keydown: key => { if (key.key === 'Escape' && drag?.active) { key.preventDefault(); key.stopPropagation(); endDrag(false); announce(t("Move cancelled.")); } }
+    };
+    drag = { source, click, listeners, active: false, x: event.clientX, y: event.clientY, frame: 0, target: null };
+    for (const [type, listener] of Object.entries(listeners)) window.addEventListener(type, listener, true);
+  }
+  function beginResize(event, edge) {
+    if (drag || event.button !== 0) return;
+    event.preventDefault();
+    const start = { x: event.clientX, y: event.clientY, width: state.layout.width, height: state.layout.height || Math.round((modal.offsetHeight - 2) / 10) * 10 };
+    const before = snapshot();
+    frozen = true;
+    dialog.classList.add('is-resizing');
+    const clamp = (value, { min, max }) => Math.max(min, Math.min(max, Math.round(value / 10) * 10));
+    const move = pointer => {
+      if (edge.includes('e')) state.layout.width = clamp(start.width + 2 * (pointer.clientX - start.x) / scale, TASK_LAYOUT.width);
+      if (edge.includes('s')) state.layout.height = clamp(start.height + (pointer.clientY - start.y) / scale, TASK_LAYOUT.height);
+      drawCanvas();
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move, true);
+      window.removeEventListener('pointerup', up, true);
+      frozen = false;
+      dialog.classList.remove('is-resizing');
+      if (snapshot() !== before) { undoStack.push(before); redoStack.length = 0; lastKey = ''; }
+      selection = { type: 'form' };
+      draw();
+    };
+    window.addEventListener('pointermove', move, true);
+    window.addEventListener('pointerup', up, true);
+  }
+  dialog.addEventListener('pointerdown', event => {
+    const grip = event.target.closest('[data-grip]');
+    if (grip) { beginResize(event, grip.dataset.grip); return; }
+    const item = event.target.closest('.designer-item'), palette = event.target.closest('[data-palette-field]'), component = event.target.closest('[data-add-section]');
+    const section = !item && event.target.closest('[data-designer-section]');
+    if (item) beginPointer(event, { type: 'field', id: item.dataset.designerField, element: item, label: layoutFieldName(byId.get(item.dataset.designerField)) }, () => select('field', item.dataset.designerField, { focus: true }));
+    else if (palette) beginPointer(event, { type: 'field', id: palette.dataset.paletteField, element: palette, label: layoutFieldName(byId.get(palette.dataset.paletteField)) }, () => {
+      const id = palette.dataset.paletteField;
+      if (placedIds().has(id)) select('field', id, { focus: true }); else select('field', id);
+    });
+    else if (component) beginPointer(event, { type: 'new-section', columns: Number(component.dataset.addSection), label: component.textContent.trim() }, () => addSection(Number(component.dataset.addSection)));
+    else if (section) beginPointer(event, { type: 'section', id: section.dataset.designerSection, element: section, label: section.querySelector('.designer-section-tab').textContent }, () => select('section', section.dataset.designerSection, { focus: true }));
+    else if (event.target.closest('.designer-canvas') && !event.target.closest('.designer-size')) select('form');
+  });
+  dialog.addEventListener('keydown', event => {
+    const command = event.ctrlKey || event.metaKey, key = event.key.toLowerCase(), typing = event.target.closest('input, select, textarea');
+    if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); if (!drag) requestClose(); return; }
+    event.stopPropagation();
+    if (command && !typing && (key === 'z' || key === 'y')) { event.preventDefault(); if (key === 'y' || event.shiftKey) restore(redoStack, undoStack); else restore(undoStack, redoStack); return; }
+    if (command || event.altKey || drag) return;
+    const grip = event.target.closest('[data-grip]');
+    if (grip && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
+      event.preventDefault();
+      const step = (event.shiftKey ? 50 : 10) * (['ArrowLeft', 'ArrowUp'].includes(event.key) ? -1 : 1);
+      if (grip.dataset.grip === 'e') mutate(() => { state.layout.width = Math.max(TASK_LAYOUT.width.min, Math.min(TASK_LAYOUT.width.max, state.layout.width + step)); }, 'width');
+      else mutate(() => { state.layout.height = Math.max(TASK_LAYOUT.height.min, Math.min(TASK_LAYOUT.height.max, (state.layout.height || Math.round((modal.offsetHeight - 2) / 10) * 10) + step)); }, 'height');
+      return;
+    }
+    const item = event.target.closest('.designer-item'), section = !item && event.target.matches('[data-designer-section]') && event.target, palette = event.target.closest('[data-palette-field]');
+    const step = { ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1 }[event.key];
+    if (item) {
+      const id = item.dataset.designerField;
+      if (step) { event.preventDefault(); moveFieldBy(id, step); }
+      else if (event.key === 'Delete' || event.key === 'Backspace') { event.preventDefault(); const next = item.nextElementSibling?.dataset.designerField || item.previousElementSibling?.dataset.designerField; mutate(() => removeField(id)); announce(fillText("“{0}” removed from the form.", layoutFieldName(byId.get(id)))); if (next) select('field', next, { focus: true }); else select('form'); }
+      else if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); select('field', id); $d('#designer-field-section')?.focus(); }
+    } else if (section) {
+      const id = section.dataset.designerSection;
+      if (step) { event.preventDefault(); moveSectionBy(id, step, event.key === 'ArrowLeft' || event.key === 'ArrowRight'); }
+      else if (event.key === 'Delete' || event.key === 'Backspace') { event.preventDefault(); mutate(() => deleteSection(id)); select('form'); announce(t("Section deleted.")); }
+      else if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); select('section', id); $d('#designer-section-name')?.focus(); }
+    } else if (palette && (event.key === 'Enter' || event.key === ' ')) {
+      event.preventDefault();
+      const id = palette.dataset.paletteField;
+      if (placedIds().has(id)) select('field', id, { focus: true }); else addFieldToForm(id);
+    }
+  });
+  dialog.addEventListener('focusin', event => {
+    const item = event.target.closest?.('.designer-item'), section = event.target.matches?.('[data-designer-section]') && event.target;
+    if (item && !(selection.type === 'field' && selection.id === item.dataset.designerField)) select('field', item.dataset.designerField);
+    else if (section && !(selection.type === 'section' && selection.id === section.dataset.designerSection)) select('section', section.dataset.designerSection);
+  });
+  $d('#designer-search').oninput = event => { paletteQuery = event.target.value; drawPalette(); };
+  $d('#designer-unused').onchange = event => { unusedOnly = event.target.checked; drawPalette(); };
+  $d('#designer-undo').onclick = () => restore(undoStack, redoStack);
+  $d('#designer-redo').onclick = () => restore(redoStack, undoStack);
+  $d('#designer-reset').onclick = () => { mutate(() => { state.layout = defaultTaskEditorLayout(settingsDraft); }); select('form'); announce(t("Default layout restored.")); };
+  function applyDesign() {
+    if (view !== 4 || activeOrganizationId !== organizationId || !$('#task-layout-mini')) throw new Error(t("The settings page was reloaded: open the form designer again."));
+    settingsDraft.taskEditorLayout = normalizeTaskEditorLayout(settingsDraft, structuredClone(state.layout));
+    settingsDraft.requiredTaskColumns = [...state.required];
+    approved = true;
+    dialog.close();
+    drawTaskLayoutSettings(); redrawColumnDefinitions(); refreshSettingsState();
+  }
+  function requestClose() {
+    if (!dirty()) { approved = true; dialog.close(); return; }
+    confirmDialog("Discard the form changes?", "The changes made in the form designer have not been applied.", () => { approved = true; dialog.close(); });
+  }
+  $d('#designer-cancel').onclick = requestClose;
+  $d('#designer-apply').onclick = action(() => { applyDesign(); notify("Form layout applied. Save the settings to keep it."); });
+  $d('#designer-save').onclick = action(async () => { applyDesign(); await saveSettings(); rerenderPreservingView(); notify("Settings saved."); });
+  dialog.addEventListener('cancel', event => { event.preventDefault(); if (!drag) requestClose(); });
+  const observer = new ResizeObserver(() => fit());
+  const onResize = () => fit();
+  dialog.addEventListener('close', () => {
+    if (!approved && dirty()) { dialog.showModal(); return; }
+    if (drag) endDrag(false);
+    observer.disconnect();
+    window.removeEventListener('resize', onResize);
+    dialog.remove();
+    $('#open-form-designer')?.focus();
+  });
+  dialog.showModal();
+  observer.observe(modal);
+  window.addEventListener('resize', onResize);
+  draw();
+  dialog.querySelector('.designer-palette-field')?.focus();
 }
 function updatesPanel() {
   return ui`<section class="panel settings-section full" id="updates-panel"><h2>App & updates</h2><p class="section-description">Updates and shortcuts apply to this portable copy, not to one organization. GitHub receives no workspace data. Downloading and installing always require your action.</p><p>Installed version: <strong>${esc(appVersion)}</strong></p><p id="update-status" role="status" aria-live="polite"></p><progress id="update-progress" max="100" hidden aria-label="Update download progress"></progress><label class="field checkbox-field"><input type="checkbox" id="update-auto"><span>Check for updates at startup</span></label><div class="storage-actions"><button type="button" class="button" id="update-check">Check for updates</button><button type="button" class="button" id="update-download" hidden>Download update</button><button type="button" class="button primary" id="update-install" hidden>Install and restart</button><button type="button" class="button" id="update-release">View releases</button></div><hr><h3>Windows shortcut</h3><p class="section-description">Create a shortcut to the portable launcher, not the temporary app. Remove old broken pins, then pin the new shortcut or the running app once. Moving the portable folder requires recreating its shortcut.</p><button type="button" class="button" id="create-shortcut">Create desktop shortcut</button></section>`;
@@ -3456,6 +4139,7 @@ $('#modal').addEventListener('close', () => {
   if (settingsDraftPending()) { renderChrome(); refreshSettingsState(); } else rerenderPreservingView();
 });
 document.addEventListener('keydown', e => {
+  if ($('#form-designer')?.open) return;
   const command = e.ctrlKey || e.metaKey, key = e.key.toLowerCase();
   if (e.key === 'F1' && !command && !e.altKey && !$('#modal').open && data) { e.preventDefault(); openGuide(); return; }
   if (command && key === 'k' && !$('#modal').open && data) { e.preventDefault(); action(() => withSavedSettings(openGlobalSearch))(); return; }
@@ -3494,7 +4178,7 @@ window.runSmokeTests = async () => {
   async function waitFor(predicate) {
     const deadline = Date.now() + 5000;
     while (!predicate()) {
-      if (Date.now() > deadline) throw new Error('Timeout while saving the test.');
+      if (Date.now() > deadline) throw new Error(`Timeout while saving the test. After: ${checks.at(-1) || '-'}${$('#toast')?.textContent ? `; message: ${$('#toast').textContent}` : ''}`);
       await new Promise(resolve => setTimeout(resolve, 25));
     }
   }
@@ -3599,8 +4283,10 @@ window.runSmokeTests = async () => {
   }
   taskDialog(data.tasks.find(task => !task.hidden));
   const editModal = $('#modal'), editBody = $('.task-edit-layout'), editWidth = editModal.clientWidth;
-  check(editWidth >= Math.min(1100, innerWidth * 0.9) && $('.task-edit-fields').getBoundingClientRect().right < $('.task-edit-text').getBoundingClientRect().left, "Wide task editor places properties and text side by side");
+  const propertiesSection = $('#task-form [data-section="section-properties"]'), textSection = $('#task-form [data-section="section-text"]');
+  check(editWidth >= Math.min(1100, innerWidth * 0.9) && propertiesSection.getBoundingClientRect().right < textSection.getBoundingClientRect().left && $('#task-form .task-edit-pool').hidden, "Wide task editor places properties and text side by side");
   check(editModal.scrollHeight <= editModal.clientHeight + 1 && editBody.scrollHeight <= editBody.clientHeight + 1 && $('#task-form [type="submit"]').getBoundingClientRect().bottom <= innerHeight, 'Desktop editor fits onscreen without scrolling the modal');
+  check($('#task-form [data-form-field="sequence"] .required-mark') && $('#task-form').elements.sequence.getAttribute('aria-required') === 'true' && document.querySelectorAll('#task-form .required-mark').length === 1, 'Default required fields are marked in the task editor');
   $('#description-editor').innerHTML = "<p>Long description to edit.</p>".repeat(100);
   $('#notes-editor').innerHTML = "<p>Long notes to edit.</p>".repeat(100);
   check($('#description-editor').scrollHeight > $('#description-editor').clientHeight && $('#notes-editor').scrollHeight > $('#notes-editor').clientHeight && editBody.scrollHeight <= editBody.clientHeight + 1, 'Long text scrolls only inside the editors without moving fields or buttons');
@@ -3615,42 +4301,120 @@ window.runSmokeTests = async () => {
       next.tasks.find(task => task.id === taskId).customFields = { 'custom-layout-value': 'Keep this value', 'custom-layout-text': '<p>Keep this text</p>' };
     });
     view = 4; render(); showSettingsTab('task-layout');
-    check(!$('#task-layout-panel').hidden && $('#task-layout-fields').children.length === taskEditorFields(data.settings).length && !settingsChanged(), 'Task layout settings list all available editor fields without creating unsaved changes');
-    const setControl = (selector, value) => {
-      const input = $(selector);
-      if (input.type === 'checkbox') input.checked = value; else input.value = value;
-      input.dispatchEvent(new Event('change', { bubbles: true }));
-    };
-    setControl('#task-layout-mode', 'text-first');
-    setControl('#task-layout-columns', '1');
-    for (const id of ['code', 'sequence', 'description', 'custom-layout-value', 'custom-layout-text']) setControl(`[data-layout-field="${id}"] [data-layout-visible]`, false);
-    setControl('[data-layout-field="urgency"] [data-layout-section]', 'text');
-    const handle = $('[data-layout-field="sequence"] [data-drag-handle]');
-    handle.focus(); handle.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }));
-    check(settingsDraft.taskEditorLayout.fields[0].id === 'sequence' && $('#task-layout-preview').dataset.mode === 'text-first' && !$('#settings-tab-task-layout .settings-tab-dot').hidden && settingsChanged(), 'Task layout controls, keyboard ordering and preview update the unsaved settings draft');
+    const fieldCount = taskEditorFields(data.settings).length;
+    check(!$('#task-layout-panel').hidden && $('#task-layout-mini').querySelectorAll('.layout-mini-field').length === fieldCount && $('#task-required-summary').textContent.includes(term('Sequence')) && !settingsChanged(), 'Task layout settings summarize the form and its required fields without creating unsaved changes');
+    const key = (target, name, options = {}) => target.dispatchEvent(new KeyboardEvent('keydown', { key: name, bubbles: true, cancelable: true, ...options }));
+    const pointer = (target, type, x, y) => (type === 'pointerdown' ? target : window).dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, button: 0, isPrimary: true, pointerId: 7, clientX: x, clientY: y }));
+    const centre = element => { const box = element.getBoundingClientRect(); return [box.left + box.width / 2, box.top + box.height / 2]; };
+    const tap = element => { const [x, y] = centre(element); pointer(element, 'pointerdown', x, y); pointer(element, 'pointerup', x, y); };
+    const dragTo = (source, [x, y]) => { const [sx, sy] = centre(source); pointer(source, 'pointerdown', sx, sy); pointer(source, 'pointermove', sx + 8, sy + 8); pointer(source, 'pointermove', x, y); pointer(source, 'pointerup', x, y); };
+    const change = (element, value) => { if (element.type === 'checkbox') element.checked = value; else element.value = value; element.dispatchEvent(new Event(element.type === 'checkbox' || element.tagName === 'SELECT' ? 'change' : 'input', { bubbles: true })); };
+    $('#open-form-designer').click();
+    const designer = $('#form-designer'), inDesigner = selector => designer.querySelector(selector), onForm = id => inDesigner(`#designer-layout [data-designer-field="${id}"]`);
+    check(designer?.open && designer.getBoundingClientRect().width >= innerWidth - 1 && designer.querySelectorAll('[data-palette-field]').length === fieldCount && designer.querySelectorAll('#designer-layout .designer-item').length === fieldCount && inDesigner('.designer-ghost .designer-ghost-app') && inDesigner('#designer-modal.task-form'), 'Form designer opens full screen with the field list, the blurred app and a live form preview');
+    onForm('code').focus(); key(onForm('code'), 'Delete');
+    check(!onForm('code') && !inDesigner('[data-palette-field="code"]').classList.contains('is-placed') && !inDesigner('#designer-undo').disabled && document.activeElement?.dataset.designerField, 'Delete removes the focused field from the form, returns it to the field list and keeps focus on the form');
+    key(designer, 'z', { ctrlKey: true });
+    const restored = Boolean(onForm('code'));
+    key(designer, 'y', { ctrlKey: true });
+    check(restored && !onForm('code'), 'Ctrl+Z and Ctrl+Y undo and redo designer changes');
+    const component = inDesigner('[data-add-section="1"]'), [cx, cy] = centre(component);
+    pointer(component, 'pointerdown', cx, cy); pointer(component, 'pointerup', cx, cy);
+    const sectionId = inDesigner('.designer-section.is-selected')?.dataset.designerSection;
+    check(sectionId && inDesigner('#designer-section-name') && designer.querySelectorAll('[data-designer-section]').length === 3, 'Section components add a new section and select it');
+    const nameInput = inDesigner('#designer-section-name');
+    nameInput.focus(); change(nameInput, 'Planning');
+    check(inDesigner(`[data-designer-section="${sectionId}"] .task-form-section-title`)?.textContent === 'Planning' && document.activeElement === nameInput, 'Section properties rename the section live while typing');
+    const paletteCode = inDesigner('[data-palette-field="code"]');
+    paletteCode.focus(); key(paletteCode, 'Enter');
+    check(inDesigner(`[data-designer-section="${sectionId}"] [data-designer-field="code"]`) && document.activeElement === onForm('code'), 'Enter on a listed field adds it to the selected section');
+    const planned = () => [...designer.querySelectorAll(`[data-designer-section="${sectionId}"] [data-designer-field]`)].map(item => item.dataset.designerField).join();
+    const codeBox = onForm('code').getBoundingClientRect();
+    dragTo(onForm('custom-layout-value'), [codeBox.right - 3, codeBox.top + codeBox.height / 2]);
+    check(planned() === 'code,custom-layout-value' && inDesigner('.designer-drop-indicator').hidden && !designer.classList.contains('is-dragging'), 'Dragging a field drops it at the pointer position in another section');
+    onForm('custom-layout-value').focus(); key(onForm('custom-layout-value'), 'ArrowUp');
+    check(planned() === 'custom-layout-value,code' && document.activeElement === onForm('custom-layout-value'), 'Arrow keys reorder the focused field and keep focus on it');
+    dragTo(onForm('custom-layout-value'), centre(inDesigner('#designer-fields')));
+    check(!onForm('custom-layout-value') && !inDesigner('[data-palette-field="custom-layout-value"]').classList.contains('is-placed'), 'Dropping a field on the field list removes it from the form');
+    tap(onForm('code'));
+    change(inDesigner('#designer-field-required'), true);
+    check(onForm('code').querySelector('.required-mark') && inDesigner('[data-palette-field="code"] .required-mark') && inDesigner('#designer-field-required').checked, 'Required can be set in the field properties and shows on the preview and in the field list');
+    tap(onForm('hidden'));
+    check(inDesigner('#designer-field-required').disabled, 'Fields that are never empty cannot be required');
+    const width = settingsDraft.taskEditorLayout.width, east = inDesigner('[data-grip="e"]');
+    east.focus(); key(east, 'ArrowLeft', { shiftKey: true });
+    check(inDesigner('#designer-modal').style.getPropertyValue('--task-form-width') === `${width - 50}px` && inDesigner('#designer-size').textContent.startsWith(`${width - 50} ×`), 'The window edge resizes the form with the keyboard and shows its size');
+    const south = inDesigner('[data-grip="s"]'), [gx, gy] = centre(south);
+    pointer(south, 'pointerdown', gx, gy); pointer(south, 'pointermove', gx, gy + 60); pointer(south, 'pointerup', gx, gy + 60);
+    check(inDesigner('#designer-modal').classList.contains('fixed-height') && !inDesigner('#designer-auto-height').checked && Number(inDesigner('#designer-height').value) >= 360, 'Dragging the bottom edge switches the form to a fixed height');
+    inDesigner('[data-preset="100"]').click();
+    check(designer.querySelectorAll('#designer-layout > .task-form-column').length === 1 && designer.querySelectorAll('[data-designer-section]').length === 3, 'Column presets keep the sections of removed layout columns');
+    key(designer, 'z', { ctrlKey: true });
+    check(designer.querySelectorAll('#designer-layout > .task-form-column').length === 2 && inDesigner('#designer-modal').classList.contains('fixed-height'), 'Undo restores the previous column layout');
+    key(designer, 'Escape');
+    check($('#modal').open && $('#confirm-action') && designer.open, 'Escape asks before discarding the designer changes');
+    $('#modal [data-close]').click();
+    check(designer.open && !$('#modal').open && document.body.contains(designer), 'Cancelling the confirmation keeps the designer open');
+    inDesigner('#designer-apply').click();
+    await waitFor(() => !$('#form-designer'));
+    const draftLayout = settingsDraft.taskEditorLayout, planning = draftLayout.columns.flatMap(column => column.sections).find(section => section.id === sectionId);
+    check(planning?.name === 'Planning' && planning.fields.map(field => field.id).join() === 'code' && draftLayout.unplaced.includes('custom-layout-value') && draftLayout.height > 0 && settingsDraft.requiredTaskColumns.includes('code') && !$('#settings-tab-task-layout .settings-tab-dot').hidden && settingsChanged(), 'Apply copies the designed form and required fields into the unsaved settings');
+    check($('#custom-definitions-tasks [data-field-id="code"] [data-field-required]').checked && $('#custom-definitions-tasks [data-field-id="tags"] [data-field-required]').disabled && $('#task-required-summary').textContent.includes(term('Portal code')), 'Column management and the layout summary show the new required field');
     await saveSettings();
-    const configured = structuredClone(data.settings.taskEditorLayout), savedTask = structuredClone(data.tasks.find(task => task.id === taskId));
-    check(JSON.stringify((await workspaceApi.load()).data.settings.taskEditorLayout) === JSON.stringify(configured) && JSON.stringify(data.settings.taskColumns) === JSON.stringify(baseline.settings.taskColumns.concat([{ id: 'custom-layout-value', visible: true }, { id: 'custom-layout-text', visible: true }])), 'Task layout persists without reordering or hiding list columns');
+    const configured = structuredClone(data.settings.taskEditorLayout), savedTask = structuredClone(data.tasks.find(task => task.id === taskId)), stored = (await workspaceApi.load()).data.settings;
+    check(JSON.stringify(stored.taskEditorLayout) === JSON.stringify(configured) && stored.requiredTaskColumns.join() === 'sequence,code' && JSON.stringify(data.settings.taskColumns) === JSON.stringify(baseline.settings.taskColumns.concat([{ id: 'custom-layout-value', visible: true }, { id: 'custom-layout-text', visible: true }])), 'Task form and required fields persist without reordering or hiding list columns');
     taskDialog(savedTask);
-    const form = $('#task-form'), properties = $('.task-edit-fields'), text = $('.task-edit-text');
-    check($('.task-edit-layout').firstElementChild === text && text.getBoundingClientRect().right < properties.getBoundingClientRect().left && text.contains(form.elements.urgencyId) && getComputedStyle(properties).gridTemplateColumns.split(' ').length === 1, 'Saved task layout controls section placement, field placement and column count');
-    check(['code', 'sequence', 'description', 'custom-layout-value', 'custom-layout-text'].every(id => $(`[data-task-field="${id}"]`).hidden) && form.elements.code.value === savedTask.code && form.elements['custom-layout-value'].value === 'Keep this value', 'Hidden task editor fields retain their DOM values but are not displayed');
+    const form = $('#task-form'), planningSection = form.querySelector(`[data-section="${sectionId}"]`);
+    check(planningSection?.querySelector('.task-form-section-title')?.textContent === 'Planning' && planningSection.contains(form.elements.code) && form.querySelector('.task-edit-pool').contains(form.elements['custom-layout-value']) && form.elements['custom-layout-value'].value === 'Keep this value' && form.querySelector('[data-form-field="code"] .required-mark') && form.classList.contains('fixed-height'), 'The task editor uses the designed sections and size, keeps values of fields off the form and marks required fields');
+    form.elements.code.value = '';
+    form.requestSubmit();
+    await new Promise(resolve => setTimeout(resolve, 50));
+    check($('#modal').open && form.querySelector('[data-form-field="code"] .field-error') && form.elements.code.getAttribute('aria-invalid') === 'true' && document.activeElement === form.elements.code, 'Empty required fields block saving, are flagged and receive focus');
+    form.elements.code.value = savedTask.code || 'PRJ-LAYOUT';
+    form.elements.code.dispatchEvent(new Event('input', { bubbles: true }));
+    check(!form.querySelector('[data-form-field="code"] .field-error') && form.elements.code.getAttribute('aria-invalid') !== 'true', 'Typing in a required field clears its error');
     form.elements.releaseDate.value = '2030-07-12';
     form.requestSubmit(); await waitFor(() => !saving && !$('#modal').open);
     const edited = data.tasks.find(task => task.id === taskId);
-    check(edited.releaseDate === '2030-07-12' && ['code', 'sequence', 'description', 'notes', 'effortHours', 'hidden', 'customFields', 'tagIds'].every(key => JSON.stringify(edited[key]) === JSON.stringify(savedTask[key])), 'Saving a visible field never clears hidden built-in or custom field values');
+    check(edited.releaseDate === '2030-07-12' && ['sequence', 'description', 'notes', 'effortHours', 'hidden', 'customFields', 'tagIds'].every(key => JSON.stringify(edited[key]) === JSON.stringify(savedTask[key])), 'Saving never clears values of fields kept off the form');
     taskDialog();
-    check($('.task-edit-layout').dataset.mode === 'text-first' && $('[data-task-field="code"]').hidden && Number($('#task-form').elements.sequence.value) > Math.max(...data.tasks.map(task => task.sequence)), 'New tasks use the saved layout and still initialize hidden fields');
+    check($(`#task-form [data-section="${sectionId}"]`) && $('#task-form .task-edit-pool').contains($('#task-form').elements['custom-layout-value']) && Number($('#task-form').elements.sequence.value) > Math.max(...data.tasks.map(task => task.sequence)), 'New tasks use the saved form and still initialize fields kept off it');
+    $('#modal').close();
+    view = 4; render(); showSettingsTab('custom-columns');
+    change($('#custom-definitions-tasks [data-field-id="sequence"] [data-field-required]'), false);
+    change($('#custom-definitions-tasks [data-field-id="releaseDate"] [data-field-required]'), true);
+    change($('#custom-definitions-issues [data-field-id="problem"] [data-field-required]'), true);
+    check(settingsDraft.requiredTaskColumns.join() === 'code,releaseDate' && settingsDraft.requiredIssueColumns.join() === 'problem' && document.activeElement === $('#custom-definitions-issues [data-field-id="problem"] [data-field-required]') && !$('#settings-tab-custom-columns .settings-tab-dot').hidden, 'Column management toggles required fields for both lists and keeps focus');
+    await saveSettings();
+    taskDialog();
+    const fresh = $('#task-form'), top = Math.max(...data.tasks.map(task => task.sequence));
+    fresh.elements.sequence.value = ''; fresh.elements.code.value = 'PRJ-AUTO'; fresh.elements.releaseDate.value = '2031-01-10';
+    fresh.requestSubmit(); await waitFor(() => !saving && !$('#modal').open);
+    check(data.tasks.find(task => task.code === 'PRJ-AUTO')?.sequence === top + 1, 'An optional empty sequence takes the next number');
+    issueDialog();
+    const issueForm = $('#issue-form');
+    issueForm.elements.code.value = 'PRJ-AUTO'; issueForm.elements.problem.value = '';
+    issueForm.requestSubmit();
+    await new Promise(resolve => setTimeout(resolve, 50));
+    check($('#modal').open && issueForm.querySelector('[data-form-field="problem"] .required-mark') && issueForm.querySelector('[data-form-field="problem"] .field-error') && !data.issues.some(issue => issue.code === 'PRJ-AUTO'), 'The issue editor enforces required columns');
+    $('#modal').close();
+    bulkDialog([taskId]);
+    check(!$('#bulk-release-mode option[value="clear"]') && $('#bulk-release-mode option[value="set"]') && $('#bulk-form select[name="highlightId"] option[value="__none"]'), 'Bulk edit cannot clear a required release date');
     $('#modal').close();
     view = 4; render(); showSettingsTab('task-layout');
     $('#reset-task-layout').click();
-    check(settingsDraft.taskEditorLayout.mode === 'split' && settingsDraft.taskEditorLayout.fields.every(field => field.visible), 'Default task layout can be restored without deleting columns or values');
+    check(JSON.stringify(settingsDraft.taskEditorLayout) === JSON.stringify(defaultTaskEditorLayout(settingsDraft)) && settingsChanged(), 'Default task layout can be restored without deleting columns or values');
     $('#discard-settings').click();
     check(JSON.stringify(settingsDraft.taskEditorLayout) === JSON.stringify(configured) && !settingsChanged(), 'Discard restores the saved editor layout');
-    setControl('#task-layout-mode', 'stacked');
-    await saveSettings();
+    $('#open-form-designer').click();
+    const second = $('#form-designer'), grip = second.querySelector('[data-grip="e"]');
+    grip.focus(); key(grip, 'ArrowRight');
+    second.querySelector('#designer-save').click();
+    await waitFor(() => !saving && !$('#form-designer') && data.settings.taskEditorLayout.width === configured.width + 10);
+    check(!settingsChanged() && $('#task-layout-summary').textContent.includes(`${configured.width + 10} ×`), 'Save in the designer applies and saves the settings in one step');
+    await commit(next => { const layout = next.settings.taskEditorLayout; layout.columns = [{ width: 100, sections: layout.columns.flatMap(column => column.sections) }]; layout.height = 0; });
     taskDialog(data.tasks.find(task => task.id === taskId));
-    check($('.task-edit-text').getBoundingClientRect().top >= $('.task-edit-fields').getBoundingClientRect().bottom && $('#task-form [type="submit"]').getBoundingClientRect().bottom <= innerHeight, 'Stacked task layout keeps both sections scrollable and the save action reachable');
+    check($('#task-form [data-section="section-text"]').getBoundingClientRect().top >= $('#task-form [data-section="section-properties"]').getBoundingClientRect().bottom && $('#task-form [type="submit"]').getBoundingClientRect().bottom <= innerHeight, 'Stacked task layout keeps the sections scrollable and the save action reachable');
     $('#modal').close();
     await commit(baseline); clearHistory(activeOrganizationId); view = 0; render();
   }

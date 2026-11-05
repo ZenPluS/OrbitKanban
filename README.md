@@ -4,7 +4,7 @@
 
 | | |
 | --- | --- |
-| **Current version** | 2.50.0 |
+| **Current version** | 2.60.0 |
 | **Platform** | Windows 10 / 11, 64-bit |
 | **Distribution** | Single portable executable, `OrbitKanban-Portable.exe` |
 | **Network** | Not required. Used only for optional update checks against GitHub |
@@ -41,6 +41,7 @@
 - [Portal links](#portal-links)
 - [Settings](#settings)
   - [Task editor layout](#task-editor-layout)
+  - [Required fields](#required-fields)
 - [Appearance](#appearance)
   - [Themes](#themes)
   - [Color picker](#color-picker)
@@ -73,7 +74,7 @@
 - **Multiple organizations**, each with its own data, settings, logo, theme and language.
 - **Flexible lists**: multi-level sorting, drag-and-drop ordering, per-column filters, saved views, row highlights, tags, duplicate detection, bulk edit, and undo/redo.
 - **Custom columns** of nine types; every built-in column can also be removed.
-- **Configurable task editor**: arrange, resize, reorder and hide fields per organization, with a layout preview.
+- **Form designer** for the task editor: drag fields into custom sections, size the window and mark fields as required, per organization.
 - **40 built-in themes**, custom themes, and palettes generated from an image or logo with WCAG AA contrast.
 - **Imports and exports**: CSV import with validation, Excel workbooks, and per-organization JSON exports.
 - **Browser access** from the same PC, with live sync across windows.
@@ -185,7 +186,7 @@ The main list. Each task can have:
 | Release date | Each date gets a deterministic color: the same day always has the same color, everywhere |
 | Highlight and tags | See [Highlights and tags](#highlights-and-tags) |
 
-Create tasks with **New task** or `Ctrl+N`. Open the editor by double-clicking a row or clicking the portal code. The wide editor shows properties and links on the left, and description and notes on the right, with **Save**, **Cancel** and **Delete** always within reach. Descriptions and notes show up to three lines in the table, and hovering shows the full text.
+Create tasks with **New task** or `Ctrl+N`. Open the editor by double-clicking a row or clicking the portal code. The editor follows the organization's [form layout](#task-editor-layout), by default with properties and links on the left and description and notes on the right, and keeps **Save**, **Cancel** and **Delete** always within reach. Descriptions and notes show up to three lines in the table, and hovering shows the full text.
 
 ### Linked issues
 
@@ -290,7 +291,7 @@ Use **Columns** in each list toolbar, or **Settings → List columns**, to show,
 | Effort (hours) | Non-negative number of hours |
 | Yes / No | Yes, no or empty |
 
-The type is fixed at creation to protect existing values. Names (up to 60 characters), options and order can be changed. Custom values are edited in the task and issue editors, and they can be searched, filtered, sorted (where meaningful), imported from CSV and exported to Excel. **Save settings** also saves columns still being typed into the forms. Deleting a column removes its values only when settings are saved, and the deletion can be undone.
+The type is fixed at creation to protect existing values. Names (up to 60 characters), options and order can be changed. Custom values are edited in the task and issue editors, and they can be searched, filtered, sorted (where meaningful), imported from CSV and exported to Excel. **Save settings** also saves columns still being typed into the forms. Deleting a column removes its values only when settings are saved, and the deletion can be undone. The **Required** box makes a column mandatory in the editors; see [Required fields](#required-fields).
 
 ### Removable built-in columns
 
@@ -305,7 +306,7 @@ Since 2.22.0 every built-in column of **Tasks** and **Linked issues** can be del
   - the Kanban view requires **Status**;
   - manual ordering requires **Sequence**.
 
-  When a required column is missing, the affected view shows a link to Column management, and the matching Excel sheet is disabled.
+  When a column needed by a view is missing, the view shows a link to Column management, and the matching Excel sheet is disabled.
 - Saved views, CSV import, bulk edit, filters, search and Excel adapt to the remaining columns.
 
 Once columns have been deleted, use OrbitKanban 2.22.0 or later with that workspace.
@@ -341,17 +342,32 @@ Leaving settings without saving restores the previous configuration. Themes, fon
 
 ### Task editor layout
 
-**Settings → Appearance → Task editor layout** controls the form used to create and edit tasks, independently of the list columns:
+**Settings → Appearance → Task editor layout** shows a miniature of the task form with its window size, layout columns and required fields. **Open form designer** opens a full-screen designer in the style of model-driven form editors such as Power Apps:
 
-- Place properties on the left, text panels on the left, or stack the sections vertically.
-- Choose one or two property columns.
-- Drag each field's handle, or use its arrow keys, to reorder fields within their sections.
-- Move built-in or custom editor fields between sections, choose one-column or full-width properties, and show or hide individual fields.
-- A schematic preview reflects the draft. **Save settings** applies it; **Discard changes** keeps the saved layout, and **Restore default layout** resets the draft.
+- **Live canvas.** The task window is drawn at its real size over a blurred copy of the app.
+- **Field list** on the left. Search the fields or show only those not on the form, then drag them into a section. Fields can also be dragged between sections and layout columns; an indicator shows where they will land.
+- **Components.** Drag or click a section with one to four columns. Sections can be renamed (up to 60 characters), show or hide their name, change layout column or be deleted, and their fields go back to the list.
+- **Properties** on the right, for the current selection:
+  - *form*: width from 480 to 2000 px, a fixed height from 360 to 1600 px or **Automatic height (fits the content)**, and up to three layout columns with proportional widths;
+  - *section*: name, name visibility, number of columns and position;
+  - *field*: section, width in section columns, **Required**, position, and removal from the form.
+- Drag the edges of the window to resize it. `Ctrl+Z` and `Ctrl+Y` undo and redo every change made in the designer.
+- With the keyboard, `Enter` adds the selected field to the selected section, the arrow keys move the selected item and `Delete` removes it.
+- **Apply** brings the draft back to settings, to be stored with **Save settings**; **Save settings** in the designer stores it immediately. **Cancel** drops the designer changes, and **Restore default layout** rebuilds the default form.
 
-Hidden fields keep their values when a task is saved, including rich text and custom values. New tasks still initialize hidden fields normally. Removed columns disappear from the layout; new columns are included automatically. The editor adapts to narrow windows and keeps its save/cancel actions accessible.
+The real editor uses the chosen width and height but never exceeds the app window: its content scrolls when needed, and narrow windows stack the layout columns. Fields left off the form keep their values when a task is saved, including rich text and custom values, and new tasks still initialize them normally. List columns are not affected. Deleted columns disappear from the form, and new columns join the section that holds fields of the same kind.
 
-Layouts are stored per organization in the portable workspace and included in settings exports and backups. Importing settings remaps custom field references by the existing column matching rules. Older archives receive the original two-panel layout; importing older settings without a layout preserves the current preference.
+Layouts are stored per organization in the portable workspace and included in settings exports and backups. Importing settings remaps custom field references by the existing column matching rules. Layouts from 2.50 are converted to the equivalent sections, and older archives receive the default form. Downgrading is not supported: OrbitKanban 2.50.0 cannot open a workspace once 2.60.0 has saved it.
+
+### Required fields
+
+Mark a field as **Required** in the field properties of the form designer, or with the **Required** box of each column in **Settings → Column management**, for both tasks and issues. **Sequence** is required by default; this is the setting behind its asterisk, and it can be turned off like any other.
+
+- Required fields show an asterisk. Saving a task or an issue with an empty required field highlights it with a message and keeps the editor open.
+- Task fields are checked only when they are on the form, as in model-driven forms; the designer warns about a required field left off the form.
+- **Bulk edit** cannot clear a required release date or highlight. CSV imports and organization imports are not checked.
+- Yes/no fields, tags, the incidents and problems resolved from Linked issues, and the computed **Link** column of Linked issues cannot be required.
+- Deleting a column also removes it from the required fields.
 
 ## Appearance
 
@@ -592,7 +608,7 @@ All source code, tests, scripts and documentation are in English. Interface text
 | `build-and-push.ps1`, `github-release.js` | Build, test, commit, push and GitHub release pipeline |
 | `smoke.js`, `smoke-web.js`, `smoke-windows.js` | End-to-end smoke tests |
 | `fonts/` | Bundled WOFF2 fonts, sources and licenses |
-| `*.test.js` | Unit tests, including layout validation and import/export in `task-layout.test.js` |
+| `*.test.js` | Unit tests, including layout validation and import/export in `task-layout.test.js` and required fields in `required-fields.test.js` |
 
 ### Build, test and release
 
@@ -605,7 +621,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\build-and-push.ps1 -Message "Des
 The script:
 
 1. Checks the repository: active branch, no merge or rebase in progress, not behind the remote, and no unwanted files (`data`, `dist`, `node_modules`, executables, archives, or files over 5 MB).
-2. Runs `npm run check`, `npm test` and the smoke test from source, including task layout persistence, hidden-value preservation and update notification behavior.
+2. Runs `npm run check`, `npm test` and the smoke test from source, including the form designer, required fields, task layout persistence, preservation of values left off the form and update notifications.
 3. Builds the portable executable into `dist-staging\<version>` and verifies its version and embedded icon.
 4. Smoke-tests the packaged app and the portable launcher in isolated temporary folders.
 5. Copies the tested executable to `dist\OrbitKanban-Portable.exe`, or to `dist\OrbitKanban-Portable-<version>.exe` when the former is running.
@@ -627,7 +643,7 @@ Tags are never moved. Bump the version before releasing new sources:
 npm version minor --no-git-tag-version --ignore-scripts
 ```
 
-For a specifically numbered release, use `npm version 2.50.0 --no-git-tag-version --ignore-scripts` instead. To update the local portable copy too, run the pipeline **without `-NoDeliver`** and close the app first. The script replaces only the executable, not `dist/data`.
+For a specifically numbered release, use `npm version 2.60.0 --no-git-tag-version --ignore-scripts` instead. To update the local portable copy too, run the pipeline **without `-NoDeliver`** and close the app first. The script replaces only the executable, not `dist/data`.
 
 The script refuses to reuse a tagged version for different sources. If a build or test fails, nothing is committed or pushed.
 
@@ -635,6 +651,7 @@ The script refuses to reuse a tagged version for different sources. If a build o
 
 | Version | Changes |
 | --- | --- |
+| **2.60.0** | Full-screen form designer for the task editor with drag and drop, custom sections, layout columns and window size; configurable required fields for tasks and issues |
 | **2.50.0** | Per-organization task editor layout settings with preview, field ordering and visibility; persistent update notifications and top-bar shortcut |
 | **2.47.1** | Smooth, reversible sidebar animation with label fades and support for reduced motion |
 | **2.47.0** | Collapsible sidebar: **☰** or `Ctrl+B` folds it into a column of icons with tooltips and counters |

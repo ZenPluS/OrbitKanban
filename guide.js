@@ -250,10 +250,16 @@ const SECTIONS = [
         '**Discard changes**, or leaving the settings without saving, keeps the previous configuration.'
       ] },
       { title: 'Task editor layout', items: [
-        'In **Settings → Task editor layout**, choose side-by-side sections, text on the left, or stacked sections, with one or two property columns.',
-        'Reorder fields with the drag handle or its arrow keys, move them between sections, choose their width and hide those you do not need. The schematic preview follows your changes.',
-        'Hidden fields retain their values when you save a task. Deleted columns disappear from the layout; newly added columns appear automatically. This does not change the task list columns.',
-        'Press **Save settings** to apply the layout to new and existing tasks in this organization. It travels with settings exports and backups. **Restore default layout** resets the draft; **Discard changes** keeps the saved layout.'
+        'In **Settings → Task editor layout**, press **Open form designer**: the task window appears over the blurred app, with the field list on the left and the properties of the selected item on the right.',
+        'Drag fields from the list into the window, or between sections, to add and reorder them. With the keyboard, `Enter` adds the selected field, the arrow keys move it and `Delete` removes it.',
+        'Drag a section with one to four columns from **Components**, or click it to add it. Rename sections, choose whether to show their name and split the window into up to three layout columns with proportional widths.',
+        'Drag the edges of the window to set its width and height, or keep **Automatic height (fits the content)**. The real window never exceeds the app window and scrolls when needed. `Ctrl+Z` and `Ctrl+Y` undo and redo.',
+        'Fields left off the form keep their values and the task list columns do not change. **Apply** keeps the design in the settings to save later; **Save settings** saves it immediately. Layouts travel with settings exports and backups.'
+      ] },
+      { title: 'Required fields', items: [
+        'Mark a field as **Required** in the field properties of the form designer, or in **Settings → Column management** for tasks and issues. **Sequence** is required by default.',
+        'Required fields are checked when you save a task or an issue, but only when they are on the form: missing fields are highlighted with a message. **Bulk edit** cannot clear a required release date or highlight; imports are not checked.',
+        'Yes/no fields and values that are not entered in the editor, such as tags or the incidents and problems linked automatically, cannot be required.'
       ] },
       { title: 'Identity & navigation', items: [
         'Set the organization name, the names of the four views and the hours of an effort day. Changing the hours per day changes only how effort is displayed.'

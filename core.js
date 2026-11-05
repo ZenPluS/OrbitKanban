@@ -64,43 +64,113 @@ const defaultTaskColumns = (fields = []) => [...TASK_COLUMNS.map(([columnId, vis
 function normalizeTaskColumns(input, fields = [], deleted = []) {
   return columns.normalizeColumns(input, defaultTaskColumns(), fields, deleted);
 }
+// Task editor form: a modal of chosen size split into layout columns, each holding titled sections with their own field grid.
+const TASK_LAYOUT = {
+  width: { min: 480, max: 2000, default: 1260 }, height: { min: 360, max: 1600 },
+  columns: 3, columnWidth: { min: 10, max: 100 }, sections: 30, sectionColumns: 4, sectionName: 60, fields: 100
+};
 function taskEditorFields(settings) {
   const schema = columns.schemaOf(settings, 'tasks');
   const order = ['code', 'sequence', 'urgency', 'status', 'releaseDate', 'highlight', 'effort', 'link'];
   const field = definition => ({
-    id: definition.id, name: definition.name, builtin: Boolean(definition.builtin),
-    section: ['description', 'notes'].includes(definition.id) ? 'text' : 'properties',
-    span: ['richtext', 'url', 'effort'].includes(definition.type) ? 2 : 1, visible: true
+    id: definition.id, name: definition.name, builtin: Boolean(definition.builtin), type: definition.type,
+    section: definition.type === 'richtext' ? 'text' : 'properties', span: ['richtext', 'url', 'effort'].includes(definition.type) ? 2 : 1
   });
-  const available = id => schema.find(item => item.id === id);
+  const available = id => schema.find(item => item.id === id), custom = columns.fieldsOf(settings, 'tasks');
   const linked = columns.hasColumn(settings, 'tasks', 'code') && columns.hasColumn(settings, 'issues', 'code') &&
     ['incident', 'problem'].some(id => columns.hasColumn(settings, 'tasks', id) && columns.hasColumn(settings, 'issues', id));
   return [
     ...order.filter(available).map(id => field(available(id))),
-    { id: 'hidden', name: 'Hide from the task list', builtin: true, section: 'properties', span: 2, visible: true },
-    ...(linked ? [{ id: 'matches', name: 'Linked issues', builtin: true, section: 'properties', span: 2, visible: true }] : []),
-    ...columns.fieldsOf(settings, 'tasks').map(field),
-    ...['description', 'notes'].filter(available).map(id => field(available(id)))
+    { id: 'hidden', name: 'Hide from the task list', builtin: true, type: 'boolean', section: 'properties', span: 2 },
+    ...(linked ? [{ id: 'matches', name: 'Linked issues', builtin: true, type: 'matches', section: 'properties', span: 2 }] : []),
+    ...custom.filter(item => item.type !== 'richtext').map(field),
+    ...['description', 'notes'].filter(available).map(id => field(available(id))),
+    ...custom.filter(item => item.type === 'richtext').map(field)
   ];
 }
-function validTaskEditorLayout(layout) {
-  return Boolean(layout) && typeof layout === 'object' && !Array.isArray(layout) &&
-    ['split', 'text-first', 'stacked'].includes(layout.mode) && [1, 2].includes(layout.columns) &&
-    Array.isArray(layout.fields) && layout.fields.length <= 100 &&
-    layout.fields.every(field => field && typeof field.id === 'string' && field.id.length > 0 && field.id.length <= 200 &&
+const layoutName = (text, settings) => { const value = term(text, settings.language || 'it').trim(); return value && value.length <= TASK_LAYOUT.sectionName ? value : text; };
+const layoutSection = (settings, sectionId, name, columnCount, fields = []) => ({ id: sectionId, name: layoutName(name, settings), showName: false, columns: columnCount, fields });
+function defaultTaskEditorLayout(settings) {
+  const fields = taskEditorFields(settings);
+  const pick = (group, columnCount) => fields.filter(field => field.section === group).map(({ id, span }) => ({ id, span: Math.min(span, columnCount) }));
+  const properties = layoutSection(settings, 'section-properties', "Properties", 2, pick('properties', 2));
+  const text = layoutSection(settings, 'section-text', "Text panels", 1, pick('text', 1));
+  const layoutColumns = text.fields.length ? [{ width: 40, sections: [properties] }, { width: 60, sections: [text] }] : [{ width: 100, sections: [properties] }];
+  return { width: TASK_LAYOUT.width.default, height: 0, columns: layoutColumns, unplaced: [] };
+}
+// 2.50 stored { mode, columns, fields: [{ id, section, span, visible }] }: rebuild it as the equivalent sections.
+function migrateLegacyTaskLayout(settings, legacy) {
+  const properties = layoutSection(settings, 'section-properties', "Properties", legacy.columns);
+  const text = layoutSection(settings, 'section-text', "Text panels", 1);
+  const unplaced = [];
+  for (const field of legacy.fields) {
+    if (!field.visible) unplaced.push(field.id);
+    else (field.section === 'text' ? text : properties).fields.push({ id: field.id, span: field.span });
+  }
+  const layoutColumns = legacy.mode === 'stacked' ? [{ width: 100, sections: [properties, text] }]
+    : legacy.mode === 'text-first' ? [{ width: 60, sections: [text] }, { width: 40, sections: [properties] }]
+    : [{ width: 40, sections: [properties] }, { width: 60, sections: [text] }];
+  return { width: TASK_LAYOUT.width.default, height: 0, columns: layoutColumns, unplaced };
+}
+const plainObject = value => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+const layoutInteger = (value, { min, max }) => Number.isInteger(value) && value >= min && value <= max;
+const layoutFieldId = value => typeof value === 'string' && value.length > 0 && value.length <= 200;
+function validLegacyTaskLayout(layout) {
+  return ['split', 'text-first', 'stacked'].includes(layout.mode) && [1, 2].includes(layout.columns) &&
+    Array.isArray(layout.fields) && layout.fields.length <= TASK_LAYOUT.fields &&
+    layout.fields.every(field => plainObject(field) && layoutFieldId(field.id) &&
       ['properties', 'text'].includes(field.section) && [1, 2].includes(field.span) && typeof field.visible === 'boolean') &&
     new Set(layout.fields.map(field => field.id)).size === layout.fields.length;
 }
+function validTaskEditorLayout(layout) {
+  if (!plainObject(layout)) return false;
+  if (layout.mode !== undefined) return validLegacyTaskLayout(layout);
+  const fieldIds = [], sectionIds = [];
+  const validSection = section => plainObject(section) && typeof section.id === 'string' && /^section-[\w-]{1,80}$/.test(section.id) &&
+    typeof section.name === 'string' && section.name.length <= TASK_LAYOUT.sectionName && typeof section.showName === 'boolean' &&
+    layoutInteger(section.columns, { min: 1, max: TASK_LAYOUT.sectionColumns }) && Array.isArray(section.fields) &&
+    section.fields.every(field => plainObject(field) && layoutFieldId(field.id) && layoutInteger(field.span, { min: 1, max: TASK_LAYOUT.sectionColumns }) && fieldIds.push(field.id)) &&
+    sectionIds.push(section.id) > 0;
+  return layoutInteger(layout.width, TASK_LAYOUT.width) && (layout.height === 0 || layoutInteger(layout.height, TASK_LAYOUT.height)) &&
+    Array.isArray(layout.columns) && layout.columns.length >= 1 && layout.columns.length <= TASK_LAYOUT.columns &&
+    layout.columns.every(column => plainObject(column) && layoutInteger(column.width, TASK_LAYOUT.columnWidth) && Array.isArray(column.sections) && column.sections.every(validSection)) &&
+    Array.isArray(layout.unplaced) && layout.unplaced.every(fieldId => layoutFieldId(fieldId) && fieldIds.push(fieldId)) &&
+    sectionIds.length <= TASK_LAYOUT.sections && new Set(sectionIds).size === sectionIds.length &&
+    fieldIds.length <= TASK_LAYOUT.fields && new Set(fieldIds).size === fieldIds.length;
+}
+// Unknown fields are dropped and fields added later (new custom columns) join the section that holds fields of the same kind.
 function normalizeTaskEditorLayout(settings, input = settings.taskEditorLayout) {
   assert(input === undefined || validTaskEditorLayout(input), "Invalid task editor layout.");
-  const defaults = taskEditorFields(settings).map(({ id, section, span, visible }) => ({ id, section, span, visible }));
-  const known = new Set(defaults.map(field => field.id)), seen = new Set();
-  const fields = (input?.fields || []).filter(field => known.has(field.id)).map(({ id, section, span, visible }) => {
-    seen.add(id);
-    return { id, section, span, visible };
-  });
-  fields.push(...defaults.filter(field => !seen.has(field.id)));
-  return { mode: input?.mode || 'split', columns: input?.columns || 2, fields };
+  if (input === undefined) return defaultTaskEditorLayout(settings);
+  const source = input.mode !== undefined ? migrateLegacyTaskLayout(settings, input) : input;
+  const available = taskEditorFields(settings), known = new Map(available.map(field => [field.id, field])), seen = new Set();
+  const layoutColumns = source.columns.map(column => ({
+    width: column.width,
+    sections: column.sections.map(section => ({
+      id: section.id, name: section.name, showName: section.showName, columns: section.columns,
+      fields: section.fields.filter(field => known.has(field.id)).map(field => { seen.add(field.id); return { id: field.id, span: Math.min(field.span, section.columns) }; })
+    }))
+  }));
+  const unplaced = source.unplaced.filter(fieldId => known.has(fieldId) && !seen.has(fieldId));
+  unplaced.forEach(fieldId => seen.add(fieldId));
+  const sections = () => layoutColumns.flatMap(column => column.sections);
+  for (const field of available.filter(item => !seen.has(item.id))) {
+    let target = sections().find(section => section.fields.some(item => known.get(item.id).section === field.section)) || sections()[0];
+    if (!target) {
+      target = layoutSection(settings, sections().some(section => section.id === 'section-properties') ? `section-${id()}` : 'section-properties', "Properties", 2);
+      layoutColumns[0].sections.push(target);
+    }
+    target.fields.push({ id: field.id, span: Math.min(field.span, target.columns) });
+  }
+  return { width: source.width, height: source.height, columns: layoutColumns, unplaced };
+}
+// Imported layouts may name custom columns with ids that were remapped while merging the column definitions.
+function remapTaskEditorLayout(settings, layout, mapping) {
+  const source = layout.mode !== undefined ? migrateLegacyTaskLayout(settings, layout) : structuredClone(layout), seen = new Set();
+  const map = fieldId => { const target = mapping.get(fieldId) || fieldId; if (seen.has(target)) return ''; seen.add(target); return target; };
+  for (const column of source.columns) for (const section of column.sections) section.fields = section.fields.map(field => ({ ...field, id: map(field.id) })).filter(field => field.id);
+  source.unplaced = source.unplaced.map(map).filter(Boolean);
+  return normalizeTaskEditorLayout(settings, source);
 }
 function defaultHighlights(language = 'it') {
   const T = text => { const value = term(text, language).trim(); return value && value.length <= HIGHLIGHT_NAME_MAX ? value : text; };
@@ -180,16 +250,14 @@ function baseData(language = 'it') {
     { id: id(), name: T("Medium"), color: '#9e8af7' },
     { id: id(), name: T("Low"), color: '#77a6c9' }
   ];
-  return {
-    version: 1,
-    settings: {
-      language, logo: '', portalUrlTemplate: '', tabNames: ["Tasks", "Linked issues", "Milestones", 'Kanban'].map(name => T(name)),
-      hoursPerDay: 8, fontSizes: defaultFontSizes(), fontFamily: DEFAULT_FONT_FAMILY, statuses, urgencies, highlights: defaultHighlights(language), tags: [], taskColumns: defaultTaskColumns(), themeId: 'midnight',
-      themes: defaultThemes(), savedViews: [], taskFields: [], issueFields: [], issueColumns: columns.normalizeIssueColumns(), taskEditorLayout: normalizeTaskEditorLayout({})
-    },
-    tasks: [],
-    issues: []
+  const settings = {
+    language, logo: '', portalUrlTemplate: '', tabNames: ["Tasks", "Linked issues", "Milestones", 'Kanban'].map(name => T(name)),
+    hoursPerDay: 8, fontSizes: defaultFontSizes(), fontFamily: DEFAULT_FONT_FAMILY, statuses, urgencies, highlights: defaultHighlights(language), tags: [], taskColumns: defaultTaskColumns(), themeId: 'midnight',
+    themes: defaultThemes(), savedViews: [], taskFields: [], issueFields: [], issueColumns: columns.normalizeIssueColumns(),
+    requiredTaskColumns: [...columns.DEFAULT_REQUIRED.tasks], requiredIssueColumns: [...columns.DEFAULT_REQUIRED.issues]
   };
+  settings.taskEditorLayout = normalizeTaskEditorLayout(settings);
+  return { version: 1, settings, tasks: [], issues: [] };
 }
 const DEMO_FIRST_RELEASE = '2025-01-01';
 const localIsoDate = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -327,6 +395,7 @@ function validateData(data) {
   assert(data && data.version === 1, "Unsupported archive format.");
   const s = data.settings;
   columns.validateDeleted(s || {});
+  columns.validateRequired(s || {});
   assert(s && (s.appName === undefined || (typeof s.appName === 'string' && s.appName.trim().length > 0 && s.appName.length <= 100)), "Invalid organization name.");
   assert(Array.isArray(s.tabNames) && s.tabNames.length === 4 && s.tabNames.every(n => typeof n === 'string' && n.trim() && n.length <= 60), "Specify four valid tab names.");
   assert(Number.isFinite(s.hoursPerDay) && s.hoursPerDay > 0 && s.hoursPerDay <= 24, "Hours per day must be greater than 0 and no more than 24.");
@@ -415,6 +484,7 @@ function validateArchive(archive) {
     organization.data.settings.issueFields ??= [];
     for (const kind of ['tasks', 'issues']) for (const field of columns.fieldsOf(organization.data.settings, kind)) field.options = columns.choices(field);
     organization.data.settings.issueColumns = columns.listColumns(organization.data.settings, 'issues');
+    for (const kind of ['tasks', 'issues']) organization.data.settings[columns.requiredKey(kind)] = columns.requiredOf(organization.data.settings, kind);
     organization.data.settings.taskEditorLayout = normalizeTaskEditorLayout(organization.data.settings);
     normalizeThemes(organization.data.settings);
     normalizeHighlights(organization.data);
@@ -480,6 +550,7 @@ function organizationExport(organization, kind, { appVersion = '', exportedAt = 
       highlights: structuredClone(highlights), tags: structuredClone(settings.tags || []),
       taskColumns: columns.listColumns(settings, 'tasks'), savedViews: structuredClone(settings.savedViews || []),
       deletedTaskColumns: [...columns.deletedOf(settings, 'tasks')], deletedIssueColumns: [...columns.deletedOf(settings, 'issues')],
+      requiredTaskColumns: columns.requiredOf(settings, 'tasks'), requiredIssueColumns: columns.requiredOf(settings, 'issues'),
       taskFields: structuredClone(settings.taskFields || []), issueFields: structuredClone(settings.issueFields || []),
       issueColumns: columns.listColumns(settings, 'issues'), taskEditorLayout: normalizeTaskEditorLayout(settings)
     };
@@ -553,8 +624,9 @@ function parseOrganizationFile(input) {
     }
     if (source.highlights !== undefined) settings.highlights = fileRecords(source.highlights, RECORD_KEYS.highlight, "Invalid highlighters.");
     if (source.tags !== undefined) settings.tags = fileRecords(source.tags, RECORD_KEYS.highlight, "Invalid tags.");
-    for (const key of ['taskFields', 'issueFields', 'issueColumns', 'deletedTaskColumns', 'deletedIssueColumns']) if (source[key] !== undefined) settings[key] = structuredClone(source[key]);
+    for (const key of ['taskFields', 'issueFields', 'issueColumns', 'deletedTaskColumns', 'deletedIssueColumns', 'requiredTaskColumns', 'requiredIssueColumns']) if (source[key] !== undefined) settings[key] = structuredClone(source[key]);
     columns.validateDeleted(settings);
+    columns.validateRequired(settings);
     for (const kind of ['tasks', 'issues']) columns.validateFields(columns.fieldsOf(settings, kind));
     if (source.taskColumns !== undefined) {
       const columns = fileRecords(source.taskColumns, RECORD_KEYS.column, "Invalid list columns.");
@@ -639,9 +711,11 @@ function applyOrganizationImport(current, file, options = {}) {
     for (const key of ['language', 'portalUrlTemplate', 'tabNames', 'hoursPerDay', 'statuses', 'urgencies']) settings[key] = incoming[key];
     if (incoming.fontSizes) settings.fontSizes = incoming.fontSizes;
     if (incoming.fontFamily !== undefined) settings.fontFamily = incoming.fontFamily;
-    if (incoming.taskEditorLayout !== undefined) settings.taskEditorLayout = normalizeTaskEditorLayout(settings, {
-      ...incoming.taskEditorLayout, fields: remapColumns(incoming.taskEditorLayout.fields, maps.tasks.mapping)
-    });
+    if (incoming.taskEditorLayout !== undefined) settings.taskEditorLayout = remapTaskEditorLayout(settings, incoming.taskEditorLayout, maps.tasks.mapping);
+    for (const kind of ['tasks', 'issues']) {
+      const key = columns.requiredKey(kind);
+      if (incoming[key] !== undefined) settings[key] = [...new Set(incoming[key].map(fieldId => maps[kind].mapping.get(fieldId) || fieldId))];
+    }
     if (incoming.highlights) {
       const highlight = colorOptionRemapper(settings.highlights || [], incoming.highlights);
       for (const task of next.tasks) task.highlightId = highlight(task.highlightId);
@@ -1026,7 +1100,7 @@ const core = {
   ORGANIZATION_FILE_KINDS, organizationExport, organizationFileName, situationFileName, parseOrganizationFile, applyOrganizationImport, importedOrganizationData, uniqueOrganizationName,
   FONT_SIZE_PARTS, FONT_SIZE_STEP, FONT_FAMILIES, DEFAULT_FONT_FAMILY, validFontFamily, defaultFontSizes, clampFontSize, defaultThemes,
   HIGHLIGHT_LIMIT, defaultHighlights, TASK_COLUMN_IDS, defaultTaskColumns, normalizeTaskColumns, TAG_LIMIT, TAG_NAME_MAX, nextReleaseDate, reorderTaskSequences,
-  taskEditorFields, normalizeTaskEditorLayout, validTaskEditorLayout
+  TASK_LAYOUT, taskEditorFields, defaultTaskEditorLayout, migrateLegacyTaskLayout, normalizeTaskEditorLayout, validTaskEditorLayout, remapTaskEditorLayout
 };
 if (typeof module !== 'undefined') module.exports = core;
 else window.OrbitaCore = core;

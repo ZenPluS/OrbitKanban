@@ -39,6 +39,19 @@ const schemaOf = (settings, kind) => [
   ...BUILTIN_FIELDS[kind].filter(field => hasColumn(settings, kind, field.id)).map(field => ({ ...field, builtin: true, options: field.catalog ? settings[field.catalog] || [] : [] })),
   ...fieldsOf(settings, kind)
 ];
+// Columns without an editor control (or with an always-valid one) cannot be mandatory.
+const UNREQUIRABLE = { tasks: ['tags', 'incident', 'problem'], issues: ['linked'] };
+const DEFAULT_REQUIRED = { tasks: ['sequence'], issues: [] };
+const requiredKey = kind => kind === 'tasks' ? 'requiredTaskColumns' : 'requiredIssueColumns';
+const canRequire = (settings, kind, id) => !UNREQUIRABLE[kind].includes(id) && schemaOf(settings, kind).some(field => field.id === id && field.type !== 'boolean');
+const requiredOf = (settings, kind) => (settings[requiredKey(kind)] ?? DEFAULT_REQUIRED[kind]).filter(id => canRequire(settings, kind, id));
+const isRequired = (settings, kind, id) => requiredOf(settings, kind).includes(id);
+function validateRequired(settings) {
+  for (const kind of ['tasks', 'issues']) {
+    const list = settings[requiredKey(kind)];
+    assert(list === undefined || (Array.isArray(list) && list.length <= 100 && list.every(id => typeof id === 'string' && id && id.length <= 200) && new Set(list).size === list.length), "Invalid required columns.");
+  }
+}
 const valueOf = (record, field) => field.builtin ? record[field.property] : record.customFields?.[field.id];
 function setValue(record, field, value) {
   if (field.builtin) record[field.property] = value;
@@ -81,6 +94,7 @@ function removeColumn(settings, kind, id) {
     settings[key] = fieldsOf(settings, kind).filter(field => field.id !== id);
   }
   settings[kind === 'tasks' ? 'taskColumns' : 'issueColumns'] = listColumns(settings, kind);
+  settings[requiredKey(kind)] = requiredOf(settings, kind);
   cleanViews(settings);
 }
 function cleanData(data) {
@@ -98,6 +112,7 @@ function cleanData(data) {
       }
     }
     settings[kind === 'tasks' ? 'taskColumns' : 'issueColumns'] = listColumns(settings, kind);
+    settings[requiredKey(kind)] = requiredOf(settings, kind);
   }
   cleanViews(settings);
   for (const view of settings.savedViews || []) {
@@ -251,7 +266,7 @@ function remapValues(values, mapping, valueMappings = new Map(), filters = false
   }));
 }
 const valuesKey = values => JSON.stringify(Object.entries(values || {}).sort(([a], [b]) => a.localeCompare(b)));
-const api = { TYPES, FIELD_LIMIT, EMPTY_VALUE, FILTER_VALUES_MAX, BUILTIN_FIELDS, deletedKey, deletedOf, hasColumn, schemaOf, valueOf, setValue, defaultColumns, listColumns, sortKeys, defaultSort, validateDeleted, cleanViews, removeColumn, cleanData, fieldsOf, choices, validateFields, validateValue, validateCustomData, normalizeColumns, normalizeIssueColumns, validDate, validFilters, emptyFilter, activeFilter, matchesFilter, mergeFields, remapValues, valuesKey };
+const api = { TYPES, FIELD_LIMIT, EMPTY_VALUE, FILTER_VALUES_MAX, BUILTIN_FIELDS, DEFAULT_REQUIRED, deletedKey, deletedOf, hasColumn, requiredKey, canRequire, requiredOf, isRequired, validateRequired, schemaOf, valueOf, setValue, defaultColumns, listColumns, sortKeys, defaultSort, validateDeleted, cleanViews, removeColumn, cleanData, fieldsOf, choices, validateFields, validateValue, validateCustomData, normalizeColumns, normalizeIssueColumns, validDate, validFilters, emptyFilter, activeFilter, matchesFilter, mergeFields, remapValues, valuesKey };
 if (typeof module !== 'undefined') module.exports = api;
 else globalThis.OrbitaColumns = api;
 })();
