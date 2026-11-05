@@ -71,10 +71,10 @@ const TASK_LAYOUT = {
 };
 function taskEditorFields(settings) {
   const schema = columns.schemaOf(settings, 'tasks');
-  const order = ['code', 'sequence', 'urgency', 'status', 'releaseDate', 'highlight', 'effort', 'link'];
+  const order = ['code', 'sequence', 'urgency', 'status', 'releaseDate', 'highlight', 'effort'];
   const field = definition => ({
     id: definition.id, name: definition.name, builtin: Boolean(definition.builtin), type: definition.type,
-    section: definition.type === 'richtext' ? 'text' : 'properties', span: ['richtext', 'url', 'effort'].includes(definition.type) ? 2 : 1
+    section: definition.type === 'richtext' ? 'text' : 'properties', span: ['richtext', 'url', 'platform', 'effort', 'parent', 'child'].includes(definition.type) ? 2 : 1
   });
   const available = id => schema.find(item => item.id === id), custom = columns.fieldsOf(settings, 'tasks');
   const linked = columns.hasColumn(settings, 'tasks', 'code') && columns.hasColumn(settings, 'issues', 'code') &&
@@ -251,7 +251,7 @@ function baseData(language = 'it') {
     { id: id(), name: T("Low"), color: '#77a6c9' }
   ];
   const settings = {
-    language, logo: '', portalUrlTemplate: '', tabNames: ["Tasks", "Linked issues", "Milestones", 'Kanban'].map(name => T(name)),
+    language, logo: '', tabNames: ["Tasks", "Linked issues", "Milestones", 'Kanban'].map(name => T(name)),
     hoursPerDay: 8, fontSizes: defaultFontSizes(), fontFamily: DEFAULT_FONT_FAMILY, statuses, urgencies, highlights: defaultHighlights(language), tags: [], taskColumns: defaultTaskColumns(), themeId: 'midnight',
     themes: defaultThemes(), savedViews: [], taskFields: [], issueFields: [], issueColumns: columns.normalizeIssueColumns(),
     requiredTaskColumns: [...columns.DEFAULT_REQUIRED.tasks], requiredIssueColumns: [...columns.DEFAULT_REQUIRED.issues]
@@ -276,7 +276,11 @@ function demoData(language = 'it', now = new Date()) {
   const format = (text, value) => text.replaceAll('{0}', value);
   const [todo, doing, review, done] = data.settings.statuses.map(status => status.id);
   const [critical, high, medium, low] = data.settings.urgencies.map(urgency => urgency.id);
-  data.settings.portalUrlTemplate = "https://jira.example.com/browse/{code}";
+  const field = (fieldId, name, type, extra = {}) => ({ id: fieldId, name: term(name, language).trim().slice(0, 60) || name, type, options: [], ...extra });
+  const ticketPlatform = field('custom-ticket-platform', "Ticket platform", 'platform', { template: 'https://tickets.example.com/browse/{code}' });
+  const changePlatform = field('custom-change-platform', "Change platform", 'platform', { template: 'https://changes.example.com/change/{code}' });
+  const predecessors = field('custom-predecessors', "Predecessors", 'parent'), successors = field('custom-successors', "Successors", 'child', { source: predecessors.id });
+  data.settings.taskFields = [ticketPlatform, changePlatform, predecessors, successors];
   data.settings.tags = [
     { id: 'tag-frontend', name: 'Frontend', color: '#5aa9f6' },
     { id: 'tag-backend', name: 'Backend', color: '#b18cff' },
@@ -337,13 +341,13 @@ function demoData(language = 'it', now = new Date()) {
     };
     tasks.push({
       id: id(), code, sequence: n + 1,
-      url: external ? `https://servicenow.example.com/change/${code}` : '',
       description: pick(descriptions),
       urgencyId: urgencyId || (action[1] ? critical : pick([critical, high, high, high, medium, medium, medium, medium, low, low])),
       statusId, effortHours: pick([2, 4, 6, 8, 12, 16, 20, 24, 32, 40]) + pick([0, 0, 0, 2, 4]),
       releaseDate, notes: random() < 0.45 || statusId === review ? pick(notesByStatus[statusId]) : '',
       hidden: statusId === done && Boolean(releaseDate) && releaseDate < hideBefore, highlightId: '',
-      tagIds: n % 5 === 0 ? [] : [n % 2 ? 'tag-frontend' : 'tag-backend', ...(action[1] ? ['tag-bug', 'tag-security'] : [])]
+      tagIds: n % 5 === 0 ? [] : [n % 2 ? 'tag-frontend' : 'tag-backend', ...(action[1] ? ['tag-bug', 'tag-security'] : [])],
+      customFields: { [external ? changePlatform.id : ticketPlatform.id]: code }
     });
     if (action[1] || random() < 0.2) linkIssues(code, action[1] && random() < 0.6);
   }
@@ -359,37 +363,84 @@ function demoData(language = 'it', now = new Date()) {
   const markers = [attention, '', blocker, discuss, '', ready, '', attention];
   tasks.filter(task => task.statusId !== done).forEach((task, index) => { task.highlightId = markers[index % markers.length]; });
   tasks.filter(task => task.statusId === done && !task.hidden).slice(-3).forEach(task => { task.highlightId = ready; });
+  // Dependencies between the next release and the backlog show both sides of the reference columns.
+  const upcoming = tasks.filter(task => task.releaseDate === next), backlog = tasks.filter(task => !task.releaseDate);
+  const dependsOn = (task, ...parents) => { task.customFields[predecessors.id] = parents.map(parent => parent.id); };
+  dependsOn(upcoming[1], upcoming[0]);
+  dependsOn(upcoming[2], upcoming[0]);
+  backlog.slice(0, 3).forEach((task, index) => dependsOn(task, upcoming[index + 3]));
+  dependsOn(backlog[3], backlog[0], upcoming[1]);
+  data.settings.taskColumns = columns.listColumns(data.settings, 'tasks').map(column => [ticketPlatform.id, changePlatform.id].includes(column.id) ? { ...column, visible: false } : column);
+  data.settings.taskEditorLayout = defaultTaskEditorLayout(data.settings);
   data.tasks = tasks;
   data.issues = issues;
   return validateData(data);
 }
 function initialData() { return demoData('it'); }
 function assert(condition, message) { if (!condition) throw new Error(message); }
-// Templates saved before the source moved to English use the Italian placeholder {codice} (or <codice>), so both spellings stay valid.
-const hasPortalPlaceholder = template => /\{(?:codice|code)\}|<(?:codice|code)>/i.test(template);
-function normalizeUrl(value) {
-  const url = String(value ?? '').trim();
-  return !url || /^[a-z][a-z\d+.-]*:\/\//i.test(url) ? url : `https://${url}`;
+const { hasPlaceholder: hasPortalPlaceholder, normalizeUrl, isWebUrl, fillTemplate: fillPortalTemplate, validTemplate: validPortalTemplate } = columns;
+// Address of the task on its platform: the first "Link to platform" column, in list order, that gives a valid address.
+function platformUrl(task, settings) {
+  const fields = new Map(columns.fieldsOf(settings, 'tasks').filter(field => field.type === 'platform').map(field => [field.id, field]));
+  for (const column of columns.listColumns(settings, 'tasks')) {
+    const field = fields.get(column.id), url = field ? columns.platformLink(field, task.customFields?.[field.id]) : '';
+    if (url) return url;
+  }
+  return '';
 }
-function isWebUrl(value) {
-  if (typeof value !== 'string' || value.length > 4000 || !/^https?:\/\/\S+$/i.test(value)) return false;
-  try {
-    const url = new URL(value);
-    return ['http:', 'https:'].includes(url.protocol) && Boolean(url.hostname);
-  } catch { return false; }
-}
-function fillPortalTemplate(template, code) {
-  return template.replace(/\{(?:codice|code)\}|<(?:codice|code)>/gi, () => encodeURIComponent(String(code).trim()));
-}
-function validPortalTemplate(template) {
-  if (template === '') return true;
-  return typeof template === 'string' && template.length <= 2000 && hasPortalPlaceholder(template) && isWebUrl(fillPortalTemplate(template, 'PRJ-1'));
-}
-function portalUrl(task, settings) {
-  if (!columns.hasColumn(settings, 'tasks', 'link')) return '';
-  if (task.url) return task.url;
-  const template = settings.portalUrlTemplate || '';
-  return template && String(task.code ?? '').trim() ? fillPortalTemplate(template, task.code) : '';
+const LEGACY_LINK = 'link';
+// Up to 2.60 every task had a built-in "Portal link" column (task.url) filled from one organization template.
+// It becomes an ordinary "Link to platform" column: the template moves to the column, a specific link or the code becomes its value.
+function upgradeLegacyLink(settings, tasks, { language = 'it', template, fillCodes = false } = {}) {
+  if (!plainObject(settings)) return false;
+  const list = Array.isArray(tasks) ? tasks.filter(plainObject) : [];
+  const columnIds = value => Array.isArray(value) && value.some(column => column?.id === LEGACY_LINK);
+  const layout = settings.taskEditorLayout;
+  const inLayout = plainObject(layout) && (Array.isArray(layout.fields) ? layout.fields.some(field => field?.id === LEGACY_LINK)
+    : (Array.isArray(layout.columns) && layout.columns.some(column => Array.isArray(column?.sections) && column.sections.some(section => Array.isArray(section?.fields) && section.fields.some(field => field?.id === LEGACY_LINK)))) || (Array.isArray(layout.unplaced) && layout.unplaced.includes(LEGACY_LINK)));
+  const deletedList = Array.isArray(settings.deletedTaskColumns) ? settings.deletedTaskColumns : [];
+  const legacy = 'portalUrlTemplate' in settings || list.some(task => 'url' in task) || deletedList.includes(LEGACY_LINK) || columnIds(settings.taskColumns)
+    || (Array.isArray(settings.requiredTaskColumns) && settings.requiredTaskColumns.includes(LEGACY_LINK)) || inLayout
+    || (Array.isArray(settings.savedViews) && settings.savedViews.some(view => columnIds(view?.columns) || (plainObject(view?.columnFilters) && LEGACY_LINK in view.columnFilters)));
+  if (!legacy) return false;
+  const deleted = deletedList.includes(LEGACY_LINK);
+  let fieldId = '';
+  if (!deleted) {
+    const fields = Array.isArray(settings.taskFields) ? settings.taskFields : (settings.taskFields = []);
+    const rawTemplate = typeof (template ?? settings.portalUrlTemplate) === 'string' ? (template ?? settings.portalUrlTemplate).trim() : '';
+    const validTemplate = rawTemplate && validPortalTemplate(rawTemplate) ? rawTemplate : '';
+    const names = new Set(fields.map(field => typeof field?.name === 'string' ? field.name.trim().toLocaleLowerCase() : ''));
+    const base = term("Link to platform", language).trim().slice(0, 56) || "Link to platform";
+    let name = base;
+    for (let index = 2; names.has(name.toLocaleLowerCase()); index++) name = `${base} ${index}`;
+    fieldId = fields.some(field => field?.id === columns.LEGACY_LINK_ID) ? `custom-${id()}` : columns.LEGACY_LINK_ID;
+    fields.push({ id: fieldId, name, type: 'platform', options: [], template: validTemplate });
+    for (const task of list) {
+      const url = typeof task.url === 'string' ? task.url.trim() : '', code = typeof task.code === 'string' ? task.code.replace(/\s+/g, ' ').replace(/[\u0000-\u001f]/g, '').trim() : '';
+      const value = url && url.length <= 2000 && isWebUrl(url) ? url : (validTemplate || fillCodes) && code.length <= 2000 ? code : '';
+      if (!value || (task.customFields !== undefined && !plainObject(task.customFields))) continue;
+      task.customFields = { ...(task.customFields || {}), [fieldId]: value };
+    }
+  }
+  const swap = ids => Array.isArray(ids) ? ids.flatMap(item => item === LEGACY_LINK ? (fieldId ? [fieldId] : []) : [item]) : ids;
+  const swapColumns = items => Array.isArray(items) ? items.flatMap(item => item?.id === LEGACY_LINK ? (fieldId ? [{ ...item, id: fieldId }] : []) : [item]) : items;
+  settings.taskColumns = swapColumns(settings.taskColumns);
+  settings.requiredTaskColumns = swap(settings.requiredTaskColumns);
+  if (Array.isArray(settings.savedViews)) for (const view of settings.savedViews.filter(plainObject)) {
+    view.columns = swapColumns(view.columns);
+    if (plainObject(view.columnFilters) && LEGACY_LINK in view.columnFilters) {
+      view.columnFilters = Object.fromEntries(Object.entries(view.columnFilters).flatMap(([key, value]) => key === LEGACY_LINK ? (fieldId ? [[fieldId, value]] : []) : [[key, value]]));
+    }
+  }
+  if (plainObject(layout)) {
+    if (Array.isArray(layout.fields)) layout.fields = swapColumns(layout.fields);
+    if (Array.isArray(layout.columns)) for (const column of layout.columns) if (Array.isArray(column?.sections)) for (const section of column.sections) if (plainObject(section)) section.fields = swapColumns(section.fields);
+    layout.unplaced = swap(layout.unplaced);
+  }
+  if (deleted) settings.deletedTaskColumns = deletedList.filter(item => item !== LEGACY_LINK);
+  delete settings.portalUrlTemplate;
+  for (const task of list) delete task.url;
+  return true;
 }
 function validateData(data) {
   assert(data && data.version === 1, "Unsupported archive format.");
@@ -403,7 +454,6 @@ function validateData(data) {
   const text = v => typeof v === 'string';
   const color = v => /^#[0-9a-f]{6}$/i.test(v);
   assert(s.language === undefined || validLanguage(s.language), "Unsupported language.");
-  assert(s.portalUrlTemplate === undefined || validPortalTemplate(s.portalUrlTemplate), "The portal link template must be a valid web address containing {code}.");
   assert(s.logo === undefined || s.logo === '' || (text(s.logo) && s.logo.length <= 1500000 && /^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/.test(s.logo)), "Invalid logo.");
   assert(s.fontSizes === undefined || validFontSizes(s.fontSizes), "Invalid text sizes.");
   assert(s.fontFamily === undefined || validFontFamily(s.fontFamily), "Invalid font.");
@@ -416,8 +466,8 @@ function validateData(data) {
   assert(s.highlights === undefined || (Array.isArray(s.highlights) && s.highlights.length <= HIGHLIGHT_LIMIT && s.highlights.every(x => x && text(x.id) && x.id && text(x.name) && x.name.trim() && x.name.length <= HIGHLIGHT_NAME_MAX && color(x.color)) && uniqueIds(s.highlights)), "Invalid highlighters.");
   assert(s.tags === undefined || (Array.isArray(s.tags) && s.tags.length <= TAG_LIMIT && s.tags.every(x => x && text(x.id) && x.id && x.id.length <= 200 && text(x.name) && x.name.trim() && x.name.length <= TAG_NAME_MAX && color(x.color)) && uniqueIds(s.tags)), "Invalid tags.");
   assert(s.tags === undefined || new Set(s.tags.map(tag => tag.name.trim().toLowerCase())).size === s.tags.length, "Tag names must be unique.");
-  columns.validateFields(columns.fieldsOf(s, 'tasks'));
-  columns.validateFields(columns.fieldsOf(s, 'issues'));
+  columns.validateFields(columns.fieldsOf(s, 'tasks'), 'tasks');
+  columns.validateFields(columns.fieldsOf(s, 'issues'), 'issues');
   const taskColumnIds = columns.schemaOf(s, 'tasks').map(field => field.id);
   const issueColumnIds = columns.schemaOf(s, 'issues').map(field => field.id);
   const filterTypes = { sequence: 'number', effort: 'effort', releaseDate: 'date', ...Object.fromEntries((s.taskFields || []).map(field => [field.id, field.type])) };
@@ -438,13 +488,12 @@ function validateData(data) {
   assert(s.themes.some(t => t.id === s.themeId), "Selected theme does not exist.");
   assert(Array.isArray(data.tasks) && uniqueIds(data.tasks), "Invalid task list.");
   for (const t of data.tasks) {
-    assert(['id', 'code', 'url', 'description', 'notes', 'releaseDate', 'statusId', 'urgencyId'].every(k => text(t[k])) && t.id, "Incomplete task.");
+    assert(['id', 'code', 'description', 'notes', 'releaseDate', 'statusId', 'urgencyId'].every(k => text(t[k])) && t.id, "Incomplete task.");
     assert(Number.isInteger(t.sequence) && t.sequence >= 0, "Sequence must be a non-negative integer.");
     assert(Number.isFinite(t.effortHours) && t.effortHours >= 0, "Invalid effort.");
     assert(typeof t.hidden === 'boolean', "Invalid visibility.");
     assert(t.highlightId === undefined || (text(t.highlightId) && t.highlightId.length <= 200), "Invalid task highlight.");
     assert(t.tagIds === undefined || (Array.isArray(t.tagIds) && t.tagIds.length <= TAG_LIMIT && t.tagIds.every(tagId => text(tagId) && tagId && tagId.length <= 200) && new Set(t.tagIds).size === t.tagIds.length), "Invalid task tags.");
-    assert(!t.url || /^https?:\/\/\S+$/i.test(t.url), "The link must start with http:// or https://.");
     assert(!t.releaseDate || (/^\d{4}-\d{2}-\d{2}$/.test(t.releaseDate) && !Number.isNaN(Date.parse(t.releaseDate)) && new Date(t.releaseDate).toISOString().slice(0, 10) === t.releaseDate), "Invalid release date.");
     assert((!t.statusId || s.statuses.some(x => x.id === t.statusId)) && (!t.urgencyId || s.urgencies.some(x => x.id === t.urgencyId)), "Missing status or urgency.");
   }
@@ -457,6 +506,7 @@ function migrateArchive(input) {
   const archive = structuredClone(input);
   assert(archive?.format !== 'orbitkanban-organization', "This file is an organization export (themes, settings or data): use “Import from file…” in the “Export and import organization” section.");
   if (archive.version === 1) {
+    upgradeLegacyLink(archive.settings, archive.tasks, { language: archive.settings?.language ?? 'it' });
     validateData(archive);
     const organizationId = id();
     return validateArchive({
@@ -473,10 +523,10 @@ function validateArchive(archive) {
   assert(new Set(archive.organizations.map(o => o.id)).size === archive.organizations.length, "Duplicate organizations.");
   assert(archive.organizations.some(o => o.id === archive.activeOrganizationId), "The active organization does not exist.");
   for (const organization of archive.organizations) {
+    upgradeLegacyLink(organization.data?.settings, organization.data?.tasks, { language: organization.data?.settings?.language ?? 'it' });
     validateData(organization.data);
     organization.data.settings.language ??= 'it';
     organization.data.settings.logo ??= '';
-    organization.data.settings.portalUrlTemplate ??= '';
     organization.data.settings.fontSizes ??= defaultFontSizes();
     organization.data.settings.fontFamily ??= DEFAULT_FONT_FAMILY;
     organization.data.settings.savedViews ??= [];
@@ -533,7 +583,7 @@ const RECORD_KEYS = {
   urgency: ['id', 'name', 'color'],
   highlight: ['id', 'name', 'color'],
   column: ['id', 'visible'],
-  task: ['id', 'code', 'sequence', 'url', 'description', 'notes', 'releaseDate', 'statusId', 'urgencyId', 'effortHours', 'hidden', 'highlightId', 'tagIds', 'customFields'],
+  task: ['id', 'code', 'sequence', 'description', 'notes', 'releaseDate', 'statusId', 'urgencyId', 'effortHours', 'hidden', 'highlightId', 'tagIds', 'customFields'],
   issue: ['id', 'code', 'incident', 'problem', 'customFields']
 };
 function organizationExport(organization, kind, { appVersion = '', exportedAt = new Date().toISOString() } = {}) {
@@ -544,7 +594,7 @@ function organizationExport(organization, kind, { appVersion = '', exportedAt = 
   const highlights = structuredClone(settings.highlights ?? defaultHighlights(settings.language || 'it'));
   if (parts.includes('settings')) {
     file.settings = {
-      language: settings.language || 'it', logo: settings.logo || '', portalUrlTemplate: settings.portalUrlTemplate || '',
+      language: settings.language || 'it', logo: settings.logo || '',
       tabNames: [...settings.tabNames], hoursPerDay: settings.hoursPerDay, fontSizes: { ...(settings.fontSizes || defaultFontSizes()) }, fontFamily: settings.fontFamily ?? DEFAULT_FONT_FAMILY,
       statuses: structuredClone(settings.statuses), urgencies: structuredClone(settings.urgencies),
       highlights: structuredClone(highlights), tags: structuredClone(settings.tags || []),
@@ -601,6 +651,12 @@ function parseOrganizationFile(input) {
   };
   const missing = { themes: "The file does not contain themes.", settings: "The file does not contain settings.", data: "The file does not contain data." };
   for (const part of parts) assert(file[part] && typeof file[part] === 'object' && !Array.isArray(file[part]), missing[part]);
+  file = structuredClone(file);
+  const fileLanguage = validLanguage(file.settings?.language) ? file.settings.language : 'it';
+  const legacyTemplate = typeof file.settings?.portalUrlTemplate === 'string' ? file.settings.portalUrlTemplate : undefined;
+  if (parts.includes('settings')) upgradeLegacyLink(file.settings, [], { language: fileLanguage });
+  // Without the settings the template is unknown: the codes are kept so the template of the receiving column can complete them.
+  if (parts.includes('data')) upgradeLegacyLink(file.data, file.data.tasks, { language: fileLanguage, template: legacyTemplate ?? '', fillCodes: !parts.includes('settings') || Boolean(legacyTemplate) });
   const probe = baseData('it');
   const check = (settings, content = {}) => validateData({ ...probe, settings: { ...probe.settings, ...settings }, ...content });
   if (parts.includes('themes')) {
@@ -611,7 +667,7 @@ function parseOrganizationFile(input) {
   if (parts.includes('settings')) {
     const source = file.settings;
     const settings = {
-      language: source.language, logo: source.logo ?? '', portalUrlTemplate: source.portalUrlTemplate ?? '',
+      language: source.language, logo: source.logo ?? '',
       tabNames: Array.isArray(source.tabNames) ? [...source.tabNames] : source.tabNames, hoursPerDay: source.hoursPerDay,
       statuses: fileRecords(source.statuses, RECORD_KEYS.status, "Invalid or empty status list."),
       urgencies: fileRecords(source.urgencies, RECORD_KEYS.urgency, "Invalid or empty urgency list.")
@@ -627,7 +683,7 @@ function parseOrganizationFile(input) {
     for (const key of ['taskFields', 'issueFields', 'issueColumns', 'deletedTaskColumns', 'deletedIssueColumns', 'requiredTaskColumns', 'requiredIssueColumns']) if (source[key] !== undefined) settings[key] = structuredClone(source[key]);
     columns.validateDeleted(settings);
     columns.validateRequired(settings);
-    for (const kind of ['tasks', 'issues']) columns.validateFields(columns.fieldsOf(settings, kind));
+    for (const kind of ['tasks', 'issues']) columns.validateFields(columns.fieldsOf(settings, kind), kind);
     if (source.taskColumns !== undefined) {
       const columns = fileRecords(source.taskColumns, RECORD_KEYS.column, "Invalid list columns.");
       assert(columns.every(column => typeof column.id === 'string' && typeof column.visible === 'boolean'), "Invalid list columns.");
@@ -650,7 +706,7 @@ function parseOrganizationFile(input) {
     if (source.tags !== undefined) content.tags = fileRecords(source.tags, RECORD_KEYS.highlight, "Invalid tags.");
     for (const key of ['taskFields', 'issueFields', 'deletedTaskColumns', 'deletedIssueColumns']) if (source[key] !== undefined) content[key] = structuredClone(source[key]);
     columns.validateDeleted(content);
-    for (const kind of ['tasks', 'issues']) columns.validateFields(columns.fieldsOf(content, kind));
+    for (const kind of ['tasks', 'issues']) columns.validateFields(columns.fieldsOf(content, kind), kind);
     const schema = { deletedTaskColumns: columns.deletedOf(content, 'tasks'), deletedIssueColumns: columns.deletedOf(content, 'issues') };
     check({ statuses: content.statuses, urgencies: content.urgencies, ...(content.highlights ? { highlights: content.highlights } : {}), tags: content.tags || [], taskFields: columns.fieldsOf(content, 'tasks'), issueFields: columns.fieldsOf(content, 'issues'), ...schema,
       taskColumns: columns.listColumns({ ...content, ...schema }, 'tasks'), issueColumns: columns.listColumns({ ...content, ...schema }, 'issues')
@@ -708,7 +764,7 @@ function applyOrganizationImport(current, file, options = {}) {
     const remapColumns = (list, map) => list.map(column => ({ ...column, id: map.get(column.id) || column.id }));
     const status = optionRemapper(settings.statuses, incoming.statuses), urgency = optionRemapper(settings.urgencies, incoming.urgencies);
     for (const task of next.tasks) { task.statusId = status(task.statusId); task.urgencyId = urgency(task.urgencyId); }
-    for (const key of ['language', 'portalUrlTemplate', 'tabNames', 'hoursPerDay', 'statuses', 'urgencies']) settings[key] = incoming[key];
+    for (const key of ['language', 'tabNames', 'hoursPerDay', 'statuses', 'urgencies']) settings[key] = incoming[key];
     if (incoming.fontSizes) settings.fontSizes = incoming.fontSizes;
     if (incoming.fontFamily !== undefined) settings.fontFamily = incoming.fontFamily;
     if (incoming.taskEditorLayout !== undefined) settings.taskEditorLayout = remapTaskEditorLayout(settings, incoming.taskEditorLayout, maps.tasks.mapping);
@@ -1096,7 +1152,7 @@ function themeFromLogo(pixels) {
 const core = {
   APP_NAME, initialData, baseData, demoData, demoReleaseDates, validateData, migrateArchive, validateArchive, createOrganization, matchIssues, indexIssues, findDuplicates, sortTasks, dateColor, today, validLanguage,
   extractThemePalette, themeFromLogo, themeFromImage, accessibleThemePalette, shiftToContrast, contrastRatio, relativeLuminance, hexToHsv, hsvToHex, onAccentColor, iconPalette, iconInk, ICON_FAMILIES, WCAG_TEXT_CONTRAST, WCAG_GRAPHIC_CONTRAST,
-  normalizeUrl, isWebUrl, validPortalTemplate, hasPortalPlaceholder, portalUrl,
+  normalizeUrl, isWebUrl, validPortalTemplate, hasPortalPlaceholder, fillPortalTemplate, platformUrl, upgradeLegacyLink,
   ORGANIZATION_FILE_KINDS, organizationExport, organizationFileName, situationFileName, parseOrganizationFile, applyOrganizationImport, importedOrganizationData, uniqueOrganizationName,
   FONT_SIZE_PARTS, FONT_SIZE_STEP, FONT_FAMILIES, DEFAULT_FONT_FAMILY, validFontFamily, defaultFontSizes, clampFontSize, defaultThemes,
   HIGHLIGHT_LIMIT, defaultHighlights, TASK_COLUMN_IDS, defaultTaskColumns, normalizeTaskColumns, TAG_LIMIT, TAG_NAME_MAX, nextReleaseDate, reorderTaskSequences,

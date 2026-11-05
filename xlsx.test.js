@@ -56,7 +56,7 @@ test('workbook is a valid zip package with typed, styled and linked cells', asyn
         name: 'Tasks', columns: [{ width: 10 }, { width: 40 }, {}, { width: 14 }], freeze: { row: 1, col: 1 }, autoFilter: true, tabColor: '#6c5ce7', print: { landscape: true, fitWidth: true },
         rows: [
           [{ v: 'Code', style: { bold: true, fill: '#202432', color: '#ffffff', border: '#cccccc' } }, 'Description', 'Effort (hours)', 'Release'],
-          [{ v: 'PRJ-1', link: 'https://jira.example.com/browse/PRJ-1?a=1&b=2' }, { v: 'Line 1\nLine 2 <b>&</b> "ok"', style: { wrap: true, vertical: 'top' } }, 12.5, { v: '2026-01-15', type: 'date', style: { fill: '#ffeeaa' } }],
+          [{ v: 'PRJ-1', link: 'https://tickets.example.com/browse/PRJ-1?a=1&b=2' }, { v: 'Line 1\nLine 2 <b>&</b> "ok"', style: { wrap: true, vertical: 'top' } }, 12.5, { v: '2026-01-15', type: 'date', style: { fill: '#ffeeaa' } }],
           [{ v: 'PRJ-2', link: 'javascript:alert(1)' }, '', { v: 'n/a', type: 'number' }, { v: '', type: 'date', style: { fill: '#eeeeee' } }],
           { height: 30, cells: [true, false, null, { v: new Date(2026, 4, 6, 10, 30, 0) }] }
         ]
@@ -99,7 +99,7 @@ test('workbook is a valid zip package with typed, styled and linked cells', asyn
   assert.match(sheet, /<row r="4" ht="30" customHeight="1"><c r="A4" t="b"><v>1<\/v><\/c><c r="B4" t="b"><v>0<\/v><\/c><c r="D4" s="\d+"><v>46148\.4375<\/v><\/c><\/row>/);
   assert.match(sheet, /<hyperlinks><hyperlink ref="A2" r:id="rId1"\/><\/hyperlinks>/);
   assert.doesNotMatch(sheet, /hyperlink ref="A3"/, 'only web links become hyperlinks');
-  assert.equal(files.get('xl/worksheets/_rels/sheet1.xml.rels').includes('Target="https://jira.example.com/browse/PRJ-1?a=1&amp;b=2" TargetMode="External"'), true);
+  assert.equal(files.get('xl/worksheets/_rels/sheet1.xml.rels').includes('Target="https://tickets.example.com/browse/PRJ-1?a=1&amp;b=2" TargetMode="External"'), true);
 
   const styles = files.get('xl/styles.xml');
   assert.match(styles, /<fill><patternFill patternType="solid"><fgColor rgb="FF202432"\/><bgColor indexed="64"\/><\/patternFill><\/fill>/);

@@ -52,7 +52,7 @@ const SECTIONS = [
     summary: 'The main list: one row per task, with its portal code, schedule, effort and the incidents and problems linked to it.',
     topics: [
       { title: 'Task fields', items: [
-        '**Portal code** identifies the task in the source portal, such as JIRA, and links issues to it.',
+        '**Portal code** identifies the task on its source platform, such as a ticket platform, and links issues to it.',
         '**Sequence** is assigned automatically but can be edited by hand; duplicates are allowed.',
         '**Description** and **Notes** are rich text with bold, italic, underline and lists.',
         '**Urgency** and **Status** use the options configured in the settings, in their order.',
@@ -62,8 +62,8 @@ const SECTIONS = [
       ] },
       { title: 'Create and edit', items: [
         '**New task** or `Ctrl+N` opens the editor. Double-click a row, or click its code, to edit it.',
-        'By default, the editor shows properties on the left and description and notes on the right. A task can have its own link, which takes precedence over the portal template.',
-        'The icon next to the code opens the task in the portal, in your default browser.'
+        'By default, the editor shows properties on the left and description and notes on the right.',
+        'The icon next to the code opens the task on its platform, in your default browser. It appears when a **Link to platform** column has a value.'
       ] },
       { title: 'Sort the list', items: [
         'The default order is by release date, ascending. Click a column header to sort; `Shift`+click adds further sort levels.',
@@ -159,7 +159,7 @@ const SECTIONS = [
     topics: [
       { title: 'Associations', items: [
         'Each row links a portal code to an incident, a problem or both. A problem can have several incidents, and a code can appear in several rows.',
-        'Codes match the task list regardless of letter case and surrounding spaces. No connection to JIRA is needed.',
+        'Codes match the task list regardless of letter case and surrounding spaces. No connection to the ticket platform is needed.',
         'The linked column counts the tasks with that code; **Waiting for a task** means that no task uses it yet.'
       ] },
       { title: 'Work with the list', items: [
@@ -202,10 +202,10 @@ const SECTIONS = [
     topics: [
       { title: 'Show, hide and reorder', items: [
         '**Columns** above each list, or **Settings → List columns**, shows or hides columns and changes their order by dragging. Hiding a column never deletes data.',
-        '**Portal link** and **Highlight** are available but hidden at first. **Restore default columns** brings back the initial layout.'
+        '**Highlight** is available but hidden at first. **Restore default columns** brings back the initial layout.'
       ] },
       { title: 'Custom columns', items: [
-        'In **Settings → Column management** you can add up to 30 columns per list: text, rich text, number, date, single or multiple choice, link, effort in hours, or yes/no.',
+        'In **Settings → Column management** you can add up to 40 columns per list: text, rich text, number, date, single or multiple choice, website, link to platform, effort in hours, yes/no and, in the task list, references between tasks.',
         'The type cannot be changed after creation. Custom columns can be filtered, imported from CSV and exported to Excel; numbers, dates, effort, yes/no and single choices can also be sorted.'
       ] },
       { title: 'Default columns can be deleted', items: [
@@ -215,6 +215,28 @@ const SECTIONS = [
       { title: 'Column labels', items: [
         'Statuses, urgencies, highlights, tags and every choice column share the same label editor: name, color, order, add and delete.',
         'Deleting an option in use and saving leaves the affected tasks unassigned.'
+      ] }
+    ]
+  },
+  {
+    id: 'links', icon: 'external', title: 'Links and references', go: [{ settings: 'custom-columns' }],
+    summary: 'Open tasks on the platforms where they live, collect useful websites and connect tasks that depend on each other.',
+    topics: [
+      { title: 'Links to platforms', items: [
+        'A **Link to platform** column opens the task on an external platform, such as a ticket platform or a change platform. Add one column for each platform in **Settings → Column management** and fill in only the ones a task needs.',
+        'Each column has its own **Link template**, with `{code}` where the code goes, for example `https://tickets.example.com/browse/{code}`. In the task you then enter only the code, or copy the task code with one click; a full address entered in a task replaces the template for that task.',
+        'Without a template, enter the full address in each task. A preview under the field shows the resulting link.',
+        'The icon next to the task code, on the cards and in Excel exports opens the first platform link that has a value, in the order of the list columns, even when its column is hidden.',
+        'The single portal link of earlier versions becomes a **Link to platform** column automatically, with the same template and the same links.'
+      ] },
+      { title: 'Websites', items: [
+        'A **Website** column holds any web address, such as documentation or a shared folder, and shows it as a link that opens in your default browser.'
+      ] },
+      { title: 'References between tasks', items: [
+        'A **Reference parent** column lists the tasks that come before a task. Adding it to the task list also adds its **Reference child** column, named **Successors** unless you choose another name.',
+        'In the editor, **Choose predecessors** opens a searchable list of the other tasks. The task then appears automatically among the successors of each task you choose.',
+        'Successors are read-only: to change them, edit the predecessors of the other task. A task cannot depend on itself or on its own successors, so chains never loop.',
+        'Click a reference to open that task. Deleting a task removes it from every reference, and deleting either column deletes both.'
       ] }
     ]
   },
@@ -242,7 +264,7 @@ const SECTIONS = [
     ]
   },
   {
-    id: 'settings', icon: 'settings', title: 'Settings', go: [{ settings: 'identity' }, { settings: 'languages' }, { settings: 'portal' }, { settings: 'task-layout' }],
+    id: 'settings', icon: 'settings', title: 'Settings', go: [{ settings: 'identity' }, { settings: 'languages' }, { settings: 'task-layout' }],
     summary: 'Each organization has its own configuration, organized in tabs.',
     topics: [
       { title: 'Save or discard', items: [
@@ -259,7 +281,7 @@ const SECTIONS = [
       { title: 'Required fields', items: [
         'Mark a field as **Required** in the field properties of the form designer, or in **Settings → Column management** for tasks and issues. **Sequence** is required by default.',
         'Required fields are checked when you save a task or an issue, but only when they are on the form: missing fields are highlighted with a message. **Bulk edit** cannot clear a required release date or highlight; imports are not checked.',
-        'Yes/no fields and values that are not entered in the editor, such as tags or the incidents and problems linked automatically, cannot be required.'
+        'Yes/no fields and values that are not entered in the editor, such as tags, successors or the incidents and problems linked automatically, cannot be required.'
       ] },
       { title: 'Identity & navigation', items: [
         'Set the organization name, the names of the four views and the hours of an effort day. Changing the hours per day changes only how effort is displayed.'
@@ -267,9 +289,6 @@ const SECTIONS = [
       { title: 'Language & translations', items: [
         'Italian and English are built in, and the language is chosen for each organization.',
         'To add a language, translate a copy of `en.template.json` in the `data/languages` folder and press **Reload languages**. Invalid files are listed and ignored.'
-      ] },
-      { title: 'Portal link', items: [
-        'Enter the portal address with `{code}` where the code goes, for example `https://jira.company.com/browse/{code}`. A preview shows the result.'
       ] }
     ]
   },

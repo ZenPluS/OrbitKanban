@@ -4,7 +4,7 @@
 
 | | |
 | --- | --- |
-| **Current version** | 2.60.2 |
+| **Current version** | 2.70.0 |
 | **Platform** | Windows 10 / 11, 64-bit |
 | **Distribution** | Single portable executable, `OrbitKanban-Portable.exe` |
 | **Network** | Not required. Used only for optional update checks against GitHub |
@@ -38,7 +38,10 @@
   - [Custom columns](#custom-columns)
   - [Removable built-in columns](#removable-built-in-columns)
   - [Column labels](#column-labels)
-- [Portal links](#portal-links)
+- [Links and references](#links-and-references)
+  - [Links to platforms](#links-to-platforms)
+  - [Websites](#websites)
+  - [References between tasks](#references-between-tasks)
 - [Settings](#settings)
   - [Task editor layout](#task-editor-layout)
   - [Required fields](#required-fields)
@@ -73,7 +76,7 @@
 - **Automatic issue matching.** Incidents and problems recorded in Linked issues are resolved onto tasks by their portal code.
 - **Multiple organizations**, each with its own data, settings, logo, theme and language.
 - **Flexible lists**: multi-level sorting, drag-and-drop ordering, per-column filters, saved views, row highlights, tags, duplicate detection, bulk edit, and undo/redo.
-- **Custom columns** of nine types; every built-in column can also be removed.
+- **Custom columns** of twelve types, including links to any number of ticket platforms, websites and predecessor/successor references between tasks; every built-in column can also be removed.
 - **Form designer** for the task editor: drag fields into custom sections, size the window and mark fields as required, per organization.
 - **40 built-in themes**, custom themes, and palettes generated from an image or logo with WCAG AA contrast.
 - **Imports and exports**: CSV import with validation, Excel workbooks, and per-organization JSON exports.
@@ -104,7 +107,8 @@ The demo organization shows every feature with realistic data:
 - more than 200 tasks covering all urgencies, statuses, efforts in days and hours, and rich-text descriptions and notes;
 - older completed tasks hidden from the list but still visible in Milestones and Kanban, and a backlog of unscheduled tasks;
 - more than 150 linked issues, including problems shared by several incidents, lowercase codes, problem-only rows and codes with no matching task;
-- portal links generated from `https://jira.example.com/browse/{code}`, plus specific links to a second portal for `CHG…` codes;
+- two **Link to platform** columns: a ticket platform (`https://tickets.example.com/browse/{code}`) and a change platform for `CHG…` codes;
+- predecessors and successors between upcoming and backlog tasks;
 - an extra **Aurora** theme.
 
 Demo data is created only when no workspace exists yet, so updating the app never touches an existing `data` folder. To explore the demo next to your own data, create a new organization with **Include demo data**. **Clear tasks and issues** removes the demo content from the current organization and keeps its settings.
@@ -153,7 +157,7 @@ The workspace format is version 2 (multi-organization). It cannot be opened by 1
 
 ## Organizations
 
-The menu under the **OrbitKanban** name in the sidebar switches the active organization. Each organization has its **own tasks and issues** and its own tab names, statuses, urgencies, highlights, tags, columns, themes, font, text sizes, hours per day, portal link, logo and language. Switching updates every view immediately and resets search and filters. The selection is remembered for the next launch. Identical codes in different organizations are never linked.
+The menu under the **OrbitKanban** name in the sidebar switches the active organization. Each organization has its **own tasks and issues** and its own tab names, statuses, urgencies, highlights, tags, columns, themes, font, text sizes, hours per day, logo and language. Switching updates every view immediately and resets search and filters. The selection is remembered for the next launch. Identical codes in different organizations are never linked.
 
 - **Manage organizations** opens the related settings tab.
 - **New organization** asks for a name, language and optional logo. A preview shows the logo and the four colors of the theme that will be generated. New organizations start empty unless **Include demo data** is selected.
@@ -176,21 +180,21 @@ The main list. Each task can have:
 
 | Field | Description |
 | --- | --- |
-| Portal code | The identifier in the source portal, such as JIRA |
+| Portal code | The identifier on the source ticket platform |
 | Sequence | Insertion number, assigned automatically and editable; duplicates are allowed |
-| Portal link | Generated from the organization template, or a specific link (see [Portal links](#portal-links)) |
 | Description and notes | Rich text with bold, italic, underline and lists |
 | Urgency and status | Configurable, ordered pick-lists |
 | Effort | Days and hours, stored in hours using the organization's hours-per-day setting (8 by default) |
 | Incident and problem | Resolved automatically from [Linked issues](#linked-issues) |
 | Release date | Each date gets a deterministic color: the same day always has the same color, everywhere |
 | Highlight and tags | See [Highlights and tags](#highlights-and-tags) |
+| Links and references | Optional columns for platform links, websites, predecessors and successors (see [Links and references](#links-and-references)) |
 
 Create tasks with **New task** or `Ctrl+N`. Open the editor by double-clicking a row or clicking the portal code. The editor follows the organization's [form layout](#task-editor-layout), by default with properties and links on the left and description and notes on the right, and keeps **Save**, **Cancel** and **Delete** always within reach. Descriptions and notes show up to three lines in the table, and hovering shows the full text.
 
 ### Linked issues
 
-Each row links a **portal code** to an **incident** and/or a **problem**. One problem can have many incidents, and one code can appear in many rows. Codes match tasks case-insensitively, ignoring surrounding spaces. Each task shows the incidents and problems of all matching rows, without duplicates. No connection to JIRA or any other portal is needed.
+Each row links a **portal code** to an **incident** and/or a **problem**. One problem can have many incidents, and one code can appear in many rows. Codes match tasks case-insensitively, ignoring surrounding spaces. Each task shows the incidents and problems of all matching rows, without duplicates. No connection to the ticket platform or any other system is needed.
 
 ### Milestones
 
@@ -275,11 +279,11 @@ Select tasks with the checkboxes. `Shift+click` selects a range, and the header 
 
 ## Columns
 
-Use **Columns** in each list toolbar, or **Settings → List columns**, to show, hide and reorder columns by drag and drop or with the arrow buttons. **Restore defaults** brings back the initial layout. Hiding a column never deletes data, and the row actions column is always visible. **Portal link** and **Highlight** are optional task columns that are hidden by default.
+Use **Columns** in each list toolbar, or **Settings → List columns**, to show, hide and reorder columns by drag and drop or with the arrow buttons. **Restore defaults** brings back the initial layout. Hiding a column never deletes data, and the row actions column is always visible. **Highlight** is an optional task column that is hidden by default.
 
 ### Custom columns
 
-**Settings → Column management** adds up to **30 custom columns per list**, separately for each organization:
+**Settings → Column management** adds up to **40 custom columns per list**, separately for each organization:
 
 | Type | Value |
 | --- | --- |
@@ -287,9 +291,12 @@ Use **Columns** in each list toolbar, or **Settings → List columns**, to show,
 | Number | Integer or decimal, negative values allowed |
 | Date | Calendar date with deterministic color |
 | Single / Multiple choice | Colored labels managed under **Column labels** |
-| Link | Clickable HTTP/HTTPS address |
+| Website | Clickable HTTP/HTTPS address, such as documentation or a shared folder |
+| Link to platform | Code on an external platform, turned into a link by the column template, or a full address (see [Links to platforms](#links-to-platforms)) |
 | Effort (hours) | Non-negative number of hours |
 | Yes / No | Yes, no or empty |
+| Reference parent | Predecessor tasks picked from a searchable list; tasks only (see [References between tasks](#references-between-tasks)) |
+| Reference child | Successor tasks, computed automatically and read-only; created together with its parent column |
 
 The type is fixed at creation to protect existing values. Names (up to 60 characters), options and order can be changed. Custom values are edited in the task and issue editors, and they can be searched, filtered, sorted (where meaningful), imported from CSV and exported to Excel. **Save settings** also saves columns still being typed into the forms. Deleting a column removes its values only when settings are saved, and the deletion can be undone. The **Required** box makes a column mandatory in the editors; see [Required fields](#required-fields).
 
@@ -300,7 +307,6 @@ Since 2.22.0 every built-in column of **Tasks** and **Linked issues** can be del
 - Deleting asks for confirmation. Values are erased only on **Save settings**, and **Discard changes** reverts it. Hiding a column never erases data.
 - **Restore column** brings back a built-in column and its catalog, **but not its erased values**.
 - Settings appear only for columns that exist:
-  - the portal link template requires **Portal link**;
   - hours per day requires at least one effort column;
   - the Milestones view and release views require **Release date**;
   - the Kanban view requires **Status**;
@@ -322,11 +328,35 @@ Every single- or multiple-choice column, built-in or custom, gets its own tab un
 
 Statuses also offer the automatic-highlight star, and the status order defines the kanban columns. Renaming or reordering labels preserves assignments. Deleting a label and saving clears it from every row, including hidden ones. Single-choice values become **Unassigned**, and multiple-choice values keep their other labels.
 
-## Portal links
+## Links and references
 
-Each organization has its own link template in **Settings → Portal link**. Put the `{code}` placeholder where the task code belongs, for example `https://jira.example.com/browse/{code}`. `{codice}`, `<code>` and `<codice>` are also accepted, case-insensitively. `https://` is added when no scheme is given. A live preview validates the template, and an invalid template cannot be saved.
+Three families of custom task columns connect a task to the outside world and to other tasks. Add them in **Settings → Column management**. External links open in the default browser, never inside the app, and only `http://` and `https://` addresses are opened.
 
-A task's **Specific link (optional)** overrides the template, which is useful for tickets on another portal. Codes are URL-encoded. External links open in the default browser, never inside the app, and only `http://` and `https://` addresses are opened.
+### Links to platforms
+
+A **Link to platform** column opens the task on an external platform, such as a ticket platform or a change platform. Add one column for each platform and fill in only the ones a task needs.
+
+- Each column has its own optional **Link template**. Put the `{code}` placeholder where the code belongs, for example `https://tickets.example.com/browse/{code}`. `{codice}`, `<code>` and `<codice>` are also accepted, case-insensitively, and `https://` is added when no scheme is given. A live preview validates the template, and an invalid template cannot be saved.
+- In the task, enter only the code on that platform, or copy the task's portal code with one click. Codes are URL-encoded. A full address entered in a task replaces the template for that task.
+- Without a template, each task holds the full address. A preview under the field shows the resulting link.
+- The link icon next to the portal code, on the kanban cards and in Excel exports opens the **first platform column with a value**, in list-column order, even when that column is hidden.
+- Platform columns can be filtered, exported to Excel as links, imported from CSV and made required like any other column.
+
+Up to 2.60, each organization had a single built-in **Portal link** column and one template in **Settings → Portal link**. Opening an older workspace, backup or organization file converts it automatically into a **Link to platform** column with the same template, position, visibility, required flag, saved-view filters and form placement. Specific links are kept as they are; tasks that relied on the template get their portal code as the value. A deleted portal link column is not recreated. Downgrading is not supported: OrbitKanban 2.60 cannot open a workspace once 2.70.0 has saved it.
+
+### Websites
+
+A **Website** column holds any web address, such as documentation or a shared folder, and shows it as a link. Addresses without a scheme get `https://`.
+
+### References between tasks
+
+A **Reference parent** column lists the tasks that come before a task, its **predecessors**. Adding one also adds its **Reference child** column, named **Successors** unless you choose another name. An organization can have several independent pairs.
+
+- In the editor, **Choose predecessors** opens a searchable list of the other tasks. Each chosen task then lists this task among its successors automatically.
+- Successors are computed and read-only: to change them, edit the predecessors of the other task. A task cannot depend on itself or on one of its own successors, so chains never loop.
+- References show the portal code (or the sequence when the code is empty); click one to open that task.
+- Deleting a task removes it from every reference. Deleting either column of a pair deletes both, after confirmation, when settings are saved.
+- References exist only for tasks. They travel with backups and organization exports, but CSV import does not fill them.
 
 ## Settings
 
@@ -367,7 +397,7 @@ Mark a field as **Required** in the field properties of the form designer, or wi
 - Required fields show an asterisk. Saving a task or an issue with an empty required field highlights it with a message and keeps the editor open.
 - Task fields are checked only when they are on the form, as in model-driven forms; the designer warns about a required field left off the form.
 - **Bulk edit** cannot clear a required release date or highlight. CSV imports and organization imports are not checked.
-- Yes/no fields, tags, the incidents and problems resolved from Linked issues, and the computed **Link** column of Linked issues cannot be required.
+- Yes/no fields, tags, successor (**Reference child**) columns, the incidents and problems resolved from Linked issues, and the computed **Link** column of Linked issues cannot be required.
 - Deleting a column also removes it from the required fields.
 
 ## Appearance
@@ -463,7 +493,7 @@ A file named after a built-in language, such as `it.json`, overrides only the te
 | Button | Content |
 | --- | --- |
 | **Export themes** | All themes and the active theme |
-| **Export settings** | Language, portal link, tab names, hours per day, font, text sizes, statuses, urgencies, highlighters, tags, columns and logo |
+| **Export settings** | Language, tab names, hours per day, font, text sizes, statuses, urgencies, highlighters, tags, columns (with their platform templates) and logo |
 | **Export data** | Tasks and issues, with the catalogs needed to map them |
 | **Export everything** | All of the above in one file |
 
@@ -516,7 +546,7 @@ While the app is running, the same interface is available in a browser **on the 
 - Changes sync live between the app and all tabs. Concurrent edits are reapplied on top of fresh data instead of overwriting it, and unsaved settings drafts are preserved.
 - The server listens on **127.0.0.1 only**. The first visit uses a personal access link from **Settings → Browser access → Copy access link**, after which the browser keeps a protected session cookie. **Do not share the access link.** To revoke all sessions, delete `data/runtime/browser-access-token` while the app is closed.
 - When the app closes, tabs show **App not reachable**. Reopen the app and reload the tab to continue.
-- Exports, imports and portal links work in the browser too. Installing updates is available only in the desktop app.
+- Exports, imports and platform links work in the browser too. Installing updates is available only in the desktop app.
 
 ## Updates
 
@@ -644,7 +674,7 @@ Tags are never moved. Bump the version before releasing new sources:
 npm version minor --no-git-tag-version --ignore-scripts
 ```
 
-For a specifically numbered release, use `npm version 2.60.2 --no-git-tag-version --ignore-scripts` instead. To update the local portable copy too, run the pipeline **without `-NoDeliver`** and close the app first. The script replaces only the executable, not `dist/data`.
+For a specifically numbered release, use `npm version 2.70.0 --no-git-tag-version --ignore-scripts` instead. To update the local portable copy too, run the pipeline **without `-NoDeliver`** and close the app first. The script replaces only the executable, not `dist/data`.
 
 The script refuses to reuse a tagged version for different sources. If a build or test fails, nothing is committed or pushed.
 
@@ -652,6 +682,7 @@ The script refuses to reuse a tagged version for different sources. If a build o
 
 | Version | Changes |
 | --- | --- |
+| **2.70.0** | **Link to platform** columns, one per platform with their own templates, replace the organization portal link (migrated automatically); **Website** columns; **Reference parent/child** columns for predecessors and automatic successors; guide contents keep the last section highlighted |
 | **2.60.2** | The portable launcher keeps its splash screen on screen until the main window is open, with no blank gap or second loading window |
 | **2.60.1** | Form designer bar works as the Windows title bar and keeps its buttons clear of the window controls; a single **Save** replaces **Apply** and **Save settings** |
 | **2.60.0** | Full-screen form designer for the task editor with drag and drop, custom sections, layout columns and window size; configurable required fields for tasks and issues |

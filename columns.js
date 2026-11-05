@@ -1,18 +1,58 @@
 'use strict';
 (() => {
-const TYPES = ['text', 'richtext', 'number', 'date', 'select', 'multiselect', 'url', 'effort', 'boolean'];
-const FIELD_LIMIT = 30;
+const TYPES = ['text', 'richtext', 'number', 'date', 'select', 'multiselect', 'url', 'platform', 'effort', 'boolean', 'parent', 'child'];
+// Reference columns only exist on tasks: a parent column stores the predecessors, its child column shows the successors.
+const REFERENCE_TYPES = ['parent', 'child'];
+const REFERENCE_MAX = 500;
+const FIELD_LIMIT = 40;
+const LEGACY_LINK_ID = 'custom-platform-link';
 const ownObject = value => value && typeof value === 'object' && !Array.isArray(value);
 const assert = (condition, message) => { if (!condition) throw new Error(message); };
 const key = value => value.trim().toLocaleLowerCase();
 const fieldsOf = (settings, kind) => settings[kind === 'tasks' ? 'taskFields' : 'issueFields'] === undefined ? [] : settings[kind === 'tasks' ? 'taskFields' : 'issueFields'];
 const validDate = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
 const choices = field => field.options.map(option => typeof option === 'string' ? { id: option, name: option, color: '#a392ff' } : { ...option });
+// Templates saved before the source moved to English use the Italian placeholder {codice} (or <codice>), so both spellings stay valid.
+const hasPlaceholder = template => typeof template === 'string' && /\{(?:codice|code)\}|<(?:codice|code)>/i.test(template);
+const hasScheme = value => /^[a-z][a-z\d+.-]*:\/\//i.test(value);
+function normalizeUrl(value) {
+  const url = String(value ?? '').trim();
+  return !url || hasScheme(url) ? url : `https://${url}`;
+}
+function isWebUrl(value) {
+  if (typeof value !== 'string' || value.length > 4000 || !/^https?:\/\/\S+$/i.test(value)) return false;
+  try {
+    const url = new URL(value);
+    return ['http:', 'https:'].includes(url.protocol) && Boolean(url.hostname);
+  } catch { return false; }
+}
+const fillTemplate = (template, code) => template.replace(/\{(?:codice|code)\}|<(?:codice|code)>/gi, () => encodeURIComponent(String(code).trim()));
+const validTemplate = template => template === '' || (typeof template === 'string' && template.length <= 2000 && hasPlaceholder(template) && isWebUrl(fillTemplate(template, 'PRJ-1')));
+// A platform value is either the identifier on that platform (put into the column template) or a full address.
+function platformLink(field, value) {
+  const text = typeof value === 'string' ? value.trim() : '';
+  if (!text) return '';
+  if (hasScheme(text)) return isWebUrl(text) ? text : '';
+  if (!field.template) return '';
+  const url = fillTemplate(field.template, text);
+  return isWebUrl(url) ? url : '';
+}
+// Editor and import input: without a template only a web address makes sense, with a template the identifier is kept as typed.
+function platformValue(field, raw) {
+  const text = String(raw ?? '').trim().replace(/\s+/g, ' ');
+  if (!text) return '';
+  if (field.template && !hasScheme(text)) {
+    assert(text.length <= 2000, "Invalid custom column value.");
+    return text;
+  }
+  const url = normalizeUrl(text);
+  assert(isWebUrl(url) && url.length <= 2000, "Enter a valid web address.");
+  return url;
+}
 const BUILTIN_FIELDS = {
   tasks: [
     { id: 'sequence', name: 'Sequence', type: 'number', property: 'sequence', sort: 'sequence', empty: 0 },
     { id: 'code', name: 'Portal code', type: 'text', property: 'code', sort: 'code', empty: '' },
-    { id: 'link', name: 'Portal link', type: 'url', property: 'url', visible: false, empty: '' },
     { id: 'description', name: 'Description', type: 'richtext', property: 'description', empty: '' },
     { id: 'urgency', name: 'Urgency', type: 'select', property: 'urgencyId', catalog: 'urgencies', sort: 'urgencyId', empty: '' },
     { id: 'status', name: 'Status', type: 'select', property: 'statusId', catalog: 'statuses', sort: 'statusId', empty: '' },
@@ -43,7 +83,7 @@ const schemaOf = (settings, kind) => [
 const UNREQUIRABLE = { tasks: ['tags', 'incident', 'problem'], issues: ['linked'] };
 const DEFAULT_REQUIRED = { tasks: ['sequence'], issues: [] };
 const requiredKey = kind => kind === 'tasks' ? 'requiredTaskColumns' : 'requiredIssueColumns';
-const canRequire = (settings, kind, id) => !UNREQUIRABLE[kind].includes(id) && schemaOf(settings, kind).some(field => field.id === id && field.type !== 'boolean');
+const canRequire = (settings, kind, id) => !UNREQUIRABLE[kind].includes(id) && schemaOf(settings, kind).some(field => field.id === id && !['boolean', 'child'].includes(field.type));
 const requiredOf = (settings, kind) => (settings[requiredKey(kind)] ?? DEFAULT_REQUIRED[kind]).filter(id => canRequire(settings, kind, id));
 const isRequired = (settings, kind, id) => requiredOf(settings, kind).includes(id);
 function validateRequired(settings) {
@@ -86,16 +126,46 @@ function cleanViews(settings) {
     if (view.columnFilters) view.columnFilters = Object.fromEntries(Object.entries(view.columnFilters).filter(([id]) => ids.includes(id)));
   }
 }
+// A parent column and its child column only make sense together, so deleting either removes both.
+const pairedIds = (settings, kind, id) => {
+  const fields = fieldsOf(settings, kind), field = fields.find(field => field.id === id);
+  if (!field || !REFERENCE_TYPES.includes(field.type)) return [id];
+  const parentId = field.type === 'parent' ? field.id : field.source;
+  return [parentId, ...fields.filter(item => item.type === 'child' && item.source === parentId).map(item => item.id)].filter((value, index, list) => value && list.indexOf(value) === index);
+};
 function removeColumn(settings, kind, id) {
   assert(hasColumn(settings, kind, id), "This column no longer exists.");
   if (BUILTIN_FIELDS[kind].some(field => field.id === id)) (settings[deletedKey(kind)] ||= []).push(id);
   else {
-    const key = kind === 'tasks' ? 'taskFields' : 'issueFields';
-    settings[key] = fieldsOf(settings, kind).filter(field => field.id !== id);
+    const key = kind === 'tasks' ? 'taskFields' : 'issueFields', removed = pairedIds(settings, kind, id);
+    settings[key] = fieldsOf(settings, kind).filter(field => !removed.includes(field.id) && !(field.type === 'child' && removed.includes(field.source)));
   }
   settings[kind === 'tasks' ? 'taskColumns' : 'issueColumns'] = listColumns(settings, kind);
   settings[requiredKey(kind)] = requiredOf(settings, kind);
   cleanViews(settings);
+}
+// Successors are never stored: they are read from the parent column of the other tasks.
+function successorIndex(tasks, parentId) {
+  const index = new Map();
+  for (const task of tasks) for (const id of task.customFields?.[parentId] || []) {
+    if (!index.has(id)) index.set(id, []);
+    index.get(id).push(task.id);
+  }
+  return index;
+}
+// Drops references to deleted tasks or to the task itself, and any value stored in a computed child column.
+function pruneReferences(data) {
+  const fields = fieldsOf(data.settings, 'tasks').filter(field => REFERENCE_TYPES.includes(field.type));
+  if (!fields.length) return data;
+  const ids = new Set(data.tasks.map(task => task.id));
+  for (const task of data.tasks) for (const field of fields) {
+    const value = task.customFields?.[field.id];
+    if (value === undefined) continue;
+    const kept = field.type === 'parent' && Array.isArray(value) ? [...new Set(value)].filter(id => id !== task.id && ids.has(id)) : [];
+    if (kept.length) task.customFields[field.id] = kept;
+    else delete task.customFields[field.id];
+  }
+  return data;
 }
 function cleanData(data) {
   const settings = data.settings;
@@ -114,6 +184,7 @@ function cleanData(data) {
     settings[kind === 'tasks' ? 'taskColumns' : 'issueColumns'] = listColumns(settings, kind);
     settings[requiredKey(kind)] = requiredOf(settings, kind);
   }
+  pruneReferences(data);
   cleanViews(settings);
   for (const view of settings.savedViews || []) {
     if (!settings.statuses.some(option => option.id === view.statusFilter)) view.statusFilter = '';
@@ -125,7 +196,7 @@ function cleanData(data) {
   }
   return data;
 }
-function validateFields(fields) {
+function validateFields(fields, kind) {
   assert(Array.isArray(fields) && fields.length <= FIELD_LIMIT, "Invalid custom column list.");
   const ids = new Set(), names = new Set();
   for (const field of fields) {
@@ -135,6 +206,14 @@ function validateFields(fields) {
     assert(Array.isArray(field.options) && field.options.length <= 100, "Invalid column options.");
     const options = choices(field);
     assert(options.every(option => option && typeof option.id === 'string' && option.id.trim() && option.id.length <= 200 && typeof option.name === 'string' && option.name.trim() && option.name.length <= 60 && /^#[0-9a-f]{6}$/i.test(option.color)) && new Set(options.map(option => option.id)).size === options.length && new Set(options.map(option => key(option.name))).size === options.length, "Invalid column options.");
+    assert(field.type === 'platform' ? field.template === undefined || validTemplate(field.template) : field.template === undefined, "The platform link template must be a valid web address containing {code}.");
+    assert(kind !== 'issues' || !REFERENCE_TYPES.includes(field.type), "Invalid custom column.");
+  }
+  const sources = new Set();
+  for (const field of fields) {
+    if (field.type !== 'child') { assert(field.source === undefined, "Invalid custom column."); continue; }
+    assert(typeof field.source === 'string' && fields.some(item => item.id === field.source && item.type === 'parent') && !sources.has(field.source), "Each successor column must belong to a different predecessor column.");
+    sources.add(field.source);
   }
   return fields;
 }
@@ -153,13 +232,16 @@ function validateValue(value, field, optionIds) {
       try { const url = new URL(value); valid = typeof value === 'string' && value.length <= 2000 && /^https?:\/\/\S+$/i.test(value) && Boolean(url.hostname); }
       catch { valid = false; }
       break;
+    case 'platform': valid = typeof value === 'string' && value.length <= 2000 && value === value.trim() && !/[\u0000-\u001f]/.test(value); break;
+    case 'parent': valid = Array.isArray(value) && value.length <= REFERENCE_MAX && value.every(item => typeof item === 'string' && item && item.length <= 200) && new Set(value).size === value.length; break;
+    case 'child': valid = false; break;
     default: valid = typeof value === 'string' && value.length <= 200000;
   }
   assert(valid, "Invalid custom column value.");
 }
 function validateCustomData(data) {
   for (const kind of ['tasks', 'issues']) {
-    const fields = validateFields(fieldsOf(data.settings, kind)), known = new Map(fields.map(field => [field.id, field]));
+    const fields = validateFields(fieldsOf(data.settings, kind), kind), known = new Map(fields.map(field => [field.id, field]));
     const options = new Map(fields.map(field => [field.id, new Set(choices(field).map(option => option.id))]));
     for (const record of data[kind]) {
       for (const field of BUILTIN_FIELDS[kind]) if (field.property && deletedOf(data.settings, kind).includes(field.id)) {
@@ -170,6 +252,7 @@ function validateCustomData(data) {
       for (const [id, value] of Object.entries(record.customFields)) {
         assert(known.has(id), "A custom column is missing from settings.");
         validateValue(value, known.get(id), options.get(id));
+        assert(known.get(id).type !== 'parent' || !value?.includes(record.id), "A task cannot depend on itself.");
       }
     }
   }
@@ -230,9 +313,11 @@ function matchesFilter(value, filter, type) {
   return true;
 }
 function mergeFields(target, source, preferIncoming = false) {
-  const fields = structuredClone(target), mapping = new Map(), valueMappings = new Map();
+  const fields = structuredClone(target), mapping = new Map(), valueMappings = new Map(), added = new Set();
   for (const incoming of source) {
-    let field = fields.find(field => key(field.name) === key(incoming.name));
+    // Columns migrated from the old portal link share a fixed id, so they match even when their names were translated.
+    let field = fields.find(field => key(field.name) === key(incoming.name))
+      || (incoming.type === 'platform' && incoming.id === LEGACY_LINK_ID ? fields.find(field => field.id === LEGACY_LINK_ID && field.type === 'platform') : undefined);
     if (field) {
       assert(field.type === incoming.type, "A column with the same name has a different type.");
       const options = choices(field), values = new Map();
@@ -247,13 +332,23 @@ function mergeFields(target, source, preferIncoming = false) {
         values.set(option.id, match.id);
       }
       field.options = options;
+      if (field.type === 'platform' && incoming.template !== undefined && (preferIncoming || !field.template)) field.template = incoming.template;
       valueMappings.set(incoming.id, values);
     } else {
       field = structuredClone(incoming);
       if (fields.some(item => item.id === field.id)) field.id = `custom-${globalThis.crypto.randomUUID()}`;
       fields.push(field);
+      added.add(field);
     }
     mapping.set(incoming.id, field.id);
+  }
+  // New successor columns follow their predecessor column; when it already has one, the existing column is reused.
+  for (const field of [...added].filter(field => field.type === 'child')) {
+    field.source = mapping.get(field.source) || field.source;
+    const existing = fields.find(item => item !== field && item.type === 'child' && item.source === field.source);
+    if (!existing) continue;
+    fields.splice(fields.indexOf(field), 1);
+    for (const [from, to] of mapping) if (to === field.id) mapping.set(from, existing.id);
   }
   validateFields(fields);
   return { fields, mapping, valueMappings };
@@ -266,7 +361,7 @@ function remapValues(values, mapping, valueMappings = new Map(), filters = false
   }));
 }
 const valuesKey = values => JSON.stringify(Object.entries(values || {}).sort(([a], [b]) => a.localeCompare(b)));
-const api = { TYPES, FIELD_LIMIT, EMPTY_VALUE, FILTER_VALUES_MAX, BUILTIN_FIELDS, DEFAULT_REQUIRED, deletedKey, deletedOf, hasColumn, requiredKey, canRequire, requiredOf, isRequired, validateRequired, schemaOf, valueOf, setValue, defaultColumns, listColumns, sortKeys, defaultSort, validateDeleted, cleanViews, removeColumn, cleanData, fieldsOf, choices, validateFields, validateValue, validateCustomData, normalizeColumns, normalizeIssueColumns, validDate, validFilters, emptyFilter, activeFilter, matchesFilter, mergeFields, remapValues, valuesKey };
+const api = { TYPES, REFERENCE_TYPES, REFERENCE_MAX, FIELD_LIMIT, LEGACY_LINK_ID, EMPTY_VALUE, FILTER_VALUES_MAX, BUILTIN_FIELDS, DEFAULT_REQUIRED, deletedKey, deletedOf, hasColumn, requiredKey, canRequire, requiredOf, isRequired, validateRequired, schemaOf, valueOf, setValue, defaultColumns, listColumns, sortKeys, defaultSort, validateDeleted, cleanViews, pairedIds, removeColumn, successorIndex, pruneReferences, cleanData, fieldsOf, choices, hasPlaceholder, normalizeUrl, isWebUrl, fillTemplate, validTemplate, platformLink, platformValue, validateFields, validateValue, validateCustomData, normalizeColumns, normalizeIssueColumns, validDate, validFilters, emptyFilter, activeFilter, matchesFilter, mergeFields, remapValues, valuesKey };
 if (typeof module !== 'undefined') module.exports = api;
 else globalThis.OrbitaColumns = api;
 })();

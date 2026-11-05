@@ -1344,19 +1344,97 @@ input[type=radio] {
   font-size: calc(10px * var(--fs));
   white-space: nowrap;
 }
-.link-cell {
-  max-width: calc(260px * var(--fs));
+.reference-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  min-width: 0;
+}
+td.reference-cell .reference-chips {
+  max-height: calc(68px * var(--fs));
+  overflow-y: auto;
+}
+.reference-chip {
+  display: inline-block;
+  max-width: 100%;
+  padding: 2px 9px 2px 7px;
+  border: 1px solid color-mix(in srgb, var(--pill) 40%, transparent);
+  border-left: 3px solid var(--pill);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--pill) 13%, transparent);
+  color: var(--text);
+  font: inherit;
+  font-size: calc(12px * var(--fs));
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
   overflow: hidden;
+  text-overflow: ellipsis;
+}
+button.reference-chip {
+  cursor: pointer;
+}
+button.reference-chip:hover,
+button.reference-chip:focus-visible {
+  background: color-mix(in srgb, var(--pill) 26%, transparent);
+}
+.reference-field .reference-chips {
+  padding: 6px 0;
+}
+.reference-field small,
+.platform-field small,
+.platform-template small {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.reference-field .reference-picker {
+  width: 100%;
+  min-height: calc(38px * var(--fs));
+  border: 1px solid var(--border);
+  background: var(--background);
+}
+.reference-search {
+  width: 100%;
+  margin-bottom: 10px;
+}
+.reference-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.reference-option > span:last-child {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: calc(12px * var(--fs));
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.link-cell .portal-link {
-  color: var(--accent);
-  font-size: calc(12px * var(--fs));
-  text-decoration: none;
+.reference-option .reference-chip {
+  flex-shrink: 0;
+  max-width: 45%;
 }
-.link-cell .portal-link:hover {
-  text-decoration: underline;
+#tag-menu .reference-options .tag-choice {
+  min-width: 0;
+}
+#tag-menu .reference-options .tag-choice[hidden],
+.custom-add-form .field[hidden] {
+  display: none;
+}
+.platform-preview {
+  display: block;
+  min-height: 1.6em;
+}
+.platform-preview .button {
+  margin-top: 2px;
+}
+.platform-template {
+  flex: 1 1 100%;
+}
+.platform-template .portal-preview {
+  display: block;
+  margin-top: 6px;
+  padding: 7px 10px;
 }
 .column-editor {
   list-style: none;

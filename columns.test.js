@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const C = require('./columns');
 const { baseData, validateData, migrateArchive, organizationExport, parseOrganizationFile, applyOrganizationImport, importedOrganizationData, normalizeTaskColumns, findDuplicates, matchIssues, indexIssues } = require('./core');
 const field = (type, name = type) => ({ id: `custom-${type}`, name, type, options: ['select', 'multiselect'].includes(type) ? ['One', 'Two'] : [] });
-const task = data => ({ id: 't', code: 'A', sequence: 1, url: '', description: '', notes: '', releaseDate: '', statusId: data.settings.statuses[0].id, urgencyId: data.settings.urgencies[0].id, effortHours: 0, hidden: false });
+const task = data => ({ id: 't', code: 'A', sequence: 1, description: '', notes: '', releaseDate: '', statusId: data.settings.statuses[0].id, urgencyId: data.settings.urgencies[0].id, effortHours: 0, hidden: false });
 
 test('every default column can be deleted without returning on reload or organization import', () => {
   for (const kind of ['tasks', 'issues']) for (const field of C.BUILTIN_FIELDS[kind]) {
@@ -125,14 +125,19 @@ test('CSV destinations and required mappings follow the existing schema', () => 
 });
 
 test('custom field types validate real values, including zero, false and blank cells', () => {
-  const values = { text: 'Text', richtext: '<p>Text</p>', number: -2.5, date: '2028-02-29', select: 'One', multiselect: ['One', 'Two'], url: 'https://example.com', effort: 0, boolean: false };
-  for (const type of C.TYPES) {
-    C.validateFields([field(type)]);
+  const values = { text: 'Text', richtext: '<p>Text</p>', number: -2.5, date: '2028-02-29', select: 'One', multiselect: ['One', 'Two'], url: 'https://example.com', platform: 'PRJ-1', effort: 0, boolean: false, parent: ['a', 'b'] };
+  for (const type of C.TYPES.filter(type => type !== 'child')) {
+    C.validateFields([field(type)], 'tasks');
     C.validateValue(values[type], field(type));
     C.validateValue('', field(type));
     assert.throws(() => C.validateValue({ bad: true }, field(type)));
   }
-  for (const [type, value] of [['date', '2027-02-29'], ['number', Infinity], ['effort', -1], ['select', 'Three'], ['multiselect', ['One', 'One']], ['url', 'javascript:alert(1)']]) assert.throws(() => C.validateValue(value, field(type)));
+  for (const [type, value] of [['date', '2027-02-29'], ['number', Infinity], ['effort', -1], ['select', 'Three'], ['multiselect', ['One', 'One']], ['url', 'javascript:alert(1)'],
+    ['platform', ' padded '], ['platform', 'a\nb'], ['parent', ['a', 'a']], ['parent', [1]], ['parent', 'a']]) assert.throws(() => C.validateValue(value, field(type)), `${type} ${JSON.stringify(value)}`);
+  const child = { ...field('child'), source: 'custom-parent' };
+  C.validateFields([field('parent'), child], 'tasks');
+  C.validateValue('', child);
+  assert.throws(() => C.validateValue(['a'], child));
 });
 test('invalid field names, identifiers, options and excessive schemas are rejected', () => {
   assert.throws(() => C.validateFields([field('text'), { ...field('number'), name: 'TEXT' }]));
@@ -140,7 +145,78 @@ test('invalid field names, identifiers, options and excessive schemas are reject
   assert.throws(() => C.validateFields([{ ...field('select'), options: ['One', 'one'] }]));
   C.validateFields([{ ...field('select'), options: [] }]);
   assert.throws(() => C.validateFields([{ ...field('select'), options: [{ id: 'a', name: 'A', color: 'bad' }] }]));
-  assert.throws(() => C.validateFields(Array.from({ length: 31 }, (_, i) => ({ ...field('text'), id: `custom-${i}`, name: String(i) }))));
+  C.validateFields(Array.from({ length: C.FIELD_LIMIT }, (_, i) => ({ ...field('text'), id: `custom-${i}`, name: String(i) })));
+  assert.throws(() => C.validateFields(Array.from({ length: C.FIELD_LIMIT + 1 }, (_, i) => ({ ...field('text'), id: `custom-${i}`, name: String(i) }))));
+  const parent = field('parent'), child = { ...field('child'), source: parent.id };
+  assert.throws(() => C.validateFields([parent, field('child')], 'tasks'), /successor column/i);
+  assert.throws(() => C.validateFields([parent, child, { ...child, id: 'custom-child-2', name: 'Other' }], 'tasks'), /successor column/i);
+  assert.throws(() => C.validateFields([{ ...field('text'), source: parent.id }, parent], 'tasks'));
+  assert.throws(() => C.validateFields([parent], 'issues'));
+  assert.throws(() => C.validateFields([parent, child], 'issues'));
+  assert.throws(() => C.validateFields([{ ...field('text'), template: 'https://tickets.example.com/{code}' }]), /template/i);
+  for (const template of ['https://tickets.example.com/browse', 'javascript:alert(1)//{code}', 'tickets.example.com/{code}', 42]) {
+    assert.throws(() => C.validateFields([{ ...field('platform'), template }]), /template/i, String(template));
+  }
+  C.validateFields([{ ...field('platform'), template: '' }, { ...field('url'), id: 'custom-site' }]);
+  C.validateFields([{ ...field('platform'), template: 'https://tickets.example.com/browse/{code}' }, { ...field('platform', 'Changes'), id: 'custom-changes', template: 'https://changes.example.com/c?id=<codice>' }]);
+});
+test('platform columns turn an identifier into a link with their own template or keep a full address', () => {
+  const tickets = { ...field('platform'), template: 'https://tickets.example.com/browse/{code}' }, plain = field('platform', 'Plain');
+  assert.equal(C.platformLink(tickets, 'PRJ-7'), 'https://tickets.example.com/browse/PRJ-7');
+  assert.equal(C.platformLink(tickets, ' a b/c '), 'https://tickets.example.com/browse/a%20b%2Fc');
+  assert.equal(C.platformLink(tickets, 'https://other.example.com/item/9'), 'https://other.example.com/item/9');
+  assert.equal(C.platformLink(tickets, 'javascript://alert(1)'), '');
+  assert.equal(C.platformLink(tickets, ''), '');
+  assert.equal(C.platformLink(plain, 'PRJ-7'), '');
+  assert.equal(C.platformLink(plain, 'https://tickets.example.com/browse/PRJ-7'), 'https://tickets.example.com/browse/PRJ-7');
+  assert.equal(C.platformLink({ ...tickets, template: 'https://changes.example.com/change?id=<codice>' }, 'CHG 1'), 'https://changes.example.com/change?id=CHG%201');
+  assert.equal(C.platformValue(tickets, '  PRJ-7  '), 'PRJ-7');
+  assert.equal(C.platformValue(tickets, 'https://other.example.com/x'), 'https://other.example.com/x');
+  assert.equal(C.platformValue(plain, 'tickets.example.com/browse/PRJ-7'), 'https://tickets.example.com/browse/PRJ-7');
+  assert.equal(C.platformValue(plain, ' '), '');
+  assert.throws(() => C.platformValue(plain, 'PRJ 7'), /valid web address/i);
+  assert.throws(() => C.platformValue(tickets, 'ftp://tickets.example.com/x'), /valid web address/i);
+  assert.ok(C.validTemplate('') && C.validTemplate('https://tickets.example.com/browse/{CODE}'));
+  assert.ok(!C.validTemplate('https://tickets.example.com/browse/') && !C.validTemplate('ftp://tickets.example.com/{code}'));
+});
+test('successors are computed from predecessors and references never point to missing tasks or to the task itself', () => {
+  const data = baseData(), parent = field('parent'), child = { ...field('child'), source: parent.id };
+  data.settings.taskFields = [parent, child];
+  data.tasks = ['a', 'b', 'c'].map((id, index) => ({ ...task(data), id, code: id.toUpperCase(), sequence: index + 1 }));
+  data.tasks[1].customFields = { [parent.id]: ['a'] };
+  data.tasks[2].customFields = { [parent.id]: ['a', 'b'] };
+  validateData(data);
+  const successors = C.successorIndex(data.tasks, parent.id);
+  assert.deepEqual(successors.get('a'), ['b', 'c']);
+  assert.deepEqual(successors.get('b'), ['c']);
+  assert.equal(successors.get('c'), undefined);
+  data.tasks[0].customFields = { [parent.id]: ['a'] };
+  assert.throws(() => validateData(data), /depend on itself/i);
+  data.tasks[0].customFields = { [child.id]: ['b'] };
+  assert.throws(() => validateData(data), /custom column value/i);
+  data.tasks[0].customFields = { [parent.id]: ['a', 'gone'], [child.id]: ['b'] };
+  data.tasks = data.tasks.filter(item => item.id !== 'b');
+  C.pruneReferences(data);
+  assert.deepEqual(data.tasks[0].customFields, {});
+  assert.deepEqual(data.tasks[1].customFields, { [parent.id]: ['a'] });
+  validateData(data);
+});
+test('deleting a predecessor column also deletes its successor column and the other way round', () => {
+  for (const removed of ['custom-parent', 'custom-child']) {
+    const data = baseData(), parent = field('parent'), child = { ...field('child'), source: parent.id };
+    data.settings.taskFields = [field('text'), parent, child];
+    data.settings.requiredTaskColumns = ['sequence', parent.id];
+    data.tasks = [{ ...task(data), id: 'a' }, { ...task(data), id: 'b', customFields: { [parent.id]: ['a'] } }];
+    assert.deepEqual(C.pairedIds(data.settings, 'tasks', removed), [parent.id, child.id]);
+    C.removeColumn(data.settings, 'tasks', removed);
+    C.cleanData(data);
+    validateData(data);
+    assert.deepEqual(data.settings.taskFields.map(item => item.id), ['custom-text']);
+    assert.ok(!data.settings.taskColumns.some(column => [parent.id, child.id].includes(column.id)));
+    assert.deepEqual(data.settings.requiredTaskColumns, ['sequence']);
+    assert.deepEqual(data.tasks[1].customFields, {});
+  }
+  assert.deepEqual(C.pairedIds({ taskFields: [field('text')] }, 'tasks', 'custom-text'), ['custom-text']);
 });
 test('old archives get empty custom schemas and all built-in issue columns', () => {
   const data = baseData();

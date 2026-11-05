@@ -44,6 +44,11 @@ test('CSV conversion validates numbers, dates, booleans, URLs, catalogs and esca
   assert.equal(convert('Sì', 'boolean'), true);
   assert.equal(convert('0', 'boolean'), false);
   assert.equal(convert('example.com/path', 'url'), 'https://example.com/path');
+  const template = 'https://tickets.example.com/browse/{code}';
+  assert.equal(convert(' PRJ-1 ', 'platform', { template }), 'PRJ-1');
+  assert.equal(convert('https://other.example.com/x', 'platform', { template }), 'https://other.example.com/x');
+  assert.equal(convert('tickets.example.com/browse/PRJ-1', 'platform'), 'https://tickets.example.com/browse/PRJ-1');
+  assert.throws(() => convert('PRJ 1', 'platform'), /valid web address/i);
   assert.equal(convert('  ', 'text'), undefined);
   assert.equal(convert('<script>alert("x")</script>\n&', 'richtext'), '<p>&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;<br>&amp;</p>');
   const options = [{ value: 'a', name: 'One' }, { value: 'b', name: 'Two' }];
@@ -73,17 +78,20 @@ test('task import is append-only, applies defaults, combines effort and allocate
 });
 test('custom fields of all types import into tasks and linked issues with catalogs and tags', () => {
   const data = baseData();
-  const types = ['text', 'richtext', 'number', 'date', 'select', 'multiselect', 'url', 'effort', 'boolean'];
-  const fields = types.map(type => ({ id: `custom-${type}`, name: type, type, options: ['select', 'multiselect'].includes(type) ? ['One', 'Two'] : [] }));
-  data.settings.taskFields = fields; data.settings.issueFields = structuredClone(fields);
+  const types = ['text', 'richtext', 'number', 'date', 'select', 'multiselect', 'url', 'platform', 'effort', 'boolean'];
+  const fields = types.map(type => ({ id: `custom-${type}`, name: type, type, options: ['select', 'multiselect'].includes(type) ? ['One', 'Two'] : [], ...(type === 'platform' ? { template: 'https://tickets.example.com/browse/{code}' } : {}) }));
+  const references = [{ id: 'custom-parent', name: 'Predecessors', type: 'parent', options: [] }, { id: 'custom-child', name: 'Successors', type: 'child', options: [], source: 'custom-parent' }];
+  data.settings.taskFields = [...fields, ...references]; data.settings.issueFields = structuredClone(fields);
+  assert.ok(!C.destinations(data, 'tasks').some(field => ['custom-parent', 'custom-child'].includes(field.id)));
   data.settings.tags = [{ id: 'tag-a', name: 'Team', color: '#123456' }];
-  const cells = ['custom text', '<b>Literal</b>', '0', '2028-02-29', 'two', 'One|Two', 'https://example.com', '1,25', 'no'];
+  const cells = ['custom text', '<b>Literal</b>', '0', '2028-02-29', 'two', 'One|Two', 'https://example.com', 'PRJ-1', '1,25', 'no'];
   for (const kind of ['tasks', 'issues']) {
     const base = kind === 'tasks' ? ['code', 'tagIds'] : ['code', 'incident'];
     const prepared = C.prepareImport(data, kind, [['A', kind === 'tasks' ? 'Team' : 'INC-1', ...cells]], [...base, ...fields.map(field => field.id)]);
     assert.equal(prepared.errorCount, 0);
     assert.equal(prepared.records[0].customFields['custom-number'], 0);
     assert.equal(prepared.records[0].customFields['custom-boolean'], false);
+    assert.equal(prepared.records[0].customFields['custom-platform'], 'PRJ-1');
     assert.equal(prepared.records[0].customFields['custom-select'], 'Two');
     assert.deepEqual(prepared.records[0].customFields['custom-multiselect'], ['One', 'Two']);
     if (kind === 'tasks') assert.deepEqual(prepared.records[0].tagIds, ['tag-a']);

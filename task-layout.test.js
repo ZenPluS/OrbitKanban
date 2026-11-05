@@ -23,7 +23,8 @@ test('default task form keeps the 2.50 split: properties on the left and text pa
   assert.deepEqual({ ...properties, fields: undefined }, { id: 'section-properties', name: 'Properties', showName: false, columns: 2, fields: undefined });
   assert.deepEqual(text.fields, [{ id: 'description', span: 1 }, { id: 'notes', span: 1 }]);
   assert.equal(properties.fields[0].id, 'code');
-  assert.equal(properties.fields.find(field => field.id === 'link').span, 2);
+  assert.ok(!properties.fields.some(field => field.id === 'link'));
+  assert.equal(properties.fields.find(field => field.id === 'effort').span, 2);
   assert.deepEqual(layout.unplaced, []);
   assert.equal(sections(baseData('it').settings.taskEditorLayout)[0].name, 'Proprietà');
   assert.ok(validTaskEditorLayout(layout));
@@ -89,7 +90,7 @@ test('a layout without sections gets one for the fields that are not on the form
   assert.equal(normalized.columns[0].sections[0].id, 'section-properties');
   assert.ok(!placed(normalized).includes('code'));
   assert.equal(placed(normalized).length + 1, taskEditorFields(settings).length);
-  const spans = { ...settings.taskEditorLayout, columns: [{ width: 100, sections: [{ id: 'section-a', name: '', showName: false, columns: 1, fields: [{ id: 'link', span: 4 }] }] }], unplaced: [] };
+  const spans = { ...settings.taskEditorLayout, columns: [{ width: 100, sections: [{ id: 'section-a', name: '', showName: false, columns: 1, fields: [{ id: 'effort', span: 4 }] }] }], unplaced: [] };
   assert.equal(normalizeTaskEditorLayout(settings, spans).columns[0].sections[0].fields[0].span, 1);
 });
 

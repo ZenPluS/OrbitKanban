@@ -19,11 +19,14 @@ test('only columns with a value to fill in can be mandatory', () => {
   const settings = baseData('en').settings;
   settings.taskFields = [
     { id: 'custom-flag', name: 'Flag', type: 'boolean', options: [] },
-    { id: 'custom-owner', name: 'Owner', type: 'text', options: [] }
+    { id: 'custom-owner', name: 'Owner', type: 'text', options: [] },
+    { id: 'custom-ticket', name: 'Ticket', type: 'platform', options: [], template: '' },
+    { id: 'custom-parent', name: 'Predecessors', type: 'parent', options: [] },
+    { id: 'custom-child', name: 'Successors', type: 'child', options: [], source: 'custom-parent' }
   ];
   settings.issueFields = [{ id: 'custom-area', name: 'Area', type: 'select', options: ['A', 'B'] }];
-  for (const id of ['sequence', 'code', 'link', 'description', 'urgency', 'status', 'highlight', 'effort', 'releaseDate', 'notes', 'custom-owner']) assert.ok(canRequire(settings, 'tasks', id), id);
-  for (const id of ['tags', 'incident', 'problem', 'custom-flag', 'hidden', 'matches', 'missing']) assert.ok(!canRequire(settings, 'tasks', id), id);
+  for (const id of ['sequence', 'code', 'description', 'urgency', 'status', 'highlight', 'effort', 'releaseDate', 'notes', 'custom-owner', 'custom-ticket', 'custom-parent']) assert.ok(canRequire(settings, 'tasks', id), id);
+  for (const id of ['tags', 'incident', 'problem', 'custom-flag', 'custom-child', 'link', 'hidden', 'matches', 'missing']) assert.ok(!canRequire(settings, 'tasks', id), id);
   for (const id of ['code', 'incident', 'problem', 'custom-area']) assert.ok(canRequire(settings, 'issues', id), id);
   assert.ok(!canRequire(settings, 'issues', 'linked'));
   settings.requiredTaskColumns = ['code', 'tags', 'custom-flag', 'custom-owner', 'missing'];

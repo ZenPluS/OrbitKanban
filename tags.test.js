@@ -7,7 +7,7 @@ function taggedOrganization() {
   const data = baseData();
   data.settings.tags = [{ id: 'a', name: 'Frontend', color: '#123456' }, { id: 'b', name: 'Bug', color: '#abcdef' }];
   data.tasks = [{
-    id: 'task', code: 'TAG-1', sequence: 1, url: '', description: '<b>Task</b>', notes: '', releaseDate: '',
+    id: 'task', code: 'TAG-1', sequence: 1, description: '<b>Task</b>', notes: '', releaseDate: '',
     statusId: data.settings.statuses[0].id, urgencyId: data.settings.urgencies[0].id, effortHours: 8,
     hidden: true, tagIds: ['a', 'b']
   }];

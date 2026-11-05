@@ -47,7 +47,7 @@ function destinations(data, kind) {
   const options = items => items.map(item => ({ value: item.id, name: item.name }));
   const base = kind === 'tasks' ? [
     { id: 'code', name: "Portal code", type: 'text' }, { id: 'sequence', name: "Sequence", type: 'number' },
-    { id: 'url', name: "Specific link", type: 'url' }, { id: 'description', name: "Description", type: 'richtext' },
+    { id: 'description', name: "Description", type: 'richtext' },
     { id: 'statusId', name: "Status", type: 'select', options: options(s.statuses) },
     { id: 'urgencyId', name: "Urgency", type: 'select', options: options(s.urgencies) },
     { id: 'effortHours', name: "Effort (hours)", type: 'effort' }, { id: 'effortDays', name: "Effort in days", type: 'effort' },
@@ -55,12 +55,12 @@ function destinations(data, kind) {
     { id: 'highlightId', name: "Highlight", type: 'select', options: options(s.highlights || []) },
     { id: 'tagIds', name: 'Tags', type: 'multiselect', options: options(s.tags || []) }, { id: 'hidden', name: "Hidden", type: 'boolean' }
   ] : ['code', 'incident', 'problem'].map((id, i) => ({ id, name: ["Portal code", 'Incident', 'Problem'][i], type: 'text' }));
-  const columnId = id => ({ url: 'link', statusId: 'status', urgencyId: 'urgency', highlightId: 'highlight', tagIds: 'tags', effortHours: 'effort', effortDays: 'effort' })[id] || id;
-  return [...base.filter(field => field.id === 'hidden' || C.hasColumn(s, kind, columnId(field.id))), ...C.fieldsOf(s, kind).map(field => ({ ...field, custom: true, options: C.choices(field).map(option => ({ ...option, value: option.id })) }))];
+  const columnId = id => ({ statusId: 'status', urgencyId: 'urgency', highlightId: 'highlight', tagIds: 'tags', effortHours: 'effort', effortDays: 'effort' })[id] || id;
+  return [...base.filter(field => field.id === 'hidden' || C.hasColumn(s, kind, columnId(field.id))), ...C.fieldsOf(s, kind).filter(field => !C.REFERENCE_TYPES.includes(field.type)).map(field => ({ ...field, custom: true, options: C.choices(field).map(option => ({ ...option, value: option.id })) }))];
 }
 // Italian headers stay as aliases so CSV files made with the Italian interface still map automatically.
 const aliases = {
-  code: ['key', 'issue key', 'codice', 'codice portale', 'portal code'], sequence: ['sequence'], url: ['url', 'link'],
+  code: ['key', 'issue key', 'codice', 'codice portale', 'portal code'], sequence: ['sequence'],
   description: ['description'], notes: ['notes'], statusId: ['status'], urgencyId: ['urgency', 'priority', 'priorità'],
   effortHours: ['effort', 'hours', 'ore'], effortDays: ['days', 'giorni'], releaseDate: ['release', 'data release'], hidden: ['hidden']
 };
@@ -105,6 +105,7 @@ function convertCell(input, field) {
     assert(core.isWebUrl(url) && url.length <= 2000, "The link must start with http:// or https://.");
     return url;
   }
+  if (field.type === 'platform') return C.platformValue(field, value);
   assert(value.length <= 200000, "Text is too long.");
   assert(field.custom || !['code', 'incident', 'problem'].includes(field.id) || value.length <= 200, "Codes can contain up to 200 characters.");
   if (field.type === 'richtext') return `<p>${input.replace(/[&<>"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[char])).replace(/\r\n?|\n/g, '<br>')}</p>`;
@@ -126,7 +127,7 @@ function prepareImport(data, kind, rows, mapping) {
     const before = errorCount;
     if (row.length !== mapping.length) { error(rowIndex + 1, '', "The cell count does not match the file columns."); return; }
     const record = kind === 'tasks' ? {
-      id: globalThis.crypto.randomUUID(), code: '', sequence: C.hasColumn(data.settings, kind, 'sequence') ? ++sequence : 0, url: '', description: '', notes: '', statusId: C.hasColumn(data.settings, kind, 'status') ? data.settings.statuses[0]?.id || '' : '',
+      id: globalThis.crypto.randomUUID(), code: '', sequence: C.hasColumn(data.settings, kind, 'sequence') ? ++sequence : 0, description: '', notes: '', statusId: C.hasColumn(data.settings, kind, 'status') ? data.settings.statuses[0]?.id || '' : '',
       urgencyId: C.hasColumn(data.settings, kind, 'urgency') ? data.settings.urgencies[Math.min(2, data.settings.urgencies.length - 1)]?.id || '' : '', effortHours: 0, releaseDate: '', highlightId: '', hidden: false, tagIds: []
     } : { id: globalThis.crypto.randomUUID(), code: '', incident: '', problem: '' };
     let days = 0;
