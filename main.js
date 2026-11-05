@@ -1,6 +1,7 @@
 'use strict';
 const { app, BrowserWindow, ipcMain, dialog, shell, clipboard, screen, nativeImage } = require('electron');
 const fs = require('node:fs/promises');
+const { writeFileSync } = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 const { APP_NAME, validateArchive, isWebUrl, parseOrganizationFile, ORGANIZATION_FILE_KINDS } = require('./core');
@@ -9,7 +10,7 @@ const { createWebServer, DEFAULT_PORT } = require('./web-server');
 const { createSplash, splashHoldTime, windowBackground, SPLASH_STATUS } = require('./splash');
 const { createLanguageStore } = require('./languages');
 const { TITLE_BAR_ARGUMENT, TITLE_BAR_HEIGHT, themeColors, titleBarOverlay } = require('./window-chrome');
-const { APP_ID, launcherPath, relaunchDetails, shortcutDetails } = require('./portable');
+const { APP_ID, LAUNCHER_SIGNAL_VARIABLE, launcherSignal, launcherPath, relaunchDetails, shortcutDetails } = require('./portable');
 const { createUpdater } = require('./updater');
 const { launchInstaller } = require('./update-launcher');
 app.setName(APP_NAME);
@@ -29,6 +30,16 @@ const dataFolder = path.join(root, 'data');
 const runtimeFolder = path.join(dataFolder, 'runtime');
 const launcher = process.platform === 'win32' ? launcherPath({ packaged: app.isPackaged, executable: app.getPath('exe'), portableFile: process.env.PORTABLE_EXECUTABLE_FILE }) : null;
 const portableFile = launcher && process.env.PORTABLE_EXECUTABLE_FILE ? launcher : null;
+// The portable launcher keeps showing its loading screen until the main window is visible, so the app does not open a second one.
+const launcherReadyFile = process.platform === 'win32' ? launcherSignal(process.env) : null;
+delete process.env[LAUNCHER_SIGNAL_VARIABLE];
+let launcherReleased = false;
+function releaseLauncher() {
+  if (!launcherReadyFile || launcherReleased) return;
+  launcherReleased = true;
+  try { writeFileSync(launcherReadyFile, '', { flag: 'wx' }); }
+  catch (error) { if (error.code !== 'EEXIST') console.error('The launcher loading screen could not be closed:', error); }
+}
 app.setPath('userData', runtimeFolder);
 app.setPath('sessionData', runtimeFolder);
 app.setAppLogsPath(path.join(dataFolder, 'logs'));
@@ -40,10 +51,14 @@ function revealMainWindow(reason) {
   revealed = true;
   clearTimeout(revealTimer);
   resolveAppReady(reason);
-  if (smoke) return;
+  if (smoke) {
+    releaseLauncher();
+    return;
+  }
   setTimeout(() => {
     if (win && !win.isDestroyed()) win.show();
     splash?.close();
+    releaseLauncher();
   }, splashHoldTime(splash?.shownAt, Date.now()));
 }
 const store = createWorkspaceStore({ dataFolder, extras: () => ({ appVersion: app.getVersion(), browserUrl: webServer.url }) });
@@ -201,7 +216,8 @@ const lock = app.requestSingleInstanceLock();
 if (!lock) app.quit();
 else {
   app.on('second-instance', () => {
-    const target = win && !win.isDestroyed() && win.isVisible() ? win : splash && !splash.closed ? splash.window : win;
+    // A window that is still loading appears by itself once it is ready.
+    const target = win && !win.isDestroyed() && win.isVisible() ? win : splash && !splash.closed ? splash.window : null;
     if (!target || target.isDestroyed()) return;
     if (target.isMinimized()) target.restore();
     target.focus();
@@ -209,7 +225,7 @@ else {
   app.whenReady().then(async () => {
     const icon = nativeImage.createFromPath(path.join(__dirname, 'app-logo.png'));
     if (icon.isEmpty()) throw new Error('The application icon is missing or invalid. Run npm run icon during development.');
-    splash = createSplash({ BrowserWindow, screen, appRoot: __dirname, title: APP_NAME, icon, version: app.getVersion(), show: !smoke });
+    splash = launcherReadyFile ? null : createSplash({ BrowserWindow, screen, appRoot: __dirname, title: APP_NAME, icon, version: app.getVersion(), show: !smoke });
     try { await languages.reload(); }
     catch (error) { console.error('Additional languages could not be loaded:', error); }
     let settings;
@@ -247,14 +263,24 @@ else {
     if (smoke) {
       try {
         if (await appReady !== 'renderer') throw new Error('The interface did not signal that it was ready.');
-        let screenState;
-        for (let attempt = 0; attempt < 30; attempt++) {
-          screenState = await splash.inspect();
-          if (screenState.logo && screenState.version.endsWith(app.getVersion())) break;
-          await new Promise(resolve => setTimeout(resolve, 100));
+        const splashChecks = ['Application logo and window icon use the same source image'];
+        if (splash) {
+          let screenState;
+          for (let attempt = 0; attempt < 30; attempt++) {
+            screenState = await splash.inspect();
+            if (screenState.logo && screenState.version.endsWith(app.getVersion())) break;
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
+          if (screenState.lang !== 'en' || screenState.status !== SPLASH_STATUS || screenState.version !== `Portable · v${app.getVersion()}` || screenState.busy !== 'true' || !screenState.logo) throw new Error(`Invalid splash screen: ${JSON.stringify(screenState)}`);
+          if (!screenState.indeterminate || !screenState.animated) throw new Error(`Loading bar is not animated: ${JSON.stringify(screenState)}`);
+          splash.close();
+          if (!splash.closed || !win || win.isDestroyed()) throw new Error('The splash screen did not close.');
+          splashChecks.push('Splash screen shows English, logo, and version', 'Splash screen displays an animated indeterminate loading bar', 'Splash screen closes when the interface is ready');
+        } else {
+          if (!launcherReleased || BrowserWindow.getAllWindows().length !== 1) throw new Error('The app opened its own loading screen under the portable launcher.');
+          await fs.access(launcherReadyFile);
+          splashChecks.push('Portable launcher keeps its loading screen until the interface is ready, without a second one');
         }
-        if (screenState.lang !== 'en' || screenState.status !== SPLASH_STATUS || screenState.version !== `Portable · v${app.getVersion()}` || screenState.busy !== 'true' || !screenState.logo) throw new Error(`Invalid splash screen: ${JSON.stringify(screenState)}`);
-        if (!screenState.indeterminate || !screenState.animated) throw new Error(`Loading bar is not animated: ${JSON.stringify(screenState)}`);
         const logoData = await win.webContents.executeJavaScript(`(async () => {
           const image = new Image();
           image.src = 'app-logo.svg';
@@ -266,14 +292,6 @@ else {
         })()`);
         const iconPixels = icon.toBitmap(), logoPixels = nativeImage.createFromDataURL(logoData).toBitmap();
         if (!iconPixels.equals(logoPixels)) throw new Error('The application logo and window icon do not match.');
-        splash.close();
-        if (!splash.closed || !win || win.isDestroyed()) throw new Error('The splash screen did not close.');
-        const splashChecks = [
-          'Application logo and window icon use the same source image',
-          'Splash screen shows English, logo, and version',
-          'Splash screen displays an animated indeterminate loading bar',
-          'Splash screen closes when the interface is ready'
-        ];
         if (launcher) {
           await require('./smoke-windows').verifyTaskbar(win, launcher);
           splashChecks.push('Native Windows taskbar properties relaunch the portable launcher with its persistent icon');
@@ -339,7 +357,7 @@ else {
         app.exit(1);
       }
     }
-  }).catch(error => { splash?.close(); dialog.showErrorBox('Startup failed', error.message); app.exit(1); });
+  }).catch(error => { splash?.close(); releaseLauncher(); dialog.showErrorBox('Startup failed', error.message); app.exit(1); });
 }
 let quitting = false;
 app.on('before-quit', event => {

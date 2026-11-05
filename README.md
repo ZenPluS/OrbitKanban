@@ -4,7 +4,7 @@
 
 | | |
 | --- | --- |
-| **Current version** | 2.60.1 |
+| **Current version** | 2.60.2 |
 | **Platform** | Windows 10 / 11, 64-bit |
 | **Distribution** | Single portable executable, `OrbitKanban-Portable.exe` |
 | **Network** | Not required. Used only for optional update checks against GitHub |
@@ -119,7 +119,7 @@ Demo data is created only when no workspace exists yet, so updating the app neve
 
 ### Splash screen and taskbar
 
-The portable executable extracts the app to a private temporary folder on every launch. A splash screen with the app logo, version and an animated progress bar appears immediately and stays until the organization is ready. The splash screen is always in English. When Windows asks to reduce motion, the bar pulses slowly instead of moving. Only the English and Italian Chromium resources are packaged, which keeps extraction fast.
+The portable executable extracts the app to a private temporary folder on every launch. A splash screen with the app logo, version and an animated progress bar appears immediately and stays on screen without interruption until the main window is open. The launcher starts the app itself and removes the splash screen only when the app reports that its window is visible, or if the app closes or does not report within 30 seconds. When the app runs without the portable launcher, for example during development, it shows the same splash screen itself; there, the bar pulses slowly when Windows asks to reduce motion. The splash screen is always in English. Only the English and Italian Chromium resources are packaged, which keeps extraction fast.
 
 Since 2.45.0 the main window reports the **original portable launcher** to Windows as its identity, path and icon. Pinning the running app to the taskbar therefore pins the launcher, not the temporary extraction. A second double-click brings the open app to the front.
 
@@ -644,7 +644,7 @@ Tags are never moved. Bump the version before releasing new sources:
 npm version minor --no-git-tag-version --ignore-scripts
 ```
 
-For a specifically numbered release, use `npm version 2.60.1 --no-git-tag-version --ignore-scripts` instead. To update the local portable copy too, run the pipeline **without `-NoDeliver`** and close the app first. The script replaces only the executable, not `dist/data`.
+For a specifically numbered release, use `npm version 2.60.2 --no-git-tag-version --ignore-scripts` instead. To update the local portable copy too, run the pipeline **without `-NoDeliver`** and close the app first. The script replaces only the executable, not `dist/data`.
 
 The script refuses to reuse a tagged version for different sources. If a build or test fails, nothing is committed or pushed.
 
@@ -652,6 +652,7 @@ The script refuses to reuse a tagged version for different sources. If a build o
 
 | Version | Changes |
 | --- | --- |
+| **2.60.2** | The portable launcher keeps its splash screen on screen until the main window is open, with no blank gap or second loading window |
 | **2.60.1** | Form designer bar works as the Windows title bar and keeps its buttons clear of the window controls; a single **Save** replaces **Apply** and **Save settings** |
 | **2.60.0** | Full-screen form designer for the task editor with drag and drop, custom sections, layout columns and window size; configurable required fields for tasks and issues |
 | **2.50.0** | Per-organization task editor layout settings with preview, field ordering and visibility; persistent update notifications and top-bar shortcut |

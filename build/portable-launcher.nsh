@@ -51,3 +51,49 @@ Function orbitKanbanLauncherPage
   Pop $1
   Pop $0
 FunctionEnd
+
+; Inserted by the template inside its section, right after the app is unpacked (extractAppPackage.nsh).
+; The template destroys the bitmap before it starts the app, which left the screen empty while OrbitKanban started.
+; Here the launcher starts the app itself and keeps the bitmap and its bar until the app creates the signal file, once its
+; main window is visible (main.js). It then waits for the app, cleans up like the template and quits, so the template does
+; not start the app a second time. If the app cannot be started this way, the template's own sequence runs as before.
+!macro customFiles_x64
+  System::Call 'Kernel32::SetEnvironmentVariable(t, t)i ("PORTABLE_EXECUTABLE_DIR", "$EXEDIR").r0'
+  System::Call 'Kernel32::SetEnvironmentVariable(t, t)i ("PORTABLE_EXECUTABLE_FILE", "$EXEPATH").r0'
+  System::Call 'Kernel32::SetEnvironmentVariable(t, t)i ("PORTABLE_EXECUTABLE_APP_FILENAME", "${APP_FILENAME}").r0'
+  System::Call 'Kernel32::SetEnvironmentVariable(t, t)i ("ORBITKANBAN_LAUNCHER_SIGNAL", "$PLUGINSDIR\orbitkanban-ready").r0'
+  ${StdUtils.GetAllParameters} $R0 0
+  StrCpy $R3 '"$INSTDIR\${APP_EXECUTABLE_FILENAME}" $R0'
+  ; Zero-filled STARTUPINFOW and PROCESS_INFORMATION (x64).
+  System::Alloc 104
+  Pop $R1
+  System::Call "*$R1(i 104)"
+  System::Alloc 24
+  Pop $R2
+  System::Call "kernel32::CreateProcessW(p 0, w R3, p 0, p 0, i 0, i 0, p 0, p 0, p R1, p R2) i .r0"
+  System::Free $R1
+  IntCmp $0 0 orbitKanbanNotStarted
+  System::Call "*$R2(p .R4, p .R5)"
+  System::Free $R2
+  System::Call "kernel32::CloseHandle(p R5)"
+  StrCpy $R3 0
+  orbitKanbanStarting:
+    System::Call "kernel32::WaitForSingleObject(p R4, i 25) i .r0"
+    ; Anything but WAIT_TIMEOUT means the app has already exited.
+    IntCmp $0 258 0 orbitKanbanStarted orbitKanbanStarted
+    IfFileExists "$PLUGINSDIR\orbitkanban-ready" orbitKanbanStarted
+    IntOp $R3 $R3 + 25
+    IntCmp $R3 30000 orbitKanbanStarted orbitKanbanStarting orbitKanbanStarted
+  orbitKanbanStarted:
+  BgImage::Destroy
+  System::Call "kernel32::WaitForSingleObject(p R4, i -1)"
+  System::Call "kernel32::GetExitCodeProcess(p R4, *i .r0)"
+  System::Call "kernel32::CloseHandle(p R4)"
+  SetErrorLevel $0
+  SetOutPath $EXEDIR
+  RMDir /r $INSTDIR
+  Quit
+  orbitKanbanNotStarted:
+  System::Free $R2
+  System::Call 'Kernel32::SetEnvironmentVariable(t "ORBITKANBAN_LAUNCHER_SIGNAL", p 0)'
+!macroend
