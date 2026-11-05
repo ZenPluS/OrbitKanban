@@ -62,7 +62,7 @@ const SECTIONS = [
       ] },
       { title: 'Create and edit', items: [
         '**New task** or `Ctrl+N` opens the editor. Double-click a row, or click its code, to edit it.',
-        'The editor shows the properties on the left and the description and notes on the right. A task can have its own link, which takes precedence over the portal template.',
+        'By default, the editor shows properties on the left and description and notes on the right. A task can have its own link, which takes precedence over the portal template.',
         'The icon next to the code opens the task in the portal, in your default browser.'
       ] },
       { title: 'Sort the list', items: [
@@ -242,12 +242,18 @@ const SECTIONS = [
     ]
   },
   {
-    id: 'settings', icon: 'settings', title: 'Settings', go: [{ settings: 'identity' }, { settings: 'languages' }, { settings: 'portal' }],
+    id: 'settings', icon: 'settings', title: 'Settings', go: [{ settings: 'identity' }, { settings: 'languages' }, { settings: 'portal' }, { settings: 'task-layout' }],
     summary: 'Each organization has its own configuration, organized in tabs.',
     topics: [
       { title: 'Save or discard', items: [
         'Changes take effect only with **Save settings**. A banner lists the modified tabs and a dot marks each of them.',
         '**Discard changes**, or leaving the settings without saving, keeps the previous configuration.'
+      ] },
+      { title: 'Task editor layout', items: [
+        'In **Settings → Task editor layout**, choose side-by-side sections, text on the left, or stacked sections, with one or two property columns.',
+        'Reorder fields with the drag handle or its arrow keys, move them between sections, choose their width and hide those you do not need. The schematic preview follows your changes.',
+        'Hidden fields retain their values when you save a task. Deleted columns disappear from the layout; newly added columns appear automatically. This does not change the task list columns.',
+        'Press **Save settings** to apply the layout to new and existing tasks in this organization. It travels with settings exports and backups. **Restore default layout** resets the draft; **Discard changes** keeps the saved layout.'
       ] },
       { title: 'Identity & navigation', items: [
         'Set the organization name, the names of the four views and the hours of an effort day. Changing the hours per day changes only how effort is displayed.'
@@ -308,6 +314,7 @@ const SECTIONS = [
     topics: [
       { title: 'Check, download, install', desktop: true, items: [
         'In **Settings → App & updates** press **Check for updates**, or let the app check at startup.',
+        'A detected update appears in a persistent banner in every view. **View update** opens the update settings; dismissing the banner keeps a shortcut in the top bar. The same version stays dismissed for this session, while a newer version is announced again.',
         '**Download update** downloads the new version and verifies its SHA-256 checksum; **Install and restart** replaces the executable and reopens the app.'
       ] },
       { title: 'Your data is safe', items: [

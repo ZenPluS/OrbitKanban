@@ -32,6 +32,12 @@
   </aside>
   <main>
     <header class="topbar"><div class="topbar-left"><button type="button" class="button subtle topbar-tool" id="sidebar-toggle" aria-controls="sidebar" aria-expanded="true" aria-keyshortcuts="Control+B" aria-label="Sidebar" title="Collapse the sidebar (Ctrl+B)"><svg class="ico ico-line" aria-hidden="true" focusable="false"><use href="#i-menu"/></svg></button><span class="breadcrumb">Workspace</span><span class="separator">/</span><span id="current-tab">Tasks</span></div><div class="topbar-right"><button type="button" class="button subtle topbar-tool global-search-button" id="global-search"><svg class="ico ico-line" aria-hidden="true" focusable="false"><use href="#i-search"/></svg><span id="global-search-label">Search</span><kbd>Ctrl K</kbd></button><button type="button" class="button subtle topbar-tool" id="undo-button" disabled aria-label="Undo (Ctrl+Z)"><svg class="ico ico-line" aria-hidden="true" focusable="false"><use href="#i-undo"/></svg></button><button type="button" class="button subtle topbar-tool" id="redo-button" disabled aria-label="Redo (Ctrl+Y)"><svg class="ico ico-line" aria-hidden="true" focusable="false"><use href="#i-redo"/></svg></button><span id="save-status"><i class="connection-dot"></i> Local archive</span><span class="avatar">ME</span></div></header>
+    <section id="update-notice" hidden aria-label="App update">
+      <span class="update-notice-icon" aria-hidden="true"></span>
+      <div class="update-notice-copy" role="status" aria-live="polite"><strong id="update-notice-title"></strong><span id="update-notice-message"></span></div>
+      <button type="button" class="button small" id="update-notice-open">View update</button>
+      <button type="button" class="icon-button" id="update-notice-dismiss" aria-label="Dismiss update notification"></button>
+    </section>
     <div id="content"></div>
     <footer><span><i class="connection-dot"></i> No cloud. No account. Everything under control.</span><button id="folder-button">Open data folder</button></footer>
   </main>

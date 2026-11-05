@@ -64,6 +64,44 @@ const defaultTaskColumns = (fields = []) => [...TASK_COLUMNS.map(([columnId, vis
 function normalizeTaskColumns(input, fields = [], deleted = []) {
   return columns.normalizeColumns(input, defaultTaskColumns(), fields, deleted);
 }
+function taskEditorFields(settings) {
+  const schema = columns.schemaOf(settings, 'tasks');
+  const order = ['code', 'sequence', 'urgency', 'status', 'releaseDate', 'highlight', 'effort', 'link'];
+  const field = definition => ({
+    id: definition.id, name: definition.name, builtin: Boolean(definition.builtin),
+    section: ['description', 'notes'].includes(definition.id) ? 'text' : 'properties',
+    span: ['richtext', 'url', 'effort'].includes(definition.type) ? 2 : 1, visible: true
+  });
+  const available = id => schema.find(item => item.id === id);
+  const linked = columns.hasColumn(settings, 'tasks', 'code') && columns.hasColumn(settings, 'issues', 'code') &&
+    ['incident', 'problem'].some(id => columns.hasColumn(settings, 'tasks', id) && columns.hasColumn(settings, 'issues', id));
+  return [
+    ...order.filter(available).map(id => field(available(id))),
+    { id: 'hidden', name: 'Hide from the task list', builtin: true, section: 'properties', span: 2, visible: true },
+    ...(linked ? [{ id: 'matches', name: 'Linked issues', builtin: true, section: 'properties', span: 2, visible: true }] : []),
+    ...columns.fieldsOf(settings, 'tasks').map(field),
+    ...['description', 'notes'].filter(available).map(id => field(available(id)))
+  ];
+}
+function validTaskEditorLayout(layout) {
+  return Boolean(layout) && typeof layout === 'object' && !Array.isArray(layout) &&
+    ['split', 'text-first', 'stacked'].includes(layout.mode) && [1, 2].includes(layout.columns) &&
+    Array.isArray(layout.fields) && layout.fields.length <= 100 &&
+    layout.fields.every(field => field && typeof field.id === 'string' && field.id.length > 0 && field.id.length <= 200 &&
+      ['properties', 'text'].includes(field.section) && [1, 2].includes(field.span) && typeof field.visible === 'boolean') &&
+    new Set(layout.fields.map(field => field.id)).size === layout.fields.length;
+}
+function normalizeTaskEditorLayout(settings, input = settings.taskEditorLayout) {
+  assert(input === undefined || validTaskEditorLayout(input), "Invalid task editor layout.");
+  const defaults = taskEditorFields(settings).map(({ id, section, span, visible }) => ({ id, section, span, visible }));
+  const known = new Set(defaults.map(field => field.id)), seen = new Set();
+  const fields = (input?.fields || []).filter(field => known.has(field.id)).map(({ id, section, span, visible }) => {
+    seen.add(id);
+    return { id, section, span, visible };
+  });
+  fields.push(...defaults.filter(field => !seen.has(field.id)));
+  return { mode: input?.mode || 'split', columns: input?.columns || 2, fields };
+}
 function defaultHighlights(language = 'it') {
   const T = text => { const value = term(text, language).trim(); return value && value.length <= HIGHLIGHT_NAME_MAX ? value : text; };
   return [
@@ -147,7 +185,7 @@ function baseData(language = 'it') {
     settings: {
       language, logo: '', portalUrlTemplate: '', tabNames: ["Tasks", "Linked issues", "Milestones", 'Kanban'].map(name => T(name)),
       hoursPerDay: 8, fontSizes: defaultFontSizes(), fontFamily: DEFAULT_FONT_FAMILY, statuses, urgencies, highlights: defaultHighlights(language), tags: [], taskColumns: defaultTaskColumns(), themeId: 'midnight',
-      themes: defaultThemes(), savedViews: [], taskFields: [], issueFields: [], issueColumns: columns.normalizeIssueColumns()
+      themes: defaultThemes(), savedViews: [], taskFields: [], issueFields: [], issueColumns: columns.normalizeIssueColumns(), taskEditorLayout: normalizeTaskEditorLayout({})
     },
     tasks: [],
     issues: []
@@ -300,6 +338,7 @@ function validateData(data) {
   assert(s.logo === undefined || s.logo === '' || (text(s.logo) && s.logo.length <= 1500000 && /^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/.test(s.logo)), "Invalid logo.");
   assert(s.fontSizes === undefined || validFontSizes(s.fontSizes), "Invalid text sizes.");
   assert(s.fontFamily === undefined || validFontFamily(s.fontFamily), "Invalid font.");
+  assert(s.taskEditorLayout === undefined || validTaskEditorLayout(s.taskEditorLayout), "Invalid task editor layout.");
   for (const key of ['statuses', 'urgencies']) {
     assert(Array.isArray(s[key]) && uniqueIds(s[key]), `The ${key} list is invalid or empty.`);
     assert(s[key].every(x => text(x.id) && x.id && text(x.name) && x.name.trim() && color(x.color)), `Invalid ${key} values.`);
@@ -376,6 +415,7 @@ function validateArchive(archive) {
     organization.data.settings.issueFields ??= [];
     for (const kind of ['tasks', 'issues']) for (const field of columns.fieldsOf(organization.data.settings, kind)) field.options = columns.choices(field);
     organization.data.settings.issueColumns = columns.listColumns(organization.data.settings, 'issues');
+    organization.data.settings.taskEditorLayout = normalizeTaskEditorLayout(organization.data.settings);
     normalizeThemes(organization.data.settings);
     normalizeHighlights(organization.data);
     normalizeTags(organization.data);
@@ -441,7 +481,7 @@ function organizationExport(organization, kind, { appVersion = '', exportedAt = 
       taskColumns: columns.listColumns(settings, 'tasks'), savedViews: structuredClone(settings.savedViews || []),
       deletedTaskColumns: [...columns.deletedOf(settings, 'tasks')], deletedIssueColumns: [...columns.deletedOf(settings, 'issues')],
       taskFields: structuredClone(settings.taskFields || []), issueFields: structuredClone(settings.issueFields || []),
-      issueColumns: columns.listColumns(settings, 'issues')
+      issueColumns: columns.listColumns(settings, 'issues'), taskEditorLayout: normalizeTaskEditorLayout(settings)
     };
   }
   if (parts.includes('data')) {
@@ -506,6 +546,7 @@ function parseOrganizationFile(input) {
       urgencies: fileRecords(source.urgencies, RECORD_KEYS.urgency, "Invalid or empty urgency list.")
     };
     if (source.fontFamily !== undefined) settings.fontFamily = source.fontFamily;
+    if (source.taskEditorLayout !== undefined) settings.taskEditorLayout = structuredClone(source.taskEditorLayout);
     if (source.fontSizes !== undefined) {
       assert(source.fontSizes && typeof source.fontSizes === 'object' && !Array.isArray(source.fontSizes), "Invalid text sizes.");
       settings.fontSizes = Object.fromEntries(FONT_SIZE_PARTS.map(({ id }) => [id, source.fontSizes[id] ?? 100]));
@@ -598,6 +639,9 @@ function applyOrganizationImport(current, file, options = {}) {
     for (const key of ['language', 'portalUrlTemplate', 'tabNames', 'hoursPerDay', 'statuses', 'urgencies']) settings[key] = incoming[key];
     if (incoming.fontSizes) settings.fontSizes = incoming.fontSizes;
     if (incoming.fontFamily !== undefined) settings.fontFamily = incoming.fontFamily;
+    if (incoming.taskEditorLayout !== undefined) settings.taskEditorLayout = normalizeTaskEditorLayout(settings, {
+      ...incoming.taskEditorLayout, fields: remapColumns(incoming.taskEditorLayout.fields, maps.tasks.mapping)
+    });
     if (incoming.highlights) {
       const highlight = colorOptionRemapper(settings.highlights || [], incoming.highlights);
       for (const task of next.tasks) task.highlightId = highlight(task.highlightId);
@@ -981,7 +1025,8 @@ const core = {
   normalizeUrl, isWebUrl, validPortalTemplate, hasPortalPlaceholder, portalUrl,
   ORGANIZATION_FILE_KINDS, organizationExport, organizationFileName, situationFileName, parseOrganizationFile, applyOrganizationImport, importedOrganizationData, uniqueOrganizationName,
   FONT_SIZE_PARTS, FONT_SIZE_STEP, FONT_FAMILIES, DEFAULT_FONT_FAMILY, validFontFamily, defaultFontSizes, clampFontSize, defaultThemes,
-  HIGHLIGHT_LIMIT, defaultHighlights, TASK_COLUMN_IDS, defaultTaskColumns, normalizeTaskColumns, TAG_LIMIT, TAG_NAME_MAX, nextReleaseDate, reorderTaskSequences
+  HIGHLIGHT_LIMIT, defaultHighlights, TASK_COLUMN_IDS, defaultTaskColumns, normalizeTaskColumns, TAG_LIMIT, TAG_NAME_MAX, nextReleaseDate, reorderTaskSequences,
+  taskEditorFields, normalizeTaskEditorLayout, validTaskEditorLayout
 };
 if (typeof module !== 'undefined') module.exports = core;
 else window.OrbitaCore = core;

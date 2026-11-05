@@ -4,7 +4,7 @@
 
 | | |
 | --- | --- |
-| **Current version** | 2.47.1 |
+| **Current version** | 2.50.0 |
 | **Platform** | Windows 10 / 11, 64-bit |
 | **Distribution** | Single portable executable, `OrbitKanban-Portable.exe` |
 | **Network** | Not required. Used only for optional update checks against GitHub |
@@ -40,6 +40,7 @@
   - [Column labels](#column-labels)
 - [Portal links](#portal-links)
 - [Settings](#settings)
+  - [Task editor layout](#task-editor-layout)
 - [Appearance](#appearance)
   - [Themes](#themes)
   - [Color picker](#color-picker)
@@ -72,11 +73,12 @@
 - **Multiple organizations**, each with its own data, settings, logo, theme and language.
 - **Flexible lists**: multi-level sorting, drag-and-drop ordering, per-column filters, saved views, row highlights, tags, duplicate detection, bulk edit, and undo/redo.
 - **Custom columns** of nine types; every built-in column can also be removed.
+- **Configurable task editor**: arrange, resize, reorder and hide fields per organization, with a layout preview.
 - **40 built-in themes**, custom themes, and palettes generated from an image or logo with WCAG AA contrast.
 - **Imports and exports**: CSV import with validation, Excel workbooks, and per-organization JSON exports.
 - **Browser access** from the same PC, with live sync across windows.
 - **Built-in guide** covering every feature, opened with `F1`.
-- **Verified updates** from GitHub releases, with automatic rollback if an install fails.
+- **Verified updates** from GitHub releases, with persistent in-app notifications and automatic rollback if an install fails.
 - **Translatable**: English and Italian are included, and more languages can be added with a JSON file.
 
 ## Getting started
@@ -337,6 +339,20 @@ Changes take effect only with **Save settings**:
 
 Leaving settings without saving restores the previous configuration. Themes, fonts and text sizes are previewed live.
 
+### Task editor layout
+
+**Settings → Appearance → Task editor layout** controls the form used to create and edit tasks, independently of the list columns:
+
+- Place properties on the left, text panels on the left, or stack the sections vertically.
+- Choose one or two property columns.
+- Drag each field's handle, or use its arrow keys, to reorder fields within their sections.
+- Move built-in or custom editor fields between sections, choose one-column or full-width properties, and show or hide individual fields.
+- A schematic preview reflects the draft. **Save settings** applies it; **Discard changes** keeps the saved layout, and **Restore default layout** resets the draft.
+
+Hidden fields keep their values when a task is saved, including rich text and custom values. New tasks still initialize hidden fields normally. Removed columns disappear from the layout; new columns are included automatically. The editor adapts to narrow windows and keeps its save/cancel actions accessible.
+
+Layouts are stored per organization in the portable workspace and included in settings exports and backups. Importing settings remaps custom field references by the existing column matching rules. Older archives receive the original two-panel layout; importing older settings without a layout preserves the current preference.
+
 ## Appearance
 
 ### Themes
@@ -491,6 +507,7 @@ While the app is running, the same interface is available in a browser **on the 
 
 - **Check for updates at startup** is on by default. The preference is stored in `data/updates/settings.json` and applies to the whole portable copy.
 - **Check for updates** only checks and never downloads.
+- When a newer version is detected, a persistent banner appears in every desktop view. **View update** opens **App & updates**, protecting unsaved settings. Dismissing it leaves an update badge in the top bar; the same version stays dismissed for the session, while a newer version is announced again. Downloading and installation are never triggered just by opening the notification.
 - **Download update** shows progress and verifies the size and SHA-256 digest published by GitHub. It accepts only the portable executable of this repository and HTTPS redirects to GitHub download hosts. Older versions, pre-releases and unverifiable packages are never installed.
 - **Install and restart** asks for confirmation and saves a full copy of the workspace. A small PowerShell helper then waits for the app to close, re-checks the hash, replaces the executable atomically and restarts the app. No administrator rights are needed.
 - If the new version cannot start, the helper restores the previous executable and reports the error. The downloaded file, `previous.exe`, `workspace-before-update.json` and the install log stay in a per-update folder under `data/updates`. Delete those folders once the new version works; keep `settings.json`.
@@ -563,7 +580,7 @@ All source code, tests, scripts and documentation are in English. Interface text
 | `main.js`, `preload.js`, `window-chrome.js` | Electron main process, secure bridge and custom title bar |
 | `portable.js`, `splash.js`, `splash.html`, `splash-preload.js` | Portable paths, single instance, taskbar identity and splash screen |
 | `renderer.js`, `index.html`, `styles.css` | User interface |
-| `core.js` | Data model, defaults, validation and migrations |
+| `core.js` | Data model, defaults, validation, migrations and portable task editor layout |
 | `columns.js`, `csv.js`, `xlsx.js` | Column schemas and filters, CSV parsing, Excel writer (no external dependencies) |
 | `guide.js` | In-app guide content |
 | `icons.js`, `app-logo.svg`, `app-icon.js` | Icon set, app logo and Windows icon generation |
@@ -575,7 +592,7 @@ All source code, tests, scripts and documentation are in English. Interface text
 | `build-and-push.ps1`, `github-release.js` | Build, test, commit, push and GitHub release pipeline |
 | `smoke.js`, `smoke-web.js`, `smoke-windows.js` | End-to-end smoke tests |
 | `fonts/` | Bundled WOFF2 fonts, sources and licenses |
-| `*.test.js` | Unit tests |
+| `*.test.js` | Unit tests, including layout validation and import/export in `task-layout.test.js` |
 
 ### Build, test and release
 
@@ -588,7 +605,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\build-and-push.ps1 -Message "Des
 The script:
 
 1. Checks the repository: active branch, no merge or rebase in progress, not behind the remote, and no unwanted files (`data`, `dist`, `node_modules`, executables, archives, or files over 5 MB).
-2. Runs `npm run check`, `npm test` and the smoke test from source.
+2. Runs `npm run check`, `npm test` and the smoke test from source, including task layout persistence, hidden-value preservation and update notification behavior.
 3. Builds the portable executable into `dist-staging\<version>` and verifies its version and embedded icon.
 4. Smoke-tests the packaged app and the portable launcher in isolated temporary folders.
 5. Copies the tested executable to `dist\OrbitKanban-Portable.exe`, or to `dist\OrbitKanban-Portable-<version>.exe` when the former is running.
@@ -610,12 +627,15 @@ Tags are never moved. Bump the version before releasing new sources:
 npm version minor --no-git-tag-version --ignore-scripts
 ```
 
+For a specifically numbered release, use `npm version 2.50.0 --no-git-tag-version --ignore-scripts` instead. To update the local portable copy too, run the pipeline **without `-NoDeliver`** and close the app first. The script replaces only the executable, not `dist/data`.
+
 The script refuses to reuse a tagged version for different sources. If a build or test fails, nothing is committed or pushed.
 
 ## Release history
 
 | Version | Changes |
 | --- | --- |
+| **2.50.0** | Per-organization task editor layout settings with preview, field ordering and visibility; persistent update notifications and top-bar shortcut |
 | **2.47.1** | Smooth, reversible sidebar animation with label fades and support for reduced motion |
 | **2.47.0** | Collapsible sidebar: **☰** or `Ctrl+B` folds it into a column of icons with tooltips and counters |
 | **2.46.0** | Searchable in-app guide covering every feature (sidebar **Guide**, `F1`); README rewritten in English |

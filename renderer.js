@@ -6,6 +6,7 @@ const uid = () => crypto.randomUUID();
 const { reorderTaskSequences, indexIssues } = window.OrbitaCore;
 const { FONT_FAMILIES, DEFAULT_FONT_FAMILY } = window.OrbitaCore;
 const { hexToHsv, hsvToHex } = window.OrbitaCore;
+const { taskEditorFields, normalizeTaskEditorLayout } = window.OrbitaCore;
 const CustomColumns = window.OrbitaColumns, Csv = window.OrbitaCsv;
 const hasColumn = (id, kind = 'tasks', settings = data.settings) => CustomColumns.hasColumn(settings, kind, id);
 const configuredColumns = (kind = 'tasks', settings = data.settings, input) => CustomColumns.listColumns(settings, kind, input);
@@ -28,6 +29,7 @@ let activeSavedViewId = '', backupRequest = 0;
 let languageInfo = { folder: '', template: '', languages: [], errors: [] };
 let milestoneDay = '';
 let updateState = { supported: false, phase: 'idle', autoCheck: true, version: '', percent: 0, error: '', releaseUrl: 'https://github.com/ZenPluS/OrbitKanban/releases' }, updateSubscribed = false;
+const dismissedUpdateVersions = new Set();
 // Tasks ticked in the list for bulk edit or export; kept across filters and dropped when they no longer exist.
 const selectedTasks = new Set();
 let selectionAnchor = '';
@@ -696,6 +698,7 @@ function renderChrome() {
   $('.version').innerHTML = `${browserMode() ? 'BROWSER' : 'PORTABLE'} EDITION <span id="app-version">${esc(appVersion ? `v${appVersion}` : '')}</span>`;
   applySidebar();
   updateHistoryButtons();
+  drawUpdateNotice();
 }
 function renderConnectionStatus() {
   const status = $('#save-status');
@@ -802,6 +805,7 @@ const settingsTabs = [
   { id: 'organizations', group: "Organization", icon: 'building', label: "Organizations", panel: 'organizations-panel', keys: [] },
   { id: 'themes', group: "Appearance", icon: 'palette', label: "Themes & atmosphere", panel: 'themes-panel', keys: ['themes', 'themeId'] },
   { id: 'fonts', group: "Appearance", icon: 'font', label: "Font and text size", panel: 'font-size-panel', keys: ['fontSizes', 'fontFamily'] },
+  { id: 'task-layout', group: "Appearance", icon: 'columns', label: "Task editor layout", panel: 'task-layout-panel', keys: ['taskEditorLayout'] },
   { id: 'columns', group: "Workflow", icon: 'columns', label: "List columns", panel: 'columns-panel', keys: ['taskColumns'] },
   { id: 'custom-columns', group: "Workflow", icon: 'column-plus', label: "Column management", panel: 'custom-columns-panel', keys: ['taskFields', 'issueFields', 'taskColumns', 'issueColumns', 'deletedTaskColumns', 'deletedIssueColumns'] },
   { id: 'transfer', group: "Data & access", icon: 'transfer', label: "Export and import organization", panel: 'transfer-panel', keys: [] },
@@ -824,7 +828,7 @@ const allSettingsTabs = () => [
 // Ordered: the first matching pattern decides which settings tab holds the field to fix.
 // Validation messages are English source text, except those the store localizes in the organization language, so the patterns also list the Italian wording.
 const settingsErrorTabs = [[/custom columns?|deleted columns|columns changed|colonne eliminate|colonne modificate|column options|column names and identifiers|colonn[ae] personalizzat|opzioni della colonna|nomi e identificativi delle colonne/i, 'custom-columns'], [/\btags?\b/i, 'tags'], [/evidenziatori|highlighter/i, 'highlights'], [/colonne della lista|list columns/i, 'columns'], [/link portale|portal link/i, 'portal'], [/dimensioni del testo|text sizes|\bfont\b/i, 'fonts'], [/\b(?:temi|tema|themes?)\b/i, 'themes'], [/urgen/i, 'urgencies'], [/\b(?:stati|status|statuses)\b/i, 'statuses'], [/\b(?:lingua|language)\b/i, 'languages'], [/organizzazione|organization|\btab\b|ore per giorno|hours per day|logo/i, 'identity']];
-const settingsErrorTab = message => settingsErrorTabs.find(([pattern]) => pattern.test(String(message)))?.[1];
+const settingsErrorTab = message => /task editor layout|layout della scheda attività/i.test(String(message)) ? 'task-layout' : settingsErrorTabs.find(([pattern]) => pattern.test(String(message)))?.[1];
 function settingsNav() {
   const tabs = allSettingsTabs(), groups = [...new Set(tabs.map(tab => tab.group))];
   return `<nav class="settings-nav" aria-label="${esc(t("Settings sections"))}">${groups.map((group, index) => `<div class="settings-nav-group" role="group" aria-labelledby="settings-group-${index}"><span class="settings-nav-label" id="settings-group-${index}">${esc(t(group))}</span>${tabs.filter(tab => tab.group === group).map(tab => `<button type="button" class="settings-tab" id="settings-tab-${tab.id}" data-settings-tab="${tab.id}" aria-controls="${tab.panel}"><span class="settings-tab-icon" aria-hidden="true">${ico(tab.icon, tab.family)}</span><span class="settings-tab-text">${esc(tab.custom ? tab.label : t(tab.label))}</span><span class="settings-tab-dot" role="img" aria-label="${esc(t("Unsaved changes"))}" title="${esc(t("Unsaved changes"))}" hidden></span></button>`).join('')}</div>`).join('')}</nav>`;
@@ -897,6 +901,7 @@ async function saveSettings() {
     }
     settings.taskColumns = configuredColumns('tasks', settings);
     settings.issueColumns = configuredColumns('issues', settings);
+    settings.taskEditorLayout = normalizeTaskEditorLayout(settings);
     const organizationName = $('#organization-name').value.trim();
     if (!organizationName || organizationName.length > 100) throw new Error(t("Invalid organization name."));
     await commit(next => {
@@ -2094,6 +2099,42 @@ function pruneColumnEditors(form, kind) {
     if (field.type === 'richtext') form.querySelector(`#${field.id}-editor`)?.closest('.field')?.remove();
   }
 }
+function applyTaskEditorLayout(form) {
+  const layout = normalizeTaskEditorLayout(data.settings), body = form.querySelector('.task-edit-layout');
+  const properties = form.querySelector('.task-edit-fields'), text = form.querySelector('.task-edit-text');
+  const elements = new Map();
+  for (const field of CustomColumns.schemaOf(data.settings, 'tasks')) {
+    const element = field.type === 'richtext' ? document.getElementById(field.builtin ? `${field.id}-editor` : `editor-${field.id}`) :
+      field.property ? form.elements[field.property] : form.querySelector(`[name="${field.id}"], [data-choice-field="${field.id}"]`);
+    if (element?.closest) elements.set(field.id, element.closest('.field'));
+  }
+  const effort = form.elements.days?.closest('.field');
+  if (effort) {
+    const group = document.createElement('div');
+    group.className = 'form-grid task-effort-fields';
+    group.append(effort, form.elements.hours.closest('.field'));
+    elements.set('effort', group);
+  }
+  elements.set('hidden', form.elements.hidden.closest('.field'));
+  elements.set('matches', form.querySelector('#match-preview'));
+  for (const field of layout.fields) {
+    const element = elements.get(field.id);
+    if (!element) continue;
+    element.dataset.taskField = field.id;
+    element.hidden = !field.visible;
+    element.classList.toggle('full', field.section === 'properties' && field.span === 2);
+    (field.section === 'text' ? text : properties).append(element);
+  }
+  form.querySelector('.custom-edit-fields')?.remove();
+  body.dataset.mode = layout.mode;
+  properties.style.gridTemplateColumns = `repeat(${layout.columns}, minmax(0, 1fr))`;
+  properties.hidden = !layout.fields.some(field => field.visible && field.section === 'properties');
+  text.hidden = !layout.fields.some(field => field.visible && field.section === 'text');
+  text.style.setProperty('--task-text-count', String(layout.fields.filter(field => field.visible && field.section === 'text').length || 1));
+  if (layout.mode === 'text-first') body.prepend(text);
+  body.classList.toggle('single-section', properties.hidden || text.hidden);
+  if (properties.hidden && text.hidden) body.insertAdjacentHTML('beforeend', `<p class="muted">${esc(t("All editor fields are hidden. Change the task editor layout in Settings."))}</p>`);
+}
 function taskDialog(existing) {
   const t = existing || {
     id: uid(), code: '', sequence: Math.max(0, ...data.tasks.map(t => t.sequence)) + 1, url: '', description: '',
@@ -2120,8 +2161,8 @@ function taskDialog(existing) {
     </div></div><div class="modal-actions">${existing ? ui`<button type="button" class="button danger" id="delete-task">Delete</button>` : ''}<span class="spacer"></span><button type="button" class="button" data-close>Cancel</button><button type="submit" class="button primary">Save task</button></div></form>`);
   const form = $('#task-form');
   pruneColumnEditors(form, 'tasks');
-  if (!$('.task-edit-text .field')) $('.task-edit-text').remove();
   if (!hasColumn('code') || !hasColumn('code', 'issues') || !['incident', 'problem'].some(id => hasColumn(id) && hasColumn(id, 'issues'))) $('#match-preview').remove();
+  applyTaskEditorLayout(form);
   const updateMatches = () => {
     if (!$('#match-preview')) return;
     const code = form.elements.code?.value || '', links = matchIssues({ code }, data.issues);
@@ -2881,6 +2922,8 @@ function wireCustomColumns() {
   const syncColumns = () => {
     settingsDraft.taskColumns = configuredColumns('tasks', settingsDraft);
     settingsDraft.issueColumns = configuredColumns('issues', settingsDraft);
+    settingsDraft.taskEditorLayout = normalizeTaskEditorLayout(settingsDraft);
+    drawTaskLayoutSettings();
     $('#hours-per-day').closest('.field').hidden = !['tasks', 'issues'].some(kind => CustomColumns.schemaOf(settingsDraft, kind).some(field => field.type === 'effort'));
     columnEditor($('#columns-editor'), settingsDraft.taskColumns, 'tasks', settingsDraft);
     columnEditor($('#issue-columns-editor'), settingsDraft.issueColumns, 'issues', settingsDraft);
@@ -2927,6 +2970,52 @@ function wireCustomColumns() {
   }
   syncColumns();
 }
+function taskLayoutPanel() {
+  return ui`<section class="panel settings-section full" id="task-layout-panel"><h2>Task editor layout</h2><p class="section-description">Arrange the fields in the task editor for this organization. This also applies to new tasks. Hidden fields keep their values; list columns are not changed.</p><div class="form-grid"><label class="field">Arrangement<select id="task-layout-mode"><option value="split">Properties on the left</option><option value="text-first">Text panels on the left</option><option value="stacked">Stacked sections</option></select></label><label class="field">Property columns<select id="task-layout-columns"><option value="1">One column</option><option value="2">Two columns</option></select></label></div><div class="task-layout-designer"><div><h3>Fields and order</h3><p class="muted">Drag the handle or use its arrow keys. Choose a section, width and visibility for each field.</p><div id="task-layout-fields"></div><button type="button" class="button" id="reset-task-layout">${ico('reset')}Restore default layout</button></div><section class="task-layout-preview-panel" aria-labelledby="task-layout-preview-title"><h3 id="task-layout-preview-title">Layout preview</h3><p class="muted">Schematic preview. The editor adapts to the window size.</p><div id="task-layout-preview"></div></section></div></section>`;
+}
+function drawTaskLayoutSettings() {
+  if (!$('#task-layout-fields')) return;
+  const layout = settingsDraft.taskEditorLayout = normalizeTaskEditorLayout(settingsDraft);
+  const definitions = new Map(taskEditorFields(settingsDraft).map(field => [field.id, field]));
+  const nameOf = field => { const definition = definitions.get(field.id); return definition.builtin ? term(definition.name) : definition.name; };
+  $('#task-layout-mode').value = layout.mode;
+  $('#task-layout-columns').value = String(layout.columns);
+  const preview = () => {
+    const sections = layout.mode === 'text-first' ? ['text', 'properties'] : ['properties', 'text'];
+    const target = $('#task-layout-preview');
+    target.dataset.mode = layout.mode;
+    target.innerHTML = sections.map(section => {
+      const fields = layout.fields.filter(field => field.visible && field.section === section);
+      return `<div class="task-layout-preview-section" ${fields.length ? '' : 'hidden'}><h4>${esc(t(section === 'properties' ? "Properties" : "Text panels"))}</h4><div class="task-layout-preview-grid" style="grid-template-columns:repeat(${section === 'text' ? 1 : layout.columns},minmax(0,1fr))">${fields.map(field => `<div class="task-layout-preview-field ${field.span === 2 ? 'full' : ''}">${esc(nameOf(field))}</div>`).join('')}</div></div>`;
+    }).join('');
+    target.classList.toggle('single-section', !layout.fields.some(field => field.visible && field.section === 'text') || !layout.fields.some(field => field.visible && field.section === 'properties'));
+  };
+  const drawRows = () => {
+    const container = $('#task-layout-fields');
+    container.innerHTML = layout.fields.map(field => {
+      const name = nameOf(field);
+      return `<div class="task-layout-row" data-layout-field="${esc(field.id)}">${dragHandle(name)}<label class="task-layout-visibility"><input type="checkbox" data-layout-visible ${field.visible ? 'checked' : ''}><span>${esc(name)}</span></label><label class="field">${esc(t("Section"))}<select data-layout-section aria-label="${esc(name + ': ' + t("Section"))}"><option value="properties" ${field.section === 'properties' ? 'selected' : ''}>${esc(t("Properties"))}</option><option value="text" ${field.section === 'text' ? 'selected' : ''}>${esc(t("Text panels"))}</option></select></label><label class="field">${esc(t("Width"))}<select data-layout-span ${field.section === 'text' || layout.columns === 1 ? 'disabled' : ''} aria-label="${esc(name + ': ' + t("Width"))}"><option value="1" ${field.span === 1 ? 'selected' : ''}>${esc(t("One column"))}</option><option value="2" ${field.span === 2 ? 'selected' : ''}>${esc(t("Full width"))}</option></select></label></div>`;
+    }).join('');
+    for (const row of container.querySelectorAll('[data-layout-field]')) {
+      const field = layout.fields.find(field => field.id === row.dataset.layoutField);
+      row.querySelector('[data-layout-visible]').onchange = event => { field.visible = event.target.checked; preview(); refreshSettingsState(); };
+      row.querySelector('[data-layout-section]').onchange = event => {
+        field.section = event.target.value;
+        row.querySelector('[data-layout-span]').disabled = field.section === 'text' || layout.columns === 1;
+        preview(); refreshSettingsState();
+      };
+      row.querySelector('[data-layout-span]').onchange = event => { field.span = Number(event.target.value); preview(); refreshSettingsState(); };
+    }
+    sortable(container, '.task-layout-row', (from, to) => { layout.fields.splice(to, 0, ...layout.fields.splice(from, 1)); drawRows(); preview(); }, true);
+  };
+  $('#task-layout-mode').onchange = event => { layout.mode = event.target.value; preview(); refreshSettingsState(); };
+  $('#task-layout-columns').onchange = event => { layout.columns = Number(event.target.value); drawRows(); preview(); refreshSettingsState(); };
+  $('#reset-task-layout').onclick = () => {
+    settingsDraft.taskEditorLayout = normalizeTaskEditorLayout(settingsDraft, { mode: 'split', columns: 2, fields: [] });
+    drawTaskLayoutSettings(); refreshSettingsState();
+  };
+  drawRows(); preview();
+}
 function updatesPanel() {
   return ui`<section class="panel settings-section full" id="updates-panel"><h2>App & updates</h2><p class="section-description">Updates and shortcuts apply to this portable copy, not to one organization. GitHub receives no workspace data. Downloading and installing always require your action.</p><p>Installed version: <strong>${esc(appVersion)}</strong></p><p id="update-status" role="status" aria-live="polite"></p><progress id="update-progress" max="100" hidden aria-label="Update download progress"></progress><label class="field checkbox-field"><input type="checkbox" id="update-auto"><span>Check for updates at startup</span></label><div class="storage-actions"><button type="button" class="button" id="update-check">Check for updates</button><button type="button" class="button" id="update-download" hidden>Download update</button><button type="button" class="button primary" id="update-install" hidden>Install and restart</button><button type="button" class="button" id="update-release">View releases</button></div><hr><h3>Windows shortcut</h3><p class="section-description">Create a shortcut to the portable launcher, not the temporary app. Remove old broken pins, then pin the new shortcut or the running app once. Moving the portable folder requires recreating its shortcut.</p><button type="button" class="button" id="create-shortcut">Create desktop shortcut</button></section>`;
 }
@@ -2951,11 +3040,44 @@ function drawUpdateState() {
   $('#update-install').disabled = $('#update-install').hidden;
   $('#create-shortcut').disabled = browserMode() || !window.workspace?.createShortcut || busy;
 }
+function drawUpdateNotice() {
+  const notice = $('#update-notice');
+  let badge = $('#update-badge');
+  const openUpdates = action(() => withSavedSettings(() => { view = 4; settingsTab = 'updates'; render(); $('#update-check').focus(); }));
+  if (!badge) {
+    badge = document.createElement('button');
+    badge.id = 'update-badge';
+    badge.type = 'button';
+    badge.className = 'button subtle topbar-tool';
+    badge.innerHTML = `${ico('reset')}<span class="update-badge-dot" aria-hidden="true"></span>`;
+    $('.topbar-right').prepend(badge);
+  }
+  const available = !browserMode() && updateState.supported && Boolean(updateState.version) && !['idle', 'latest', 'installing'].includes(updateState.phase);
+  const title = fillText("Update available: v{0}", updateState.version);
+  badge.hidden = !available;
+  badge.title = title;
+  badge.setAttribute('aria-label', title);
+  badge.onclick = openUpdates;
+  notice.hidden = !available || dismissedUpdateVersions.has(updateState.version);
+  notice.setAttribute('aria-label', t("App update"));
+  const message = t(updateState.phase === 'ready' ? "Update verified and ready to install." : updateState.phase === 'downloading' ? "Downloading update…" : updateState.phase === 'error' ? "Update failed. Open App & updates for details." : "Open App & updates to download it. Installation always requires your confirmation.");
+  if ($('#update-notice-title').textContent !== title) $('#update-notice-title').textContent = title;
+  if ($('#update-notice-message').textContent !== message) $('#update-notice-message').textContent = message;
+  $('.update-notice-icon').innerHTML = ico('reset');
+  $('#update-notice-open').textContent = t("View update");
+  $('#update-notice-open').onclick = openUpdates;
+  $('#update-notice-dismiss').innerHTML = ico('close');
+  $('#update-notice-dismiss').setAttribute('aria-label', t("Dismiss update notification"));
+  $('#update-notice-dismiss').onclick = () => {
+    dismissedUpdateVersions.add(updateState.version);
+    notice.hidden = true;
+    badge.focus({ preventScroll: true });
+  };
+}
 function adoptUpdateState(state) {
-  const announce = state.phase === 'available' && (updateState.phase !== 'available' || state.version !== updateState.version);
   updateState = state;
   drawUpdateState();
-  if (announce) notify("A new version is available.", false, `v${state.version} — ${t("App & updates")}`);
+  drawUpdateNotice();
 }
 function wireUpdates() {
   drawUpdateState();
@@ -2989,7 +3111,7 @@ function renderSettings() {
     <div class="full logo-settings"><h3>Organization logo</h3><div id="logo-preview"></div><label class="field">Upload logo and generate theme<input id="logo-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp"></label><p class="muted">The logo and theme belong only to this organization and travel with the archive.</p><button class="button small" id="remove-logo" type="button">Remove logo</button><output id="logo-result" aria-live="polite"></output></div></div></section>
     <section class="panel settings-section full" id="languages-panel"><h2>Language & translations</h2><p class="section-description">Choose the language of this organization. Translations are plain JSON files: you can add more without changing the app.</p><div class="form-grid"><label class="field">Interface language<select id="language">${languageOptions(data.settings.language)}</select><small>Language is saved per organization. Custom names and content are not translated.</small></label><p class="language-missing" id="language-missing" role="status" hidden>This language is not installed on this PC: texts are shown in English.</p></div><div id="languages-details"></div></section>
     <section class="panel settings-section" id="themes-panel"><div class="themes-heading"><div><h2>Themes & atmosphere</h2><p class="section-description">Choose a palette or create your own.</p></div><button class="button" id="add-theme">${ico('plus')}Create theme</button></div><div class="themes-layout"><div class="theme-browser"><div class="theme-toolbar"><label class="theme-search"><span aria-hidden="true">${ico('search')}</span><input type="search" id="theme-search" placeholder="Search themes…" aria-label="Search themes" autocomplete="off" spellcheck="false" value="${esc(themeQuery)}"></label><span class="theme-count" id="theme-count" aria-live="polite"></span></div><div class="theme-gallery" id="theme-list"></div></div><div class="theme-editor-panel" id="theme-editor"></div></div></section>${fontSizePanel()}
-    <section class="panel settings-section" id="columns-panel"><h2>List columns</h2><p class="section-description">Choose which columns the task list shows and in what order. Hiding a column does not delete any data. You can also do this with the “Columns” button above the table.</p><div id="columns-editor"></div><button type="button" class="button" id="reset-columns">${ico('reset')}Restore default columns</button></section>${customColumnsPanel()}
+    ${taskLayoutPanel()}<section class="panel settings-section" id="columns-panel"><h2>List columns</h2><p class="section-description">Choose which columns the task list shows and in what order. Hiding a column does not delete any data. You can also do this with the “Columns” button above the table.</p><div id="columns-editor"></div><button type="button" class="button" id="reset-columns">${ico('reset')}Restore default columns</button></section>${customColumnsPanel()}
     <section class="panel settings-section full" id="browser-panel"><h2>Browser access</h2><p class="section-description">While OrbitKanban is open you can also work from a browser on this PC, with different organizations in separate tabs. Changes sync in real time between the app and the tabs.</p><code class="data-path" id="browser-url">${esc(browserUrl || t("Not available"))}</code><div class="storage-actions"><button class="button" id="browser-open" ${browserUrl ? '' : 'disabled'}>${ico('globe')}${t(browserMode() ? "Open in new tab" : "Open in browser")}</button><button class="button" id="browser-copy" ${browserUrl ? '' : 'disabled'}>${t(browserMode() ? "Copy address" : "Copy access link")}</button></div><p class="muted">${t(browserMode() ? "You are using OrbitKanban from the browser: the app on the PC must stay open. Each tab can show a different organization." : "Reachable only from this computer (127.0.0.1) and protected by a personal key: the access link contains the key, do not share it. Closing the app disconnects the browser tabs.")}</p></section>
     ${transferPanel()}<section class="panel settings-section full" id="storage-panel"><div class="storage-heading"><div><h2>Data that travels with you</h2><p class="section-description">Local JSON archive with an automatic copy of the previous save.</p></div><span class="readonly-badge">100% LOCAL</span></div><code class="data-path">${esc(dataFolder)}</code><div class="storage-actions"><button class="button" id="export-data">${ico('export')}Export backup</button><button class="button" id="import-data">${ico('import')}Import backup</button><button class="button" id="open-folder">Open data folder</button><span class="spacer"></span><button class="button danger" id="clear-data">Clear tasks and issues</button></div><div class="backup-section"><div class="storage-heading"><div><h3>Automatic backups</h3><p class="section-description">One copy per day, kept in the data folder for the last 14 days. You can restore one without losing the current archive: the standard .bak backup is created first.</p></div><button type="button" class="button small" id="refresh-backups">Refresh backups</button></div><p id="backup-status" class="muted" role="status" aria-live="polite"></p><div id="backup-list"></div></div><p class="muted">To share the app, close it and copy the executable together with the data folder. Do not run copies using the same data folder at the same time.</p></section></div></div></div>`;
       $('.settings-panels').insertAdjacentHTML('beforeend', updatesPanel());
@@ -3486,6 +3608,52 @@ window.runSmokeTests = async () => {
   openModal('<p>OrbitKanban</p>');
   check($('#modal').clientWidth < editWidth, 'Other dialogs keep a compact layout');
   $('#modal').close();
+  {
+    const baseline = structuredClone(data), taskId = data.tasks.find(task => !task.hidden).id;
+    await commit(next => {
+      next.settings.taskFields.push({ id: 'custom-layout-value', name: 'Layout value', type: 'text', options: [] }, { id: 'custom-layout-text', name: 'Layout text', type: 'richtext', options: [] });
+      next.tasks.find(task => task.id === taskId).customFields = { 'custom-layout-value': 'Keep this value', 'custom-layout-text': '<p>Keep this text</p>' };
+    });
+    view = 4; render(); showSettingsTab('task-layout');
+    check(!$('#task-layout-panel').hidden && $('#task-layout-fields').children.length === taskEditorFields(data.settings).length && !settingsChanged(), 'Task layout settings list all available editor fields without creating unsaved changes');
+    const setControl = (selector, value) => {
+      const input = $(selector);
+      if (input.type === 'checkbox') input.checked = value; else input.value = value;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+    setControl('#task-layout-mode', 'text-first');
+    setControl('#task-layout-columns', '1');
+    for (const id of ['code', 'sequence', 'description', 'custom-layout-value', 'custom-layout-text']) setControl(`[data-layout-field="${id}"] [data-layout-visible]`, false);
+    setControl('[data-layout-field="urgency"] [data-layout-section]', 'text');
+    const handle = $('[data-layout-field="sequence"] [data-drag-handle]');
+    handle.focus(); handle.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }));
+    check(settingsDraft.taskEditorLayout.fields[0].id === 'sequence' && $('#task-layout-preview').dataset.mode === 'text-first' && !$('#settings-tab-task-layout .settings-tab-dot').hidden && settingsChanged(), 'Task layout controls, keyboard ordering and preview update the unsaved settings draft');
+    await saveSettings();
+    const configured = structuredClone(data.settings.taskEditorLayout), savedTask = structuredClone(data.tasks.find(task => task.id === taskId));
+    check(JSON.stringify((await workspaceApi.load()).data.settings.taskEditorLayout) === JSON.stringify(configured) && JSON.stringify(data.settings.taskColumns) === JSON.stringify(baseline.settings.taskColumns.concat([{ id: 'custom-layout-value', visible: true }, { id: 'custom-layout-text', visible: true }])), 'Task layout persists without reordering or hiding list columns');
+    taskDialog(savedTask);
+    const form = $('#task-form'), properties = $('.task-edit-fields'), text = $('.task-edit-text');
+    check($('.task-edit-layout').firstElementChild === text && text.getBoundingClientRect().right < properties.getBoundingClientRect().left && text.contains(form.elements.urgencyId) && getComputedStyle(properties).gridTemplateColumns.split(' ').length === 1, 'Saved task layout controls section placement, field placement and column count');
+    check(['code', 'sequence', 'description', 'custom-layout-value', 'custom-layout-text'].every(id => $(`[data-task-field="${id}"]`).hidden) && form.elements.code.value === savedTask.code && form.elements['custom-layout-value'].value === 'Keep this value', 'Hidden task editor fields retain their DOM values but are not displayed');
+    form.elements.releaseDate.value = '2030-07-12';
+    form.requestSubmit(); await waitFor(() => !saving && !$('#modal').open);
+    const edited = data.tasks.find(task => task.id === taskId);
+    check(edited.releaseDate === '2030-07-12' && ['code', 'sequence', 'description', 'notes', 'effortHours', 'hidden', 'customFields', 'tagIds'].every(key => JSON.stringify(edited[key]) === JSON.stringify(savedTask[key])), 'Saving a visible field never clears hidden built-in or custom field values');
+    taskDialog();
+    check($('.task-edit-layout').dataset.mode === 'text-first' && $('[data-task-field="code"]').hidden && Number($('#task-form').elements.sequence.value) > Math.max(...data.tasks.map(task => task.sequence)), 'New tasks use the saved layout and still initialize hidden fields');
+    $('#modal').close();
+    view = 4; render(); showSettingsTab('task-layout');
+    $('#reset-task-layout').click();
+    check(settingsDraft.taskEditorLayout.mode === 'split' && settingsDraft.taskEditorLayout.fields.every(field => field.visible), 'Default task layout can be restored without deleting columns or values');
+    $('#discard-settings').click();
+    check(JSON.stringify(settingsDraft.taskEditorLayout) === JSON.stringify(configured) && !settingsChanged(), 'Discard restores the saved editor layout');
+    setControl('#task-layout-mode', 'stacked');
+    await saveSettings();
+    taskDialog(data.tasks.find(task => task.id === taskId));
+    check($('.task-edit-text').getBoundingClientRect().top >= $('.task-edit-fields').getBoundingClientRect().bottom && $('#task-form [type="submit"]').getBoundingClientRect().bottom <= innerHeight, 'Stacked task layout keeps both sections scrollable and the save action reachable');
+    $('#modal').close();
+    await commit(baseline); clearHistory(activeOrganizationId); view = 0; render();
+  }
   {
     const baseline = structuredClone(data);
     view = 4; render(); showSettingsTab('statuses');
@@ -4499,6 +4667,23 @@ window.runSmokeTests = async () => {
     const testState = { ...original, supported: true, version: '99.0.0' };
     adoptUpdateState({ ...testState, phase: 'available' });
     check(visible('#update-download') && !$('#update-download').disabled && !visible('#update-install') && $('#update-install').disabled && !$('#update-check').disabled, 'Available update offers download but not install');
+    check(visible('#update-notice') && visible('#update-badge') && $('#update-notice-title').textContent.includes('99.0.0') && $('#update-notice .update-notice-copy').getAttribute('role') === 'status', 'Detected updates display a persistent accessible notification and a top-bar badge');
+    view = 0; render();
+    check(visible('#update-notice') && visible('#update-badge'), 'Update notifications remain visible outside settings and across view changes');
+    $('#update-notice-dismiss').click();
+    adoptUpdateState({ ...testState, phase: 'available' }); render();
+    check(!visible('#update-notice') && visible('#update-badge') && document.activeElement === $('#update-badge'), 'Dismissing an update suppresses repeated alerts for that version but keeps the badge');
+    $('#update-badge').click(); await tick();
+    check(view === 4 && settingsTab === 'updates' && !$('#updates-panel').hidden, 'The notification badge opens the update settings without downloading automatically');
+    $('#organization-name').value += ' unsaved';
+    refreshSettingsState();
+    $('#update-badge').click(); await tick();
+    check($('#modal').open && $('#discard-switch') && settingsChanged(), 'Opening updates protects unsaved organization settings');
+    $('#modal [data-close]').click();
+    $('#discard-settings').click();
+    adoptUpdateState({ ...testState, version: '99.0.1', phase: 'available' });
+    check(visible('#update-notice') && $('#update-notice-title').textContent.includes('99.0.1'), 'A newer detected version appears even after an earlier notification was dismissed');
+    $('#update-notice-open').click(); await tick();
     adoptUpdateState({ ...testState, phase: 'downloading', percent: 42 });
     check(visible('#update-progress') && $('#update-progress').value === 42 && $('#update-check').disabled && $('#update-auto').disabled && !visible('#update-download') && !visible('#update-install'), 'Download progress is accessible and blocks duplicate actions');
     adoptUpdateState({ ...testState, phase: 'ready' });
@@ -4506,6 +4691,8 @@ window.runSmokeTests = async () => {
     adoptUpdateState({ ...testState, phase: 'error', error: 'Update checksum or size does not match. Nothing was installed.' });
     check(!visible('#update-install') && $('#update-install').disabled && $('#update-status').textContent.includes(t('Update checksum or size does not match. Nothing was installed.')), 'Failed updates show the error without an install action');
     adoptUpdateState(original);
+    dismissedUpdateVersions.delete('99.0.0');
+    check(!visible('#update-notice') && !visible('#update-badge'), 'Unsupported or up-to-date copies do not display update alerts');
     showSettingsTab('themes');
     check(!settingsChanged(), 'Application update state does not dirty organization settings');
   }

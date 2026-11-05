@@ -8,8 +8,8 @@
     Sequence (any build or test failure stops the script before the commit):
       1. Git checks: active branch, reachable remote, no operation in progress, branch not behind the remote,
          no file that must stay unversioned among the changes (data, builds, dependencies, executables, files over 5 MB).
-      2. npm run check and npm test.
-      3. Smoke test from the sources (npm run smoke).
+      2. npm run check and npm test, including task layout validation and import/export.
+      3. Smoke test from the sources (npm run smoke), including editor layouts and update notifications.
       4. Portable build in dist-staging\<version>, without touching an executable that may be open in dist,
          verifying the version and the icon (identical to build\icon.ico, generated from app-logo.svg) of launcher and app.
       5. Smoke test of the packaged app (win-unpacked) and of the portable launcher, with isolated temporary files
@@ -31,7 +31,10 @@
     Does not add the Copilot Co-authored-by trailer to the commit message.
 
 .EXAMPLE
-    pwsh -NoProfile -ExecutionPolicy Bypass -File .\build-and-push.ps1 -Message "Release date filter"
+    npm version 2.50.0 --no-git-tag-version --ignore-scripts
+    pwsh -NoProfile -ExecutionPolicy Bypass -File .\build-and-push.ps1 -Message "2.50.0: task layouts and update notifications"
+    Close the local app first to replace dist\OrbitKanban-Portable.exe. Its data folder is never replaced.
+    Add -NoDeliver only when the local executable must stay on the previous version.
 #>
 #Requires -Version 5.1
 
