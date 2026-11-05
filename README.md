@@ -4,7 +4,7 @@
 
 | | |
 | --- | --- |
-| **Current version** | 2.60.0 |
+| **Current version** | 2.60.1 |
 | **Platform** | Windows 10 / 11, 64-bit |
 | **Distribution** | Single portable executable, `OrbitKanban-Portable.exe` |
 | **Network** | Not required. Used only for optional update checks against GitHub |
@@ -353,7 +353,8 @@ Leaving settings without saving restores the previous configuration. Themes, fon
   - *field*: section, width in section columns, **Required**, position, and removal from the form.
 - Drag the edges of the window to resize it. `Ctrl+Z` and `Ctrl+Y` undo and redo every change made in the designer.
 - With the keyboard, `Enter` adds the selected field to the selected section, the arrow keys move the selected item and `Delete` removes it.
-- **Apply** brings the draft back to settings, to be stored with **Save settings**; **Save settings** in the designer stores it immediately. **Cancel** drops the designer changes, and **Restore default layout** rebuilds the default form.
+- **Save** stores the form, together with any other settings changes still pending, and closes the designer. **Cancel** drops the designer changes, and **Restore default layout** rebuilds the default form.
+- In the desktop app on Windows, the designer bar doubles as the title bar: drag it to move the window, and its buttons stay clear of the minimize, maximize and close buttons.
 
 The real editor uses the chosen width and height but never exceeds the app window: its content scrolls when needed, and narrow windows stack the layout columns. Fields left off the form keep their values when a task is saved, including rich text and custom values, and new tasks still initialize them normally. List columns are not affected. Deleted columns disappear from the form, and new columns join the section that holds fields of the same kind.
 
@@ -643,7 +644,7 @@ Tags are never moved. Bump the version before releasing new sources:
 npm version minor --no-git-tag-version --ignore-scripts
 ```
 
-For a specifically numbered release, use `npm version 2.60.0 --no-git-tag-version --ignore-scripts` instead. To update the local portable copy too, run the pipeline **without `-NoDeliver`** and close the app first. The script replaces only the executable, not `dist/data`.
+For a specifically numbered release, use `npm version 2.60.1 --no-git-tag-version --ignore-scripts` instead. To update the local portable copy too, run the pipeline **without `-NoDeliver`** and close the app first. The script replaces only the executable, not `dist/data`.
 
 The script refuses to reuse a tagged version for different sources. If a build or test fails, nothing is committed or pushed.
 
@@ -651,6 +652,7 @@ The script refuses to reuse a tagged version for different sources. If a build o
 
 | Version | Changes |
 | --- | --- |
+| **2.60.1** | Form designer bar works as the Windows title bar and keeps its buttons clear of the window controls; a single **Save** replaces **Apply** and **Save settings** |
 | **2.60.0** | Full-screen form designer for the task editor with drag and drop, custom sections, layout columns and window size; configurable required fields for tasks and issues |
 | **2.50.0** | Per-organization task editor layout settings with preview, field ordering and visibility; persistent update notifications and top-bar shortcut |
 | **2.47.1** | Smooth, reversible sidebar animation with label fades and support for reduced motion |

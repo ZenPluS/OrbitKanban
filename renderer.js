@@ -510,7 +510,7 @@ function paintTheme(theme) {
   for (const [property, value] of Object.entries(themeExtras(theme))) style.setProperty(property, value);
   const rgb = theme.background.slice(1).match(/.{2}/g).map(value => parseInt(value, 16));
   document.documentElement.style.colorScheme = (rgb[0] * 299 + rgb[1] * 587 + rgb[2] * 114) / 1000 > 150 ? 'light' : 'dark';
-  windowChromeColors = { background: theme.background, text: theme.text };
+  windowChromeColors = { background: theme.background, surface: theme.surface, text: theme.text };
   syncWindowChrome();
 }
 // The desktop window has no native title bar: the top bar drags it and the caption buttons take the theme colors.
@@ -519,7 +519,9 @@ let windowChromeColors = null, windowChromeKey = '', windowChromeSent = null;
 function syncWindowChrome() {
   if (!customTitleBar() || !windowChromeColors) return;
   // The overlay stops above the top bar's bottom border, so the separator line runs under the caption buttons too.
-  const request = { ...windowChromeColors, height: $('.topbar').clientHeight, dimmed: $('#modal').open };
+  // The form designer covers the top bar with its own bar, so the caption buttons take that bar's color while it is open.
+  const designer = document.getElementById('form-designer')?.open === true;
+  const request = { background: designer ? windowChromeColors.surface : windowChromeColors.background, text: windowChromeColors.text, height: $('.topbar').clientHeight, dimmed: $('#modal').open };
   const key = JSON.stringify([request, devicePixelRatio]);
   if (key === windowChromeKey) return;
   windowChromeKey = key;
@@ -3187,7 +3189,7 @@ function openFormDesigner() {
   dialog.id = 'form-designer';
   dialog.className = 'form-designer';
   dialog.setAttribute('aria-labelledby', 'form-designer-title');
-  dialog.innerHTML = `<header class="designer-bar"><div class="designer-title"><span class="eyebrow">${esc(t("Form designer"))} · ${esc(organizations.find(o => o.id === organizationId)?.name || '')}</span><h2 id="form-designer-title">${esc(t("Task editor layout"))}</h2></div><div class="designer-tools"><button type="button" class="icon-button" id="designer-undo" title="${esc(t("Undo (Ctrl+Z)"))}" aria-label="${esc(t("Undo (Ctrl+Z)"))}">${ico('undo')}</button><button type="button" class="icon-button" id="designer-redo" title="${esc(t("Redo (Ctrl+Y)"))}" aria-label="${esc(t("Redo (Ctrl+Y)"))}">${ico('redo')}</button><button type="button" class="button" id="designer-reset">${ico('reset')}${esc(t("Restore default layout"))}</button><span class="designer-divider" aria-hidden="true"></span><button type="button" class="button" id="designer-cancel">${esc(t("Cancel"))}</button><button type="button" class="button" id="designer-apply">${ico('check')}${esc(t("Apply"))}</button><button type="button" class="button primary" id="designer-save">${esc(t("Save settings"))}</button></div></header>
+  dialog.innerHTML = `<header class="designer-bar"><div class="designer-title"><span class="eyebrow">${esc(t("Form designer"))} · ${esc(organizations.find(o => o.id === organizationId)?.name || '')}</span><h2 id="form-designer-title">${esc(t("Task editor layout"))}</h2></div><div class="designer-tools"><button type="button" class="icon-button" id="designer-undo" title="${esc(t("Undo (Ctrl+Z)"))}" aria-label="${esc(t("Undo (Ctrl+Z)"))}">${ico('undo')}</button><button type="button" class="icon-button" id="designer-redo" title="${esc(t("Redo (Ctrl+Y)"))}" aria-label="${esc(t("Redo (Ctrl+Y)"))}">${ico('redo')}</button><button type="button" class="button" id="designer-reset">${ico('reset')}${esc(t("Restore default layout"))}</button><span class="designer-divider" aria-hidden="true"></span><button type="button" class="button" id="designer-cancel">${esc(t("Cancel"))}</button><button type="button" class="button primary" id="designer-save">${ico('check')}${esc(t("Save"))}</button></div></header>
     <div class="designer-body"><aside class="designer-palette" aria-labelledby="designer-fields-title"><div class="designer-palette-head"><h3 id="designer-fields-title">${esc(t("Fields"))}</h3><span class="tiny-count" id="designer-field-count"></span></div><label class="designer-search"><span aria-hidden="true">${ico('search')}</span><input type="search" id="designer-search" placeholder="${esc(t("Search fields…"))}" aria-label="${esc(t("Search fields…"))}" autocomplete="off" spellcheck="false"></label><label class="toggle-label"><input type="checkbox" id="designer-unused"> ${esc(t("Only fields not on the form"))}</label><ul class="designer-field-list" id="designer-fields" aria-labelledby="designer-fields-title"></ul><h3>${esc(t("Components"))}</h3><div class="designer-components">${[1, 2, 3, 4].map(count => `<button type="button" class="designer-component" data-add-section="${count}"><span class="designer-component-icon" aria-hidden="true">${'<i></i>'.repeat(count)}</span>${esc(fillText(count === 1 ? "Section with 1 column" : "Section with {0} columns", count))}</button>`).join('')}</div><p class="muted designer-hint">${esc(t("Drag fields and sections onto the form. With the keyboard: Enter adds the field to the selected section, the arrow keys move the selected item and Delete removes it."))}</p></aside>
     <div class="designer-canvas"><div class="designer-ghost" aria-hidden="true" inert>${designerBackdrop()}</div><div class="designer-stage" id="designer-stage"><div class="designer-frame" id="designer-frame"><div class="task-form designer-modal" id="designer-modal"><div class="modal-heading" inert><div><div class="eyebrow">TASK</div><h2>${esc(t("Edit task"))}</h2></div><span class="icon-button">${ico('close')}</span></div><div class="task-edit-layout" id="designer-layout" role="group" aria-label="${esc(t("Form preview"))}"></div><div class="modal-actions" inert><span class="button danger">${esc(t("Delete"))}</span><span class="spacer"></span><span class="button">${esc(t("Cancel"))}</span><span class="button primary">${esc(t("Save task"))}</span></div></div>
       <div class="designer-grip designer-grip-e" data-grip="e" tabindex="0" role="separator" aria-orientation="vertical" aria-label="${esc(t("Window width"))}"></div><div class="designer-grip designer-grip-s" data-grip="s" tabindex="0" role="separator" aria-orientation="horizontal" aria-label="${esc(t("Window height"))}"></div><div class="designer-grip designer-grip-se" data-grip="se" aria-hidden="true"></div></div><p class="designer-size" id="designer-size" aria-live="polite"></p></div></div>
@@ -3677,10 +3679,10 @@ function openFormDesigner() {
   }
   function requestClose() {
     if (!dirty()) { approved = true; dialog.close(); return; }
-    confirmDialog("Discard the form changes?", "The changes made in the form designer have not been applied.", () => { approved = true; dialog.close(); });
+    confirmDialog("Discard the form changes?", "The changes made in the form designer have not been saved.", () => { approved = true; dialog.close(); });
   }
   $d('#designer-cancel').onclick = requestClose;
-  $d('#designer-apply').onclick = action(() => { applyDesign(); notify("Form layout applied. Save the settings to keep it."); });
+  // One step, like the rest of the settings: the design goes into the draft and the whole draft is saved.
   $d('#designer-save').onclick = action(async () => { applyDesign(); await saveSettings(); rerenderPreservingView(); notify("Settings saved."); });
   dialog.addEventListener('cancel', event => { event.preventDefault(); if (!drag) requestClose(); });
   const observer = new ResizeObserver(() => fit());
@@ -3691,9 +3693,11 @@ function openFormDesigner() {
     observer.disconnect();
     window.removeEventListener('resize', onResize);
     dialog.remove();
+    syncWindowChrome();
     $('#open-form-designer')?.focus();
   });
   dialog.showModal();
+  syncWindowChrome();
   observer.observe(modal);
   window.addEventListener('resize', onResize);
   draw();
@@ -4312,6 +4316,11 @@ window.runSmokeTests = async () => {
     $('#open-form-designer').click();
     const designer = $('#form-designer'), inDesigner = selector => designer.querySelector(selector), onForm = id => inDesigner(`#designer-layout [data-designer-field="${id}"]`);
     check(designer?.open && designer.getBoundingClientRect().width >= innerWidth - 1 && designer.querySelectorAll('[data-palette-field]').length === fieldCount && designer.querySelectorAll('#designer-layout .designer-item').length === fieldCount && inDesigner('.designer-ghost .designer-ghost-app') && inDesigner('#designer-modal.task-form'), 'Form designer opens full screen with the field list, the blurred app and a live form preview');
+    check(!inDesigner('#designer-apply') && inDesigner('#designer-save.primary') && inDesigner('.designer-tools').querySelectorAll('.button.primary').length === 1, 'The designer offers a single save action');
+    if (customTitleBar()) {
+      const area = navigator.windowControlsOverlay.getTitlebarAreaRect(), controls = innerWidth - area.x - area.width, bar = inDesigner('.designer-bar'), region = element => getComputedStyle(element).getPropertyValue('-webkit-app-region');
+      check(controls >= 90 && region(bar) === 'drag' && [...bar.querySelectorAll('button')].every(button => region(button) === 'no-drag' && button.getBoundingClientRect().right <= innerWidth - controls) && bar.getBoundingClientRect().height >= area.height && windowChromeSent.background === document.documentElement.style.getPropertyValue('--surface'), 'The designer bar drags the window, keeps its buttons clear of the window controls and lends them its color');
+    }
     onForm('code').focus(); key(onForm('code'), 'Delete');
     check(!onForm('code') && !inDesigner('[data-palette-field="code"]').classList.contains('is-placed') && !inDesigner('#designer-undo').disabled && document.activeElement?.dataset.designerField, 'Delete removes the focused field from the form, returns it to the field list and keeps focus on the form');
     key(designer, 'z', { ctrlKey: true });
@@ -4355,12 +4364,11 @@ window.runSmokeTests = async () => {
     check($('#modal').open && $('#confirm-action') && designer.open, 'Escape asks before discarding the designer changes');
     $('#modal [data-close]').click();
     check(designer.open && !$('#modal').open && document.body.contains(designer), 'Cancelling the confirmation keeps the designer open');
-    inDesigner('#designer-apply').click();
-    await waitFor(() => !$('#form-designer'));
-    const draftLayout = settingsDraft.taskEditorLayout, planning = draftLayout.columns.flatMap(column => column.sections).find(section => section.id === sectionId);
-    check(planning?.name === 'Planning' && planning.fields.map(field => field.id).join() === 'code' && draftLayout.unplaced.includes('custom-layout-value') && draftLayout.height > 0 && settingsDraft.requiredTaskColumns.includes('code') && !$('#settings-tab-task-layout .settings-tab-dot').hidden && settingsChanged(), 'Apply copies the designed form and required fields into the unsaved settings');
+    inDesigner('#designer-save').click();
+    await waitFor(() => !saving && !$('#form-designer') && data.settings.requiredTaskColumns.includes('code'));
+    const savedLayout = data.settings.taskEditorLayout, planning = savedLayout.columns.flatMap(column => column.sections).find(section => section.id === sectionId);
+    check(planning?.name === 'Planning' && planning.fields.map(field => field.id).join() === 'code' && savedLayout.unplaced.includes('custom-layout-value') && savedLayout.height > 0 && $('#settings-tab-task-layout .settings-tab-dot').hidden && !settingsChanged() && (!customTitleBar() || windowChromeSent.background === document.documentElement.style.getPropertyValue('--background')), 'Save stores the designed form and required fields in one step and closes the designer');
     check($('#custom-definitions-tasks [data-field-id="code"] [data-field-required]').checked && $('#custom-definitions-tasks [data-field-id="tags"] [data-field-required]').disabled && $('#task-required-summary').textContent.includes(term('Portal code')), 'Column management and the layout summary show the new required field');
-    await saveSettings();
     const configured = structuredClone(data.settings.taskEditorLayout), savedTask = structuredClone(data.tasks.find(task => task.id === taskId)), stored = (await workspaceApi.load()).data.settings;
     check(JSON.stringify(stored.taskEditorLayout) === JSON.stringify(configured) && stored.requiredTaskColumns.join() === 'sequence,code' && JSON.stringify(data.settings.taskColumns) === JSON.stringify(baseline.settings.taskColumns.concat([{ id: 'custom-layout-value', visible: true }, { id: 'custom-layout-text', visible: true }])), 'Task form and required fields persist without reordering or hiding list columns');
     taskDialog(savedTask);
@@ -4411,7 +4419,7 @@ window.runSmokeTests = async () => {
     grip.focus(); key(grip, 'ArrowRight');
     second.querySelector('#designer-save').click();
     await waitFor(() => !saving && !$('#form-designer') && data.settings.taskEditorLayout.width === configured.width + 10);
-    check(!settingsChanged() && $('#task-layout-summary').textContent.includes(`${configured.width + 10} ×`), 'Save in the designer applies and saves the settings in one step');
+    check(!settingsChanged() && $('#task-layout-summary').textContent.includes(`${configured.width + 10} ×`), 'A later save from the designer stores the resized window');
     await commit(next => { const layout = next.settings.taskEditorLayout; layout.columns = [{ width: 100, sections: layout.columns.flatMap(column => column.sections) }]; layout.height = 0; });
     taskDialog(data.tasks.find(task => task.id === taskId));
     check($('#task-form [data-section="section-text"]').getBoundingClientRect().top >= $('#task-form [data-section="section-properties"]').getBoundingClientRect().bottom && $('#task-form [type="submit"]').getBoundingClientRect().bottom <= innerHeight, 'Stacked task layout keeps the sections scrollable and the save action reachable');

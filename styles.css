@@ -3650,6 +3650,17 @@ td .icon-button { width: calc(28px * var(--fs)); height: calc(28px * var(--fs));
   border-bottom: 1px solid var(--border);
   background: var(--surface);
 }
+/* On the desktop the designer covers the top bar: its own bar drags the window and leaves room for the native caption buttons */
+.custom-titlebar .designer-bar {
+  -webkit-app-region: drag;
+  app-region: drag;
+  min-height: calc(env(titlebar-area-height, 0px) + 1px);
+  padding-right: calc(20px + 100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw));
+}
+.custom-titlebar .designer-bar button {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
 .designer-title {
   min-width: 0;
 }

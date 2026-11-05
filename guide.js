@@ -254,7 +254,7 @@ const SECTIONS = [
         'Drag fields from the list into the window, or between sections, to add and reorder them. With the keyboard, `Enter` adds the selected field, the arrow keys move it and `Delete` removes it.',
         'Drag a section with one to four columns from **Components**, or click it to add it. Rename sections, choose whether to show their name and split the window into up to three layout columns with proportional widths.',
         'Drag the edges of the window to set its width and height, or keep **Automatic height (fits the content)**. The real window never exceeds the app window and scrolls when needed. `Ctrl+Z` and `Ctrl+Y` undo and redo.',
-        'Fields left off the form keep their values and the task list columns do not change. **Apply** keeps the design in the settings to save later; **Save settings** saves it immediately. Layouts travel with settings exports and backups.'
+        'Fields left off the form keep their values and the task list columns do not change. **Save** stores the form, together with any other settings changes still pending, and closes the designer; **Cancel** discards the designer changes. Layouts travel with settings exports and backups.'
       ] },
       { title: 'Required fields', items: [
         'Mark a field as **Required** in the field properties of the form designer, or in **Settings → Column management** for tasks and issues. **Sequence** is required by default.',
