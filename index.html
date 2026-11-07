@@ -8,14 +8,36 @@
   <link rel="icon" href="app-logo.svg" type="image/svg+xml">
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="fonts/fonts.css">
-  <script defer src="columns.js"></script>
-  <script defer src="core.js"></script>
-  <script defer src="icons.js"></script>
-  <script defer src="i18n.js"></script>
-  <script defer src="xlsx.js"></script>
-  <script defer src="csv.js"></script>
-  <script defer src="guide.js"></script>
-  <script defer src="renderer.js"></script>
+  <script defer src="src/shared/localization/Translator.js"></script>
+  <script defer src="src/shared/columns/ColumnSchema.js"></script>
+  <script defer src="src/shared/columns/PlatformLinks.js"></script>
+  <script defer src="src/shared/columns/RequiredFields.js"></script>
+  <script defer src="src/shared/columns/ColumnLayout.js"></script>
+  <script defer src="src/shared/columns/ColumnFilters.js"></script>
+  <script defer src="src/shared/columns/ColumnCleanup.js"></script>
+  <script defer src="src/shared/columns/ColumnValidator.js"></script>
+  <script defer src="src/shared/columns/ColumnMerger.js"></script>
+  <script defer src="src/shared/domain/Common.js"></script>
+  <script defer src="src/shared/domain/Typography.js"></script>
+  <script defer src="src/shared/domain/Limits.js"></script>
+  <script defer src="src/shared/domain/TaskColumns.js"></script>
+  <script defer src="src/shared/domain/TaskLayout.js"></script>
+  <script defer src="src/shared/domain/ThemeCatalog.js"></script>
+  <script defer src="src/shared/domain/TaskLinks.js"></script>
+  <script defer src="src/shared/domain/ArchiveValidator.js"></script>
+  <script defer src="src/shared/domain/DataFactory.js"></script>
+  <script defer src="src/shared/domain/OrganizationTransfer.js"></script>
+  <script defer src="src/shared/domain/IssueMatcher.js"></script>
+  <script defer src="src/shared/domain/TaskOrder.js"></script>
+  <script defer src="src/shared/graphics/ColorMath.js"></script>
+  <script defer src="src/shared/graphics/ThemeGenerator.js"></script>
+  <script defer src="src/shared/interop/CsvParser.js"></script>
+  <script defer src="src/shared/interop/CsvImporter.js"></script>
+  <script defer src="src/shared/interop/ZipWriter.js"></script>
+  <script defer src="src/shared/interop/XlsxWriter.js"></script>
+  <script defer src="src/shared/guide/GuideContent.js"></script>
+  <script defer src="src/shared/graphics/IconLibrary.js"></script>
+  <script type="module" src="src/renderer/main.js"></script>
 </head>
 <body>
   <aside class="sidebar" id="sidebar">

@@ -4,7 +4,7 @@
 
 | | |
 | --- | --- |
-| **Current version** | 2.70.0 |
+| **Current version** | 2.70.1 |
 | **Platform** | Windows 10 / 11, 64-bit |
 | **Distribution** | Single portable executable, `OrbitKanban-Portable.exe` |
 | **Network** | Not required. Used only for optional update checks against GitHub |
@@ -609,7 +609,7 @@ Node.js with npm is required only to develop or build. Recipients of the executa
 npm ci           # install dependencies
 npm start        # run the app from source (data is stored in the project's data folder)
 npm test         # unit tests (node --test)
-npm run check    # syntax check of every source file
+npm run check    # syntax check of every script in src/ and tools/
 npm run smoke    # end-to-end UI smoke test on an isolated temporary workspace
 npm run icon     # generate app-logo.png and build/icon.ico from app-logo.svg
 npm run splash   # generate the launcher splash image and animation from splash.html
@@ -622,24 +622,32 @@ All source code, tests, scripts and documentation are in English. Interface text
 
 ### Project structure
 
-| File | Purpose |
+The code is object oriented: apart from entry points and preload scripts, every source file holds one class, and folders group the classes by namespace.
+
+| Folder | Namespace and contents |
 | --- | --- |
-| `main.js`, `preload.js`, `window-chrome.js` | Electron main process, secure bridge and custom title bar |
-| `portable.js`, `splash.js`, `splash.html`, `splash-preload.js` | Portable paths, single instance, taskbar identity and splash screen |
-| `renderer.js`, `index.html`, `styles.css` | User interface |
-| `core.js` | Data model, defaults, validation, migrations and portable task editor layout |
-| `columns.js`, `csv.js`, `xlsx.js` | Column schemas and filters, CSV parsing, Excel writer (no external dependencies) |
-| `guide.js` | In-app guide content |
-| `icons.js`, `app-logo.svg`, `app-icon.js` | Icon set, app logo and Windows icon generation |
-| `i18n.js`, `languages.js`, `languages/` | Translation engine, external language loader and built-in language packs |
-| `workspace-store.js` | Atomic persistence, backups and organization transfer |
-| `web-server.js`, `web-bridge.js` | Local browser access server and client bridge |
-| `updater.js`, `update-launcher.js`, `install-update.ps1` | Update check, download, verification and installation |
-| `build.js`, `make-splash.js`, `splash-image.js`, `build/` | Packaging with electron-builder and launcher customization |
-| `build-and-push.ps1`, `github-release.js` | Build, test, commit, push and GitHub release pipeline |
-| `smoke.js`, `smoke-web.js`, `smoke-windows.js` | End-to-end smoke tests |
-| `fonts/` | Bundled WOFF2 fonts, sources and licenses |
-| `*.test.js` | Unit tests, including layout validation and import/export in `task-layout.test.js` and required fields in `required-fields.test.js` |
+| `src/shared/` | Classes used by the main process, the web server and the interface. Each folder is a namespace with an `index.js` for Node; in the interface the classes register under `globalThis.OrbitKanban.<Namespace>` |
+| `src/shared/domain/` | **Domain**: data model and defaults (`DataFactory`), validation and migrations (`ArchiveValidator`), organization transfer, task order, links, layout, limits, themes and typography |
+| `src/shared/columns/` | **Columns**: column schemas, layout, filters, validation, merging, required fields and platform links |
+| `src/shared/interop/` | **Interop**: CSV parsing and import, ZIP and Excel writers (no external dependencies) |
+| `src/shared/localization/` | **Localization**: the `Translator` engine |
+| `src/shared/graphics/` | **Graphics**: icon set, color math and the theme generator |
+| `src/shared/guide/` | **Guide**: in-app guide content |
+| `src/renderer/` | Interface as ES modules: `App` builds every component on the shared `AppState`; components extend `Component` and are grouped by area (`tasks`, `issues`, `milestones`, `kanban`, `settings`, `columns`, `controls`, `dialogs`, `layout`, `transfer`, …). `shared.js` imports the shared classes and `main.js` starts the app |
+| `src/desktop/` | Electron main process: `DesktopApplication` (windows, IPC, single instance), `preload.js` and the `main.js` entry point |
+| `src/desktop/storage/` | `WorkspaceStore` (atomic persistence, backups, organization transfer) and `LanguageStore` (external language files) |
+| `src/desktop/platform/` | `PortableLauncher` (portable paths, taskbar identity, shortcuts) and `WindowChrome` (custom title bar) |
+| `src/desktop/splash/` | `SplashScreen` and its preload |
+| `src/desktop/update/` | `Updater` (check, download, verification), `UpdateLauncher` and `install-update.ps1` |
+| `src/desktop/diagnostics/` | End-to-end smoke tests of the desktop app, the browser access and the taskbar identity |
+| `src/web/` | Browser access: `WebServer` and the client `WebBridge` |
+| `index.html`, `styles.css`, `splash.html` | Interface markup and styles |
+| `languages/` | Built-in language packs |
+| `app-logo.svg`, `fonts/` | App logo, bundled WOFF2 fonts with sources and licenses |
+| `tools/` | Development scripts: `build.js` (`PortableBuild`), `make-splash.js` (`LauncherArtwork`), `smoke.js` (`SmokeRunner`), `check.js` (`SyntaxCheck`), `AppIcon`, `SplashImage` and `GitHubRelease` |
+| `build/` | Portable launcher customization; generated splash and icon files |
+| `build-and-push.ps1` | Build, test, commit, push and GitHub release pipeline |
+| `test/` | Unit tests, including layout validation and import/export in `task-layout.test.js` and required fields in `required-fields.test.js` |
 
 ### Build, test and release
 
@@ -674,7 +682,7 @@ Tags are never moved. Bump the version before releasing new sources:
 npm version minor --no-git-tag-version --ignore-scripts
 ```
 
-For a specifically numbered release, use `npm version 2.70.0 --no-git-tag-version --ignore-scripts` instead. To update the local portable copy too, run the pipeline **without `-NoDeliver`** and close the app first. The script replaces only the executable, not `dist/data`.
+For a specifically numbered release, use `npm version 2.70.1 --no-git-tag-version --ignore-scripts` instead. To update the local portable copy too, run the pipeline **without `-NoDeliver`** and close the app first. The script replaces only the executable, not `dist/data`.
 
 The script refuses to reuse a tagged version for different sources. If a build or test fails, nothing is committed or pushed.
 
@@ -682,6 +690,7 @@ The script refuses to reuse a tagged version for different sources. If a build o
 
 | Version | Changes |
 | --- | --- |
+| **2.70.1** | Object-oriented code base: one class per file, grouped by namespace under `src/` (shared, renderer, desktop, web) and `tools/`; no functional changes |
 | **2.70.0** | **Link to platform** columns, one per platform with their own templates, replace the organization portal link (migrated automatically); **Website** columns; **Reference parent/child** columns for predecessors and automatic successors; guide contents keep the last section highlighted |
 | **2.60.2** | The portable launcher keeps its splash screen on screen until the main window is open, with no blank gap or second loading window |
 | **2.60.1** | Form designer bar works as the Windows title bar and keeps its buttons clear of the window controls; a single **Save** replaces **Apply** and **Save settings** |

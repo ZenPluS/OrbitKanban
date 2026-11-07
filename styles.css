@@ -2887,7 +2887,7 @@ td.custom-cell > span {
     max-width: 160px;
   }
 }
-/* Icons from icons.js: feature icons use per-theme gradients, line icons follow the text color */
+/* Icons from IconLibrary: feature icons use per-theme gradients, line icons follow the text color */
 .ico {
   display: inline-block;
   flex: none;
