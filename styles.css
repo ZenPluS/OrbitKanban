@@ -2345,6 +2345,25 @@ tr.duplicate-row td:last-child {
   max-height: min(45vh, 430px);
   overflow: auto;
 }
+#views-page {
+  display: grid;
+  gap: 16px;
+}
+#views-page > .panel {
+  padding: 18px;
+}
+#views-page h2 {
+  margin: 0;
+}
+.views-catalog-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: 9px;
+  margin-top: 14px;
+}
+.views-catalog-list small {
+  overflow-wrap: anywhere;
+}
 .saved-view-item,
 .backup-item {
   display: flex;

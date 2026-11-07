@@ -5,21 +5,21 @@ import { ColumnFilters, Common, NavigationSections } from '../shared.js';
 export class SavedViews extends Component {
   // Every release date gets a ready-made view; ids are "release:<date>" ("release:" for tasks without a date) and are never stored.
   RELEASE_VIEW = 'release:';
-  #releaseViewGroups() {
+  releaseViewGroups(includeHidden = this.state.showHidden) {
     const counts = new Map();
     if (!this.hasColumn('releaseDate')) return { upcoming: [], past: [], counts, unassigned: 0 };
     let unassigned = 0;
     for (const task of this.state.data.tasks) {
-      if (task.hidden && !this.state.showHidden) continue;
+      if (task.hidden && !includeHidden) continue;
       if (task.releaseDate) counts.set(task.releaseDate, (counts.get(task.releaseDate) || 0) + 1); else unassigned++;
     }
     const day = Common.today(), dates = [...counts.keys()].sort();
     return { upcoming: dates.filter(date => date >= day), past: dates.filter(date => date < day).reverse(), counts, unassigned };
   }
-  releaseViewIds(groups = this.#releaseViewGroups()) {
+  releaseViewIds(groups = this.releaseViewGroups()) {
     return [...groups.upcoming, ...groups.past, ...(groups.unassigned ? [''] : [])].map(date => this.RELEASE_VIEW + date);
   }
-  releaseViewOptions(groups = this.#releaseViewGroups()) {
+  releaseViewOptions(groups = this.releaseViewGroups()) {
     const option = (date, label, count) => `<option value="${this.esc(this.RELEASE_VIEW + date)}" ${this.RELEASE_VIEW + date === this.state.activeSavedViewId ? 'selected' : ''}>${this.esc(`${label} (${count})`)}</option>`;
     const upcoming = groups.upcoming.map(date => option(date, `◷ ${this.app.presenter.formatDate(date)}`, groups.counts.get(date))).join('') + (groups.unassigned ? option('', `◌ ${this.t("Unassigned")}`, groups.unassigned) : '');
     const past = groups.past.map(date => option(date, `◷ ${this.app.presenter.formatDate(date)}`, groups.counts.get(date))).join('');

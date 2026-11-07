@@ -26,7 +26,7 @@ export class AppShell extends Component {
     this.app.rowMarks.closeMarkMenu();
     this.app.tagMenu.closeTagMenu();
     this.app.sections.resolve();
-    const content = this.$('#content'), nextView = ['tasks', 'issues', 'milestones', 'kanban', 'settings', 'guide'][this.state.view];
+    const content = this.$('#content'), nextView = ['tasks', 'issues', 'milestones', 'kanban', 'settings', 'guide', 'views'][this.state.view];
     if (content.dataset.workspaceView !== nextView) content.scrollTop = 0;
     content.dataset.workspaceView = nextView;
     this.#applyTheme();
@@ -40,21 +40,22 @@ export class AppShell extends Component {
     const current = this.app.sections.current();
     this.$('#navigation').innerHTML = this.app.sections.list().map(section => {
       const { id, name } = section, i = NavigationSections.typeIndex(section.type);
-      return `<button class="nav-button ${current?.id === id ? 'active' : ''}" data-view="${i}" data-section="${this.esc(id)}"${this.app.sidebar.sidebarCollapsed ? ` title="${this.esc(name)}"` : ''}><span class="nav-icon">${this.icons[i]}${alert(i)}</span><span class="nav-label">${this.esc(name)}</span>${i === 0 ? `<span class="nav-count">${this.app.sections.taskCount(section)}</span>` : ''}</button>`;
+      return `<button class="nav-button ${current?.id === id ? 'active' : ''}" data-view="${i}" data-section="${this.esc(id)}"${this.app.sidebar.sidebarCollapsed ? ` title="${this.esc(name)}"` : ''}><span class="nav-icon">${this.app.sections.iconOf(section.type)}${alert(i)}</span><span class="nav-label">${this.esc(name)}</span>${i === 0 ? `<span class="nav-count">${this.app.sections.taskCount(section)}</span>` : ''}</button>`;
     }).join('');
     document.querySelectorAll('#navigation [data-section]').forEach(button => button.onclick = this.app.notifier.action(() => this.app.sections.open(button.dataset.section)));
     this.$('#settings-button').classList.toggle('active', this.state.view === 4);
     this.$('#guide-button').classList.toggle('active', this.state.view === 5);
-    this.$('#current-tab').textContent = this.state.view === 4 ? this.t("Settings") : this.state.view === 5 ? this.term("Guide") : current.name;
+    this.$('#current-tab').textContent = this.state.view === 4 ? this.t("Settings") : this.state.view === 5 ? this.term("Guide") : this.app.sections.title(this.app.sections.typeOf(this.state.view));
     if (this.state.view === 0) this.app.taskList.renderTasks();
     if (this.state.view === 1) this.app.issues.renderIssues();
     if (this.state.view === 2) this.app.milestones.renderMilestones();
     if (this.state.view === 3) this.app.kanban.renderKanban();
     if (this.state.view === 4) this.app.settingsView.renderSettings();
     if (this.state.view === 5) this.app.guide.renderGuide();
+    if (this.state.view === 6) this.app.viewsPage.renderViews();
   }
   adoptSnapshot(snapshot) {
-    if (this.state.activeOrganizationId !== snapshot.activeOrganizationId) { this.state.columnFilters = { tasks: {}, issues: {} }; this.state.issueSearch = ''; this.state.taskSectionId = ''; this.state.taskSectionViewId = ''; }
+    if (this.state.activeOrganizationId !== snapshot.activeOrganizationId) { this.state.columnFilters = { tasks: {}, issues: {} }; this.state.issueSearch = ''; this.state.taskSectionId = ''; this.state.taskSectionViewId = ''; this.state.standaloneView = null; }
     this.state.data = ArchiveValidator.validateData(snapshot.data);
     if (!this.hasColumn('status')) this.state.statusFilter = '';
     if (!this.hasColumn('highlight')) { this.state.highlightFilter = ''; this.state.highlighter = ''; this.app.rowMarks.pendingMarks.clear(); }

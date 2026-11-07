@@ -9,8 +9,8 @@ export class NavigationSettings extends Component {
     return `<option value="">${this.esc(this.t("All tasks"))}</option>` + views.map(view => `<option value="${this.esc(view.id)}" ${view.id === selected ? 'selected' : ''}>${this.esc(view.name)}</option>`).join('');
   }
   navigationPanel() {
-    const types = NavigationSections.TYPES.map((type, index) => `<option value="${type}">${this.esc(this.#typeName(type))}</option>`).join('');
-    return this.ui`<section class="panel settings-section full" id="navigation-panel"><h2>Navigation</h2><p class="section-description">Choose the sections of the sidebar, their names and their order. Each section opens one of the four views; Guide and Settings always stay at the bottom.</p><div class="section-list" id="section-list"></div>
+    const types = NavigationSections.TYPES.map(type => `<option value="${type}">${this.esc(this.#typeName(type))}</option>`).join('');
+    return this.ui`<section class="panel settings-section full" id="navigation-panel"><h2>Navigation</h2><p class="section-description">Choose the sections of the sidebar, their names and their order. Each section opens one of the five view types; Guide and Settings always stay at the bottom.</p><div class="section-list" id="section-list"></div>
     <form id="add-section" class="section-add"><h3>New section</h3><div class="section-add-fields"><label class="field">Section type<select name="type" id="new-section-type">${types}</select></label><label class="field">Section name<input name="name" id="new-section-name" maxlength="60" autocomplete="off"></label><label class="field">Saved view<select name="viewId" id="new-section-view"></select></label><button type="submit" class="button" id="add-section-button">${this.ico('plus')}Add section</button></div><small class="muted">A saved view limits the tasks a list, milestone or kanban section shows. Leave the name empty to use the name of the view type.</small></form>
     <p class="muted">Removing a section never deletes tasks or issues: you can add it again at any time. The first section opens when the app starts.</p></section>`;
   }
@@ -19,10 +19,10 @@ export class NavigationSettings extends Component {
     if (!container || !list) return;
     const refresh = () => { this.drawNavigation(); this.app.settings.refreshSettingsState(); };
     container.innerHTML = list.map((section, index) => {
-      const icon = this.icons[NavigationSections.typeIndex(section.type)], type = this.#typeName(section.type);
+      const icon = this.app.sections.iconOf(section.type), type = this.#typeName(section.type);
       const view = NavigationSections.FILTERABLE.includes(section.type)
         ? `<select class="section-view" data-section-view="${this.esc(section.id)}" aria-label="${this.esc(this.app.transfer.fillText("Saved view of {0}", section.name))}">${this.#viewOptions(section.viewId)}</select>`
-        : `<span class="section-view muted">${this.esc(this.t("Every association"))}</span>`;
+        : `<span class="section-view muted">${this.esc(this.t(section.type === 'views' ? "All views" : "Every association"))}</span>`;
       return `<div class="option-row section-row" data-section-row="${this.esc(section.id)}">${this.app.sortable.dragHandle(section.name)}<span class="order-number">${String(index + 1).padStart(2, '0')}</span><span class="section-type" title="${this.esc(type)}"><span class="section-type-icon" aria-hidden="true">${icon}</span><span class="section-type-name">${this.esc(type)}</span></span><input class="option-name" aria-label="${this.esc(this.t("Section name"))}" maxlength="60" required data-section-name="${this.esc(section.id)}" value="${this.esc(section.name)}">${view}<button type="button" class="icon-button" data-section-move="${this.esc(section.id)}:-1" ${index === 0 ? 'disabled' : ''} title="${this.esc(this.t("Move up"))}">${this.ico('arrow-up')}</button><button type="button" class="icon-button" data-section-move="${this.esc(section.id)}:1" ${index === list.length - 1 ? 'disabled' : ''} title="${this.esc(this.t("Move down"))}">${this.ico('arrow-down')}</button><button type="button" class="icon-button delete-option" data-section-remove="${this.esc(section.id)}" ${list.length === 1 ? 'disabled' : ''} title="${this.esc(this.t("Remove section"))}" aria-label="${this.esc(this.app.transfer.fillText("Remove section {0}", section.name))}">${this.ico('close')}</button></div>`;
     }).join('');
     const find = id => list.find(section => section.id === id);

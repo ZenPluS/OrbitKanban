@@ -7,6 +7,7 @@ const ROOT = path.join(__dirname, '..');
 const { GuideContent } = require('../src/shared/guide');
 const { IconLibrary } = require('../src/shared/graphics');
 const { ColumnSchema } = require('../src/shared/columns');
+const { NavigationSections } = require('../src/shared/domain');
 
 const pack = code => JSON.parse(fs.readFileSync(path.join(ROOT, 'languages', `${code}.json`), 'utf8'));
 const en = pack('en');
@@ -44,7 +45,7 @@ test('guide sections are complete and point to real destinations', () => {
       for (const keys of combos) assert.ok(keys.length && keys.every(key => GuideContent.isLiteralKey(key) || GuideContent.keyWords().includes(key)), `${section.id}: ${keys.join('+')}`);
     }
     for (const target of section.go || []) {
-      if (target.view !== undefined) assert.ok([0, 1, 2, 3].includes(target.view), `${section.id}: view ${target.view}`);
+      if (target.view !== undefined) assert.ok(NavigationSections.typeOf(target.view), `${section.id}: view ${target.view}`);
       else assert.ok(settingsTabIds.includes(target.settings) || catalogIds.includes(target.settings), `${section.id}: settings ${target.settings}`);
     }
   }

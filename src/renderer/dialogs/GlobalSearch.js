@@ -44,8 +44,7 @@ export class GlobalSearch extends Component {
       const item = button.dataset.globalKind === 'task' ? this.state.data.tasks.find(task => task.id === button.dataset.globalId) : this.state.data.issues.find(issue => issue.id === button.dataset.globalId);
       if (!item) { this.app.notifier.notify("This item no longer exists.", true); return; }
       this.$('#modal').close();
-      // Without a section for its view the record still opens, over the current page.
-      if (!await this.app.sections.openType(button.dataset.globalKind === 'task' ? 'tasks' : 'issues')) this.app.shell.render();
+      await this.app.sections.openType(button.dataset.globalKind === 'task' ? 'tasks' : 'issues');
       if (button.dataset.globalKind === 'task') this.app.taskDialog.taskDialog(item); else this.app.issues.issueDialog(item);
     });
     draw();

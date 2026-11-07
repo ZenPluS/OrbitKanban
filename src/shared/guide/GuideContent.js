@@ -20,7 +20,7 @@ class GuideContent {
           'Do not run two copies on the same data folder at the same time.'
         ] },
         { title: 'Find your way around', items: [
-          'The sidebar holds the organization menu, the sections of the four views, this **Guide** and **Settings**.',
+          'The sidebar holds the organization menu, the sections of the five view types, this **Guide** and **Settings**.',
           'The menu button **☰** at the left of the top bar, or `Ctrl+B`, folds the sidebar into a column of icons so the views get more space. Hover an icon to see its name; the building icon still switches organization. Press the button again to expand the sidebar; the choice is remembered.',
           'The top bar offers global search, undo and redo, and the archive status. **Open data folder** at the bottom shows where your data lives.',
           'Rename, reorder, remove or add the sections of each organization in **Settings → Navigation**.',
@@ -267,7 +267,7 @@ class GuideContent {
       ]
     },
     {
-      id: 'settings', icon: 'settings', title: 'Settings', go: [{ settings: 'identity' }, { settings: 'navigation' }, { settings: 'languages' }, { settings: 'task-layout' }],
+      id: 'settings', icon: 'settings', title: 'Settings', go: [{ settings: 'identity' }, { settings: 'navigation' }, { settings: 'languages' }, { settings: 'task-layout' }, { view: 6 }],
       summary: 'Each organization has its own configuration, organized in tabs.',
       topics: [
         { title: 'Save or discard', items: [
@@ -291,7 +291,8 @@ class GuideContent {
         ] },
         { title: 'Navigation', items: [
           'In **Settings → Navigation** choose the sections of the sidebar: drag them or use the arrows to change their order, rename them, remove them or add new ones, up to 12.',
-          'Each section opens one of the four views: tasks, linked issues, milestones or kanban. A view can have several sections, and a view without sections leaves the menu. **Guide** and **Settings** always stay at the bottom.',
+          'Each section opens one of five types: tasks, linked issues, milestones, kanban or views. A type can have several sections, and a type without sections leaves the menu. **Guide** and **Settings** always stay at the bottom.',
+          'The **Views** section lists all saved views and automatic release views. Open one to apply it to the task list, even if its menu section was removed. Release views include hidden tasks.',
           'Link a saved view to a task, milestone or kanban section to show only its tasks, for example a board for one team. A task section applies its view when you open it; deleting the saved view brings back every task.',
           'Removing a section never deletes data. The first section opens when the app starts.'
         ] },

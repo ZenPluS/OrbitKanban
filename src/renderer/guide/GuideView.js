@@ -30,9 +30,9 @@ export class GuideView extends Component {
   #guideSections() {
     return GuideContent.sections.map(section => ({
       ...section,
-      name: section.tab === undefined ? this.term(section.title) : this.app.sections.nameOf(NavigationSections.TYPES[section.tab]),
+      name: section.tab === undefined ? this.term(section.title) : this.app.sections.nameOf(NavigationSections.typeOf(section.tab)),
       go: (section.go || []).map(target => target.view !== undefined
-        ? { attr: `data-guide-view="${target.view}"`, label: this.app.sections.list().some(item => item.type === NavigationSections.TYPES[target.view]) ? this.app.sections.nameOf(NavigationSections.TYPES[target.view]) : '' }
+        ? { attr: `data-guide-view="${target.view}"`, label: this.app.sections.list().some(item => item.type === NavigationSections.typeOf(target.view)) ? this.app.sections.nameOf(NavigationSections.typeOf(target.view)) : '' }
         : { attr: `data-guide-settings="${this.esc(target.settings)}"`, label: this.#guideSettingsTarget(target.settings) }).filter(target => target.label)
     }));
   }
@@ -57,7 +57,7 @@ export class GuideView extends Component {
       if (link) { this.#showGuideSection(link.dataset.guideSection); return; }
       const target = event.target.closest('[data-guide-view],[data-guide-settings]');
       if (target?.dataset.guideSettings) this.app.settings.openSettingsTab(target.dataset.guideSettings);
-      else if (target) this.app.notifier.action(() => this.app.sections.openType(NavigationSections.TYPES[Number(target.dataset.guideView)]))();
+      else if (target) this.app.notifier.action(() => this.app.sections.openType(NavigationSections.typeOf(Number(target.dataset.guideView))))();
     });
     this.#filterGuide();
   }

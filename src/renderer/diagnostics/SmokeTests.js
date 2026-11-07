@@ -695,14 +695,16 @@ export class SmokeTests extends Component {
       check(this.$('#global-search-results [data-global-kind="task"]')?.dataset.globalId === searchTask.id, "Global search finds tasks by code");
       this.$('#global-search-results [data-global-kind="task"]').click();
       await waitFor(() => this.$('#task-form'));
-      check(this.state.view === 0 && this.$('#modal').open && this.$('#task-form'), "Task result opens the editor directly");
+      await tick();
+      check(this.state.view === 0 && this.$('#modal').open && this.$('#task-form')?.elements.code.value === searchTask.code, "Task result opens the matching editor directly");
       this.$('#modal').close();
       const searchIssue = this.state.data.issues.find(issue => issue.incident);
       this.app.globalSearch.openGlobalSearch(searchIssue.incident);
       check(this.$('#global-search-results [data-global-kind="issue"]'), "Global search finds issues by incident");
       this.$('#global-search-results [data-global-kind="issue"]').click();
       await waitFor(() => this.$('#issue-form'));
-      check(this.state.view === 1 && this.$('#modal').open && this.$('#issue-form'), 'Issue result opens the editor directly');
+      await tick();
+      check(this.state.view === 1 && this.$('#modal').open && this.$('#issue-form')?.elements.code.value === searchIssue.code, 'Issue result opens the matching editor directly');
       this.$('#modal').close();
       this.state.view = 0;
       this.app.shell.render();
@@ -752,7 +754,7 @@ export class SmokeTests extends Component {
         const navButtons = () => [...document.querySelectorAll('#navigation .nav-button')];
         const cards = () => document.querySelectorAll('.kanban-board .task-card').length;
         const setValue = (selector, value, type = 'input') => { const element = this.$(selector); element.value = value; element.dispatchEvent(new Event(type, { bubbles: true })); };
-        check(sectionIds().join() === NavigationSections.TYPES.join() && navButtons().map(button => button.dataset.section).join() === sectionIds().join() && navButtons().every((button, index) => button.dataset.view === String(index)), 'The sidebar starts from one section per view');
+        check(sectionIds().join() === NavigationSections.TYPES.join() && navButtons().map(button => button.dataset.section).join() === sectionIds().join() && navButtons().every((button, index) => button.dataset.view === String(NavigationSections.typeIndex(NavigationSections.TYPES[index]))), 'The sidebar starts from one section per view');
         const sectionTask = this.state.data.tasks.find(task => !task.hidden && task.code);
         Object.assign(this.state, { view: 0, search: sectionTask.code, statusFilter: '', highlightFilter: '', showHidden: true, duplicatesOnly: false, activeSavedViewId: '' });
         this.state.columnFilters.tasks = {};
@@ -764,7 +766,7 @@ export class SmokeTests extends Component {
         check(!this.$('#navigation-panel').hidden && sectionRows().join() === sectionIds().join() && document.querySelectorAll('#section-list select[data-section-view]').length === 3 && !this.$('#section-list [data-section-row="issues"] select') && this.$('#section-list [data-section-move="tasks:-1"]').disabled && [...this.$('#section-list [data-section-view="kanban"]').options].some(option => option.value === sectionView.id), 'Navigation settings list every section, with a saved view only for sections that show tasks');
         this.$('#section-list [data-section-move="kanban:-1"]').click();
         await tick();
-        check(sectionRows().join() === 'tasks,issues,kanban,milestones' && !this.$('#unsaved-banner').hidden && !this.$('#settings-tab-navigation .settings-tab-dot').hidden && this.$('#settings-tab-identity .settings-tab-dot').hidden, 'Moving a section reorders it and flags the Navigation tab');
+        check(sectionRows().join() === 'tasks,issues,kanban,milestones,views' && !this.$('#unsaved-banner').hidden && !this.$('#settings-tab-navigation .settings-tab-dot').hidden && this.$('#settings-tab-identity .settings-tab-dot').hidden, 'Moving a section reorders it and flags the Navigation tab');
         this.$('#section-list [data-section-remove="issues"]').click();
         setValue('#section-list [data-section-name="kanban"]', 'Smoke board');
         setValue('#new-section-type', 'issues', 'change');
@@ -778,22 +780,28 @@ export class SmokeTests extends Component {
         this.$('#new-section-view').value = sectionView.id;
         this.$('#add-section').requestSubmit();
         const draftSections = this.state.settingsDraft.navigation;
-        check(sectionRows().length === 5 && !sectionRows().includes('issues') && draftSections.slice(3).map(section => [section.type, section.name, section.viewId].join()).join('|') === `kanban,Smoke filtered board,${sectionView.id}|tasks,Smoke filtered list,${sectionView.id}` && this.$('#section-list [data-section-row]:last-child [data-section-name]') === document.activeElement, 'Sections are removed and added with their type, name and saved view');
-        draftSections.push(...Array.from({ length: 7 }, (_, index) => ({ id: `smoke-extra-${index}`, type: 'milestones', name: `Extra ${index}` })));
+        check(sectionRows().length === 6 && !sectionRows().includes('issues') && draftSections.slice(4).map(section => [section.type, section.name, section.viewId].join()).join('|') === `kanban,Smoke filtered board,${sectionView.id}|tasks,Smoke filtered list,${sectionView.id}` && this.$('#section-list [data-section-row]:last-child [data-section-name]') === document.activeElement, 'Sections are removed and added with their type, name and saved view');
+        setValue('#new-section-type', 'views', 'change');
+        check(this.$('#new-section-view').disabled && this.$('#new-section-type').options.length === 5, 'All five section types can be created, with an unfiltered Views catalog');
+        this.$('#add-section').requestSubmit();
+        const addedCatalog = draftSections.at(-1);
+        check(addedCatalog.type === 'views' && addedCatalog.name === this.t("Views") && !addedCatalog.viewId, 'A new Views section uses its translated default name');
+        this.$(`[data-section-remove="${addedCatalog.id}"]`).click();
+        draftSections.push(...Array.from({ length: 6 }, (_, index) => ({ id: `smoke-extra-${index}`, type: 'milestones', name: `Extra ${index}` })));
         this.app.navigationSettings.drawNavigation();
         check(this.$('#add-section-button').disabled && sectionRows().length === NavigationSections.LIMIT, 'No more than 12 sections can be added');
-        draftSections.splice(5);
+        draftSections.splice(6);
         this.app.navigationSettings.drawNavigation();
         setValue('#section-list [data-section-name="kanban"]', ' ');
         this.app.settings.showSettingsTab('themes');
         this.$('#save-settings').click();
         await waitFor(() => this.$('#toast').textContent.includes(this.t("Each navigation section needs a name of 1 to 60 characters.")) && !this.state.saving);
-        check(this.state.settingsTab === 'navigation' && this.state.data.settings.navigation.length === 4, 'A section without a name is not saved and its tab opens');
+        check(this.state.settingsTab === 'navigation' && this.state.data.settings.navigation.length === 5, 'A section without a name is not saved and its tab opens');
         setValue('#section-list [data-section-name="kanban"]', 'Smoke board');
         this.$('#save-settings').click();
-        await waitFor(() => !this.state.saving && this.state.data.settings.navigation.length === 5);
+        await waitFor(() => !this.state.saving && this.state.data.settings.navigation.length === 6);
         const filteredBoard = this.state.data.settings.navigation.find(section => section.name === 'Smoke filtered board'), filteredList = this.state.data.settings.navigation.find(section => section.name === 'Smoke filtered list');
-        check(navButtons().map(button => button.dataset.section).join() === sectionIds().join() && !this.$('#navigation [data-view="1"]') && navButtons().map(button => button.dataset.view).join() === '0,3,2,3,0' && navButtons()[1].querySelector('.nav-label').textContent === 'Smoke board', 'The sidebar follows the order of the sections and drops removed ones');
+        check(navButtons().map(button => button.dataset.section).join() === sectionIds().join() && !this.$('#navigation [data-view="1"]') && navButtons().map(button => button.dataset.view).join() === '0,3,2,6,3,0' && navButtons()[1].querySelector('.nav-label').textContent === 'Smoke board', 'The sidebar follows the order of the sections and drops removed ones');
         this.$(`#navigation [data-section="${filteredBoard.id}"]`).click();
         await waitFor(() => this.state.sectionId === filteredBoard.id);
         check(this.state.view === 3 && this.$(`#navigation [data-section="${filteredBoard.id}"]`).classList.contains('active') && !this.$('#navigation [data-section="kanban"]').classList.contains('active') && this.$('#current-tab').textContent === 'Smoke filtered board' && this.$('.section-view-chip')?.textContent.includes('Smoke section view') && viewTasks.length > 0 && viewTasks.length < this.state.data.tasks.length && cards() === viewTasks.length, 'A board section bound to a saved view shows only its tasks');
@@ -802,12 +810,59 @@ export class SmokeTests extends Component {
         check(this.$('#current-tab').textContent === 'Smoke board' && !this.$('.section-view-chip') && cards() === this.state.data.tasks.length && this.$('#navigation [data-section="kanban"]').classList.contains('active'), 'Another section of the same view shows every task under its own name');
         this.$(`#navigation [data-section="${filteredList.id}"]`).click();
         await waitFor(() => this.state.view === 0 && this.state.activeSavedViewId === sectionView.id && !this.state.saving);
-        check(this.state.search === sectionView.search && this.$('#current-tab').textContent === 'Smoke filtered list' && this.$(`#navigation [data-section="${filteredList.id}"]`).classList.contains('active') && navButtons()[4].querySelector('.nav-count')?.textContent === String(this.app.taskFilter.tasksOfView(sectionView, sectionView.showHidden).length), 'A task section applies its saved view when it opens');
+        check(this.state.search === sectionView.search && this.$('#current-tab').textContent === 'Smoke filtered list' && this.$(`#navigation [data-section="${filteredList.id}"]`).classList.contains('active') && navButtons()[5].querySelector('.nav-count')?.textContent === String(this.app.taskFilter.tasksOfView(sectionView, sectionView.showHidden).length), 'A task section applies its saved view when it opens');
+        this.state.search = 'changed-after-opening';
+        await this.app.sections.open('kanban');
+        await this.app.sections.open(filteredList.id);
+        check(this.state.search === sectionView.search, 'Reopening a bound task section reapplies its saved filters');
         this.$('#navigation [data-section="tasks"]').click();
         await waitFor(() => this.state.sectionId === 'tasks');
         check(this.state.view === 0 && !this.state.search && !this.state.activeSavedViewId && !this.state.showHidden && this.$('#current-tab').textContent === this.state.data.settings.navigation[0].name, 'The plain task section starts again from every task');
         this.state.view = 1; this.app.shell.render();
         check(this.state.view === 0 && this.state.sectionId === 'tasks' && this.$('#navigation [data-section="tasks"]').classList.contains('active'), 'A view without sections falls back to the first section');
+        await this.app.sections.open('views');
+        const catalogReleases = () => [...document.querySelectorAll('#views-page [data-catalog-kind="release"]')].map(button => button.dataset.catalogId);
+        const catalogGroups = this.app.savedViews.releaseViewGroups(true);
+        check(this.state.view === 6 && this.$('#navigation [data-section="views"]').classList.contains('active') && this.$('#views-page [data-catalog-kind="saved"]')?.dataset.catalogId === sectionView.id &&
+          catalogReleases().join() === [...catalogGroups.upcoming, ...(catalogGroups.unassigned ? [''] : []), ...catalogGroups.past].map(date => this.app.savedViews.RELEASE_VIEW + date).join(), 'The fifth view lists saved views and every release, including hidden tasks');
+        this.$(`#views-page [data-catalog-kind="saved"][data-catalog-id="${sectionView.id}"]`).click();
+        await waitFor(() => this.state.view === 0 && this.state.activeSavedViewId === sectionView.id && !this.state.saving);
+        check(this.state.sectionId === filteredList.id && this.state.search === sectionTask.code, 'Opening a saved view from the catalog selects its matching task section');
+        const sectionsWithTasks = structuredClone(this.state.data.settings.navigation);
+        await this.app.history.commit(next => { next.settings.navigation = next.settings.navigation.filter(section => !['tasks', 'issues'].includes(section.type)); });
+        await this.app.sections.open('views');
+        for (const [kind, record, query, page] of [['task', searchTask, searchTask.code, 0], ['issue', searchIssue, searchIssue.incident, 1]]) {
+          this.app.globalSearch.openGlobalSearch(query);
+          this.$(`#global-search-results [data-global-kind="${kind}"][data-global-id="${record.id}"]`).click();
+          await waitFor(() => this.$(`#${kind}-form`));
+          await tick();
+          check(this.state.view === page && this.$('#modal').open && this.$(`#${kind}-form`)?.elements.code.value === record.code && !this.$('#navigation .active') &&
+            this.$('#current-tab').textContent === NavigationSections.defaultName(kind === 'task' ? 'tasks' : 'issues', this.currentLanguage()), `Global search opens the matching ${kind} after all its menu sections are removed`);
+          this.$('#modal').close();
+          await this.app.sections.open('views');
+        }
+        this.$(`#views-page [data-catalog-kind="saved"][data-catalog-id="${sectionView.id}"]`).click();
+        await waitFor(() => this.state.view === 0 && this.state.activeSavedViewId === sectionView.id && !this.state.saving);
+        check(this.state.standaloneView === 0 && this.state.search === sectionTask.code && this.app.taskFilter.filteredTasks().every(task => task.code === sectionTask.code), 'A saved view opens its task list even without a task menu section');
+        await this.app.sections.open('views');
+        const catalogDate = this.state.data.tasks.find(task => task.hidden && task.releaseDate).releaseDate;
+        this.$(`#views-page [data-catalog-id="${this.app.savedViews.RELEASE_VIEW}${catalogDate}"]`).click();
+        await waitFor(() => this.state.view === 0 && this.state.activeSavedViewId === this.app.savedViews.RELEASE_VIEW + catalogDate);
+        check(this.state.showHidden && this.app.taskFilter.filteredTasks().length === this.state.data.tasks.filter(task => task.releaseDate === catalogDate).length &&
+          this.app.taskFilter.filteredTasks().every(task => task.releaseDate === catalogDate), 'A catalog release opens exactly its tasks, including hidden rows');
+        await this.app.history.commit(next => {
+          next.settings.navigation = sectionsWithTasks;
+          next.settings.navigation.find(section => section.id === 'tasks').viewId = sectionView.id;
+          next.settings.taskColumns = next.settings.taskColumns.map(column => column.id === 'notes' ? { ...column, visible: !column.visible } : column);
+        });
+        await this.app.sections.open('views');
+        this.app.globalSearch.openGlobalSearch(searchTask.code);
+        this.$(`#global-search-results [data-global-kind="task"][data-global-id="${searchTask.id}"]`).click();
+        await waitFor(() => !this.state.saving && this.$('#task-form'));
+        await tick();
+        check(this.$('#modal').open && this.$('#task-form')?.elements.code.value === searchTask.code && this.state.activeSavedViewId === sectionView.id &&
+          JSON.stringify(this.configuredColumns()) === JSON.stringify(sectionView.columns), 'Search waits for a bound section to persist its columns before opening the matching editor');
+        this.$('#modal').close();
         this.app.savedViews.openSavedViews();
         this.$(`#saved-view-list [data-view-action="delete"][data-view-id="${sectionView.id}"]`).click();
         this.$('#confirm-action').click();
@@ -815,12 +870,12 @@ export class SmokeTests extends Component {
         check(this.state.data.settings.navigation.every(section => !('viewId' in section)), 'Deleting a saved view releases the sections that followed it');
         await this.app.history.commit(next => { next.settings.navigation = navigationState.navigation; next.settings.savedViews = navigationState.savedViews; next.settings.taskColumns = navigationState.columns; });
         ({ search: this.state.search, statusFilter: this.state.statusFilter, highlightFilter: this.state.highlightFilter, showHidden: this.state.showHidden, duplicatesOnly: this.state.duplicatesOnly, sort: this.state.sort } = filterState);
-        Object.assign(this.state, { activeSavedViewId: '', sectionId: '', taskSectionId: 'tasks', taskSectionViewId: '', view: 0 });
+        Object.assign(this.state, { activeSavedViewId: '', sectionId: '', taskSectionId: 'tasks', taskSectionViewId: '', standaloneView: null, view: 0 });
         this.state.columnFilters.tasks = filterState.columnFilters;
         this.app.history.clearHistory(this.state.activeOrganizationId);
         this.$('#modal').open && this.$('#modal').close();
         this.app.shell.render();
-        check(sectionIds().join() === NavigationSections.TYPES.join() && navButtons().length === 4, 'Navigation test sections leave no data behind');
+        check(sectionIds().join() === NavigationSections.TYPES.join() && navButtons().length === 5, 'Navigation test sections leave no data behind');
       }
       {
         const releaseState = { search: this.state.search, statusFilter: this.state.statusFilter, highlightFilter: this.state.highlightFilter, showHidden: this.state.showHidden, duplicatesOnly: this.state.duplicatesOnly, filters: structuredClone(this.state.columnFilters.tasks) };
@@ -1324,7 +1379,7 @@ export class SmokeTests extends Component {
       const allSheets = this.app.excel.EXCEL_SHEETS.map(([id]) => id), xmlDoc = text => new DOMParser().parseFromString(text, 'application/xml');
       const fullBook = await unzipParts(await this.app.excel.situationWorkbook({ scope: 'all', columns: 'all', sheets: allSheets }));
       const bookSheets = [...xmlDoc(fullBook.get('xl/workbook.xml')).getElementsByTagName('sheet')].map(sheet => sheet.getAttribute('name'));
-      check([...fullBook].every(([name, text]) => !/\.(xml|rels)$/.test(name) || !xmlDoc(text).querySelector('parsererror')) && bookSheets.join('|') === XlsxWriter.sheetNames([this.t("Summary"), ...NavigationSections.TYPES.map(type => this.app.sections.nameOf(type))]).join('|'), 'Well-formed Excel workbook includes a summary and one sheet per tab');
+      check([...fullBook].every(([name, text]) => !/\.(xml|rels)$/.test(name) || !xmlDoc(text).querySelector('parsererror')) && bookSheets.join('|') === XlsxWriter.sheetNames([this.t("Summary"), ...['tasks', 'issues', 'milestones', 'kanban'].map(type => this.app.sections.nameOf(type))]).join('|'), 'Well-formed Excel workbook includes a summary and the four data sheets, not the views catalog');
       const taskSheetXml = fullBook.get('xl/worksheets/sheet2.xml'), sharedXml = fullBook.get('xl/sharedStrings.xml');
       check(xmlDoc(taskSheetXml).getElementsByTagName('row').length === this.state.data.tasks.length + 1 && sharedXml.includes('SMOKE-1') && sharedXml.includes('BULK-3') && taskSheetXml.includes(`<v>${XlsxWriter.excelDate('2031-04-01')}</v>`) && taskSheetXml.includes('<autoFilter ') && taskSheetXml.includes('state="frozen"') && fullBook.has('xl/worksheets/_rels/sheet2.xml.rels'), "Task sheet includes every row, real dates, filters, frozen panes, and links");
       check(fullBook.get('xl/styles.xml').includes(XlsxWriter.argb(this.app.excel.tint(bulkStatus.color, 0.35))) && fullBook.get('xl/styles.xml').includes(XlsxWriter.argb(this.app.excel.tint(TaskOrder.dateColor('2031-04-01'), 0.5))) && fullBook.get('xl/worksheets/sheet3.xml').includes('<autoFilter ') && fullBook.get('xl/styles.xml').includes('FFFFF1C2') && [this.t("Next release"), this.t("Today's release")].some(text => sharedXml.includes(text)), 'Status colors, dates, and next release are included in the Excel file');
@@ -2016,7 +2071,7 @@ export class SmokeTests extends Component {
       check(this.state.data.settings.fontSizes.kanban === 120 && rootSize('kanban') === '1.2', "Text sizes are imported with the full organization");
       const settingsSource = baseData('en');
       settingsSource.settings.statuses = [{ id: 'smoke-status-a', name: this.state.data.settings.statuses[0].name.toUpperCase(), color: '#3366ff', highlight: false }, { id: 'smoke-status-b', name: 'Shipped', color: '#33aa66', highlight: true }];
-      settingsSource.settings.navigation.forEach((section, index) => { section.name = ['Imported tasks', 'Imported issues', 'Imported milestones', 'Imported board'][index]; });
+      settingsSource.settings.navigation.forEach((section, index) => { section.name = ['Imported tasks', 'Imported issues', 'Imported milestones', 'Imported board', 'Imported views'][index]; });
       settingsSource.settings.logo = secondLogo;
       settingsSource.settings.fontSizes.tables = 110;
       const settingsFile = organizationExport({ name: 'Remote settings', data: settingsSource }, 'settings', { appVersion: this.state.appVersion });
@@ -2030,7 +2085,7 @@ export class SmokeTests extends Component {
       check(settingsForm.textContent.includes(this.t("Language, navigation sections, hours per day, text sizes, statuses, urgencies, highlighters, tags, list columns and platform links. Replaces current settings.")), "Settings import indicates the text sizes");
       settingsForm.requestSubmit();
       await waitFor(() => !this.$('#modal').open && !this.state.saving && this.state.data.settings.language === 'en');
-      check(firstStatusTasks.length > 0 && firstStatusTasks.every(id => this.state.data.tasks.find(t => t.id === id).statusId === 'smoke-status-a') && this.state.data.tasks.every(t => ['smoke-status-a', 'smoke-status-b'].includes(t.statusId)) && this.state.data.settings.logo === fullFile.settings.logo && this.state.data.settings.navigation.map(section => section.name).join() === 'Imported tasks,Imported issues,Imported milestones,Imported board' && this.$('#navigation [data-view="3"] .nav-label').textContent === 'Imported board' && this.state.data.settings.taskFields.some(field => field.type === 'platform' && field.name === 'Link to platform' && field.template === "https://imported.example.com/browse/{code}"), "Settings are imported with statuses remapped, logo unchanged, and the old portal template as a platform column");
+      check(firstStatusTasks.length > 0 && firstStatusTasks.every(id => this.state.data.tasks.find(t => t.id === id).statusId === 'smoke-status-a') && this.state.data.tasks.every(t => ['smoke-status-a', 'smoke-status-b'].includes(t.statusId)) && this.state.data.settings.logo === fullFile.settings.logo && this.state.data.settings.navigation.map(section => section.name).join() === 'Imported tasks,Imported issues,Imported milestones,Imported board,Imported views' && this.$('#navigation [data-view="3"] .nav-label').textContent === 'Imported board' && this.$('#navigation [data-view="6"] .nav-label').textContent === 'Imported views' && this.state.data.settings.taskFields.some(field => field.type === 'platform' && field.name === 'Link to platform' && field.template === "https://imported.example.com/browse/{code}"), "Settings are imported with statuses remapped, logo unchanged, and the old portal template as a platform column");
       check(this.state.data.settings.fontSizes.tables === 110 && this.state.data.settings.fontSizes.kanban === 100 && rootSize('tables') === '1.1' && rootSize('kanban') === '1', "Text sizes are replaced by the imported settings");
       check(document.documentElement.lang === 'en' && this.$('#current-tab').textContent === 'Settings' && this.$('#transfer-panel').textContent.includes('Export and import organization') && this.$('#transfer-panel').textContent.includes('Export everything') && this.$('#import-organization').textContent.includes('Import from file') && this.$('#toast').textContent === 'Import completed.', 'Export and import section is translated using the imported language');
       check(this.$('#font-size-panel h2').textContent === 'Text size' && this.$('label[for="font-size-tables"]').textContent === 'Tables' && this.$('[data-font-preset="130"]').textContent.includes('Extra large') && this.$('#font-size-tables').value === '110', 'Text size section is translated into English');

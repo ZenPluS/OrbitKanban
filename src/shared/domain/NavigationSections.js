@@ -4,14 +4,16 @@
 const Common = typeof module !== 'undefined' ? require('./Common') : globalThis.OrbitKanban.Domain.Common;
 
 class NavigationSections {
-  // The index of a type is the view number used by the interface.
-  static TYPES = ['tasks', 'issues', 'milestones', 'kanban'];
-  static DEFAULT_NAMES = { tasks: "Tasks", issues: "Linked issues", milestones: "Milestones", kanban: 'Kanban' };
+  // Settings and Guide keep their existing page numbers (4 and 5).
+  static VIEW_IDS = { tasks: 0, issues: 1, milestones: 2, kanban: 3, views: 6 };
+  static TYPES = Object.keys(NavigationSections.VIEW_IDS);
+  static DEFAULT_NAMES = { tasks: "Tasks", issues: "Linked issues", milestones: "Milestones", kanban: 'Kanban', views: "Views" };
   // Types that show tasks, so a saved view can filter them.
   static FILTERABLE = ['tasks', 'milestones', 'kanban'];
   static LIMIT = 12;
   static NAME_MAX = 60;
-  static typeIndex = type => NavigationSections.TYPES.indexOf(type);
+  static typeIndex = type => NavigationSections.VIEW_IDS[type] ?? -1;
+  static typeOf = view => NavigationSections.TYPES.find(type => NavigationSections.typeIndex(type) === view);
   static defaultName(type, language = 'it') {
     const source = NavigationSections.DEFAULT_NAMES[type], value = Common.term(source, language).trim();
     return value && value.length <= NavigationSections.NAME_MAX ? value : source;
@@ -21,8 +23,8 @@ class NavigationSections {
   }
   // Up to 3.0 every organization had exactly the four views, renamed through "tabNames".
   static upgradeLegacyTabNames(settings) {
-    if (!Common.plainObject(settings) || settings.navigation !== undefined || !Array.isArray(settings.tabNames) || settings.tabNames.length !== NavigationSections.TYPES.length) return false;
-    settings.navigation = NavigationSections.TYPES.map((type, index) => ({ id: type, type, name: settings.tabNames[index] }));
+    if (!Common.plainObject(settings) || settings.navigation !== undefined || !Array.isArray(settings.tabNames) || settings.tabNames.length !== 4) return false;
+    settings.navigation = NavigationSections.defaultSections(settings.language).map((section, index) => ({ ...section, name: index < 4 ? settings.tabNames[index] : section.name }));
     delete settings.tabNames;
     return true;
   }

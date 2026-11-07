@@ -189,13 +189,17 @@ test('demo data is localized and only added to new organizations on request', ()
   const demo = DataFactory.createOrganization('Demo', 'en', '', undefined, true);
   assert.ok(demo.data.tasks.length > 200 && demo.data.issues.length > 100);
 });
-test('navigation sections default to the four views, validate their limits and upgrade legacy tab names', () => {
+test('navigation sections default to five views, validate their limits and upgrade legacy tab names', () => {
   assert.deepEqual(NavigationSections.defaultSections('en'), [
     { id: 'tasks', type: 'tasks', name: 'Tasks' }, { id: 'issues', type: 'issues', name: 'Linked issues' },
-    { id: 'milestones', type: 'milestones', name: 'Milestones' }, { id: 'kanban', type: 'kanban', name: 'Kanban' }
+    { id: 'milestones', type: 'milestones', name: 'Milestones' }, { id: 'kanban', type: 'kanban', name: 'Kanban' },
+    { id: 'views', type: 'views', name: 'Views' }
   ]);
   assert.equal(DataFactory.baseData('it').settings.navigation[0].name, Common.term('Tasks', 'it'));
-  const section = index => ({ id: `s-${index}`, type: NavigationSections.TYPES[index % 4], name: `Section ${index}` });
+  assert.equal(DataFactory.baseData('it').settings.navigation[4].name, 'Viste');
+  assert.deepEqual(NavigationSections.TYPES.map(NavigationSections.typeIndex), [0, 1, 2, 3, 6]);
+  assert.deepEqual([0, 1, 2, 3, 4, 5, 6].map(NavigationSections.typeOf), ['tasks', 'issues', 'milestones', 'kanban', undefined, undefined, 'views']);
+  const section = index => ({ id: `s-${index}`, type: NavigationSections.TYPES[index % 5], name: `Section ${index}` });
   assert.equal(NavigationSections.validateNavigation([section(1)]).length, 1);
   assert.equal(NavigationSections.validateNavigation(Array.from({ length: 12 }, (_, i) => section(i))).length, 12);
   assert.throws(() => NavigationSections.validateNavigation([]), /at least one navigation section/);
@@ -203,13 +207,17 @@ test('navigation sections default to the four views, validate their limits and u
   assert.throws(() => NavigationSections.validateNavigation([{ ...section(0), name: 'x'.repeat(61) }]), /name of 1 to 60 characters/);
   assert.throws(() => NavigationSections.validateNavigation([section(0), { ...section(1), id: 's-0' }]), /Invalid navigation sections/);
   assert.throws(() => NavigationSections.validateNavigation([{ ...section(1), viewId: 'view' }]), /Invalid navigation sections/);
+  assert.throws(() => NavigationSections.validateNavigation([{ ...section(4), viewId: 'view' }]), /Invalid navigation sections/);
   assert.equal(NavigationSections.validateNavigation([{ ...section(3), viewId: 'view' }]).length, 1);
   const legacy = DataFactory.initialData();
   delete legacy.settings.navigation;
   legacy.settings.tabNames = ['List', 'Links', 'Roadmap', 'Board'];
   const upgraded = ArchiveValidator.migrateArchive(structuredClone(legacy)).organizations[0].data.settings;
-  assert.deepEqual(upgraded.navigation.map(item => [item.id, item.type, item.name]), [['tasks', 'tasks', 'List'], ['issues', 'issues', 'Links'], ['milestones', 'milestones', 'Roadmap'], ['kanban', 'kanban', 'Board']]);
+  assert.deepEqual(upgraded.navigation.map(item => [item.id, item.type, item.name]), [['tasks', 'tasks', 'List'], ['issues', 'issues', 'Links'], ['milestones', 'milestones', 'Roadmap'], ['kanban', 'kanban', 'Board'], ['views', 'views', 'Viste']]);
   assert.ok(!('tabNames' in upgraded));
+  const invalidLegacy = structuredClone(legacy);
+  invalidLegacy.settings.tabNames[0] = null;
+  assert.throws(() => ArchiveValidator.migrateArchive(invalidLegacy), /name of 1 to 60 characters/);
   const current = DataFactory.initialData();
   assert.equal(NavigationSections.upgradeLegacyTabNames(current.settings), false);
   assert.ok(!('tabNames' in current.settings));
@@ -221,11 +229,12 @@ test('navigation sections can be reordered, removed, repeated and bound to saved
     { id: 'kanban', type: 'kanban', name: 'Board' },
     { id: 'team-board', type: 'kanban', name: 'Team A board', viewId: 'team-a' },
     { id: 'roadmap-gone', type: 'milestones', name: 'Old roadmap', viewId: 'deleted-view' },
-    { id: 'tasks', type: 'tasks', name: 'Tasks' }
+    { id: 'tasks', type: 'tasks', name: 'Tasks' },
+    { id: 'catalog', type: 'views', name: 'All views' }
   ];
   const archive = ArchiveValidator.validateArchive(ArchiveValidator.migrateArchive(structuredClone(data)));
   const navigation = archive.organizations[0].data.settings.navigation;
-  assert.deepEqual(navigation.map(item => item.id), ['kanban', 'team-board', 'roadmap-gone', 'tasks']);
+  assert.deepEqual(navigation.map(item => item.id), ['kanban', 'team-board', 'roadmap-gone', 'tasks', 'catalog']);
   assert.equal(navigation[1].viewId, 'team-a');
   assert.ok(!('viewId' in navigation[2]));
   const file = OrganizationTransfer.organizationExport({ name: 'Source', data }, 'settings');
@@ -233,11 +242,14 @@ test('navigation sections can be reordered, removed, repeated and bound to saved
   const parsed = OrganizationTransfer.parseOrganizationFile(JSON.stringify(file));
   assert.ok(!('extra' in parsed.settings.navigation[0]));
   const imported = OrganizationTransfer.applyOrganizationImport(DataFactory.baseData('it'), parsed, { settings: true }).settings;
-  assert.deepEqual(imported.navigation.map(item => [item.id, item.name, item.viewId]), [['kanban', 'Board', undefined], ['team-board', 'Team A board', 'team-a'], ['roadmap-gone', 'Old roadmap', undefined], ['tasks', 'Tasks', undefined]]);
+  assert.deepEqual(imported.navigation.map(item => [item.id, item.name, item.viewId]), [['kanban', 'Board', undefined], ['team-board', 'Team A board', 'team-a'], ['roadmap-gone', 'Old roadmap', undefined], ['tasks', 'Tasks', undefined], ['catalog', 'All views', undefined]]);
+  const customized = DataFactory.baseData('en');
+  customized.settings.navigation = [navigation[0]];
+  assert.deepEqual(ArchiveValidator.migrateArchive(customized).organizations[0].data.settings.navigation, [navigation[0]], 'existing custom menus are not repopulated');
   const legacyFile = OrganizationTransfer.organizationExport({ name: 'Source', data: DataFactory.baseData('en') }, 'settings');
   delete legacyFile.settings.navigation;
   legacyFile.settings.tabNames = ['A', 'B', 'C', 'D'];
-  assert.deepEqual(OrganizationTransfer.parseOrganizationFile(legacyFile).settings.navigation.map(item => item.name), ['A', 'B', 'C', 'D']);
+  assert.deepEqual(OrganizationTransfer.parseOrganizationFile(legacyFile).settings.navigation.map(item => item.name), ['A', 'B', 'C', 'D', 'Views']);
   const broken = structuredClone(file);
   broken.settings.navigation = [];
   assert.throws(() => OrganizationTransfer.parseOrganizationFile(broken), /at least one navigation section/);
