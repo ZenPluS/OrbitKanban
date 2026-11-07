@@ -1,6 +1,6 @@
 // Font family and text size settings.
 import { Component } from '../core/Component.js';
-import { TaskOrder, Typography } from '../shared.js';
+import { NavigationSections, TaskOrder, Typography } from '../shared.js';
 
 export class FontSettings extends Component {
   #fontSizeLabels = {
@@ -25,8 +25,8 @@ export class FontSettings extends Component {
     const color = task.releaseDate ? TaskOrder.dateColor(task.releaseDate) : '#929bb2', group = this.state.data.tasks.includes(task) ? this.state.data.tasks.filter(item => item.releaseDate === task.releaseDate) : [task];
     const samples = {
       base: () => this.ui`<div class="sample-stack"><div class="stat"><span>Visible tasks <span class="stat-icon">${this.ico('tasks')}</span></span><strong>${this.app.presenter.visibleTasks().length}<small>in your workspace</small></strong></div><div class="sample-actions"><span class="button primary">${this.ico('plus')}New task</span><span class="button">Save settings</span></div></div>`,
-      sidebar: () => [0, 1, 2].map(i => `<div class="nav-button ${i ? '' : 'active'}"><span class="nav-icon">${this.icons[i]}</span><span>${this.esc(settings.tabNames[i])}</span>${i ? '' : `<span class="nav-count">${this.app.presenter.visibleTasks().length}</span>`}</div>`).join(''),
-      headings: () => this.app.columns.heading(settings.tabNames[0], "All tasks, one direction. Plan your work and focus on upcoming releases."),
+      sidebar: () => settings.navigation.slice(0, 3).map((section, i) => `<div class="nav-button ${i ? '' : 'active'}"><span class="nav-icon">${this.icons[NavigationSections.typeIndex(section.type)]}</span><span>${this.esc(section.name)}</span>${section.type === 'tasks' ? `<span class="nav-count">${this.app.sections.taskCount(section)}</span>` : ''}</div>`).join(''),
+      headings: () => this.app.columns.heading(this.app.sections.nameOf('tasks', settings), "All tasks, one direction. Plan your work and focus on upcoming releases."),
       tables: () => this.ui`<table><thead><tr><th>Portal code</th><th>Description</th><th>Release date</th></tr></thead><tbody><tr><td><span class="code-link">${this.esc(task.code)}</span></td><td><span class="description-cell">${this.esc(this.app.richText.plain(task.description) || this.tr("No description"))}</span></td><td><span class="date-pill" style="--date:${color}">${this.ico('calendar')}${this.app.presenter.formatDate(task.releaseDate)}</span></td></tr></tbody></table>`,
       milestones: () => this.ui`<div style="--milestone:${color}"><div class="timeline-label">MILESTONE ${'01'}</div><div class="timeline-line"><span>${this.ico('diamond')}</span></div><div class="milestone-heading"><h2>${this.app.presenter.formatDate(task.releaseDate)}</h2><span>${group.length} tasks · ${this.app.presenter.effort(group.reduce((sum, item) => sum + item.effortHours, 0))}</span></div><div class="milestone-cards">${this.app.milestones.miniTask(task)}</div></div>`,
       kanban: () => `<div class="kanban-column" style="--column:${status.color}"><div class="kanban-heading"><span><i></i>${this.esc(status.name)}</span><b>${this.state.data.tasks.filter(item => item.statusId === status.id).length}</b></div><div class="kanban-cards">${this.app.milestones.miniTask(task, true)}</div></div>`,

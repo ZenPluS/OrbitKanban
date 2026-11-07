@@ -26,7 +26,7 @@ export class FormDesigner extends Component {
     const tasks = this.app.taskList.sortedRows(this.app.presenter.visibleTasks()).slice(0, 16);
     const rows = tasks.length ? tasks.map(task => { const status = this.statusOf(task); return `<div class="designer-ghost-row"><b>${this.esc(task.code || '—')}</b><span>${this.esc(this.app.richText.plain(task.description || '').slice(0, 90))}</span>${this.app.presenter.pill(status.name, status.color)}<span>${this.esc(this.app.presenter.formatDate(task.releaseDate))}</span></div>`; }).join('')
       : Array.from({ length: 10 }, () => '<div class="designer-ghost-row"><i></i><i></i><i></i><i></i></div>').join('');
-    return `<div class="designer-ghost-app"><div class="designer-ghost-rail">${this.icons.map(icon => `<span>${icon}</span>`).join('')}</div><div class="designer-ghost-main"><div class="designer-ghost-heading"><strong>${this.esc(this.state.data.settings.tabNames[0])}</strong><span class="button primary">${this.ico('plus')}</span></div><div class="designer-ghost-table">${rows}</div></div></div>`;
+    return `<div class="designer-ghost-app"><div class="designer-ghost-rail">${this.icons.map(icon => `<span>${icon}</span>`).join('')}</div><div class="designer-ghost-main"><div class="designer-ghost-heading"><strong>${this.esc(this.app.sections.nameOf('tasks'))}</strong><span class="button primary">${this.ico('plus')}</span></div><div class="designer-ghost-table">${rows}</div></div></div>`;
   }
   #LAYOUT_PRESETS = [[100], [50, 50], [40, 60], [60, 40], [33, 67], [67, 33], [33, 34, 33], [25, 50, 25]];
   openFormDesigner() {

@@ -8,6 +8,7 @@ const Typography = typeof module !== 'undefined' ? require('./Typography') : glo
 const TaskColumns = typeof module !== 'undefined' ? require('./TaskColumns') : globalThis.OrbitKanban.Domain.TaskColumns;
 const TaskLayout = typeof module !== 'undefined' ? require('./TaskLayout') : globalThis.OrbitKanban.Domain.TaskLayout;
 const ThemeCatalog = typeof module !== 'undefined' ? require('./ThemeCatalog') : globalThis.OrbitKanban.Domain.ThemeCatalog;
+const NavigationSections = typeof module !== 'undefined' ? require('./NavigationSections') : globalThis.OrbitKanban.Domain.NavigationSections;
 const ArchiveValidator = typeof module !== 'undefined' ? require('./ArchiveValidator') : globalThis.OrbitKanban.Domain.ArchiveValidator;
 
 class DataFactory {
@@ -26,7 +27,7 @@ class DataFactory {
       { id: Common.id(), name: T("Low"), color: '#77a6c9' }
     ];
     const settings = {
-      language, logo: '', tabNames: ["Tasks", "Linked issues", "Milestones", 'Kanban'].map(name => T(name)),
+      language, logo: '', navigation: NavigationSections.defaultSections(language),
       hoursPerDay: 8, fontSizes: Typography.defaultFontSizes(), fontFamily: Typography.DEFAULT_FONT_FAMILY, statuses, urgencies, highlights: ThemeCatalog.defaultHighlights(language), tags: [], taskColumns: TaskColumns.defaultTaskColumns(), themeId: 'midnight',
       themes: ThemeCatalog.defaultThemes(), savedViews: [], taskFields: [], issueFields: [], issueColumns: ColumnLayout.normalizeIssueColumns(),
       requiredTaskColumns: [...RequiredFields.DEFAULT_REQUIRED.tasks], requiredIssueColumns: [...RequiredFields.DEFAULT_REQUIRED.issues]

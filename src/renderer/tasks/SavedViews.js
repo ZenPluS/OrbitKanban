@@ -1,6 +1,6 @@
 // Saved views and ready-made release views of the task list.
 import { Component } from '../core/Component.js';
-import { ColumnFilters, Common } from '../shared.js';
+import { ColumnFilters, Common, NavigationSections } from '../shared.js';
 
 export class SavedViews extends Component {
   // Every release date gets a ready-made view; ids are "release:<date>" ("release:" for tasks without a date) and are never stored.
@@ -114,7 +114,10 @@ export class SavedViews extends Component {
       if (button.dataset.viewAction === 'apply') return this.applySavedView(saved.id);
       if (button.dataset.viewAction === 'update') return this.saveSavedView(saved.name, saved.id);
       if (button.dataset.viewAction === 'delete') this.app.modal.confirmDialog("Delete the saved view?", saved.name, async () => {
-        await this.app.history.commit(next => { next.settings.savedViews = (next.settings.savedViews || []).filter(item => item.id !== saved.id); });
+        await this.app.history.commit(next => {
+          next.settings.savedViews = (next.settings.savedViews || []).filter(item => item.id !== saved.id);
+          NavigationSections.normalizeNavigation(next.settings);
+        });
         if (this.state.activeSavedViewId === saved.id) this.state.activeSavedViewId = '';
         this.app.shell.rerenderPreservingView();
         this.app.notifier.notify("View deleted.");

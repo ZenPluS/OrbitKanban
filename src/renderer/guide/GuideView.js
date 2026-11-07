@@ -1,6 +1,6 @@
 // In-app guide view.
 import { Component } from '../core/Component.js';
-import { ColumnSchema, GuideContent } from '../shared.js';
+import { ColumnSchema, GuideContent, NavigationSections } from '../shared.js';
 
 export class GuideView extends Component {
   constructor(app) {
@@ -30,9 +30,9 @@ export class GuideView extends Component {
   #guideSections() {
     return GuideContent.sections.map(section => ({
       ...section,
-      name: section.tab === undefined ? this.term(section.title) : this.state.data.settings.tabNames[section.tab],
+      name: section.tab === undefined ? this.term(section.title) : this.app.sections.nameOf(NavigationSections.TYPES[section.tab]),
       go: (section.go || []).map(target => target.view !== undefined
-        ? { attr: `data-guide-view="${target.view}"`, label: this.state.data.settings.tabNames[target.view] }
+        ? { attr: `data-guide-view="${target.view}"`, label: this.app.sections.list().some(item => item.type === NavigationSections.TYPES[target.view]) ? this.app.sections.nameOf(NavigationSections.TYPES[target.view]) : '' }
         : { attr: `data-guide-settings="${this.esc(target.settings)}"`, label: this.#guideSettingsTarget(target.settings) }).filter(target => target.label)
     }));
   }
@@ -57,7 +57,7 @@ export class GuideView extends Component {
       if (link) { this.#showGuideSection(link.dataset.guideSection); return; }
       const target = event.target.closest('[data-guide-view],[data-guide-settings]');
       if (target?.dataset.guideSettings) this.app.settings.openSettingsTab(target.dataset.guideSettings);
-      else if (target) { this.state.view = Number(target.dataset.guideView); this.app.shell.render(); }
+      else if (target) this.app.notifier.action(() => this.app.sections.openType(NavigationSections.TYPES[Number(target.dataset.guideView)]))();
     });
     this.#filterGuide();
   }

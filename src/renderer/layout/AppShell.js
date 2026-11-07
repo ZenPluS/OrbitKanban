@@ -1,6 +1,6 @@
 // Renders the current view and the chrome, and adopts workspace snapshots and remote changes.
 import { Component } from '../core/Component.js';
-import { ArchiveValidator, ColumnFilters, ColumnLayout, ColumnSchema, Common, Typography } from '../shared.js';
+import { ArchiveValidator, ColumnFilters, ColumnLayout, ColumnSchema, Common, NavigationSections, Typography } from '../shared.js';
 
 export class AppShell extends Component {
   constructor(app) {
@@ -25,6 +25,7 @@ export class AppShell extends Component {
     this.app.colorPicker.closeColorPicker();
     this.app.rowMarks.closeMarkMenu();
     this.app.tagMenu.closeTagMenu();
+    this.app.sections.resolve();
     const content = this.$('#content'), nextView = ['tasks', 'issues', 'milestones', 'kanban', 'settings', 'guide'][this.state.view];
     if (content.dataset.workspaceView !== nextView) content.scrollTop = 0;
     content.dataset.workspaceView = nextView;
@@ -36,11 +37,15 @@ export class AppShell extends Component {
       const label = this.app.transfer.fillText(i ? "{0} associations with a duplicate incident" : "{0} tasks with a duplicate incident", alerts[i]);
       return `<span class="nav-alert" title="${this.esc(label)}"><span aria-hidden="true">${alerts[i]}</span><span class="sr-only">${this.esc(label)}</span></span>`;
     };
-    this.$('#navigation').innerHTML = this.state.data.settings.tabNames.map((name, i) => `<button class="nav-button ${this.state.view === i ? 'active' : ''}" data-view="${i}"${this.app.sidebar.sidebarCollapsed ? ` title="${this.esc(name)}"` : ''}><span class="nav-icon">${this.icons[i]}${alert(i)}</span><span class="nav-label">${this.esc(name)}</span>${i === 0 ? `<span class="nav-count">${this.app.presenter.visibleTasks().length}</span>` : ''}</button>`).join('');
-    document.querySelectorAll('#navigation [data-view]').forEach(button => button.onclick = () => { this.state.view = Number(button.dataset.view); this.render(); });
+    const current = this.app.sections.current();
+    this.$('#navigation').innerHTML = this.app.sections.list().map(section => {
+      const { id, name } = section, i = NavigationSections.typeIndex(section.type);
+      return `<button class="nav-button ${current?.id === id ? 'active' : ''}" data-view="${i}" data-section="${this.esc(id)}"${this.app.sidebar.sidebarCollapsed ? ` title="${this.esc(name)}"` : ''}><span class="nav-icon">${this.icons[i]}${alert(i)}</span><span class="nav-label">${this.esc(name)}</span>${i === 0 ? `<span class="nav-count">${this.app.sections.taskCount(section)}</span>` : ''}</button>`;
+    }).join('');
+    document.querySelectorAll('#navigation [data-section]').forEach(button => button.onclick = this.app.notifier.action(() => this.app.sections.open(button.dataset.section)));
     this.$('#settings-button').classList.toggle('active', this.state.view === 4);
     this.$('#guide-button').classList.toggle('active', this.state.view === 5);
-    this.$('#current-tab').textContent = this.state.view === 4 ? this.t("Settings") : this.state.view === 5 ? this.term("Guide") : this.state.data.settings.tabNames[this.state.view];
+    this.$('#current-tab').textContent = this.state.view === 4 ? this.t("Settings") : this.state.view === 5 ? this.term("Guide") : current.name;
     if (this.state.view === 0) this.app.taskList.renderTasks();
     if (this.state.view === 1) this.app.issues.renderIssues();
     if (this.state.view === 2) this.app.milestones.renderMilestones();
@@ -49,7 +54,7 @@ export class AppShell extends Component {
     if (this.state.view === 5) this.app.guide.renderGuide();
   }
   adoptSnapshot(snapshot) {
-    if (this.state.activeOrganizationId !== snapshot.activeOrganizationId) { this.state.columnFilters = { tasks: {}, issues: {} }; this.state.issueSearch = ''; }
+    if (this.state.activeOrganizationId !== snapshot.activeOrganizationId) { this.state.columnFilters = { tasks: {}, issues: {} }; this.state.issueSearch = ''; this.state.taskSectionId = ''; this.state.taskSectionViewId = ''; }
     this.state.data = ArchiveValidator.validateData(snapshot.data);
     if (!this.hasColumn('status')) this.state.statusFilter = '';
     if (!this.hasColumn('highlight')) { this.state.highlightFilter = ''; this.state.highlighter = ''; this.app.rowMarks.pendingMarks.clear(); }

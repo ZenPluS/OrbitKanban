@@ -12,6 +12,7 @@ import { ThemePainter } from './appearance/ThemePainter.js';
 import { LogoPainter } from './appearance/LogoPainter.js';
 import { Sidebar } from './layout/Sidebar.js';
 import { AppShell } from './layout/AppShell.js';
+import { SectionNavigator } from './layout/SectionNavigator.js';
 import { SettingsController } from './settings/SettingsController.js';
 import { OrganizationManager } from './organizations/OrganizationManager.js';
 import { ColumnCatalog } from './columns/ColumnCatalog.js';
@@ -46,6 +47,7 @@ import { SettingsView } from './settings/SettingsView.js';
 import { LanguageSettings } from './settings/LanguageSettings.js';
 import { LogoSettings } from './settings/LogoSettings.js';
 import { OptionListSettings } from './settings/OptionListSettings.js';
+import { NavigationSettings } from './settings/NavigationSettings.js';
 import { ThemeSettings } from './settings/ThemeSettings.js';
 import { Toolbar } from './layout/Toolbar.js';
 import { SmokeTests } from './diagnostics/SmokeTests.js';
@@ -66,6 +68,7 @@ export class App extends Component {
     this.logoPainter = new LogoPainter(this);
     this.sidebar = new Sidebar(this);
     this.shell = new AppShell(this);
+    this.sections = new SectionNavigator(this);
     this.settings = new SettingsController(this);
     this.organizationManager = new OrganizationManager(this);
     this.columns = new ColumnCatalog(this);
@@ -100,6 +103,7 @@ export class App extends Component {
     this.languages = new LanguageSettings(this);
     this.logo = new LogoSettings(this);
     this.optionLists = new OptionListSettings(this);
+    this.navigationSettings = new NavigationSettings(this);
     this.themes = new ThemeSettings(this);
     this.toolbar = new Toolbar(this);
     this.smokeTests = new SmokeTests(this);
@@ -111,7 +115,7 @@ export class App extends Component {
       try { await this.languages.loadLanguages(); }
       catch (error) { console.error('Languages not loaded:', error); }
       const loaded = await this.workspaceApi.load();
-      this.shell.adoptSnapshot(loaded); this.shell.render(); this.shell.subscribe();
+      this.shell.adoptSnapshot(loaded); await this.sections.openFirst().catch(error => { this.shell.render(); this.notifier.notify(error.message, true); }); this.shell.subscribe();
       if (!this.browserMode() && window.workspace.updates) {
         if (!this.state.updateSubscribed) { window.workspace.onUpdate(this.updates.adoptUpdateState); this.state.updateSubscribed = true; }
         this.updates.adoptUpdateState(await this.workspaceApi.updates());

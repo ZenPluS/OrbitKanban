@@ -4,7 +4,7 @@
 
 | | |
 | --- | --- |
-| **Current version** | 3.0.1 |
+| **Current version** | 3.1.0 |
 | **Platform** | Windows 10 / 11, 64-bit |
 | **Distribution** | Single portable executable, `OrbitKanban-Portable.exe` |
 | **Network** | Not required. Used only for optional update checks against GitHub |
@@ -26,6 +26,7 @@
   - [Linked issues](#linked-issues)
   - [Milestones](#milestones)
   - [Kanban](#kanban)
+  - [Navigation sections](#navigation-sections)
 - [Working with the lists](#working-with-the-lists)
   - [Sorting and manual order](#sorting-and-manual-order)
   - [Search, column filters and views](#search-column-filters-and-views)
@@ -72,7 +73,7 @@
 ## Highlights
 
 - **Truly portable.** The executable and a `data` folder next to it are the whole installation, with automatic daily backups.
-- **Four views**: Tasks, Linked issues, Milestones and Kanban. Each tab name is configurable per organization.
+- **Four views**: Tasks, Linked issues, Milestones and Kanban. The sidebar sections that open them can be renamed, reordered, removed or added per organization, and a section can show a saved view.
 - **Collapsible sidebar** that folds into a column of icons (**☰** or `Ctrl+B`) to give the views more room.
 - **Automatic issue matching.** Incidents and problems recorded in Linked issues are resolved onto tasks by their portal code.
 - **Multiple organizations**, each with its own data, settings, logo, theme and language.
@@ -160,7 +161,7 @@ The workspace format is version 2 (multi-organization). It cannot be opened by 1
 
 ## Organizations
 
-The menu under the **OrbitKanban** name in the sidebar switches the active organization. Each organization has its **own tasks and issues** and its own tab names, statuses, urgencies, highlights, tags, columns, themes, font, text sizes, hours per day, logo and language. Switching updates every view immediately and resets search and filters. The selection is remembered for the next launch. Identical codes in different organizations are never linked.
+The menu under the **OrbitKanban** name in the sidebar switches the active organization. Each organization has its **own tasks and issues** and its own navigation sections, statuses, urgencies, highlights, tags, columns, themes, font, text sizes, hours per day, logo and language. Switching updates every view immediately and resets search and filters. The selection is remembered for the next launch. Identical codes in different organizations are never linked.
 
 - **Manage organizations** opens the related settings tab.
 - **New organization** asks for a name, language and optional logo. A preview shows the logo and the four colors of the theme that will be generated. New organizations start empty unless **Include demo data** is selected.
@@ -211,6 +212,18 @@ A horizontal timeline grouped by release date. It scrolls in both directions and
 ### Kanban
 
 A read-only board with one column per status, in the configured status order. An extra column collects tasks without a status when needed. Hidden tasks are included and labeled. Change statuses from the task list or with bulk edit.
+
+### Navigation sections
+
+The sidebar lists the **sections** of the organization. Each section opens one of the four views under its own name. **Settings → Navigation** shows all sections in menu order:
+
+- rename a section, or move it up and down to change the menu order;
+- remove a section: only the menu entry disappears, tasks and issues are never deleted;
+- **Add section** creates a new section of any of the four types, up to 12 sections. An empty name uses the name of the view type.
+
+A Tasks, Milestones or Kanban section can be bound to a [saved view](#search-column-filters-and-views). A bound Tasks section applies the view each time it opens. A bound Milestones or Kanban section shows only the tasks of that view, hidden tasks included, and its header shows a **View** label with the view name. For example, *Kanban Security* can show only security tasks while the plain *Kanban* section shows everything. Deleting a saved view releases the sections bound to it.
+
+The first section of the menu opens at startup. **Guide** and **Settings** always stay at the bottom of the sidebar and cannot be removed. A section must have a name, and at least one section is required. When a view has no section, links to it, for example from global search, open the view under its default name. Older workspaces keep their former tab names as the four default sections.
 
 ## Working with the lists
 
@@ -504,7 +517,7 @@ A file named after a built-in language, such as `it.json`, overrides only the te
 | Button | Content |
 | --- | --- |
 | **Export themes** | All themes and the active theme |
-| **Export settings** | Language, tab names, hours per day, font, text sizes, statuses, urgencies, highlighters, tags, columns (with their platform templates) and logo |
+| **Export settings** | Language, navigation sections, hours per day, font, text sizes, statuses, urgencies, highlighters, tags, columns (with their platform templates) and logo |
 | **Export data** | Tasks and issues, with the catalogs needed to map them |
 | **Export everything** | All of the above in one file |
 
@@ -638,7 +651,7 @@ The code is object oriented: apart from entry points and preload scripts, every 
 | Folder | Namespace and contents |
 | --- | --- |
 | `src/shared/` | Classes used by the main process, the web server and the interface. Each folder is a namespace with an `index.js` for Node; in the interface the classes register under `globalThis.OrbitKanban.<Namespace>` |
-| `src/shared/domain/` | **Domain**: data model and defaults (`DataFactory`), validation and migrations (`ArchiveValidator`), organization transfer, task order, links, layout, limits, themes and typography |
+| `src/shared/domain/` | **Domain**: data model and defaults (`DataFactory`), validation and migrations (`ArchiveValidator`), organization transfer, task order, links, layout, navigation sections, limits, themes and typography |
 | `src/shared/columns/` | **Columns**: column schemas, layout, filters, validation, merging, required fields and platform links |
 | `src/shared/interop/` | **Interop**: CSV parsing and import, ZIP and Excel writers (no external dependencies) |
 | `src/shared/localization/` | **Localization**: the `Translator` engine |
@@ -693,7 +706,7 @@ Tags are never moved. Bump the version before releasing new sources:
 npm version minor --no-git-tag-version --ignore-scripts
 ```
 
-For a specifically numbered release, use `npm version 3.0.1 --no-git-tag-version --ignore-scripts` instead. To update the local portable copy too, run the pipeline **without `-NoDeliver`** and close the app first. The script replaces only the executable, not `dist/data`.
+For a specifically numbered release, use `npm version 3.1.0 --no-git-tag-version --ignore-scripts` instead. To update the local portable copy too, run the pipeline **without `-NoDeliver`** and close the app first. The script replaces only the executable, not `dist/data`.
 
 The script refuses to reuse a tagged version for different sources. If a build or test fails, nothing is committed or pushed.
 
@@ -701,6 +714,7 @@ The script refuses to reuse a tagged version for different sources. If a build o
 
 | Version | Changes |
 | --- | --- |
+| **3.1.0** | **Settings → Navigation**: rename, reorder, remove and add sidebar sections (up to 12), each opening one of the four views; Tasks, Milestones and Kanban sections can be bound to a saved view. The former **Identity & navigation** tab is now **Identity** |
 | **3.0.1** | Demo data spans January 2026 to January 2029: biweekly milestones are completed up to the day the demo is created, the next one is in progress and later ones are planned |
 | **3.0.0** | Flat HTML and CSS splash screen, also shown by the portable launcher, replacing the video clip; it opens in the colors and logo of the starting organization, or draws an animated, themed atom logo. **Themed app icon**: the atom in the sidebar, browser tab and window/taskbar icon takes the theme colors. Clean-up of unused code, styles, translations and build steps |
 | **2.70.1** | Object-oriented code base: one class per file, grouped by namespace under `src/` (shared, renderer, desktop, web) and `tools/`; no functional changes |

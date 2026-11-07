@@ -2,7 +2,8 @@
 
 export class AppState {
   columnFilters = { tasks: {}, issues: {} }; issueSearch = '';
-  data; dataFolder; view = 0; search = ''; showHidden = false; duplicatesOnly = false; issueDuplicatesOnly = false; statusFilter = ''; highlightFilter = ''; highlighter = ''; sort = [{ key: 'releaseDate', direction: 'asc' }];
+  // view is the type of the open page (0-3 task, issue, milestone and kanban sections, 4 settings, 5 guide); sectionId names the sidebar section showing it.
+  data; dataFolder; view = 0; sectionId = ''; taskSectionId = ''; taskSectionViewId = ''; search = ''; showHidden = false; duplicatesOnly = false; issueDuplicatesOnly = false; statusFilter = ''; highlightFilter = ''; highlighter = ''; sort = [{ key: 'releaseDate', direction: 'asc' }];
   settingsDraft; settingsBase; saving = false; organizationBusy = false; organizations = []; activeOrganizationId; lastOpenedLink = '';
   revision = ''; appVersion = ''; browserUrl = ''; online = true; refreshing = false; pendingChange = null; renderAfterModal = false; adoptions = 0; subscribed = false;
   HISTORY_LIMIT = 20; undoHistory = new Map(); redoHistory = new Map();

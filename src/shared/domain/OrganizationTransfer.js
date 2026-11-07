@@ -14,6 +14,7 @@ const TaskColumns = typeof module !== 'undefined' ? require('./TaskColumns') : g
 const TaskLayout = typeof module !== 'undefined' ? require('./TaskLayout') : globalThis.OrbitKanban.Domain.TaskLayout;
 const ThemeCatalog = typeof module !== 'undefined' ? require('./ThemeCatalog') : globalThis.OrbitKanban.Domain.ThemeCatalog;
 const TaskLinks = typeof module !== 'undefined' ? require('./TaskLinks') : globalThis.OrbitKanban.Domain.TaskLinks;
+const NavigationSections = typeof module !== 'undefined' ? require('./NavigationSections') : globalThis.OrbitKanban.Domain.NavigationSections;
 const ArchiveValidator = typeof module !== 'undefined' ? require('./ArchiveValidator') : globalThis.OrbitKanban.Domain.ArchiveValidator;
 const DataFactory = typeof module !== 'undefined' ? require('./DataFactory') : globalThis.OrbitKanban.Domain.DataFactory;
 
@@ -27,6 +28,7 @@ class OrganizationTransfer {
     status: ['id', 'name', 'color', 'highlight'],
     urgency: ['id', 'name', 'color'],
     highlight: ['id', 'name', 'color'],
+    section: ['id', 'type', 'name', 'viewId'],
     column: ['id', 'visible'],
     task: ['id', 'code', 'sequence', 'description', 'notes', 'releaseDate', 'statusId', 'urgencyId', 'effortHours', 'hidden', 'highlightId', 'tagIds', 'customFields'],
     issue: ['id', 'code', 'incident', 'problem', 'customFields']
@@ -40,7 +42,7 @@ class OrganizationTransfer {
     if (parts.includes('settings')) {
       file.settings = {
         language: settings.language || 'it', logo: settings.logo || '',
-        tabNames: [...settings.tabNames], hoursPerDay: settings.hoursPerDay, fontSizes: { ...(settings.fontSizes || Typography.defaultFontSizes()) }, fontFamily: settings.fontFamily ?? Typography.DEFAULT_FONT_FAMILY,
+        navigation: structuredClone(settings.navigation), hoursPerDay: settings.hoursPerDay, fontSizes: { ...(settings.fontSizes || Typography.defaultFontSizes()) }, fontFamily: settings.fontFamily ?? Typography.DEFAULT_FONT_FAMILY,
         statuses: structuredClone(settings.statuses), urgencies: structuredClone(settings.urgencies),
         highlights: structuredClone(highlights), tags: structuredClone(settings.tags || []),
         taskColumns: ColumnLayout.listColumns(settings, 'tasks'), savedViews: structuredClone(settings.savedViews || []),
@@ -99,7 +101,10 @@ class OrganizationTransfer {
     file = structuredClone(file);
     const fileLanguage = Common.validLanguage(file.settings?.language) ? file.settings.language : 'it';
     const legacyTemplate = typeof file.settings?.portalUrlTemplate === 'string' ? file.settings.portalUrlTemplate : undefined;
-    if (parts.includes('settings')) TaskLinks.upgradeLegacyLink(file.settings, [], { language: fileLanguage });
+    if (parts.includes('settings')) {
+      TaskLinks.upgradeLegacyLink(file.settings, [], { language: fileLanguage });
+      NavigationSections.upgradeLegacyTabNames(file.settings);
+    }
     // Without the settings the template is unknown: the codes are kept so the template of the receiving column can complete them.
     if (parts.includes('data')) TaskLinks.upgradeLegacyLink(file.data, file.data.tasks, { language: fileLanguage, template: legacyTemplate ?? '', fillCodes: !parts.includes('settings') || Boolean(legacyTemplate) });
     const probe = DataFactory.baseData('it');
@@ -113,7 +118,7 @@ class OrganizationTransfer {
       const source = file.settings;
       const settings = {
         language: source.language, logo: source.logo ?? '',
-        tabNames: Array.isArray(source.tabNames) ? [...source.tabNames] : source.tabNames, hoursPerDay: source.hoursPerDay,
+        navigation: Array.isArray(source.navigation) ? OrganizationTransfer.#fileRecords(source.navigation, OrganizationTransfer.#RECORD_KEYS.section, "Invalid navigation sections.") : source.navigation, hoursPerDay: source.hoursPerDay,
         statuses: OrganizationTransfer.#fileRecords(source.statuses, OrganizationTransfer.#RECORD_KEYS.status, "Invalid or empty status list."),
         urgencies: OrganizationTransfer.#fileRecords(source.urgencies, OrganizationTransfer.#RECORD_KEYS.urgency, "Invalid or empty urgency list.")
       };
@@ -209,7 +214,7 @@ class OrganizationTransfer {
       const remapColumns = (list, map) => list.map(column => ({ ...column, id: map.get(column.id) || column.id }));
       const status = OrganizationTransfer.#optionRemapper(settings.statuses, incoming.statuses), urgency = OrganizationTransfer.#optionRemapper(settings.urgencies, incoming.urgencies);
       for (const task of next.tasks) { task.statusId = status(task.statusId); task.urgencyId = urgency(task.urgencyId); }
-      for (const key of ['language', 'tabNames', 'hoursPerDay', 'statuses', 'urgencies']) settings[key] = incoming[key];
+      for (const key of ['language', 'navigation', 'hoursPerDay', 'statuses', 'urgencies']) settings[key] = incoming[key];
       if (incoming.fontSizes) settings.fontSizes = incoming.fontSizes;
       if (incoming.fontFamily !== undefined) settings.fontFamily = incoming.fontFamily;
       if (incoming.taskEditorLayout !== undefined) settings.taskEditorLayout = TaskLayout.remapTaskEditorLayout(settings, incoming.taskEditorLayout, maps.tasks.mapping);
@@ -233,6 +238,7 @@ class OrganizationTransfer {
         ...view, columns: remapColumns(view.columns, maps.tasks.mapping), sort: view.sort.map(item => ({ ...item, key: maps.tasks.mapping.get(item.key) || item.key })),
         ...(view.columnFilters && { columnFilters: ColumnMerger.remapValues(view.columnFilters, maps.tasks.mapping, maps.tasks.valueMappings, true) })
       }));
+      NavigationSections.normalizeNavigation(settings);
       if (options.logo) settings.logo = incoming.logo;
     }
     if (wanted('themes')) {

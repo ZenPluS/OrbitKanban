@@ -138,7 +138,7 @@ export class ExcelExport extends Component {
         }));
       }
       const code = defs.findIndex(def => def.id === 'code');
-      sheets.push({ name: settings.tabNames[0], columns: defs.map(def => ({ width: def.width })), rows, freeze: { row: 1, col: code >= 0 && code < 3 ? code + 1 : 0 }, autoFilter: true, tabColor: settings.themes.find(theme => theme.id === settings.themeId)?.accent, print: { landscape: true, fitWidth: true } });
+      sheets.push({ name: this.app.sections.nameOf('tasks', settings), columns: defs.map(def => ({ width: def.width })), rows, freeze: { row: 1, col: code >= 0 && code < 3 ? code + 1 : 0 }, autoFilter: true, tabColor: settings.themes.find(theme => theme.id === settings.themeId)?.accent, print: { landscape: true, fitWidth: true } });
     }
     if (wanted.has('issues')) {
       const identical = new Set(duplicates.identical), cell = { border: grid, vertical: 'top' };
@@ -149,7 +149,7 @@ export class ExcelExport extends Component {
           const values = { code: { v: issue.code, link: url, style: { ...cell, bold: true } }, incident: { v: issue.incident, style: { ...cell, ...(group && { fill: this.tint('#f2b94a', 0.45) }) } }, problem: { v: issue.problem, style: cell }, linked: { v: linked.length, style: cell } };
           return [...ids.map(id => values[id] || this.#customSpreadsheetCell(issue, this.app.columns.columnDef(id, 'issues').field, cell)), { v: group ? this.t(identical.has(issue.id) ? "identical" : "Yes") : '', style: { ...cell, horizontal: 'center' } }];
         })];
-      sheets.push({ name: settings.tabNames[1], columns: [...ids.map(() => ({ width: 22 })), { width: 12 }], rows, freeze: { row: 1 }, autoFilter: true });
+      sheets.push({ name: this.app.sections.nameOf('issues', settings), columns: [...ids.map(() => ({ width: 22 })), { width: 12 }], rows, freeze: { row: 1 }, autoFilter: true });
     }
     if (wanted.has('milestones')) {
       const dates = [...new Set(tasks.map(task => task.releaseDate).filter(Boolean))].sort(), day = Common.today();
@@ -163,7 +163,7 @@ export class ExcelExport extends Component {
           ...statuses.map(status => ({ v: group.filter(task => task.statusId === status.id).length || '', style: { ...cell, horizontal: 'center' } })), { v: this.app.taskList.sortedRows(group).map(task => task.code).join(', '), style: { ...cell, wrap: true } }]);
       });
       const included = (_, index) => (this.hasColumn('effort') || ![4, 5].includes(index)) && (this.hasColumn('code') || index !== 6 + statuses.length);
-      sheets.push({ name: settings.tabNames[2], columns: [{ width: 8 }, { width: 14 }, { width: 17 }, { width: 10 }, { width: 9 }, { width: 11 }, ...statuses.map(() => ({ width: 12 })), { width: 60 }].filter(included), rows: rows.map(row => row.filter(included)), freeze: { row: 1, col: 2 } });
+      sheets.push({ name: this.app.sections.nameOf('milestones', settings), columns: [{ width: 8 }, { width: 14 }, { width: 17 }, { width: 10 }, { width: 9 }, { width: 11 }, ...statuses.map(() => ({ width: 12 })), { width: 60 }].filter(included), rows: rows.map(row => row.filter(included)), freeze: { row: 1, col: 2 } });
     }
     if (wanted.has('kanban')) {
       const columns = statuses.map(status => TaskOrder.sortTasks(tasks.filter(task => task.statusId === status.id)));
@@ -176,7 +176,7 @@ export class ExcelExport extends Component {
           return { v: `${this.app.taskFilter.recordLabel(task)}${text ? ` · ${text.length > 90 ? text.slice(0, 89) + '…' : text}` : ''}`, link: url, style: { wrap: true, vertical: 'top', border: grid, fill: this.tint(statuses[i].color, 0.12), ...(task.hidden ? { italic: true, color: muted } : url ? {} : { color: '#1d2030' }) } };
         }));
       }
-      sheets.push({ name: settings.tabNames[3], columns: statuses.map(() => ({ width: 34 })), rows, freeze: { row: 1 } });
+      sheets.push({ name: this.app.sections.nameOf('kanban', settings), columns: statuses.map(() => ({ width: 34 })), rows, freeze: { row: 1 } });
     }
     return XlsxWriter.buildWorkbook({ title: `${Common.APP_NAME} · ${organization}`, creator: Common.APP_NAME, application: Common.APP_NAME, created: now, sheets });
   }
@@ -193,7 +193,7 @@ export class ExcelExport extends Component {
     if (choices.scope === 'selected' && !selected) choices.scope = 'view';
     const columns = this.configuredColumns();
     const radio = (name, value, title, detail, disabled = false) => `<label class="choice-card ${disabled ? 'is-disabled' : ''}"><input type="radio" name="${name}" value="${value}" ${choices[name] === value ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span><strong>${this.esc(this.t(title))}</strong><small>${this.esc(detail)}</small></span></label>`;
-    const sheetCards = this.EXCEL_SHEETS.map(([id, name, detail]) => `<label class="choice-card ${enabledSheet(id) ? '' : 'is-disabled'}"><input type="checkbox" name="sheets" value="${id}" ${choices.sheets.includes(id) && enabledSheet(id) ? 'checked' : ''} ${enabledSheet(id) ? '' : 'disabled'}><span><strong>${this.esc(typeof name === 'number' ? this.state.data.settings.tabNames[name] : this.t(name))}</strong><small>${this.esc(this.t(enabledSheet(id) ? detail : "Restore the required column to export this view."))}</small></span></label>`).join('');
+    const sheetCards = this.EXCEL_SHEETS.map(([id, name, detail]) => `<label class="choice-card ${enabledSheet(id) ? '' : 'is-disabled'}"><input type="checkbox" name="sheets" value="${id}" ${choices.sheets.includes(id) && enabledSheet(id) ? 'checked' : ''} ${enabledSheet(id) ? '' : 'disabled'}><span><strong>${this.esc(typeof name === 'number' ? this.app.sections.nameOf(id) : this.t(name))}</strong><small>${this.esc(this.t(enabledSheet(id) ? detail : "Restore the required column to export this view."))}</small></span></label>`).join('');
     this.app.modal.openModal(this.ui`<form id="excel-form" novalidate><div class="modal-heading"><div><div class="eyebrow">EXCEL</div><h2>Export to Excel</h2></div><button type="button" class="icon-button" data-close aria-label="Close">${this.ico('close')}</button></div>
     <p class="section-description">Create an .xlsx workbook. Summary, milestones and kanban follow the selected tasks. “As shown” also applies issue filters; the other options export all issues.</p>
     <fieldset class="excel-group"><legend>Tasks to export</legend><div class="choice-grid">${radio('scope', 'view', "As shown in the list", this.app.transfer.fillText("{0} · current filters and sorting", this.plural(this.app.taskFilter.filteredTasks().length, "tasks")))}${radio('scope', 'all', "All tasks", this.app.transfer.fillText("{0}, hidden ones included", this.plural(this.state.data.tasks.length, "tasks")))}${radio('scope', 'selected', "Selected only", selected ? this.app.transfer.fillText("{0} selected", selected) : this.t("No task selected"), !selected)}</div></fieldset>

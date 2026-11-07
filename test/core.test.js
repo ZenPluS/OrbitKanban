@@ -1,7 +1,7 @@
 'use strict';
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { Common, DataFactory, ArchiveValidator, IssueMatcher, TaskOrder, TaskLinks, OrganizationTransfer, Typography, Limits, ThemeCatalog, TaskColumns } = require('../src/shared/domain');
+const { Common, DataFactory, ArchiveValidator, IssueMatcher, TaskOrder, TaskLinks, OrganizationTransfer, Typography, Limits, ThemeCatalog, TaskColumns, NavigationSections } = require('../src/shared/domain');
 const { ThemeGenerator, ColorMath } = require('../src/shared/graphics');
 const { PlatformLinks } = require('../src/shared/columns');
 
@@ -182,12 +182,65 @@ test('demo data shows every feature and is deterministic for the same day', () =
 });
 test('demo data is localized and only added to new organizations on request', () => {
   const english = DataFactory.demoData('en', new Date(2026, 4, 20, 10));
-  assert.equal(english.settings.tabNames[0], 'Tasks');
+  assert.equal(english.settings.navigation[0].name, 'Tasks');
   assert.ok(english.tasks.some(task => /Released to production/.test(task.notes)));
   assert.ok(!english.tasks.some(task => /Rilasciato/.test(task.notes)));
   assert.equal(DataFactory.createOrganization('Empty', 'en').data.tasks.length, 0);
   const demo = DataFactory.createOrganization('Demo', 'en', '', undefined, true);
   assert.ok(demo.data.tasks.length > 200 && demo.data.issues.length > 100);
+});
+test('navigation sections default to the four views, validate their limits and upgrade legacy tab names', () => {
+  assert.deepEqual(NavigationSections.defaultSections('en'), [
+    { id: 'tasks', type: 'tasks', name: 'Tasks' }, { id: 'issues', type: 'issues', name: 'Linked issues' },
+    { id: 'milestones', type: 'milestones', name: 'Milestones' }, { id: 'kanban', type: 'kanban', name: 'Kanban' }
+  ]);
+  assert.equal(DataFactory.baseData('it').settings.navigation[0].name, Common.term('Tasks', 'it'));
+  const section = index => ({ id: `s-${index}`, type: NavigationSections.TYPES[index % 4], name: `Section ${index}` });
+  assert.equal(NavigationSections.validateNavigation([section(1)]).length, 1);
+  assert.equal(NavigationSections.validateNavigation(Array.from({ length: 12 }, (_, i) => section(i))).length, 12);
+  assert.throws(() => NavigationSections.validateNavigation([]), /at least one navigation section/);
+  assert.throws(() => NavigationSections.validateNavigation(Array.from({ length: 13 }, (_, i) => section(i))), /up to 12 navigation sections/);
+  assert.throws(() => NavigationSections.validateNavigation([{ ...section(0), name: 'x'.repeat(61) }]), /name of 1 to 60 characters/);
+  assert.throws(() => NavigationSections.validateNavigation([section(0), { ...section(1), id: 's-0' }]), /Invalid navigation sections/);
+  assert.throws(() => NavigationSections.validateNavigation([{ ...section(1), viewId: 'view' }]), /Invalid navigation sections/);
+  assert.equal(NavigationSections.validateNavigation([{ ...section(3), viewId: 'view' }]).length, 1);
+  const legacy = DataFactory.initialData();
+  delete legacy.settings.navigation;
+  legacy.settings.tabNames = ['List', 'Links', 'Roadmap', 'Board'];
+  const upgraded = ArchiveValidator.migrateArchive(structuredClone(legacy)).organizations[0].data.settings;
+  assert.deepEqual(upgraded.navigation.map(item => [item.id, item.type, item.name]), [['tasks', 'tasks', 'List'], ['issues', 'issues', 'Links'], ['milestones', 'milestones', 'Roadmap'], ['kanban', 'kanban', 'Board']]);
+  assert.ok(!('tabNames' in upgraded));
+  const current = DataFactory.initialData();
+  assert.equal(NavigationSections.upgradeLegacyTabNames(current.settings), false);
+  assert.ok(!('tabNames' in current.settings));
+});
+test('navigation sections can be reordered, removed, repeated and bound to saved views that may disappear', () => {
+  const data = DataFactory.baseData('en');
+  data.settings.savedViews = [{ id: 'team-a', name: 'Team A', search: 'alpha', statusFilter: 'all', highlightFilter: 'all', showHidden: false, duplicatesOnly: false, columns: structuredClone(data.settings.taskColumns), sort: [{ key: 'releaseDate', direction: 'asc' }] }];
+  data.settings.navigation = [
+    { id: 'kanban', type: 'kanban', name: 'Board' },
+    { id: 'team-board', type: 'kanban', name: 'Team A board', viewId: 'team-a' },
+    { id: 'roadmap-gone', type: 'milestones', name: 'Old roadmap', viewId: 'deleted-view' },
+    { id: 'tasks', type: 'tasks', name: 'Tasks' }
+  ];
+  const archive = ArchiveValidator.validateArchive(ArchiveValidator.migrateArchive(structuredClone(data)));
+  const navigation = archive.organizations[0].data.settings.navigation;
+  assert.deepEqual(navigation.map(item => item.id), ['kanban', 'team-board', 'roadmap-gone', 'tasks']);
+  assert.equal(navigation[1].viewId, 'team-a');
+  assert.ok(!('viewId' in navigation[2]));
+  const file = OrganizationTransfer.organizationExport({ name: 'Source', data }, 'settings');
+  file.settings.navigation[0].extra = '<script>';
+  const parsed = OrganizationTransfer.parseOrganizationFile(JSON.stringify(file));
+  assert.ok(!('extra' in parsed.settings.navigation[0]));
+  const imported = OrganizationTransfer.applyOrganizationImport(DataFactory.baseData('it'), parsed, { settings: true }).settings;
+  assert.deepEqual(imported.navigation.map(item => [item.id, item.name, item.viewId]), [['kanban', 'Board', undefined], ['team-board', 'Team A board', 'team-a'], ['roadmap-gone', 'Old roadmap', undefined], ['tasks', 'Tasks', undefined]]);
+  const legacyFile = OrganizationTransfer.organizationExport({ name: 'Source', data: DataFactory.baseData('en') }, 'settings');
+  delete legacyFile.settings.navigation;
+  legacyFile.settings.tabNames = ['A', 'B', 'C', 'D'];
+  assert.deepEqual(OrganizationTransfer.parseOrganizationFile(legacyFile).settings.navigation.map(item => item.name), ['A', 'B', 'C', 'D']);
+  const broken = structuredClone(file);
+  broken.settings.navigation = [];
+  assert.throws(() => OrganizationTransfer.parseOrganizationFile(broken), /at least one navigation section/);
 });
 test('automatic associations are case-insensitive, many-to-many and deduplicated', () => {
   const issues = [
@@ -273,7 +326,11 @@ test('invalid archives cannot overwrite portable data', () => {
   for (const mutate of [
     d => { d.version = 2; },
     d => { d.settings.appName = ' '; },
-    d => { d.settings.tabNames.pop(); },
+    d => { d.settings.navigation = []; },
+    d => { d.settings.navigation[1].id = d.settings.navigation[0].id; },
+    d => { d.settings.navigation[0].type = 'guide'; },
+    d => { d.settings.navigation[1].viewId = 'issues-view'; },
+    d => { d.settings.navigation[0].name = ' '; },
     d => { d.settings.hoursPerDay = 0; },
     d => { d.settings.statuses = []; },
     d => { d.settings.urgencies[0].color = 'red'; },
@@ -461,7 +518,7 @@ test('the renamed built-in theme drops its old Italian name in archives and impo
 });
 test('new organizations have independent empty workspaces and localized defaults', () => {
   const first = DataFactory.createOrganization('First', 'it'), second = DataFactory.createOrganization('Second', 'en');
-  assert.equal(second.data.settings.tabNames[0], 'Tasks');
+  assert.equal(second.data.settings.navigation[0].name, 'Tasks');
   assert.equal(second.data.settings.statuses[0].name, 'To do');
   assert.equal(first.data.tasks.length, 0);
   assert.equal(second.data.issues.length, 0);
@@ -647,7 +704,7 @@ test('organization exports contain only the requested parts as independent copie
   assert.deepEqual(sections(files.data), ['data']);
   assert.deepEqual(sections(files.organization), ['themes', 'settings', 'data']);
   assert.deepEqual(files.themes.themes, { themeId: organization.data.settings.themeId, themes: organization.data.settings.themes });
-  assert.deepEqual(Object.keys(files.settings.settings).sort(), ['deletedIssueColumns', 'deletedTaskColumns', 'fontFamily', 'fontSizes', 'highlights', 'hoursPerDay', 'issueColumns', 'issueFields', 'language', 'logo', 'requiredIssueColumns', 'requiredTaskColumns', 'savedViews', 'statuses', 'tabNames', 'tags', 'taskColumns', 'taskEditorLayout', 'taskFields', 'urgencies']);
+  assert.deepEqual(Object.keys(files.settings.settings).sort(), ['deletedIssueColumns', 'deletedTaskColumns', 'fontFamily', 'fontSizes', 'highlights', 'hoursPerDay', 'issueColumns', 'issueFields', 'language', 'logo', 'navigation', 'requiredIssueColumns', 'requiredTaskColumns', 'savedViews', 'statuses', 'tags', 'taskColumns', 'taskEditorLayout', 'taskFields', 'urgencies']);
   assert.deepEqual(files.settings.settings.highlights, organization.data.settings.highlights);
   assert.deepEqual(files.data.data.highlights, organization.data.settings.highlights);
   assert.deepEqual(files.settings.settings.fontSizes, Typography.defaultFontSizes());
@@ -727,7 +784,7 @@ test('importing settings remaps existing tasks by name, then position, and keeps
     assert.equal(imported.urgencyId, source.settings.urgencies[current.settings.urgencies.findIndex(u => u.id === original.urgencyId)].id);
   }
   assert.deepEqual(result.issues, current.issues);
-  assert.deepEqual([result.settings.language, result.settings.hoursPerDay, result.settings.tabNames], ['en', 7, source.settings.tabNames]);
+  assert.deepEqual([result.settings.language, result.settings.hoursPerDay, result.settings.navigation], ['en', 7, source.settings.navigation]);
   const platform = result.settings.taskFields.find(field => field.name === 'Link to platform');
   assert.deepEqual([platform.type, platform.template, 'portalUrlTemplate' in result.settings], ['platform', 'https://tickets.example.com/browse/{code}', false]);
   assert.deepEqual(result.settings.taskFields.slice(0, current.settings.taskFields.length), current.settings.taskFields);

@@ -4436,3 +4436,89 @@ td .icon-button { width: calc(28px * var(--fs)); height: calc(28px * var(--fs));
     transition: none;
   }
 }
+
+/* Navigation settings: one row per sidebar section. */
+.section-list {
+  margin-top: 14px;
+}
+.section-row {
+  flex-wrap: wrap;
+}
+.section-type {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 calc(150px * var(--fs));
+  gap: calc(8px * var(--fs));
+  min-width: 0;
+  color: var(--muted);
+  font-size: calc(13px * var(--fs));
+}
+.section-type-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: calc(28px * var(--fs));
+  height: calc(28px * var(--fs));
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+}
+.section-type-icon .ico {
+  width: calc(16px * var(--fs));
+  height: calc(16px * var(--fs));
+}
+.section-type-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.section-row .option-name {
+  flex: 1 1 calc(160px * var(--fs));
+  width: auto;
+}
+.section-row .section-view {
+  flex: 0 1 calc(210px * var(--fs));
+  min-width: calc(130px * var(--fs));
+  padding: 8px;
+  font-size: calc(13px * var(--fs));
+}
+.section-row span.section-view {
+  padding: 0 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.section-add {
+  margin-top: 6px;
+  padding: calc(14px * var(--fs));
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+}
+.section-add h3 {
+  margin: 0 0 10px;
+  font-size: calc(14px * var(--fs));
+}
+.section-add-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  align-items: end;
+  gap: calc(10px * var(--fs));
+  margin-bottom: 8px;
+}
+.section-add-fields .field {
+  margin: 0;
+}
+.section-view-chip {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+}
+.section-view-chip .ico {
+  width: calc(14px * var(--fs));
+  height: calc(14px * var(--fs));
+}
+@media (max-width: 900px) {
+  .section-add-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -30,4 +30,15 @@ export class TaskFilter extends Component {
       !this.state.search || this.app.cells.searchableValues(t, 'tasks', issues).some(value => value.toLocaleLowerCase().includes(needle))
     ));
   }
+  // Tasks a saved view would show, without touching the filters of the task list; boards keep hidden tasks unless asked otherwise.
+  tasksOfView(saved, includeHidden = true) {
+    const keys = ['search', 'statusFilter', 'highlightFilter', 'showHidden', 'duplicatesOnly'], previous = Object.fromEntries(keys.map(key => [key, this.state[key]])), previousColumns = this.state.columnFilters.tasks;
+    Object.assign(this.state, {
+      search: saved.search || '', statusFilter: this.state.data.settings.statuses.some(item => item.id === saved.statusFilter) ? saved.statusFilter : '',
+      highlightFilter: ['__any', '__none'].includes(saved.highlightFilter) || this.app.presenter.highlightsOf().some(item => item.id === saved.highlightFilter) ? saved.highlightFilter : '',
+      showHidden: includeHidden || Boolean(saved.showHidden), duplicatesOnly: Boolean(saved.duplicatesOnly)
+    });
+    this.state.columnFilters.tasks = Object.fromEntries(Object.entries(saved.columnFilters || {}).filter(([id]) => this.app.columns.columnDef(id, 'tasks')));
+    try { return this.filteredTasks(); } finally { Object.assign(this.state, previous); this.state.columnFilters.tasks = previousColumns; }
+  }
 }

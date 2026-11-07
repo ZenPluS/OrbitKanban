@@ -8,6 +8,7 @@ module.exports = {
   TaskLayout: require('./TaskLayout'),
   ThemeCatalog: require('./ThemeCatalog'),
   TaskLinks: require('./TaskLinks'),
+  NavigationSections: require('./NavigationSections'),
   ArchiveValidator: require('./ArchiveValidator'),
   DataFactory: require('./DataFactory'),
   OrganizationTransfer: require('./OrganizationTransfer'),

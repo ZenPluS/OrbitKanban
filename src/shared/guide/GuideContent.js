@@ -20,10 +20,10 @@ class GuideContent {
           'Do not run two copies on the same data folder at the same time.'
         ] },
         { title: 'Find your way around', items: [
-          'The sidebar holds the organization menu, the four views, this **Guide** and **Settings**.',
+          'The sidebar holds the organization menu, the sections of the four views, this **Guide** and **Settings**.',
           'The menu button **☰** at the left of the top bar, or `Ctrl+B`, folds the sidebar into a column of icons so the views get more space. Hover an icon to see its name; the building icon still switches organization. Press the button again to expand the sidebar; the choice is remembered.',
           'The top bar offers global search, undo and redo, and the archive status. **Open data folder** at the bottom shows where your data lives.',
-          'The four views can be renamed for each organization in **Settings → Identity & navigation**.',
+          'Rename, reorder, remove or add the sections of each organization in **Settings → Navigation**.',
           'Press `F1` at any time to open this guide.'
         ] },
         { title: 'Pin it to the taskbar', desktop: true, items: [
@@ -45,7 +45,7 @@ class GuideContent {
           'The logo (PNG, JPEG, WebP, GIF or BMP up to 15 MB) is stored with the organization and generates a matching theme.'
         ] },
         { title: 'Rename and change the logo', items: [
-          'Rename the organization and change or remove its logo in **Settings → Identity & navigation**.'
+          'Rename the organization and change or remove its logo in **Settings → Identity**.'
         ] }
       ]
     },
@@ -267,7 +267,7 @@ class GuideContent {
       ]
     },
     {
-      id: 'settings', icon: 'settings', title: 'Settings', go: [{ settings: 'identity' }, { settings: 'languages' }, { settings: 'task-layout' }],
+      id: 'settings', icon: 'settings', title: 'Settings', go: [{ settings: 'identity' }, { settings: 'navigation' }, { settings: 'languages' }, { settings: 'task-layout' }],
       summary: 'Each organization has its own configuration, organized in tabs.',
       topics: [
         { title: 'Save or discard', items: [
@@ -286,8 +286,14 @@ class GuideContent {
           'Required fields are checked when you save a task or an issue, but only when they are on the form: missing fields are highlighted with a message. **Bulk edit** cannot clear a required release date or highlight; imports are not checked.',
           'Yes/no fields and values that are not entered in the editor, such as tags, successors or the incidents and problems linked automatically, cannot be required.'
         ] },
-        { title: 'Identity & navigation', items: [
-          'Set the organization name, the names of the four views and the hours of an effort day. Changing the hours per day changes only how effort is displayed.'
+        { title: 'Identity', items: [
+          'Set the organization name and the hours of an effort day. Changing the hours per day changes only how effort is displayed.'
+        ] },
+        { title: 'Navigation', items: [
+          'In **Settings → Navigation** choose the sections of the sidebar: drag them or use the arrows to change their order, rename them, remove them or add new ones, up to 12.',
+          'Each section opens one of the four views: tasks, linked issues, milestones or kanban. A view can have several sections, and a view without sections leaves the menu. **Guide** and **Settings** always stay at the bottom.',
+          'Link a saved view to a task, milestone or kanban section to show only its tasks, for example a board for one team. A task section applies its view when you open it; deleting the saved view brings back every task.',
+          'Removing a section never deletes data. The first section opens when the app starts.'
         ] },
         { title: 'Language & translations', items: [
           'Italian and English are built in, and the language is chosen for each organization.',

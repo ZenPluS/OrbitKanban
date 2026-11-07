@@ -13,6 +13,7 @@ const Limits = typeof module !== 'undefined' ? require('./Limits') : globalThis.
 const TaskLayout = typeof module !== 'undefined' ? require('./TaskLayout') : globalThis.OrbitKanban.Domain.TaskLayout;
 const ThemeCatalog = typeof module !== 'undefined' ? require('./ThemeCatalog') : globalThis.OrbitKanban.Domain.ThemeCatalog;
 const TaskLinks = typeof module !== 'undefined' ? require('./TaskLinks') : globalThis.OrbitKanban.Domain.TaskLinks;
+const NavigationSections = typeof module !== 'undefined' ? require('./NavigationSections') : globalThis.OrbitKanban.Domain.NavigationSections;
 
 class ArchiveValidator {
   static validateData(data) {
@@ -21,7 +22,7 @@ class ArchiveValidator {
     ColumnCleanup.validateDeleted(s || {});
     RequiredFields.validateRequired(s || {});
     Common.assert(s && (s.appName === undefined || (typeof s.appName === 'string' && s.appName.trim().length > 0 && s.appName.length <= 100)), "Invalid organization name.");
-    Common.assert(Array.isArray(s.tabNames) && s.tabNames.length === 4 && s.tabNames.every(n => typeof n === 'string' && n.trim() && n.length <= 60), "Specify four valid tab names.");
+    NavigationSections.validateNavigation(s.navigation);
     Common.assert(Number.isFinite(s.hoursPerDay) && s.hoursPerDay > 0 && s.hoursPerDay <= 24, "Hours per day must be greater than 0 and no more than 24.");
     const uniqueIds = (items) => new Set(items.map(x => x.id)).size === items.length;
     const text = v => typeof v === 'string';
@@ -80,6 +81,7 @@ class ArchiveValidator {
     Common.assert(archive?.format !== 'orbitkanban-organization', "This file is an organization export (themes, settings or data): use “Import from file…” in the “Export and import organization” section.");
     if (archive.version === 1) {
       TaskLinks.upgradeLegacyLink(archive.settings, archive.tasks, { language: archive.settings?.language ?? 'it' });
+      NavigationSections.upgradeLegacyTabNames(archive.settings);
       ArchiveValidator.validateData(archive);
       const organizationId = Common.id();
       return ArchiveValidator.validateArchive({
@@ -97,6 +99,7 @@ class ArchiveValidator {
     Common.assert(archive.organizations.some(o => o.id === archive.activeOrganizationId), "The active organization does not exist.");
     for (const organization of archive.organizations) {
       TaskLinks.upgradeLegacyLink(organization.data?.settings, organization.data?.tasks, { language: organization.data?.settings?.language ?? 'it' });
+      NavigationSections.upgradeLegacyTabNames(organization.data?.settings);
       ArchiveValidator.validateData(organization.data);
       organization.data.settings.language ??= 'it';
       organization.data.settings.logo ??= '';
@@ -109,6 +112,7 @@ class ArchiveValidator {
       organization.data.settings.issueColumns = ColumnLayout.listColumns(organization.data.settings, 'issues');
       for (const kind of ['tasks', 'issues']) organization.data.settings[RequiredFields.requiredKey(kind)] = RequiredFields.requiredOf(organization.data.settings, kind);
       organization.data.settings.taskEditorLayout = TaskLayout.normalizeTaskEditorLayout(organization.data.settings);
+      NavigationSections.normalizeNavigation(organization.data.settings);
       ThemeCatalog.normalizeThemes(organization.data.settings);
       ArchiveValidator.#normalizeHighlights(organization.data);
       ArchiveValidator.normalizeTags(organization.data);

@@ -1,6 +1,6 @@
 // Settings draft, tabs, navigation and saving.
 import { Component } from '../core/Component.js';
-import { ColumnCleanup, ColumnSchema, ColumnValidator, TaskLayout } from '../shared.js';
+import { ColumnCleanup, ColumnSchema, ColumnValidator, NavigationSections, TaskLayout } from '../shared.js';
 
 export class SettingsController extends Component {
   constructor(app) {
@@ -10,7 +10,7 @@ export class SettingsController extends Component {
   #collectSettings() {
     this.state.settingsDraft.hoursPerDay = Number(this.$('#hours-per-day').value);
     this.state.settingsDraft.language = this.$('#language').value;
-    document.querySelectorAll('[data-tab-name]').forEach(input => { this.state.settingsDraft.tabNames[Number(input.dataset.tabName)] = input.value.trim(); });
+    for (const section of this.state.settingsDraft.navigation) section.name = section.name.trim();
     return this.state.settingsDraft;
   }
   settingsChanged() {
@@ -18,7 +18,8 @@ export class SettingsController extends Component {
     return this.app.customColumns.pendingCustomColumns().length > 0 || JSON.stringify(this.#collectSettings()) !== JSON.stringify(this.state.data.settings) || this.$('#organization-name').value.trim() !== this.state.organizations.find(o => o.id === this.state.activeOrganizationId).name;
   }
   settingsTabs = [
-    { id: 'identity', group: "Organization", icon: 'id', label: "Identity & navigation", panel: 'identity-panel', keys: ['tabNames', 'hoursPerDay', 'logo'] },
+    { id: 'identity', group: "Organization", icon: 'id', label: "Identity", panel: 'identity-panel', keys: ['hoursPerDay', 'logo'] },
+    { id: 'navigation', group: "Organization", icon: 'menu', label: "Navigation", panel: 'navigation-panel', keys: ['navigation'] },
     { id: 'languages', group: "Organization", icon: 'translate', label: "Language & translations", panel: 'languages-panel', keys: ['language'] },
     { id: 'organizations', group: "Organization", icon: 'building', label: "Organizations", panel: 'organizations-panel', keys: [] },
     { id: 'themes', group: "Appearance", icon: 'palette', label: "Themes & atmosphere", panel: 'themes-panel', keys: ['themes', 'themeId'] },
@@ -35,7 +36,7 @@ export class SettingsController extends Component {
     return ['tasks', 'issues'].flatMap((kind, index) => ColumnSchema.schemaOf(this.state.settingsDraft || this.state.data.settings, kind).filter(field => ['select', 'multiselect'].includes(field.type)).map(field => {
       const id = field.catalog || `choice-${kind}-${field.id}`;
       return { id, panel: `${id}-panel`, group: "Column labels", icon: 'tag', family: 'violet',
-        label: `${field.builtin ? this.t(field.name) : field.name} · ${(this.state.settingsDraft || this.state.data.settings).tabNames[index]}`,
+        label: `${field.builtin ? this.t(field.name) : field.name} · ${this.app.sections.nameOf(kind, this.state.settingsDraft || this.state.data.settings)}`,
         field, kind, custom: true, keys: [field.catalog || (kind === 'tasks' ? 'taskFields' : 'issueFields')] };
     }));
   }
@@ -45,7 +46,7 @@ export class SettingsController extends Component {
   ];
   // Ordered: the first matching pattern decides which settings tab holds the field to fix.
   // Validation messages are English source text, except those the store localizes in the organization language, so the patterns also list the Italian wording.
-  #settingsErrorTabs = [[/custom columns?|deleted columns|required columns|colonne obbligatorie|columns changed|colonne eliminate|colonne modificate|column options|column names and identifiers|colonn[ae] personalizzat|opzioni della colonna|nomi e identificativi delle colonne|platform link|link alla piattaforma|successor|successori/i, 'custom-columns'], [/\btags?\b/i, 'tags'], [/evidenziatori|highlighter/i, 'highlights'], [/colonne della lista|list columns/i, 'columns'], [/dimensioni del testo|text sizes|\bfont\b/i, 'fonts'], [/\b(?:temi|tema|themes?)\b/i, 'themes'], [/urgen/i, 'urgencies'], [/\b(?:stati|status|statuses)\b/i, 'statuses'], [/\b(?:lingua|language)\b/i, 'languages'], [/organizzazione|organization|\btab\b|ore per giorno|hours per day|logo/i, 'identity']];
+  #settingsErrorTabs = [[/navigation|navigazione/i, 'navigation'], [/custom columns?|deleted columns|required columns|colonne obbligatorie|columns changed|colonne eliminate|colonne modificate|column options|column names and identifiers|colonn[ae] personalizzat|opzioni della colonna|nomi e identificativi delle colonne|platform link|link alla piattaforma|successor|successori/i, 'custom-columns'], [/\btags?\b/i, 'tags'], [/evidenziatori|highlighter/i, 'highlights'], [/colonne della lista|list columns/i, 'columns'], [/dimensioni del testo|text sizes|\bfont\b/i, 'fonts'], [/\b(?:temi|tema|themes?)\b/i, 'themes'], [/urgen/i, 'urgencies'], [/\b(?:stati|status|statuses)\b/i, 'statuses'], [/\b(?:lingua|language)\b/i, 'languages'], [/organizzazione|organization|ore per giorno|hours per day|logo/i, 'identity']];
   settingsErrorTab = message => /task editor layout|layout della scheda attività/i.test(String(message)) ? 'task-layout' : this.#settingsErrorTabs.find(([pattern]) => pattern.test(String(message)))?.[1];
   settingsNav() {
     const tabs = this.allSettingsTabs(), groups = [...new Set(tabs.map(tab => tab.group))];
@@ -130,6 +131,7 @@ export class SettingsController extends Component {
         }
         next.settings = structuredClone(settings);
         ColumnCleanup.cleanData(next);
+        NavigationSections.normalizeNavigation(next.settings);
       }, organizationName);
       this.state.statusFilter = '';
       this.state.activeSavedViewId = '';

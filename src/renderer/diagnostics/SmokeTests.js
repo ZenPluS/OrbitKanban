@@ -1,6 +1,6 @@
 // End-to-end interface checks run by the smoke test (window.runSmokeTests).
 import { Component } from '../core/Component.js';
-import { ColorMath, ColumnCleanup, ColumnFilters, ColumnLayout, ColumnSchema, Common, DataFactory, GuideContent, IconLibrary, OrganizationTransfer, TaskColumns, TaskLayout, TaskLinks, TaskOrder, ThemeCatalog, ThemeGenerator, Translator, Typography, XlsxWriter } from '../shared.js';
+import { ColorMath, ColumnCleanup, ColumnFilters, ColumnLayout, ColumnSchema, Common, DataFactory, GuideContent, IconLibrary, NavigationSections, OrganizationTransfer, TaskColumns, TaskLayout, TaskLinks, TaskOrder, ThemeCatalog, ThemeGenerator, Translator, Typography, XlsxWriter } from '../shared.js';
 
 export class SmokeTests extends Component {
   install() {
@@ -42,7 +42,7 @@ export class SmokeTests extends Component {
       check(['#global-search', '#redo-button', '#save-status', '.topbar-right .avatar'].every(selector => heightOf(selector) === heightOf('#undo-button')) && Math.round(boxOf('#undo-button').width) === heightOf('#undo-button'), 'Top-bar controls share one height and undo/redo are square');
       check(heightOf('#new-task') === heightOf('#columns-button') && heightOf('#columns-button') === heightOf('#reset-sort') && heightOf('#reset-sort') === heightOf('#saved-view-manage') && document.querySelectorAll('#task-rows tr:first-child td:last-child .icon-button').length && [...document.querySelectorAll('#task-rows tr:first-child td:last-child .icon-button')].every(button => Math.round(button.getBoundingClientRect().height) === Math.round(button.getBoundingClientRect().width)), 'Page buttons, toolbar buttons and row actions use the shared size scale');
       const iconSprite = document.getElementById('orbit-icon-sprite');
-      check(iconSprite && IconLibrary.names().every(name => iconSprite.querySelector(`symbol#i-${name}`)) && document.querySelectorAll('#navigation .nav-icon svg.ico').length === this.state.data.settings.tabNames.length && this.$('#settings-button svg.ico') && this.$('#new-task svg.ico') && this.$('#columns-button svg.ico') && !/[▤⌘◈▥⚙⌕↶↷↗＋◉◌⋯▽▾]/.test([...document.querySelectorAll('#navigation button, .topbar button, #content .page-heading button, #content .table-toolbar button, #task-rows td:last-child button')].map(button => button.textContent).join('')), 'Icons come from the shared sprite instead of text glyphs');
+      check(iconSprite && IconLibrary.names().every(name => iconSprite.querySelector(`symbol#i-${name}`)) && document.querySelectorAll('#navigation .nav-icon svg.ico').length === this.state.data.settings.navigation.length && this.$('#settings-button svg.ico') && this.$('#new-task svg.ico') && this.$('#columns-button svg.ico') && !/[▤⌘◈▥⚙⌕↶↷↗＋◉◌⋯▽▾]/.test([...document.querySelectorAll('#navigation button, .topbar button, #content .page-heading button, #content .table-toolbar button, #task-rows td:last-child button')].map(button => button.textContent).join('')), 'Icons come from the shared sprite instead of text glyphs');
       const rootStyle = getComputedStyle(document.documentElement), hexOf = rgb => '#' + rgb.match(/\d+/g).slice(0, 3).map(n => Number(n).toString(16).padStart(2, '0')).join('');
       check(getComputedStyle(this.$('#navigation .nav-icon .ico')).getPropertyValue('--ico-front').trim() === 'url(#ig-blue)' && Object.keys(ThemeGenerator.ICON_FAMILIES).every(family => /^#[0-9a-f]{6}$/i.test(rootStyle.getPropertyValue(`--ig-${family}-1`).trim())), 'Feature icons use per-theme gradient stops');
       const activeTheme = () => this.state.data.settings.themes.find(theme => theme.id === this.state.data.settings.themeId), themedLogo = this.app.logoPainter.themedLogo(activeTheme());
@@ -89,11 +89,11 @@ export class SmokeTests extends Component {
       const railWidth = boxOf('#sidebar').width;
       check(inRail() && sidebarToggle.title === this.t("Expand the sidebar (Ctrl+B)") && railWidth >= 48 && railWidth < sidebarWidth / 2 && Math.abs(boxOf('.table-scroll').width - tableWidth - (sidebarWidth - railWidth)) < 1 && sidebar.scrollWidth <= sidebar.clientWidth && localStorage.getItem('orbitkanban.sidebarCollapsed') === '1', 'Menu button folds the sidebar into a column of icons and gives the space to the list');
       const railButtons = [...document.querySelectorAll('#navigation .nav-button, #guide-button, #settings-button')], railCenter = (boxOf('#sidebar').left + boxOf('#sidebar').right) / 2;
-      check(railButtons.length === this.state.data.settings.tabNames.length + 2 && railButtons.every(button => { const icon = button.querySelector('.nav-icon'), box = icon.getBoundingClientRect(), label = button.querySelector('.nav-label'); return insideRail(icon) && Math.abs((box.left + box.right) / 2 - railCenter) < 2 && labelHidden(label) && button.title === (button.id === 'guide-button' ? this.term("Open the guide (F1)") : label.textContent); }) && this.$('#navigation .nav-button').title === this.state.data.settings.tabNames[0] && this.$('#settings-button').title === this.t("Settings") && [...document.querySelectorAll('.brand > div:last-child, .local-card')].every(element => !element.getClientRects().length) && insideRail(this.$('.brand-icon')) && insideRail(this.$('#app-version')), 'Column keeps every view icon, the guide and settings, with their names as tooltips');
+      check(railButtons.length === this.state.data.settings.navigation.length + 2 && railButtons.every(button => { const icon = button.querySelector('.nav-icon'), box = icon.getBoundingClientRect(), label = button.querySelector('.nav-label'); return insideRail(icon) && Math.abs((box.left + box.right) / 2 - railCenter) < 2 && labelHidden(label) && button.title === (button.id === 'guide-button' ? this.term("Open the guide (F1)") : label.textContent); }) && this.$('#navigation .nav-button').title === this.state.data.settings.navigation[0].name && this.$('#settings-button').title === this.t("Settings") && [...document.querySelectorAll('.brand > div:last-child, .local-card')].every(element => !element.getClientRects().length) && insideRail(this.$('.brand-icon')) && insideRail(this.$('#app-version')), 'Column keeps every view icon, the guide and settings, with their names as tooltips');
       const taskBadge = this.$('#navigation .nav-count'), listIcon = this.$('#navigation .nav-icon').getBoundingClientRect();
       check(insideRail(taskBadge) && taskBadge.textContent === String(this.app.presenter.visibleTasks().length) && getComputedStyle(taskBadge).position === 'absolute' && taskBadge.getBoundingClientRect().left > (listIcon.left + listIcon.right) / 2 && taskBadge.getBoundingClientRect().top > listIcon.top, 'Task counter becomes a badge on the list icon');
       this.$('#navigation [data-view="1"]').click();
-      check(this.state.view === 1 && inRail() && this.$('#navigation [data-view="1"]').classList.contains('active') && this.$('#navigation [data-view="1"]').title === this.state.data.settings.tabNames[1] && this.$('#settings-button').title === this.t("Settings") && this.$('#current-tab').textContent === this.state.data.settings.tabNames[1], 'Views open from the column and it stays folded across renders');
+      check(this.state.view === 1 && inRail() && this.$('#navigation [data-view="1"]').classList.contains('active') && this.$('#navigation [data-view="1"]').title === this.state.data.settings.navigation[1].name && this.$('#settings-button').title === this.t("Settings") && this.$('#current-tab').textContent === this.state.data.settings.navigation[1].name, 'Views open from the column and it stays folded across renders');
       this.$('#navigation [data-view="0"]').click();
       await tick();
       const organizationIcon = boxOf('.organization-icon'), organizationMenu = boxOf('#organization-select'), activeOrganizationName = this.state.organizations.find(o => o.id === this.state.activeOrganizationId).name;
@@ -413,7 +413,8 @@ export class SmokeTests extends Component {
           ["The platform link template must be a valid web address containing {code}.", 'custom-columns'], ["Each successor column must belong to a different predecessor column.", 'custom-columns'], ["Invalid text sizes.", 'fonts'], ["Invalid font.", 'fonts'],
           ["Invalid themes.", 'themes'], ["Selected theme does not exist.", 'themes'], ["The urgencies list is invalid or empty.", 'urgencies'], ["Invalid urgencies values.", 'urgencies'],
           ["The statuses list is invalid or empty.", 'statuses'], ["Invalid statuses values.", 'statuses'], ["Invalid status highlighting.", 'statuses'], ["Unsupported language.", 'languages'],
-          ["Specify four valid tab names.", 'identity'], ["Hours per day must be greater than 0 and no more than 24.", 'identity'], ["Invalid logo.", 'identity'], ["Invalid organization name.", 'identity']
+          ["Keep at least one navigation section.", 'navigation'], ["You can have up to 12 navigation sections.", 'navigation'], ["Each navigation section needs a name of 1 to 60 characters.", 'navigation'], ["Invalid navigation sections.", 'navigation'],
+          ["Hours per day must be greater than 0 and no more than 24.", 'identity'], ["Invalid logo.", 'identity'], ["Invalid organization name.", 'identity']
         ];
         const wrongTabs = errorTabs.flatMap(([message, tab]) => ['en', 'it'].filter(language => this.app.settings.settingsErrorTab(Translator.translate(message, language)) !== tab).map(language => `${language} “${message}”`));
         check(!wrongTabs.length, wrongTabs.length ? `Settings errors open the wrong tab: ${wrongTabs.join(', ')}` : "Settings errors open the matching tab in English and Italian");
@@ -693,12 +694,14 @@ export class SmokeTests extends Component {
       this.$('#global-search-input').dispatchEvent(new Event('input', { bubbles: true }));
       check(this.$('#global-search-results [data-global-kind="task"]')?.dataset.globalId === searchTask.id, "Global search finds tasks by code");
       this.$('#global-search-results [data-global-kind="task"]').click();
+      await waitFor(() => this.$('#task-form'));
       check(this.state.view === 0 && this.$('#modal').open && this.$('#task-form'), "Task result opens the editor directly");
       this.$('#modal').close();
       const searchIssue = this.state.data.issues.find(issue => issue.incident);
       this.app.globalSearch.openGlobalSearch(searchIssue.incident);
       check(this.$('#global-search-results [data-global-kind="issue"]'), "Global search finds issues by incident");
       this.$('#global-search-results [data-global-kind="issue"]').click();
+      await waitFor(() => this.$('#issue-form'));
       check(this.state.view === 1 && this.$('#modal').open && this.$('#issue-form'), 'Issue result opens the editor directly');
       this.$('#modal').close();
       this.state.view = 0;
@@ -741,6 +744,84 @@ export class SmokeTests extends Component {
       this.app.history.clearHistory(this.state.activeOrganizationId);
       this.app.shell.render();
       check(!(this.state.data.settings.savedViews || []).some(saved => saved.name === 'Smoke saved view'), "Deleted saved view leaves no test data behind");
+      {
+        const navigationState = { navigation: structuredClone(this.state.data.settings.navigation), savedViews: structuredClone(this.state.data.settings.savedViews || []), columns: structuredClone(this.state.data.settings.taskColumns) };
+        const filterState = { search: this.state.search, statusFilter: this.state.statusFilter, highlightFilter: this.state.highlightFilter, showHidden: this.state.showHidden, duplicatesOnly: this.state.duplicatesOnly, sort: structuredClone(this.state.sort), columnFilters: structuredClone(this.state.columnFilters.tasks) };
+        const sectionIds = () => this.state.data.settings.navigation.map(section => section.id);
+        const sectionRows = () => [...document.querySelectorAll('#section-list .section-row')].map(row => row.dataset.sectionRow);
+        const navButtons = () => [...document.querySelectorAll('#navigation .nav-button')];
+        const cards = () => document.querySelectorAll('.kanban-board .task-card').length;
+        const setValue = (selector, value, type = 'input') => { const element = this.$(selector); element.value = value; element.dispatchEvent(new Event(type, { bubbles: true })); };
+        check(sectionIds().join() === NavigationSections.TYPES.join() && navButtons().map(button => button.dataset.section).join() === sectionIds().join() && navButtons().every((button, index) => button.dataset.view === String(index)), 'The sidebar starts from one section per view');
+        const sectionTask = this.state.data.tasks.find(task => !task.hidden && task.code);
+        Object.assign(this.state, { view: 0, search: sectionTask.code, statusFilter: '', highlightFilter: '', showHidden: true, duplicatesOnly: false, activeSavedViewId: '' });
+        this.state.columnFilters.tasks = {};
+        this.app.shell.render();
+        await this.app.savedViews.saveSavedView('Smoke section view');
+        const sectionView = this.state.data.settings.savedViews.find(saved => saved.name === 'Smoke section view'), viewTasks = this.app.taskFilter.tasksOfView(sectionView);
+        Object.assign(this.state, { search: '', showHidden: false, activeSavedViewId: '' });
+        this.state.view = 4; this.app.shell.render(); this.app.settings.showSettingsTab('navigation');
+        check(!this.$('#navigation-panel').hidden && sectionRows().join() === sectionIds().join() && document.querySelectorAll('#section-list select[data-section-view]').length === 3 && !this.$('#section-list [data-section-row="issues"] select') && this.$('#section-list [data-section-move="tasks:-1"]').disabled && [...this.$('#section-list [data-section-view="kanban"]').options].some(option => option.value === sectionView.id), 'Navigation settings list every section, with a saved view only for sections that show tasks');
+        this.$('#section-list [data-section-move="kanban:-1"]').click();
+        await tick();
+        check(sectionRows().join() === 'tasks,issues,kanban,milestones' && !this.$('#unsaved-banner').hidden && !this.$('#settings-tab-navigation .settings-tab-dot').hidden && this.$('#settings-tab-identity .settings-tab-dot').hidden, 'Moving a section reorders it and flags the Navigation tab');
+        this.$('#section-list [data-section-remove="issues"]').click();
+        setValue('#section-list [data-section-name="kanban"]', 'Smoke board');
+        setValue('#new-section-type', 'issues', 'change');
+        check(this.$('#new-section-view').disabled && this.$('#new-section-name').placeholder === NavigationSections.defaultName('issues', this.state.data.settings.language), 'Sections of associations cannot follow a saved view');
+        setValue('#new-section-type', 'kanban', 'change');
+        this.$('#new-section-name').value = 'Smoke filtered board';
+        this.$('#new-section-view').value = sectionView.id;
+        this.$('#add-section').requestSubmit();
+        setValue('#new-section-type', 'tasks', 'change');
+        this.$('#new-section-name').value = 'Smoke filtered list';
+        this.$('#new-section-view').value = sectionView.id;
+        this.$('#add-section').requestSubmit();
+        const draftSections = this.state.settingsDraft.navigation;
+        check(sectionRows().length === 5 && !sectionRows().includes('issues') && draftSections.slice(3).map(section => [section.type, section.name, section.viewId].join()).join('|') === `kanban,Smoke filtered board,${sectionView.id}|tasks,Smoke filtered list,${sectionView.id}` && this.$('#section-list [data-section-row]:last-child [data-section-name]') === document.activeElement, 'Sections are removed and added with their type, name and saved view');
+        draftSections.push(...Array.from({ length: 7 }, (_, index) => ({ id: `smoke-extra-${index}`, type: 'milestones', name: `Extra ${index}` })));
+        this.app.navigationSettings.drawNavigation();
+        check(this.$('#add-section-button').disabled && sectionRows().length === NavigationSections.LIMIT, 'No more than 12 sections can be added');
+        draftSections.splice(5);
+        this.app.navigationSettings.drawNavigation();
+        setValue('#section-list [data-section-name="kanban"]', ' ');
+        this.app.settings.showSettingsTab('themes');
+        this.$('#save-settings').click();
+        await waitFor(() => this.$('#toast').textContent.includes(this.t("Each navigation section needs a name of 1 to 60 characters.")) && !this.state.saving);
+        check(this.state.settingsTab === 'navigation' && this.state.data.settings.navigation.length === 4, 'A section without a name is not saved and its tab opens');
+        setValue('#section-list [data-section-name="kanban"]', 'Smoke board');
+        this.$('#save-settings').click();
+        await waitFor(() => !this.state.saving && this.state.data.settings.navigation.length === 5);
+        const filteredBoard = this.state.data.settings.navigation.find(section => section.name === 'Smoke filtered board'), filteredList = this.state.data.settings.navigation.find(section => section.name === 'Smoke filtered list');
+        check(navButtons().map(button => button.dataset.section).join() === sectionIds().join() && !this.$('#navigation [data-view="1"]') && navButtons().map(button => button.dataset.view).join() === '0,3,2,3,0' && navButtons()[1].querySelector('.nav-label').textContent === 'Smoke board', 'The sidebar follows the order of the sections and drops removed ones');
+        this.$(`#navigation [data-section="${filteredBoard.id}"]`).click();
+        await waitFor(() => this.state.sectionId === filteredBoard.id);
+        check(this.state.view === 3 && this.$(`#navigation [data-section="${filteredBoard.id}"]`).classList.contains('active') && !this.$('#navigation [data-section="kanban"]').classList.contains('active') && this.$('#current-tab').textContent === 'Smoke filtered board' && this.$('.section-view-chip')?.textContent.includes('Smoke section view') && viewTasks.length > 0 && viewTasks.length < this.state.data.tasks.length && cards() === viewTasks.length, 'A board section bound to a saved view shows only its tasks');
+        this.$('#navigation [data-section="kanban"]').click();
+        await waitFor(() => this.state.sectionId === 'kanban');
+        check(this.$('#current-tab').textContent === 'Smoke board' && !this.$('.section-view-chip') && cards() === this.state.data.tasks.length && this.$('#navigation [data-section="kanban"]').classList.contains('active'), 'Another section of the same view shows every task under its own name');
+        this.$(`#navigation [data-section="${filteredList.id}"]`).click();
+        await waitFor(() => this.state.view === 0 && this.state.activeSavedViewId === sectionView.id && !this.state.saving);
+        check(this.state.search === sectionView.search && this.$('#current-tab').textContent === 'Smoke filtered list' && this.$(`#navigation [data-section="${filteredList.id}"]`).classList.contains('active') && navButtons()[4].querySelector('.nav-count')?.textContent === String(this.app.taskFilter.tasksOfView(sectionView, sectionView.showHidden).length), 'A task section applies its saved view when it opens');
+        this.$('#navigation [data-section="tasks"]').click();
+        await waitFor(() => this.state.sectionId === 'tasks');
+        check(this.state.view === 0 && !this.state.search && !this.state.activeSavedViewId && !this.state.showHidden && this.$('#current-tab').textContent === this.state.data.settings.navigation[0].name, 'The plain task section starts again from every task');
+        this.state.view = 1; this.app.shell.render();
+        check(this.state.view === 0 && this.state.sectionId === 'tasks' && this.$('#navigation [data-section="tasks"]').classList.contains('active'), 'A view without sections falls back to the first section');
+        this.app.savedViews.openSavedViews();
+        this.$(`#saved-view-list [data-view-action="delete"][data-view-id="${sectionView.id}"]`).click();
+        this.$('#confirm-action').click();
+        await waitFor(() => !this.state.saving && !this.state.data.settings.savedViews.some(saved => saved.id === sectionView.id));
+        check(this.state.data.settings.navigation.every(section => !('viewId' in section)), 'Deleting a saved view releases the sections that followed it');
+        await this.app.history.commit(next => { next.settings.navigation = navigationState.navigation; next.settings.savedViews = navigationState.savedViews; next.settings.taskColumns = navigationState.columns; });
+        ({ search: this.state.search, statusFilter: this.state.statusFilter, highlightFilter: this.state.highlightFilter, showHidden: this.state.showHidden, duplicatesOnly: this.state.duplicatesOnly, sort: this.state.sort } = filterState);
+        Object.assign(this.state, { activeSavedViewId: '', sectionId: '', taskSectionId: 'tasks', taskSectionViewId: '', view: 0 });
+        this.state.columnFilters.tasks = filterState.columnFilters;
+        this.app.history.clearHistory(this.state.activeOrganizationId);
+        this.$('#modal').open && this.$('#modal').close();
+        this.app.shell.render();
+        check(sectionIds().join() === NavigationSections.TYPES.join() && navButtons().length === 4, 'Navigation test sections leave no data behind');
+      }
       {
         const releaseState = { search: this.state.search, statusFilter: this.state.statusFilter, highlightFilter: this.state.highlightFilter, showHidden: this.state.showHidden, duplicatesOnly: this.state.duplicatesOnly, filters: structuredClone(this.state.columnFilters.tasks) };
         this.state.showHidden = false; this.state.view = 0; this.app.shell.render();
@@ -816,7 +897,7 @@ export class SmokeTests extends Component {
       check(rejected && (await this.workspaceApi.load()).data.version === 1, "Invalid archive is rejected without data loss");
       for (let i = 1; i < 4; i++) {
         this.state.view = i; this.app.shell.render();
-        check(this.$('#content').textContent.includes(this.state.data.settings.tabNames[i]), `Tab ${i + 1} renders`);
+        check(this.$('#content').textContent.includes(this.app.sections.nameOf(NavigationSections.TYPES[i])), `Tab ${i + 1} renders`);
         check(this.$('.page-heading').offsetHeight <= 75 && document.documentElement.scrollHeight <= innerHeight + 1, `Compact heading and internal scrolling in tab ${i + 1}`);
       }
       check(document.querySelectorAll('.kanban-column').length === this.state.data.settings.statuses.length, "Kanban columns and status order");
@@ -1243,7 +1324,7 @@ export class SmokeTests extends Component {
       const allSheets = this.app.excel.EXCEL_SHEETS.map(([id]) => id), xmlDoc = text => new DOMParser().parseFromString(text, 'application/xml');
       const fullBook = await unzipParts(await this.app.excel.situationWorkbook({ scope: 'all', columns: 'all', sheets: allSheets }));
       const bookSheets = [...xmlDoc(fullBook.get('xl/workbook.xml')).getElementsByTagName('sheet')].map(sheet => sheet.getAttribute('name'));
-      check([...fullBook].every(([name, text]) => !/\.(xml|rels)$/.test(name) || !xmlDoc(text).querySelector('parsererror')) && bookSheets.join('|') === XlsxWriter.sheetNames([this.t("Summary"), ...this.state.data.settings.tabNames.slice(0, 4)]).join('|'), 'Well-formed Excel workbook includes a summary and one sheet per tab');
+      check([...fullBook].every(([name, text]) => !/\.(xml|rels)$/.test(name) || !xmlDoc(text).querySelector('parsererror')) && bookSheets.join('|') === XlsxWriter.sheetNames([this.t("Summary"), ...NavigationSections.TYPES.map(type => this.app.sections.nameOf(type))]).join('|'), 'Well-formed Excel workbook includes a summary and one sheet per tab');
       const taskSheetXml = fullBook.get('xl/worksheets/sheet2.xml'), sharedXml = fullBook.get('xl/sharedStrings.xml');
       check(xmlDoc(taskSheetXml).getElementsByTagName('row').length === this.state.data.tasks.length + 1 && sharedXml.includes('SMOKE-1') && sharedXml.includes('BULK-3') && taskSheetXml.includes(`<v>${XlsxWriter.excelDate('2031-04-01')}</v>`) && taskSheetXml.includes('<autoFilter ') && taskSheetXml.includes('state="frozen"') && fullBook.has('xl/worksheets/_rels/sheet2.xml.rels'), "Task sheet includes every row, real dates, filters, frozen panes, and links");
       check(fullBook.get('xl/styles.xml').includes(XlsxWriter.argb(this.app.excel.tint(bulkStatus.color, 0.35))) && fullBook.get('xl/styles.xml').includes(XlsxWriter.argb(this.app.excel.tint(TaskOrder.dateColor('2031-04-01'), 0.5))) && fullBook.get('xl/worksheets/sheet3.xml').includes('<autoFilter ') && fullBook.get('xl/styles.xml').includes('FFFFF1C2') && [this.t("Next release"), this.t("Today's release")].some(text => sharedXml.includes(text)), 'Status colors, dates, and next release are included in the Excel file');
@@ -1287,11 +1368,11 @@ export class SmokeTests extends Component {
       this.state.view = 0; this.app.shell.render();
       this.$('#guide-button').click();
       check(this.state.view === 5 && this.$('#guide-button').classList.contains('active') && !this.$('#settings-button').classList.contains('active') && this.$('#current-tab').textContent === this.term("Guide") && this.$('#guide-page h1').textContent.startsWith(this.term("Guide")) && this.$('#guide-search').placeholder === this.term("Search the guide…"), "Guide button opens the in-app guide");
-      check(document.querySelectorAll('.guide-section').length === guideSectionIds.length && guideSectionIds.every(id => this.$(`#guide-${id}`) && this.$(`.guide-nav-link[data-guide-section="${id}"]`)) && [0, 1, 2, 3].every(i => this.$(`#guide-${GuideContent.sections.find(section => section.tab === i).id}-title`).textContent === this.state.data.settings.tabNames[i]), "Guide lists every section in its contents, using the organization's tab names");
+      check(document.querySelectorAll('.guide-section').length === guideSectionIds.length && guideSectionIds.every(id => this.$(`#guide-${id}`) && this.$(`.guide-nav-link[data-guide-section="${id}"]`)) && [0, 1, 2, 3].every(i => this.$(`#guide-${GuideContent.sections.find(section => section.tab === i).id}-title`).textContent === this.app.sections.nameOf(NavigationSections.TYPES[i])), "Guide lists every section in its contents, using the organization's section names");
       const guidePageText = this.$('#guide-page').textContent;
       check(!guidePageText.includes('**') && !guidePageText.includes('`') && this.$('#guide-page li strong') && this.$('#guide-page li kbd') && this.$('#guide-page li code') && document.querySelectorAll('.guide-shortcuts tbody tr').length === GuideContent.sections.find(section => section.shortcuts).shortcuts.length && this.$('.guide-topic .guide-badge')?.textContent === this.term("Desktop app only"), "Guide renders bold labels, keys, code, shortcuts and badges");
       check(this.$('#content').scrollWidth <= this.$('#content').clientWidth + 1 && [...document.querySelectorAll('.guide-section')].every(section => section.scrollWidth <= section.clientWidth + 1), "Guide fits the window without horizontal scrolling");
-      check(this.$('#guide-kanban [data-guide-settings="statuses"]') && this.$('#guide-tasks [data-guide-view="0"]').textContent === this.app.guide.fillTerm("Go to {0}", this.state.data.settings.tabNames[0]), "Guide shortcuts point to views and settings tabs");
+      check(this.$('#guide-kanban [data-guide-settings="statuses"]') && this.$('#guide-tasks [data-guide-view="0"]').textContent === this.app.guide.fillTerm("Go to {0}", this.app.sections.nameOf('tasks')), "Guide shortcuts point to views and settings tabs");
       this.$('.guide-nav-link[data-guide-section="updates"]').click();
       check(document.activeElement === this.$('#guide-updates-title') && this.$('.guide-nav-link[data-guide-section="updates"]').getAttribute('aria-current') === 'true' && document.querySelectorAll('.guide-nav-link[aria-current]').length === 1 && this.$('#content').scrollTop > 0, "Guide contents jump to a section and mark it");
       this.$('#content').scrollTop = 0;
@@ -1425,13 +1506,13 @@ export class SmokeTests extends Component {
       document.querySelector('[data-view="0"]').click();
       check(this.state.view === 0 && accent() === savedAccent && this.state.data.settings.themeId !== previewTheme.id, 'Leaving without saving keeps the previous theme');
       this.state.view = 4; this.app.shell.render();
-      document.querySelector('[data-tab-name="1"]').value = "Edit temporanea";
-      document.querySelector('[data-tab-name="1"]').dispatchEvent(new Event('input', { bubbles: true }));
+      document.querySelector('[data-section-name="issues"]').value = "Edit temporanea";
+      document.querySelector('[data-section-name="issues"]').dispatchEvent(new Event('input', { bubbles: true }));
       await new Promise(resolve => setTimeout(resolve));
       check(!this.$('#unsaved-banner').hidden, 'Warning appears for any changed setting');
-      check(!this.$('#settings-tab-identity .settings-tab-dot').hidden && this.$('#settings-tab-themes .settings-tab-dot').hidden, "Editing tab names is flagged on the Identity tab");
-      document.querySelector('[data-tab-name="1"]').value = this.state.data.settings.tabNames[1];
-      document.querySelector('[data-tab-name="1"]').dispatchEvent(new Event('input', { bubbles: true }));
+      check(!this.$('#settings-tab-navigation .settings-tab-dot').hidden && this.$('#settings-tab-identity .settings-tab-dot').hidden && this.$('#settings-tab-themes .settings-tab-dot').hidden, "Editing section names is flagged on the Navigation tab");
+      document.querySelector('[data-section-name="issues"]').value = this.state.data.settings.navigation.find(section => section.id === 'issues').name;
+      document.querySelector('[data-section-name="issues"]').dispatchEvent(new Event('input', { bubbles: true }));
       await new Promise(resolve => setTimeout(resolve));
       check(this.$('#unsaved-banner').hidden, 'Warning disappears when changes match the saved values');
       this.app.settings.showSettingsTab('themes');
@@ -1553,7 +1634,8 @@ export class SmokeTests extends Component {
       await waitFor(() => this.state.lastOpenedLink === `https://tickets.smoke.test/browse/${encodeURIComponent(sampleCode)}`);
       check(location.protocol === 'file:' && this.state.view === 4, 'Preview link opens in the default browser without navigating the app');
       this.$('#organization-name').value = 'Test workspace';
-      document.querySelector('[data-tab-name="2"]').value = 'Custom roadmap';
+      document.querySelector('[data-section-name="milestones"]').value = 'Custom roadmap';
+      document.querySelector('[data-section-name="milestones"]').dispatchEvent(new Event('input', { bubbles: true }));
       this.state.settingsDraft.statuses.reverse();
       this.app.settings.showSettingsTab('themes');
       this.$('#add-theme').click();
@@ -1649,7 +1731,7 @@ export class SmokeTests extends Component {
       this.state.view = 3; this.app.shell.render();
       check(document.querySelector(`.kanban-column a.card-portal-link[href="${changeLink}"]`) && !document.querySelector('.kanban-board button'), "Platform link appears in kanban without editing controls");
       check(organizationName() === 'Test workspace' && document.title === Common.APP_NAME && this.$('#brand-name').textContent === Common.APP_NAME && !this.$('#app-name'), "Organization name is editable while the OrbitKanban identity stays fixed");
-      check(this.state.data.settings.tabNames[2] === 'Custom roadmap' && this.state.data.settings.themes.some(t => t.name === 'Test theme' && t.accent === '#ff8844'), 'Tab names and user theme are saved');
+      check(this.state.data.settings.navigation.find(section => section.id === 'milestones').name === 'Custom roadmap' && this.state.data.settings.themes.some(t => t.name === 'Test theme' && t.accent === '#ff8844'), 'Section names and user theme are saved');
       const savedTheme = (await this.workspaceApi.load()).data.settings.themes.find(t => t.name === 'Test theme');
       check(savedTheme.background === '#101820' && savedTheme.surface === '#101820' && savedTheme.text === '#f0f4fc', 'Colors extracted from an image persist on disk');
       check((await this.workspaceApi.load()).data.settings.themes.some(t => t.name === 'Automatic palette' && this.app.themes.themeFields.every(([key]) => t[key] === generated[key])), 'Entire automatic palette is preserved on disk');
@@ -1719,7 +1801,7 @@ export class SmokeTests extends Component {
       this.$('#save-settings').click();
       await waitFor(() => this.state.data.settings.language === 'en' && !this.state.saving);
       check(document.documentElement.lang === 'en' && this.$('#current-tab').textContent === 'Settings' && this.$('#save-settings').textContent === 'Save settings', 'English selector translates settings and navigation');
-      check(this.$('#content').textContent.includes('Organization logo') && this.$('#content').textContent.includes('Interface language') && !this.$('#content').textContent.includes(Translator.translate("Identity & navigation", 'it')), "Settings, logo, and language are translated into English");
+      check(this.$('#content').textContent.includes('Organization logo') && this.$('#content').textContent.includes('Interface language') && !this.$('#content').textContent.includes(Translator.translate("Navigation", 'it')) && !this.$('#content').textContent.includes(Translator.translate("Identity", 'it')), "Settings, logo, and language are translated into English");
       check(this.$('.settings-nav').getAttribute('aria-label') === 'Settings sections' && ['Appearance', 'Themes & atmosphere', "Data & access"].every(text => this.$('.settings-nav').textContent.includes(text)) && this.$('#theme-search').placeholder === 'Search themes…' && this.$('#theme-count').textContent.endsWith('themes'), "Settings tabs and theme gallery are translated into English");
       const typeLabels = [...document.querySelectorAll('[data-add-field="tasks"] select[name="type"] option')].map(option => option.textContent);
       check(['Website', 'Link to platform', 'Reference parent'].every(label => typeLabels.includes(label)) && !typeLabels.includes('Reference child') && this.$('[data-add-field="tasks"] [data-child-name]').textContent.includes('Successors column name') && this.$('#custom-columns-panel').textContent.includes('Up to 40 custom columns'), 'Column types, including platform links and references, are translated into English');
@@ -1793,7 +1875,7 @@ export class SmokeTests extends Component {
       this.$('#create-organization').elements.name.value = 'Temporary';
       this.$('#create-organization').requestSubmit();
       await waitFor(() => this.state.organizations.length === 3 && !this.state.organizationBusy);
-      check(this.state.data.settings.language === 'en' && this.state.data.settings.tabNames[0] === 'Tasks', "New organization inherits the language and localized default names");
+      check(this.state.data.settings.language === 'en' && this.state.data.settings.navigation[0].name === 'Tasks', "New organization inherits the language and localized default names");
       this.$('#manage-organizations').click();
       this.$('#delete-organization').click();
       this.$('#confirm-action').click();
@@ -1934,7 +2016,7 @@ export class SmokeTests extends Component {
       check(this.state.data.settings.fontSizes.kanban === 120 && rootSize('kanban') === '1.2', "Text sizes are imported with the full organization");
       const settingsSource = baseData('en');
       settingsSource.settings.statuses = [{ id: 'smoke-status-a', name: this.state.data.settings.statuses[0].name.toUpperCase(), color: '#3366ff', highlight: false }, { id: 'smoke-status-b', name: 'Shipped', color: '#33aa66', highlight: true }];
-      settingsSource.settings.tabNames = ['Imported tasks', 'Imported issues', 'Imported milestones', 'Imported board'];
+      settingsSource.settings.navigation.forEach((section, index) => { section.name = ['Imported tasks', 'Imported issues', 'Imported milestones', 'Imported board'][index]; });
       settingsSource.settings.logo = secondLogo;
       settingsSource.settings.fontSizes.tables = 110;
       const settingsFile = organizationExport({ name: 'Remote settings', data: settingsSource }, 'settings', { appVersion: this.state.appVersion });
@@ -1945,10 +2027,10 @@ export class SmokeTests extends Component {
       await waitFor(importDialogOpen);
       const settingsForm = this.$('#organization-import-form');
       check(settingsForm.elements.settings.checked && settingsForm.elements.destination.value === 'current' && !settingsForm.elements.logo.checked && !settingsForm.elements.logo.disabled && settingsForm.querySelector('.import-logo'), "Settings import is offered for the current organization without replacing its logo");
-      check(settingsForm.textContent.includes(this.t("Language, tab names, hours per day, text sizes, statuses, urgencies, highlighters, tags, list columns and platform links. Replaces current settings.")), "Settings import indicates the text sizes");
+      check(settingsForm.textContent.includes(this.t("Language, navigation sections, hours per day, text sizes, statuses, urgencies, highlighters, tags, list columns and platform links. Replaces current settings.")), "Settings import indicates the text sizes");
       settingsForm.requestSubmit();
       await waitFor(() => !this.$('#modal').open && !this.state.saving && this.state.data.settings.language === 'en');
-      check(firstStatusTasks.length > 0 && firstStatusTasks.every(id => this.state.data.tasks.find(t => t.id === id).statusId === 'smoke-status-a') && this.state.data.tasks.every(t => ['smoke-status-a', 'smoke-status-b'].includes(t.statusId)) && this.state.data.settings.logo === fullFile.settings.logo && this.state.data.settings.tabNames[0] === 'Imported tasks' && this.state.data.settings.taskFields.some(field => field.type === 'platform' && field.name === 'Link to platform' && field.template === "https://imported.example.com/browse/{code}"), "Settings are imported with statuses remapped, logo unchanged, and the old portal template as a platform column");
+      check(firstStatusTasks.length > 0 && firstStatusTasks.every(id => this.state.data.tasks.find(t => t.id === id).statusId === 'smoke-status-a') && this.state.data.tasks.every(t => ['smoke-status-a', 'smoke-status-b'].includes(t.statusId)) && this.state.data.settings.logo === fullFile.settings.logo && this.state.data.settings.navigation.map(section => section.name).join() === 'Imported tasks,Imported issues,Imported milestones,Imported board' && this.$('#navigation [data-view="3"] .nav-label').textContent === 'Imported board' && this.state.data.settings.taskFields.some(field => field.type === 'platform' && field.name === 'Link to platform' && field.template === "https://imported.example.com/browse/{code}"), "Settings are imported with statuses remapped, logo unchanged, and the old portal template as a platform column");
       check(this.state.data.settings.fontSizes.tables === 110 && this.state.data.settings.fontSizes.kanban === 100 && rootSize('tables') === '1.1' && rootSize('kanban') === '1', "Text sizes are replaced by the imported settings");
       check(document.documentElement.lang === 'en' && this.$('#current-tab').textContent === 'Settings' && this.$('#transfer-panel').textContent.includes('Export and import organization') && this.$('#transfer-panel').textContent.includes('Export everything') && this.$('#import-organization').textContent.includes('Import from file') && this.$('#toast').textContent === 'Import completed.', 'Export and import section is translated using the imported language');
       check(this.$('#font-size-panel h2').textContent === 'Text size' && this.$('label[for="font-size-tables"]').textContent === 'Tables' && this.$('[data-font-preset="130"]').textContent.includes('Extra large') && this.$('#font-size-tables').value === '110', 'Text size section is translated into English');

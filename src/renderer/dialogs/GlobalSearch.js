@@ -38,16 +38,16 @@ export class GlobalSearch extends Component {
     input.onkeydown = event => {
       if (event.key === 'Enter') { event.preventDefault(); list.querySelector('[data-first-result]')?.click(); }
     };
-    list.onclick = event => {
+    list.onclick = this.app.notifier.action(async event => {
       const button = event.target.closest('[data-global-kind]');
       if (!button) return;
       const item = button.dataset.globalKind === 'task' ? this.state.data.tasks.find(task => task.id === button.dataset.globalId) : this.state.data.issues.find(issue => issue.id === button.dataset.globalId);
       if (!item) { this.app.notifier.notify("This item no longer exists.", true); return; }
       this.$('#modal').close();
-      this.state.view = button.dataset.globalKind === 'task' ? 0 : 1;
-      this.app.shell.render();
-      if (this.state.view === 0) this.app.taskDialog.taskDialog(item); else this.app.issues.issueDialog(item);
-    };
+      // Without a section for its view the record still opens, over the current page.
+      if (!await this.app.sections.openType(button.dataset.globalKind === 'task' ? 'tasks' : 'issues')) this.app.shell.render();
+      if (button.dataset.globalKind === 'task') this.app.taskDialog.taskDialog(item); else this.app.issues.issueDialog(item);
+    });
     draw();
     input.focus();
   }
