@@ -11,7 +11,9 @@ const WorkspaceStore = require('./storage/WorkspaceStore');
 const LanguageStore = require('./storage/LanguageStore');
 const WebServer = require('../web/WebServer');
 const SplashScreen = require('./splash/SplashScreen');
+const SplashTheme = require('./splash/SplashTheme');
 const WindowChrome = require('./platform/WindowChrome');
+const WindowIcon = require('./platform/WindowIcon');
 const PortableLauncher = require('./platform/PortableLauncher');
 const Updater = require('./update/Updater');
 const UpdateLauncher = require('./update/UpdateLauncher');
@@ -29,6 +31,8 @@ class DesktopApplication {
   #win; #splash; #revealTimer; #revealed = false; #resolveAppReady;
   #appReady = new Promise(resolve => { this.#resolveAppReady = resolve; });
   #store; #languages; #updater; #webServer;
+  #splashTheme; #splashThemeTimer = null; #splashThemeSaving = Promise.resolve();
+  #windowIcon; #windowIconApplied = null;
   #updateShutdown = false;
   #quitting = false;
 
@@ -56,6 +60,8 @@ class DesktopApplication {
     app.setAppLogsPath(path.join(this.#dataFolder, 'logs'));
     this.#store = new WorkspaceStore({ dataFolder: this.#dataFolder, extras: () => ({ appVersion: app.getVersion(), browserUrl: this.#webServer.url }) });
     this.#languages = new LanguageStore({ dataFolder: this.#dataFolder });
+    this.#splashTheme = new SplashTheme(this.#runtimeFolder);
+    this.#windowIcon = new WindowIcon(this.#runtimeFolder);
     this.#updater = new Updater({
       currentVersion: app.getVersion(), dataFolder: this.#dataFolder, portableFile: this.#smoke ? null : this.#portableFile,
       install: update => this.#installUpdate(update)
@@ -83,8 +89,27 @@ class DesktopApplication {
   get appReady() { return this.#appReady; }
   get store() { return this.#store; }
   get webServer() { return this.#webServer; }
+  get splashTheme() { return this.#splashTheme; }
+  get windowIcon() { return this.#windowIcon; }
+  get windowIconApplied() { return this.#windowIconApplied; }
 
   #message(text, organizationId) { return this.#store.message(text, organizationId); }
+
+  // The next start shows the loading screen in the theme and logo of the organization that opens first (the active one).
+  // Saves run one after another, so quitting can wait for the last one and two writes never race.
+  saveSplashTheme(settings) {
+    clearTimeout(this.#splashThemeTimer);
+    this.#splashThemeTimer = null;
+    this.#splashThemeSaving = this.#splashThemeSaving.then(async () => {
+      try { await this.#splashTheme.save(settings ?? (await this.#store.load()).data.settings); }
+      catch (error) { console.error('The loading screen theme could not be saved:', error); }
+    });
+    return this.#splashThemeSaving;
+  }
+  #scheduleSplashTheme() {
+    clearTimeout(this.#splashThemeTimer);
+    this.#splashThemeTimer = setTimeout(() => this.saveSplashTheme(), 1500);
+  }
 
   releaseLauncher() {
     if (!this.#launcherReadyFile || this.#launcherReleased) return;
@@ -190,6 +215,17 @@ class DesktopApplication {
       if (!shell.writeShortcutLink(result.filePath, 'create', PortableLauncher.shortcutDetails(this.#launcher))) throw new Error(message("Could not create the shortcut."));
       return true;
     });
+    // The window icon follows the theme; the executable and pinned shortcuts keep the icon embedded in the .exe.
+    handle('window-icon', async images => {
+      if (process.platform !== 'win32') return false;
+      await this.#windowIcon.save(images);
+      const win = this.#win, icon = nativeImage.createFromPath(this.#windowIcon.file);
+      if (icon.isEmpty()) throw new Error('Invalid window icon.');
+      if (win.isDestroyed()) return false;
+      win.setIcon(icon);
+      this.#windowIconApplied = this.#windowIcon.file;
+      return true;
+    });
     ipcMain.on('app-ready', event => { if (this.#win && event.sender === this.#win.webContents) this.#revealMainWindow('renderer'); });
     ipcMain.on('window-chrome', (event, request) => {
       const win = this.#win;
@@ -255,14 +291,19 @@ class DesktopApplication {
   }
   async #ready() {
     const smoke = this.#smoke, customTitleBar = this.#customTitleBar;
-    const icon = nativeImage.createFromPath(path.join(this.#appRoot, 'app-logo.png'));
-    if (icon.isEmpty()) throw new Error('The application icon is missing or invalid. Run npm run icon during development.');
-    this.#splash = this.#launcherReadyFile ? null : new SplashScreen({ BrowserWindow, screen, appRoot: this.#appRoot, title: Common.APP_NAME, icon, version: app.getVersion(), show: !smoke });
+    const appLogo = nativeImage.createFromPath(path.join(this.#appRoot, 'app-logo.png'));
+    if (appLogo.isEmpty()) throw new Error('The application icon is missing or invalid. Run npm run icon during development.');
+    // The themed icon saved by the last session, so the windows open in the theme colors; the app logo on the first start.
+    const themedIcon = process.platform === 'win32' && this.#windowIcon.read();
+    const savedIcon = themedIcon ? nativeImage.createFromPath(themedIcon) : null;
+    const icon = savedIcon && !savedIcon.isEmpty() ? savedIcon : appLogo;
+    this.#splash = this.#launcherReadyFile ? null : new SplashScreen({ BrowserWindow, screen, appRoot: this.#appRoot, title: Common.APP_NAME, icon, version: app.getVersion(), theme: this.#splashTheme.read(), show: !smoke });
     try { await this.#languages.reload(); }
     catch (error) { console.error('Additional languages could not be loaded:', error); }
     let settings;
     try { settings = (await this.#store.load()).data.settings; }
     catch (error) { console.error('Workspace archive could not be preloaded:', error); }
+    if (settings) await this.saveSplashTheme(settings);
     try { await this.#webServer.start(); }
     catch (error) { console.error('Browser access did not start:', error); }
     this.#windowChrome = customTitleBar ? WindowChrome.titleBarOverlay({ ...WindowChrome.themeColors(settings), height: WindowChrome.TITLE_BAR_HEIGHT.initial }) : null;
@@ -292,13 +333,16 @@ class DesktopApplication {
         catch (error) { console.error('Automatic update check failed:', error); }
       });
     }
-    if (smoke) await require('./diagnostics/DesktopSmokeTest').run(this, icon);
+    if (smoke) await require('./diagnostics/DesktopSmokeTest').run(this, appLogo);
   }
 
   // Registers the IPC API and the application events; the window opens when Electron is ready.
   start() {
     this.#registerIpc();
-    this.#store.on('change', info => { if (this.#win && !this.#win.isDestroyed()) this.#win.webContents.send('workspace-changed', info); });
+    this.#store.on('change', info => {
+      if (this.#win && !this.#win.isDestroyed()) this.#win.webContents.send('workspace-changed', info);
+      this.#scheduleSplashTheme();
+    });
     const lock = app.requestSingleInstanceLock();
     if (!lock) app.quit();
     else {
@@ -316,7 +360,10 @@ class DesktopApplication {
       this.#splash?.close();
       if (this.#quitting) return;
       event.preventDefault();
-      Promise.allSettled([this.#store.idle(), this.#webServer.close()]).then(() => { this.#quitting = true; app.quit(); });
+      // Decided after the store is idle: its last write may have scheduled a new theme save.
+      Promise.allSettled([this.#store.idle(), this.#webServer.close()])
+        .then(() => this.#splashThemeTimer !== null ? this.saveSplashTheme() : this.#splashThemeSaving)
+        .then(() => { this.#quitting = true; app.quit(); });
     });
     app.on('window-all-closed', () => app.quit());
   }

@@ -1,14 +1,68 @@
 'use strict';
 // End-to-end check of the app run with --smoke-test: loading screen, icons, shortcuts, interface, browser access and exports.
-const { app, BrowserWindow, nativeImage, shell } = require('electron');
+const { app, BrowserWindow, nativeImage, screen, shell } = require('electron');
 const fs = require('node:fs/promises');
 const path = require('node:path');
-const { ArchiveValidator, OrganizationTransfer } = require('../../shared/domain');
+const { ArchiveValidator, DataFactory, OrganizationTransfer } = require('../../shared/domain');
 const SplashScreen = require('../splash/SplashScreen');
+const SplashTheme = require('../splash/SplashTheme');
 const WindowChrome = require('../platform/WindowChrome');
 const PortableLauncher = require('../platform/PortableLauncher');
+const IconFile = require('../platform/IconFile');
 
 class DesktopSmokeTest {
+  static #LOGO = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==';
+
+  // A hidden loading screen opened with a saved light theme and a custom logo, as the next start would show it.
+  static async #checkThemedSplash(application, icon) {
+    const data = DataFactory.initialData(), themes = (data.organizations?.[0]?.data.settings ?? data.settings).themes;
+    const folder = path.join(application.root, 'splash-theme-check'), daylight = themes.find(theme => theme.id === 'daylight');
+    if (!daylight) throw new Error('The Daylight theme is missing.');
+    const store = new SplashTheme(folder);
+    try {
+      await store.save({ themeId: daylight.id, themes, logo: DesktopSmokeTest.#LOGO });
+      const splash = new SplashScreen({ BrowserWindow, screen, appRoot: application.appRoot, title: app.getName(), icon, version: app.getVersion(), theme: store.read(), show: false });
+      try {
+        const expected = `rgb(${[1, 3, 5].map(index => parseInt(daylight.background.slice(index, index + 2), 16)).join(', ')})`;
+        let state;
+        for (let attempt = 0; attempt < 50 && !(state?.logo === 'custom' && state.background === expected); attempt++) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+          state = await splash.inspect().catch(() => null);
+        }
+        if (splash.window.getBackgroundColor().toLowerCase() !== daylight.background.toLowerCase()) throw new Error('The loading window does not open in the theme background.');
+        if (state?.logo !== 'custom' || state.background !== expected || !state.animated || !state.version.endsWith(app.getVersion())) throw new Error(`The loading screen ignores its saved theme: ${JSON.stringify(state)}`);
+      } finally {
+        splash.close();
+      }
+    } finally {
+      await fs.rm(folder, { recursive: true, force: true });
+    }
+  }
+
+  // The interface sends the atom in the theme colors; the app applies it to the window and saves it for the next start.
+  static async #checkThemedWindowIcon(application, win) {
+    for (let attempt = 0; attempt < 100 && !application.windowIconApplied; attempt++) await new Promise(resolve => setTimeout(resolve, 50));
+    const file = application.windowIcon.read();
+    if (application.windowIconApplied !== application.windowIcon.file || file !== application.windowIcon.file) throw new Error('The themed window icon was not applied and saved.');
+    const images = IconFile.parse(await fs.readFile(file)), large = images.find(image => image.size === 256);
+    if (images.map(image => image.size).join() !== IconFile.ICON_SIZES.join() || large?.format !== 'png') throw new Error('The themed window icon misses icon sizes.');
+    const sample = await win.webContents.executeJavaScript(`(async source => {
+      const image = new Image();
+      image.src = source;
+      await image.decode();
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = 256;
+      const context = canvas.getContext('2d');
+      context.drawImage(image, 0, 0);
+      const pixel = (x, y) => [...context.getImageData(x, y, 1, 1).data.slice(0, 3)];
+      const settings = window.smokeState().data.settings, palette = OrbitKanban.Graphics.AppLogo.palette(settings.themes.find(theme => theme.id === settings.themeId));
+      const rgb = hex => hex.slice(1).match(/../g).map(value => parseInt(value, 16));
+      return { badge: pixel(128, 16), nucleus: pixel(128, 128), expected: { badge: rgb(palette.badge), nucleus: rgb(palette.nucleus) } };
+    })(${JSON.stringify(`data:image/png;base64,${large.data.toString('base64')}`)})`);
+    const near = (actual, expected) => actual.every((channel, index) => Math.abs(channel - expected[index]) <= 2);
+    if (!near(sample.badge, sample.expected.badge) || !near(sample.nucleus, sample.expected.nucleus)) throw new Error(`The window icon does not use the theme colors: ${JSON.stringify(sample)}`);
+  }
+
   // Runs once the main window has loaded; writes smoke-result.json or smoke-error.json in the test folder and exits the app.
   static async run(application, icon) {
     const { splash, launcher, launcherReadyFile, portableFile, root, customTitleBar, webServer, store } = application;
@@ -33,6 +87,11 @@ class DesktopSmokeTest {
         await fs.access(launcherReadyFile);
         splashChecks.push('Portable launcher keeps its loading screen until the interface is ready, without a second one');
       }
+      const saved = application.splashTheme.read(), background = SplashScreen.windowBackground((await store.load()).data.settings).toLowerCase();
+      if (saved?.background !== background) throw new Error(`The loading screen theme was not saved for the next start: ${JSON.stringify(saved)}`);
+      splashChecks.push('Loading screen colors of the active organization are saved for the next start');
+      await DesktopSmokeTest.#checkThemedSplash(application, icon);
+      splashChecks.push('Loading screen opens in the saved theme colors with the organization logo');
       const logoData = await win.webContents.executeJavaScript(`(async () => {
         const image = new Image();
         image.src = 'app-logo.svg';
@@ -44,6 +103,10 @@ class DesktopSmokeTest {
       })()`);
       const iconPixels = icon.toBitmap(), logoPixels = nativeImage.createFromDataURL(logoData).toBitmap();
       if (!iconPixels.equals(logoPixels)) throw new Error('The application logo and window icon do not match.');
+      if (process.platform === 'win32') {
+        await DesktopSmokeTest.#checkThemedWindowIcon(application, win);
+        splashChecks.push('Window icon takes the theme colors and is saved for the next start');
+      }
       if (launcher) {
         await require('./TaskbarVerifier').verifyTaskbar(win, launcher);
         splashChecks.push('Native Windows taskbar properties relaunch the portable launcher with its persistent icon');

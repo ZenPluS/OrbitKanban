@@ -45,6 +45,12 @@ export class SmokeTests extends Component {
       check(iconSprite && IconLibrary.names().every(name => iconSprite.querySelector(`symbol#i-${name}`)) && document.querySelectorAll('#navigation .nav-icon svg.ico').length === this.state.data.settings.tabNames.length && this.$('#settings-button svg.ico') && this.$('#new-task svg.ico') && this.$('#columns-button svg.ico') && !/[▤⌘◈▥⚙⌕↶↷↗＋◉◌⋯▽▾]/.test([...document.querySelectorAll('#navigation button, .topbar button, #content .page-heading button, #content .table-toolbar button, #task-rows td:last-child button')].map(button => button.textContent).join('')), 'Icons come from the shared sprite instead of text glyphs');
       const rootStyle = getComputedStyle(document.documentElement), hexOf = rgb => '#' + rgb.match(/\d+/g).slice(0, 3).map(n => Number(n).toString(16).padStart(2, '0')).join('');
       check(getComputedStyle(this.$('#navigation .nav-icon .ico')).getPropertyValue('--ico-front').trim() === 'url(#ig-blue)' && Object.keys(ThemeGenerator.ICON_FAMILIES).every(family => /^#[0-9a-f]{6}$/i.test(rootStyle.getPropertyValue(`--ig-${family}-1`).trim())), 'Feature icons use per-theme gradient stops');
+      const activeTheme = () => this.state.data.settings.themes.find(theme => theme.id === this.state.data.settings.themeId), themedLogo = this.app.logoPainter.themedLogo(activeTheme());
+      check(!this.state.data.settings.logo && themedLogo.startsWith('data:image/svg+xml') && this.$('.brand-icon img').getAttribute('src') === themedLogo && this.$('link[rel="icon"]').getAttribute('href') === themedLogo && this.app.logoPainter.themedLogo({ ...activeTheme(), accent: '#ff7a59' }) !== themedLogo, 'App logo and browser tab icon take the theme colors');
+      if (typeof window.workspace?.windowIcon === 'function') {
+        await waitFor(() => this.app.logoPainter.windowIconSent === themedLogo);
+        check(true, 'Desktop window icon takes the theme colors');
+      }
       check(ColorMath.contrastRatio(hexOf(getComputedStyle(this.$('#new-task')).color), hexOf(getComputedStyle(this.$('#new-task')).backgroundColor)) >= 4.5, 'Primary button labels meet WCAG AA contrast on the accent');
       if (this.app.themePainter.customTitleBar()) {
         const overlay = navigator.windowControlsOverlay, area = overlay?.visible ? overlay.getTitlebarAreaRect() : null;
@@ -1761,7 +1767,7 @@ export class SmokeTests extends Component {
       this.$('#discard-switch').click();
       await waitFor(() => this.state.activeOrganizationId === firstOrganizationId && !this.state.organizationBusy);
       check(this.state.data.tasks.length === initialTaskCount + 1 && this.state.data.issues.some(issue => issue.incident === 'INC-SMOKE') && organizationName() === firstOrganizationName, "Returning to the first organization preserves tasks, associations, and settings");
-      check(document.documentElement.lang === 'it' && this.$('.brand-icon img').getAttribute('src') === 'app-logo.svg' && document.documentElement.style.getPropertyValue('--accent') === firstSettings.themes.find(theme => theme.id === firstSettings.themeId).accent, "Language and theme are per organization, with the app logo as fallback");
+      check(document.documentElement.lang === 'it' && this.$('.brand-icon img').getAttribute('src') === this.app.logoPainter.themedLogo(firstSettings.themes.find(theme => theme.id === firstSettings.themeId)) && document.documentElement.style.getPropertyValue('--accent') === firstSettings.themes.find(theme => theme.id === firstSettings.themeId).accent, "Language and theme are per organization, with the themed app logo as fallback");
       imageContext.fillStyle = '#22cc88'; imageContext.fillRect(30, 0, 10, 10);
       const firstLogoBlob = await new Promise(resolve => imageSource.toBlob(resolve, 'image/png'));
       const firstLogoUpload = new DataTransfer();

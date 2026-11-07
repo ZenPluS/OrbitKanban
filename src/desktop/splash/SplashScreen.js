@@ -21,31 +21,42 @@ class SplashScreen {
   #closed = false;
   #shownAt = null;
 
-  constructor({ BrowserWindow, screen, appRoot, title, icon, version = '', show = true }) {
+  // theme: the saved loading-screen theme ({ url, background } from SplashTheme#read), or null for the default colors.
+  constructor({ BrowserWindow, screen, appRoot, title, icon, version = '', theme = null, show = true }) {
     const { width, height } = SplashScreen.SPLASH_SIZE, area = screen.getPrimaryDisplay().bounds;
-    // Centered on the whole primary screen, exactly like the launcher bitmap, so the two screens overlap.
+    // Centered on the whole primary screen, exactly like the launcher's loading screen, so the two screens overlap.
     const window = new BrowserWindow({
       width, height, useContentSize: true, title, icon,
       x: Math.round(area.x + (area.width - width) / 2), y: Math.round(area.y + (area.height - height) / 2),
       show: false, frame: false, resizable: false, maximizable: false, fullscreenable: false, closable: false, skipTaskbar: true,
-      backgroundColor: SplashScreen.SPLASH_BACKGROUND,
-      webPreferences: { preload: path.join(appRoot, 'src', 'desktop', 'splash', 'splash-preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: false }
+      backgroundColor: /^#[0-9a-f]{6}$/i.test(theme?.background || '') ? theme.background : SplashScreen.SPLASH_BACKGROUND,
+      webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: false }
     });
     this.window = window;
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     window.webContents.on('will-navigate', event => event.preventDefault());
     window.on('closed', () => { this.#closed = true; });
     window.once('show', () => { this.#shownAt = Date.now(); });
-    // Shown at once with the launcher background: waiting for the first paint would leave the desktop visible longer.
+    // Shown at once with the theme background: waiting for the first paint would leave the desktop visible longer.
     if (show) window.show();
-    window.loadFile(path.join(appRoot, 'splash.html'), { query: { version } }).catch(() => {});
+    const query = theme?.url ? { version, theme: theme.url } : { version };
+    window.loadFile(SplashScreen.page(appRoot), { query }).catch(() => {});
   }
+  static page(appRoot) { return path.join(appRoot, 'src', 'desktop', 'splash', 'splash.html'); }
   get closed() { return this.#closed || this.window.isDestroyed(); }
   get shownAt() { return this.#shownAt; }
+  // logo: 'custom' (organization logo), 'default' (themed atom) or '' when neither is drawn.
   inspect() {
     return this.window.webContents.executeJavaScript(`(() => {
-      const byId = id => document.getElementById(id), image = document.querySelector('.logo img'), bar = byId('splash-progress');
-      return { lang: document.documentElement.lang, status: byId('splash-status').textContent, version: byId('splash-version').textContent, busy: document.querySelector('.splash').getAttribute('aria-busy'), indeterminate: bar.getAttribute('role') === 'progressbar' && !bar.hasAttribute('aria-valuenow'), animated: document.getAnimations().some(animation => animation.playState === 'running'), logo: Boolean(image && image.complete && image.naturalWidth > 0) };
+      const byId = id => document.getElementById(id), bar = byId('splash-progress'), style = selector => getComputedStyle(document.querySelector(selector));
+      const custom = style('.logo-custom').display !== 'none' && style('.logo-custom').backgroundImage.startsWith('url("data:image/png;base64,');
+      const atom = style('.logo-default').display !== 'none' && document.querySelectorAll('.logo-default .logo-orbit').length === 3 && document.querySelectorAll('.logo-default .logo-electron').length === 3;
+      return {
+        lang: document.documentElement.lang, status: byId('splash-status').textContent, version: byId('splash-version').textContent,
+        busy: document.querySelector('.splash').getAttribute('aria-busy'), indeterminate: bar.getAttribute('role') === 'progressbar' && !bar.hasAttribute('aria-valuenow'),
+        animated: document.getAnimations().some(animation => animation.playState === 'running') && document.getAnimations().length >= (custom ? 1 : 7),
+        logo: custom ? 'custom' : atom ? 'default' : '', background: getComputedStyle(document.body).backgroundColor, accent: style('.sweep').backgroundColor
+      };
     })()`);
   }
   close() {

@@ -4,7 +4,7 @@
 
 | | |
 | --- | --- |
-| **Current version** | 2.70.1 |
+| **Current version** | 3.0.0 |
 | **Platform** | Windows 10 / 11, 64-bit |
 | **Distribution** | Single portable executable, `OrbitKanban-Portable.exe` |
 | **Network** | Not required. Used only for optional update checks against GitHub |
@@ -47,6 +47,7 @@
   - [Required fields](#required-fields)
 - [Appearance](#appearance)
   - [Themes](#themes)
+  - [Themed app icon](#themed-app-icon)
   - [Color picker](#color-picker)
   - [Fonts](#fonts)
   - [Text size](#text-size)
@@ -78,7 +79,7 @@
 - **Flexible lists**: multi-level sorting, drag-and-drop ordering, per-column filters, saved views, row highlights, tags, duplicate detection, bulk edit, and undo/redo.
 - **Custom columns** of twelve types, including links to any number of ticket platforms, websites and predecessor/successor references between tasks; every built-in column can also be removed.
 - **Form designer** for the task editor: drag fields into custom sections, size the window and mark fields as required, per organization.
-- **40 built-in themes**, custom themes, and palettes generated from an image or logo with WCAG AA contrast.
+- **40 built-in themes**, custom themes, and palettes generated from an image or logo with WCAG AA contrast. The splash screen, the app logo and the window icon follow the theme too.
 - **Imports and exports**: CSV import with validation, Excel workbooks, and per-organization JSON exports.
 - **Browser access** from the same PC, with live sync across windows.
 - **Built-in guide** covering every feature, opened with `F1`.
@@ -123,7 +124,9 @@ Demo data is created only when no workspace exists yet, so updating the app neve
 
 ### Splash screen and taskbar
 
-The portable executable extracts the app to a private temporary folder on every launch. A splash screen with the app logo, version and an animated progress bar appears immediately and stays on screen without interruption until the main window is open. The launcher starts the app itself and removes the splash screen only when the app reports that its window is visible, or if the app closes or does not report within 30 seconds. When the app runs without the portable launcher, for example during development, it shows the same splash screen itself; there, the bar pulses slowly when Windows asks to reduce motion. The splash screen is always in English. Only the English and Italian Chromium resources are packaged, which keeps extraction fast.
+The portable executable extracts the app to a private temporary folder on every launch. A splash screen with the logo, the version and an animated progress bar appears immediately and stays on screen without interruption until the main window is open. The launcher starts the app itself and removes the splash screen only when the app reports that its window is visible, or if the app closes or does not report within 30 seconds. When the app runs without the portable launcher, for example during development, it shows the same splash screen itself; there, when Windows asks to reduce motion, the electrons stop and the bar pulses slowly. The splash screen is always in English. Only the English and Italian Chromium resources are packaged, which keeps extraction fast.
+
+The splash screen is a flat HTML and CSS animation (`src/desktop/splash/`), with no video or image frames. While the launcher unpacks the app, Chromium is not available yet, so Windows' built-in HTML engine displays the same page. The splash screen opens in the theme of the organization that opens first: the app saves its colors, and its logo if it has one, to `data/runtime/splash-theme.css`, and the next launch uses them. Without a logo, the splash screen draws the OrbitKanban atom in the theme colors, with electrons circling its orbits. On the first launch, or if that file is missing, the splash screen uses the default Midnight theme. If Windows cannot display the HTML page, the launcher shows a still image of the default splash screen.
 
 Since 2.45.0 the main window reports the **original portable launcher** to Windows as its identity, path and icon. Pinning the running app to the taskbar therefore pins the launcher, not the temporary extraction. A second double-click brings the open app to the front.
 
@@ -149,7 +152,7 @@ Everything OrbitKanban stores lives in the `data` folder next to the executable:
 | `data/backups/` | Daily snapshots of the whole workspace; the 14 most recent are kept |
 | `data/languages/` | Optional translation files and the English template |
 | `data/updates/` | Update preference, downloads and rollback copies |
-| `data/runtime/` | Cache, logs, the sidebar preference and the browser access key |
+| `data/runtime/` | Cache, logs, the sidebar preference, the splash screen theme, the themed window icon and the browser access key |
 
 A daily backup is written before the first change of each day. **Settings → Data that travels with you** lists the backups with date and size. Restoring one asks for confirmation and replaces all organizations and settings; the current state is first saved to `workspace.json.bak`. Read and write errors are always reported, and a corrupted workspace is never silently replaced.
 
@@ -419,6 +422,14 @@ Every theme has four colors: background, surface, text and accent. Built-in pale
 
 You can also pick a role and click the image to sample a color manually; manual choices are not corrected. PNG, JPEG, WebP, GIF (first frame) and BMP files up to 15 MB are supported, resized to 1600 px at most. Images are processed in memory only and never stored or uploaded.
 
+### Themed app icon
+
+Like themed icons on a phone, the OrbitKanban atom takes the colors of the active theme: the badge follows the surface, and the orbits and nucleus follow the accent, adjusted to stay readable. The themed atom appears in the sidebar, in the browser tab, in the splash screen and, in the desktop app, as the window icon on the taskbar, in Alt+Tab and in the title bar. It changes as soon as you switch theme or organization.
+
+- If the organization has its own **logo**, the sidebar and the browser tab show that logo; the window icon keeps the themed atom.
+- The window icon is saved as `data/runtime/app-icon.ico`, in every size Windows uses, so the next launch opens with it right away.
+- The executable's own icon, which Windows shows in File Explorer, on **pinned** taskbar buttons and on shortcuts, cannot change while the app runs and stays the default icon.
+
 ### Color picker
 
 Every color in the app (labels, highlighters, tags and theme colors) uses the same built-in picker, styled like the rest of the app:
@@ -612,7 +623,7 @@ npm test         # unit tests (node --test)
 npm run check    # syntax check of every script in src/ and tools/
 npm run smoke    # end-to-end UI smoke test on an isolated temporary workspace
 npm run icon     # generate app-logo.png and build/icon.ico from app-logo.svg
-npm run splash   # generate the launcher splash image and animation from splash.html
+npm run splash   # generate the launcher's fallback splash image and the app icons
 npm run dist     # build dist/OrbitKanban-Portable.exe
 ```
 
@@ -631,21 +642,21 @@ The code is object oriented: apart from entry points and preload scripts, every 
 | `src/shared/columns/` | **Columns**: column schemas, layout, filters, validation, merging, required fields and platform links |
 | `src/shared/interop/` | **Interop**: CSV parsing and import, ZIP and Excel writers (no external dependencies) |
 | `src/shared/localization/` | **Localization**: the `Translator` engine |
-| `src/shared/graphics/` | **Graphics**: icon set, color math and the theme generator |
+| `src/shared/graphics/` | **Graphics**: icon set, color math, the theme generator and the themed app logo (`AppLogo`) |
 | `src/shared/guide/` | **Guide**: in-app guide content |
-| `src/renderer/` | Interface as ES modules: `App` builds every component on the shared `AppState`; components extend `Component` and are grouped by area (`tasks`, `issues`, `milestones`, `kanban`, `settings`, `columns`, `controls`, `dialogs`, `layout`, `transfer`, …). `shared.js` imports the shared classes and `main.js` starts the app |
+| `src/renderer/` | Interface as ES modules: `App` builds every component on the shared `AppState`; components extend `Component` and are grouped by area (`tasks`, `issues`, `milestones`, `kanban`, `settings`, `columns`, `controls`, `dialogs`, `layout`, `appearance`, `transfer`, …). `shared.js` imports the shared classes and `main.js` starts the app |
 | `src/desktop/` | Electron main process: `DesktopApplication` (windows, IPC, single instance), `preload.js` and the `main.js` entry point |
 | `src/desktop/storage/` | `WorkspaceStore` (atomic persistence, backups, organization transfer) and `LanguageStore` (external language files) |
-| `src/desktop/platform/` | `PortableLauncher` (portable paths, taskbar identity, shortcuts) and `WindowChrome` (custom title bar) |
-| `src/desktop/splash/` | `SplashScreen` and its preload |
+| `src/desktop/platform/` | `PortableLauncher` (portable paths, taskbar identity, shortcuts), `WindowChrome` (custom title bar), `WindowIcon` (themed window icon) and `IconFile` (ICO encoder and reader) |
+| `src/desktop/splash/` | `SplashScreen`, `SplashTheme` (saved splash screen colors and logo) and the splash screen page (`splash.html`, `splash.js`), shared with the portable launcher |
 | `src/desktop/update/` | `Updater` (check, download, verification), `UpdateLauncher` and `install-update.ps1` |
 | `src/desktop/diagnostics/` | End-to-end smoke tests of the desktop app, the browser access and the taskbar identity |
 | `src/web/` | Browser access: `WebServer` and the client `WebBridge` |
-| `index.html`, `styles.css`, `splash.html` | Interface markup and styles |
+| `index.html`, `styles.css` | Interface markup and styles |
 | `languages/` | Built-in language packs |
 | `app-logo.svg`, `fonts/` | App logo, bundled WOFF2 fonts with sources and licenses |
 | `tools/` | Development scripts: `build.js` (`PortableBuild`), `make-splash.js` (`LauncherArtwork`), `smoke.js` (`SmokeRunner`), `check.js` (`SyntaxCheck`), `AppIcon`, `SplashImage` and `GitHubRelease` |
-| `build/` | Portable launcher customization; generated splash and icon files |
+| `build/` | Portable launcher customization (HTML splash screen host); generated fallback splash and icon files |
 | `build-and-push.ps1` | Build, test, commit, push and GitHub release pipeline |
 | `test/` | Unit tests, including layout validation and import/export in `task-layout.test.js` and required fields in `required-fields.test.js` |
 
@@ -682,7 +693,7 @@ Tags are never moved. Bump the version before releasing new sources:
 npm version minor --no-git-tag-version --ignore-scripts
 ```
 
-For a specifically numbered release, use `npm version 2.70.1 --no-git-tag-version --ignore-scripts` instead. To update the local portable copy too, run the pipeline **without `-NoDeliver`** and close the app first. The script replaces only the executable, not `dist/data`.
+For a specifically numbered release, use `npm version 3.0.0 --no-git-tag-version --ignore-scripts` instead. To update the local portable copy too, run the pipeline **without `-NoDeliver`** and close the app first. The script replaces only the executable, not `dist/data`.
 
 The script refuses to reuse a tagged version for different sources. If a build or test fails, nothing is committed or pushed.
 
@@ -690,6 +701,7 @@ The script refuses to reuse a tagged version for different sources. If a build o
 
 | Version | Changes |
 | --- | --- |
+| **3.0.0** | Flat HTML and CSS splash screen, also shown by the portable launcher, replacing the video clip; it opens in the colors and logo of the starting organization, or draws an animated, themed atom logo. **Themed app icon**: the atom in the sidebar, browser tab and window/taskbar icon takes the theme colors. Clean-up of unused code, styles, translations and build steps |
 | **2.70.1** | Object-oriented code base: one class per file, grouped by namespace under `src/` (shared, renderer, desktop, web) and `tools/`; no functional changes |
 | **2.70.0** | **Link to platform** columns, one per platform with their own templates, replace the organization portal link (migrated automatically); **Website** columns; **Reference parent/child** columns for predecessors and automatic successors; guide contents keep the last section highlighted |
 | **2.60.2** | The portable launcher keeps its splash screen on screen until the main window is open, with no blank gap or second loading window |

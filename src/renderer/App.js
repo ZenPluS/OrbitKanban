@@ -9,6 +9,7 @@ import { TagMenu } from './tasks/TagMenu.js';
 import { ColorPicker } from './controls/ColorPicker.js';
 import { TaskFilter } from './tasks/TaskFilter.js';
 import { ThemePainter } from './appearance/ThemePainter.js';
+import { LogoPainter } from './appearance/LogoPainter.js';
 import { Sidebar } from './layout/Sidebar.js';
 import { AppShell } from './layout/AppShell.js';
 import { SettingsController } from './settings/SettingsController.js';
@@ -62,6 +63,7 @@ export class App extends Component {
     this.colorPicker = new ColorPicker(this);
     this.taskFilter = new TaskFilter(this);
     this.themePainter = new ThemePainter(this);
+    this.logoPainter = new LogoPainter(this);
     this.sidebar = new Sidebar(this);
     this.shell = new AppShell(this);
     this.settings = new SettingsController(this);

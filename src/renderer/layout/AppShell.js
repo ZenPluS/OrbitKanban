@@ -12,16 +12,14 @@ export class AppShell extends Component {
     for (const { id } of Typography.FONT_SIZE_PARTS) document.documentElement.style.setProperty(`--fs-${id}`, String(values[id] / 100));
   }
   #applyTheme() {
-    this.app.themePainter.paintTheme(this.state.data.settings.themes.find(t => t.id === this.state.data.settings.themeId));
+    const theme = this.state.data.settings.themes.find(t => t.id === this.state.data.settings.themeId);
+    this.app.themePainter.paintTheme(theme);
     this.paintFontSizes(this.state.data.settings.fontSizes);
     this.app.fontSettings.paintFontFamily(this.state.data.settings.fontFamily);
     const organization = this.state.organizations.find(o => o.id === this.state.activeOrganizationId);
     document.title = this.browserMode() ? `${organization.name} · ${Common.APP_NAME}` : Common.APP_NAME;
     this.$('#brand-name').textContent = Common.APP_NAME;
-    const icon = this.$('link[rel="icon"]');
-    if (icon) { icon.type = this.state.data.settings.logo ? 'image/png' : 'image/svg+xml'; icon.href = this.state.data.settings.logo || 'app-logo.svg'; }
-    this.$('.brand-icon').innerHTML = `<img src="${this.state.data.settings.logo || 'app-logo.svg'}" alt="${this.esc(this.state.data.settings.logo ? organization.name : Common.APP_NAME)}">`;
-    this.$('.brand-icon').classList.add('has-logo');
+    this.app.logoPainter.paintLogo(theme, organization);
   }
   render() {
     this.app.colorPicker.closeColorPicker();

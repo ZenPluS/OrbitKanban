@@ -3,5 +3,6 @@
 module.exports = {
   ColorMath: require('./ColorMath'),
   ThemeGenerator: require('./ThemeGenerator'),
+  AppLogo: require('./AppLogo'),
   IconLibrary: require('./IconLibrary')
 };

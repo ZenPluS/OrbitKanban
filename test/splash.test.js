@@ -4,18 +4,138 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const ROOT = path.join(__dirname, '..');
+const os = require('node:os');
+const vm = require('node:vm');
+const { pathToFileURL } = require('node:url');
 const SplashScreen = require('../src/desktop/splash/SplashScreen');
+const SplashTheme = require('../src/desktop/splash/SplashTheme');
+const { ColorMath } = require('../src/shared/graphics');
+const { DataFactory } = require('../src/shared/domain');
 const { SPLASH_STATUS, SPLASH_MIN_VISIBLE, splashHoldTime, windowBackground } = SplashScreen;
-const { encodeBmp, quantize, encodeAvi } = require('../tools/SplashImage');
+const { encodeBmp } = require('../tools/SplashImage');
+const PAGE = SplashScreen.page(ROOT);
+const PAGE_HTML = fs.readFileSync(PAGE, 'utf8');
+const PAGE_SCRIPT = fs.readFileSync(path.join(path.dirname(PAGE), 'splash.js'), 'utf8');
+const LOGO = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==';
+const themes = () => { const data = DataFactory.initialData(); return (data.organizations?.[0]?.data.settings ?? data.settings).themes; };
 
 test('loading screen is English only with an indeterminate bar and no step counter', () => {
-  const html = fs.readFileSync(path.join(ROOT, 'splash.html'), 'utf8');
-  assert.match(html, /<html lang="en">/);
-  assert.ok(html.includes(`>${SPLASH_STATUS}<`));
-  assert.match(html, /role="progressbar"/);
-  assert.doesNotMatch(html, /aria-valuenow|splash-counter|Caricamento|Preparazione/);
-  assert.equal(html.match(/class="brand"/g).length, 1, 'markup appears once');
-  assert.match(html, /@keyframes sweep/);
+  assert.match(PAGE_HTML, /<html lang="en">/);
+  assert.ok(PAGE_HTML.includes(`>${SPLASH_STATUS}<`));
+  assert.match(PAGE_HTML, /role="progressbar"/);
+  assert.doesNotMatch(PAGE_HTML, /aria-valuenow|splash-counter|Caricamento|Preparazione/);
+  assert.equal(PAGE_HTML.match(/class="brand"/g).length, 1, 'markup appears once');
+  assert.match(PAGE_HTML, /@keyframes sweep/);
+  assert.ok(!fs.existsSync(path.join(ROOT, 'splash.html')), 'one loading screen page');
+});
+test('loading screen page also runs in the Windows HTML engine used by the launcher', () => {
+  assert.match(PAGE_HTML, /<meta http-equiv="X-UA-Compatible" content="IE=edge">/);
+  assert.doesNotMatch(PAGE_HTML, /var\(--|--[\w-]+:/, 'IE11 has no CSS custom properties');
+  assert.doesNotMatch(PAGE_HTML, /<script>|\son\w+=/, 'no inline script: the policy allows script-src self only');
+  assert.match(PAGE_HTML, /<script src="splash\.js"><\/script>/);
+  assert.doesNotMatch(PAGE_HTML, /\.(?:avi|gif|mp4|webm)\b|<video|<img/i, 'the animation is CSS only');
+  // Electrons are HTML elements: IE11 does not animate CSS transforms on SVG elements.
+  assert.equal(PAGE_HTML.match(/class="logo-electron"/g).length, 3);
+  assert.equal(PAGE_HTML.match(/class="logo-orbit logo-orbit-\d"/g).length, 3);
+  for (const id of ['splash-version', 'splash-status', 'splash-progress']) assert.ok(PAGE_HTML.includes(`id="${id}"`), id);
+  // ES5 only: no arrow functions, block-scoped declarations, classes, template literals or URLSearchParams.
+  const code = PAGE_SCRIPT.replace(/^\s*\/\/.*$/gm, '');
+  assert.doesNotMatch(code, /=>|\b(?:let|const|class)\s|`|URLSearchParams|\.includes\(|\.startsWith\(/);
+});
+test('loading screen colors default to the Midnight theme, the same palette the app saves for it', () => {
+  const palette = SplashTheme.palette(undefined);
+  assert.deepEqual(SplashTheme.theme(undefined), SplashTheme.DEFAULT_THEME);
+  assert.equal(palette.background, SplashScreen.SPLASH_BACKGROUND);
+  // Every saved rule repeats the colors of the same page rule, so a missing theme file looks exactly like the default theme.
+  const rules = SplashTheme.css(undefined).split('\n').slice(1).filter(Boolean);
+  assert.ok(rules.length >= 10);
+  for (const rule of rules) {
+    const [, selector, body] = rule.match(/^(.+?) \{ (.+) \}$/);
+    const page = PAGE_HTML.match(new RegExp(`\\n\\s*${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} \\{([^}]*)\\}`));
+    assert.ok(page, selector);
+    for (const color of body.match(/#[0-9a-f]{6}/g)) assert.ok(page[1].includes(color), `${selector} ${color}`);
+  }
+});
+test('saved loading screen colors stay readable in every built-in theme', () => {
+  for (const theme of themes()) {
+    const palette = SplashTheme.palette({ themeId: theme.id, themes: themes() });
+    assert.equal(palette.background, theme.background.toLowerCase(), theme.id);
+    assert.ok(ColorMath.contrastRatio(palette.muted, palette.background) >= ColorMath.WCAG_TEXT_CONTRAST, `${theme.id} version text`);
+    for (const surface of [palette.background, palette.badge]) {
+      assert.ok(ColorMath.contrastRatio(palette.accent, surface) >= ColorMath.WCAG_GRAPHIC_CONTRAST, `${theme.id} accent`);
+    }
+    assert.equal(palette.orbits.length, 3);
+    for (const color of [...palette.orbits, palette.line, palette.badge]) assert.match(color, /^#[0-9a-f]{6}$/, theme.id);
+  }
+});
+test('loading screen style sheet carries the organization theme and only a safe PNG logo', () => {
+  const daylight = { themeId: 'daylight', themes: themes() };
+  const css = SplashTheme.css(daylight);
+  assert.ok(css.startsWith('/* OrbitKanban splash theme v1 background=#eef0f7 */\n'));
+  assert.match(css, /^html, body \{ background: #eef0f7; color: #[0-9a-f]{6}; \}$/m);
+  assert.doesNotMatch(css, /logo-custom|logo-default/, 'no logo: the themed atom is drawn');
+  assert.deepEqual(SplashTheme.parse(css), { background: '#eef0f7' });
+  const withLogo = SplashTheme.css({ ...daylight, logo: LOGO });
+  assert.ok(withLogo.includes(`.logo-custom { display: block; background-image: url("${LOGO}"); }`));
+  assert.ok(withLogo.includes('.logo-default { display: none; }'));
+  for (const logo of ['data:image/svg+xml;base64,PHN2Zz4=', 'data:image/png;base64,AAAA"); } body { display: none', `${LOGO}\n`, 42, 'data:image/png;base64,' + 'A'.repeat(1500001)]) {
+    assert.doesNotMatch(SplashTheme.css({ ...daylight, logo }), /logo-custom/, String(logo).slice(0, 40));
+  }
+  for (const settings of [{ themeId: 'missing', themes: themes() }, { themeId: 'bad', themes: [{ id: 'bad', background: 'red', surface: '#000000', text: '#ffffff', accent: '#ff0000' }] }]) {
+    assert.ok(SplashTheme.css(settings).startsWith('/* OrbitKanban splash theme v1 background=#10131c */'));
+  }
+  for (const text of ['', 'html { }', '/* OrbitKanban splash theme v1 background=red */\n', null, '/* OrbitKanban splash theme v1 background=#eef0f7 */\n' + ' '.repeat(3 * 1024 * 1024)]) {
+    assert.equal(SplashTheme.parse(text), null);
+  }
+});
+test('loading screen theme is saved atomically next to the runtime data and only when it changes', async () => {
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'orbitkanban-splash-theme-'));
+  try {
+    const runtime = path.join(folder, 'runtime'), store = new SplashTheme(runtime);
+    assert.equal(store.file, path.join(runtime, SplashTheme.FILE_NAME));
+    assert.equal(store.read(), null, 'nothing saved yet');
+    const settings = { themeId: 'daylight', themes: themes(), logo: LOGO };
+    assert.equal(await store.save(settings), true);
+    assert.equal(fs.readFileSync(store.file, 'utf8'), SplashTheme.css(settings));
+    assert.deepEqual(store.read(), { background: '#eef0f7', url: pathToFileURL(store.file).href });
+    assert.equal(await store.save(settings), false, 'unchanged');
+    assert.equal(await new SplashTheme(runtime).save(settings), false, 'unchanged on disk');
+    assert.equal(await store.save({ ...settings, themeId: 'midnight' }), true);
+    assert.equal(store.read().background, '#10131c');
+    assert.deepEqual(fs.readdirSync(runtime), [SplashTheme.FILE_NAME], 'no temporary files left');
+    fs.writeFileSync(store.file, 'body { background: red; }');
+    assert.equal(store.read(), null, 'unrecognized file');
+    const quoted = new SplashTheme(path.join(folder, "O'Brien", 'runtime'));
+    await quoted.save(settings);
+    assert.match(quoted.read().url, /^file:\/\/\/.*\/O%27Brien\/runtime\/splash-theme\.css$/, 'accepted by the loading screen script');
+  } finally {
+    fs.rmSync(folder, { recursive: true, force: true });
+  }
+});
+test('loading screen script accepts only its own theme file and a plain version', () => {
+  const run = ({ search = '', hash = '', width = 520 }) => {
+    const written = [], element = { textContent: 'Portable' }, listeners = {};
+    const document = {
+      write: html => written.push(html), getElementById: id => id === 'splash-version' ? element : null,
+      addEventListener: (name, listener) => { listeners[name] = listener; }, documentElement: { clientWidth: width }
+    };
+    vm.runInNewContext(PAGE_SCRIPT, { window: { location: { search, hash }, innerWidth: width }, document });
+    return { html: written.join(''), version: element.textContent, document };
+  };
+  const launcher = run({ hash: '#version=2.71.0&theme=splash-theme.css', width: 650 });
+  assert.equal(launcher.version, 'Portable \u00b7 v2.71.0');
+  assert.equal(launcher.html, '<link rel="stylesheet" href="splash-theme.css"><style>.splash { zoom: 1.2500; }</style>');
+  const file = 'file:///C:/Users/me/Portable%20Apps/OrbitKanban/data/runtime/splash-theme.css';
+  const electron = run({ search: `?version=2.71.0-beta.1&theme=${encodeURIComponent(file)}` });
+  assert.equal(electron.version, 'Portable \u00b7 v2.71.0-beta.1');
+  assert.equal(electron.html, `<link rel="stylesheet" href="${file}">`, 'no zoom at 100%');
+  for (const theme of ['http://example.com/splash-theme.css', 'javascript:alert(1)//splash-theme.css', 'splash-theme.css"><script>alert(1)</script>', 'file:///C:/x"/splash-theme.css', '//example.com/splash-theme.css', 'theme.css']) {
+    assert.equal(run({ hash: `#theme=${encodeURIComponent(theme)}` }).html, '', theme);
+  }
+  for (const version of ['<b>2</b>', '2.71.0 & more', 'x'.repeat(33), '%E0%A4%A']) {
+    assert.equal(run({ hash: `#version=${version}` }).version, 'Portable', version);
+  }
+  assert.equal(typeof run({}).document.oncontextmenu, 'function');
 });
 test('loading screen stays just long enough not to flicker', () => {
   assert.equal(splashHoldTime(null, 5000), 0, 'never shown: nothing to wait for');
@@ -37,9 +157,10 @@ test('Windows build embeds the application logo without requiring code signing',
   assert.equal(scripts.prestart, 'npm run icon');
   assert.equal(scripts.presmoke, 'npm run icon');
   assert.equal(scripts.predist, 'npm run splash');
-  for (const file of ['index.html', 'splash.html']) {
-    assert.match(fs.readFileSync(path.join(ROOT, file), 'utf8'), /<img src="app-logo\.svg"/);
-  }
+  assert.match(fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8'), /<img src="app-logo\.svg"/);
+  // The loading screen draws the same atom inline, so it can recolor it with the organization theme.
+  assert.ok(PAGE_HTML.includes('viewBox="0 0 64 64"'));
+  assert.ok(!build.files.includes('splash.html'));
 });
 test('loading window uses the same native icon as the application', async () => {
   const { EventEmitter } = require('node:events');
@@ -51,17 +172,22 @@ test('loading window uses the same native icon as the application', async () => 
       this.webContents = new EventEmitter();
       this.webContents.setWindowOpenHandler = () => {};
     }
-    async loadFile(file) { this.file = file; }
+    async loadFile(file, options) { this.file = file; this.query = options?.query; }
     isDestroyed() { return false; }
   }
-  const splash = new SplashScreen({
-    BrowserWindow: Window, screen: { getPrimaryDisplay: () => ({ bounds: { x: 0, y: 0, width: 1920, height: 1080 } }) },
-    appRoot: ROOT, title: 'OrbitKanban', version: '2.6.2', icon, show: false
-  });
+  const screen = { getPrimaryDisplay: () => ({ bounds: { x: 0, y: 0, width: 1920, height: 1080 } }) };
+  const splash = new SplashScreen({ BrowserWindow: Window, screen, appRoot: ROOT, title: 'OrbitKanban', version: '2.6.2', icon, show: false });
   assert.equal(splash.window.options.icon, icon);
   assert.equal(splash.window.options.show, false);
   assert.equal(splash.window.options.skipTaskbar, true);
-  assert.equal(splash.window.file, path.join(ROOT, 'splash.html'));
+  assert.equal(splash.window.options.webPreferences.preload, undefined, 'the page needs no privileged bridge');
+  assert.equal(splash.window.file, path.join(ROOT, 'src', 'desktop', 'splash', 'splash.html'));
+  assert.deepEqual(splash.window.query, { version: '2.6.2' });
+  assert.equal(splash.window.options.backgroundColor, SplashScreen.SPLASH_BACKGROUND);
+  const theme = { background: '#eef0f7', url: pathToFileURL(path.join(ROOT, 'data', 'runtime', SplashTheme.FILE_NAME)).href };
+  const themed = new SplashScreen({ BrowserWindow: Window, screen, appRoot: ROOT, title: 'OrbitKanban', version: '2.6.2', icon, theme, show: false });
+  assert.equal(themed.window.options.backgroundColor, '#eef0f7', 'opens in the theme color before the page paints');
+  assert.deepEqual(themed.window.query, { version: '2.6.2', theme: theme.url });
 });
 test('main window starts with the organization theme background', () => {
   const themes = [{ id: 'midnight', background: '#10131c' }, { id: 'daylight', background: '#EEF0F7' }];
@@ -93,41 +219,4 @@ test('BMP encoder rejects inconsistent input', () => {
   assert.throws(() => encodeBmp(Buffer.alloc(0), 0, 0), /invalid bitmap data/i);
   assert.throws(() => encodeBmp(null, 1, 1), /invalid bitmap data/i);
   assert.throws(() => encodeBmp(Buffer.alloc(8), 1.5, 2), /invalid bitmap data/i);
-});
-test('palette is exact for few colors and close for many', () => {
-  const few = quantize([Uint8Array.from([1, 2, 3, 200, 100, 50]), Uint8Array.from([200, 100, 50, 1, 2, 3])]);
-  assert.equal(few.palette.length, 2);
-  assert.deepEqual(few.frames.map(frame => [...frame].map(index => few.palette[index])), [[[1, 2, 3], [200, 100, 50]], [[200, 100, 50], [1, 2, 3]]]);
-  const gradient = new Uint8Array(3 * 4096);
-  for (let index = 0; index < 4096; index++) gradient.set([index & 255, index >> 4, 255 - (index & 255)], index * 3);
-  const many = quantize([gradient]);
-  assert.ok(many.palette.length <= 256);
-  let worst = 0;
-  many.frames[0].forEach((entry, index) => {
-    const color = many.palette[entry];
-    worst = Math.max(worst, ...[0, 1, 2].map(c => Math.abs(color[c] - gradient[index * 3 + c])));
-  });
-  assert.ok(worst <= 24, `largest channel error ${worst}`);
-  assert.throws(() => quantize([]), /invalid frames/i);
-});
-test('AVI encoder writes a looping 8-bit clip the animation control can read', () => {
-  const frames = [Uint8Array.from([0, 1, 1, 0, 1, 0]), Uint8Array.from([1, 0, 0, 1, 0, 1])];
-  const file = encodeAvi({ width: 3, height: 2, fps: 30, palette: [[16, 19, 28], [163, 146, 255]], frames });
-  assert.deepEqual([file.toString('ascii', 0, 4), file.readUInt32LE(4), file.toString('ascii', 8, 12)], ['RIFF', file.length - 8, 'AVI ']);
-  const find = (id, from = 12) => { const at = file.indexOf(id, from, 'ascii'); assert.ok(at > 0, id); return at; };
-  const avih = find('avih') + 8;
-  assert.deepEqual([file.readUInt32LE(avih), file.readUInt32LE(avih + 12), file.readUInt32LE(avih + 16), file.readUInt32LE(avih + 24), file.readUInt32LE(avih + 32), file.readUInt32LE(avih + 36)], [33333, 0x10, 2, 1, 3, 2]);
-  const strh = find('strh') + 8;
-  assert.deepEqual([file.toString('ascii', strh, strh + 4), file.toString('ascii', strh + 4, strh + 8), file.readUInt32LE(strh + 20), file.readUInt32LE(strh + 24), file.readUInt32LE(strh + 32)], ['vids', 'DIB ', 1, 30, 2]);
-  const strf = find('strf') + 8;
-  assert.deepEqual([file.readUInt32LE(strf), file.readInt32LE(strf + 4), file.readInt32LE(strf + 8), file.readUInt16LE(strf + 14), file.readUInt32LE(strf + 16), file.readUInt32LE(strf + 32)], [40, 3, 2, 8, 0, 256]);
-  assert.deepEqual([...file.subarray(strf + 44, strf + 48)], [255, 146, 163, 0], 'palette is stored as BGR');
-  const movi = find('movi'), first = find('00db', movi);
-  assert.equal(file.readUInt32LE(first + 4), 8, 'rows padded to 4 bytes');
-  assert.deepEqual([...file.subarray(first + 8, first + 16)], [0, 1, 0, 0, 0, 1, 1, 0], 'bottom row first');
-  const idx1 = find('idx1', first) + 8;
-  assert.deepEqual([file.toString('ascii', idx1, idx1 + 4), file.readUInt32LE(idx1 + 4), file.readUInt32LE(idx1 + 8), file.readUInt32LE(idx1 + 12)], ['00db', 0x10, first - movi, 8]);
-  assert.equal(file.readUInt32LE(idx1 + 24), first - movi + 16);
-  assert.throws(() => encodeAvi({ width: 3, height: 2, fps: 30, palette: [[0, 0, 0]], frames: [new Uint8Array(5)] }), /invalid frames/i);
-  assert.throws(() => encodeAvi({ width: 3, height: 2, fps: 0, palette: [[0, 0, 0]], frames }), /invalid video format/i);
 });

@@ -12,7 +12,8 @@ class GuideContent {
         { title: 'Portable by design', items: [
           'The app is a single executable. The **data** folder next to it holds the archive, backups, languages and update history.',
           'No installation or administrator rights are needed. The first launch creates a demo organization that you can explore or clear.',
-          'The first time, Windows SmartScreen may warn about an unsigned app: choose **More info** and then **Run anyway**.'
+          'The first time, Windows SmartScreen may warn about an unsigned app: choose **More info** and then **Run anyway**.',
+          'While the app starts, the loading screen already uses the theme colors and the logo of the organization that opens first.'
         ] },
         { title: 'Share it', items: [
           'To share the app, close it and copy the executable together with its **data** folder: the recipient gets the same organizations, themes and settings.',
@@ -248,7 +249,8 @@ class GuideContent {
         { title: 'Themes', items: [
           'Choose from 40 built-in themes, 27 dark and 13 light, or create your own from four colors: background, surface, text and accent.',
           'Built-in themes can be edited for each organization and brought back with **Restore built-in theme**; your own themes can be edited and deleted.',
-          'Built-in palettes meet WCAG AA contrast: text at least 4.5:1 and accent at least 3:1, on both background and surfaces.'
+          'Built-in palettes meet WCAG AA contrast: text at least 4.5:1 and accent at least 3:1, on both background and surfaces.',
+          'The app icon takes the theme colors too, like themed icons on a phone: in the sidebar, in the browser tab and on the app window in the taskbar. The executable file and pinned shortcuts keep the original icon.'
         ] },
         { title: 'Theme from an image', items: [
           'Upload an image and all four colors are extracted automatically, then adjusted as little as possible, in lightness only, to meet WCAG AA.',

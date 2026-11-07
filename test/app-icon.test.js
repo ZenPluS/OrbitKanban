@@ -3,7 +3,12 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const zlib = require('node:zlib');
+const os = require('node:os');
+const path = require('node:path');
 const { ICON_SIZES, encodeIco, parseIco, readExecutableIcons, verifyExecutableIcon } = require('../tools/AppIcon');
+const WindowIcon = require('../src/desktop/platform/WindowIcon');
+const { AppLogo, ColorMath } = require('../src/shared/graphics');
+const { DataFactory } = require('../src/shared/domain');
 
 const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), zlib.deflateSync(Buffer.from('png'))]);
 const solid = (size, rgba) => Buffer.alloc(size * size * 4).fill(Buffer.from(rgba));
@@ -120,4 +125,68 @@ test('icon reader understands a real Windows executable', { skip: process.platfo
   assert.ok(groups.length > 0);
   assert.ok(groups[0].images.length > 0 && groups[0].images.every(image => image.size > 0 && image.data.length > 0));
   assert.throws(() => verifyExecutableIcon(fs.readFileSync(electron), sampleIco()), /does not match/i);
+});
+
+const builtInThemes = () => { const data = DataFactory.initialData(); return (data.organizations?.[0]?.data.settings ?? data.settings).themes; };
+const windowImages = (rgba = [10, 20, 30, 255]) => ICON_SIZES.map(size => size === 256 ? { size, png: new Uint8Array(PNG) } : { size, rgba: new Uint8Array(solid(size, rgba)) });
+
+test('themed app logo keeps its orbits and nucleus readable on the badge in every built-in theme', () => {
+  assert.deepEqual(AppLogo.theme(undefined), AppLogo.DEFAULT_THEME);
+  assert.deepEqual(AppLogo.theme({ ...AppLogo.DEFAULT_THEME, accent: 'red' }), AppLogo.DEFAULT_THEME, 'invalid colors fall back to the default theme');
+  assert.deepEqual(AppLogo.ICON_SIZES, ICON_SIZES, 'window and executable icons share the sizes');
+  const logos = new Set();
+  for (const theme of builtInThemes()) {
+    const palette = AppLogo.palette(theme);
+    for (const color of [palette.badge, palette.ring, palette.electron, palette.nucleus, ...palette.orbits]) assert.match(color, /^#[0-9a-f]{6}$/, theme.id);
+    for (const color of [palette.accent, ...palette.orbits]) assert.ok(ColorMath.contrastRatio(color, palette.badge) >= ColorMath.WCAG_GRAPHIC_CONTRAST, `${theme.id} ${color}`);
+    assert.equal(palette.nucleus, palette.accent);
+    logos.add(AppLogo.svg(theme));
+  }
+  assert.equal(logos.size, builtInThemes().length, 'each theme draws its own logo');
+});
+test('themed app logo is the app-logo.svg drawing in flat theme colors', () => {
+  const theme = builtInThemes().find(item => item.id === 'daylight'), palette = AppLogo.palette(theme), svg = AppLogo.svg(theme, 32);
+  assert.match(svg, /^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg" width="32" height="32" viewBox="0 0 64 64">/);
+  assert.equal(svg.match(/<ellipse class="orbit"/g).length, 3);
+  assert.equal(svg.match(/<circle class="electron"/g).length, 3);
+  assert.match(svg, /@media \(max-width:40px\)\{\.orbit\{stroke-width:4\.4\}\.electron\{display:none\}\}/, 'small icons drop the electrons, like the executable icon');
+  assert.doesNotMatch(svg, /Gradient|url\(|<script|<image|href/, 'flat colors only, nothing external');
+  for (const color of [palette.badge, palette.ring, palette.nucleus, ...palette.orbits]) assert.ok(svg.includes(`"${color}"`), color);
+  assert.equal(decodeURIComponent(AppLogo.dataUrl(theme, 32).replace('data:image/svg+xml;charset=utf-8,', '')), svg);
+  const source = fs.readFileSync(path.join(__dirname, '..', 'app-logo.svg'), 'utf8');
+  for (const shape of ['r="31"', 'rx="24" ry="9.5"', 'rotate(120 32 32)', 'rotate(60 32 32)', 'r="3.2"', 'r="5.6"']) assert.ok(source.includes(shape) && svg.includes(shape), shape);
+});
+test('window icon accepts only the complete set of icon sizes from the interface', () => {
+  const ico = WindowIcon.encode(windowImages());
+  assert.ok(WindowIcon.valid(ico));
+  assert.deepEqual(parseIco(ico).map(({ size, format }) => `${size}:${format}`), ['16:dib', '24:dib', '32:dib', '48:dib', '64:dib', '128:dib', '256:png']);
+  for (const images of [null, {}, windowImages().slice(1), [...windowImages().slice(1), windowImages()[1]], windowImages().map(image => image.size === 32 ? { ...image, rgba: [1, 2, 3] } : image), windowImages().map(image => image.size === 256 ? { size: 256, png: 'iVBOR' } : image), windowImages().map(image => image.size === 256 ? { size: 256, png: new Uint8Array(600 * 1024) } : image)]) {
+    assert.throws(() => WindowIcon.encode(images), /invalid|PNG/i);
+  }
+  assert.throws(() => WindowIcon.encode(windowImages().map(image => image.size === 48 ? { ...image, rgba: new Uint8Array(10) } : image)), /invalid icon pixels/i);
+  assert.equal(WindowIcon.valid(encodeIco([{ size: 16, rgba: solid(16, [0, 0, 0, 255]) }])), false, 'missing sizes');
+  assert.equal(WindowIcon.valid(Buffer.from('not an icon')), false);
+});
+test('window icon is saved atomically for the next start and rewritten only when it changes', async () => {
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'orbitkanban-window-icon-'));
+  try {
+    const store = new WindowIcon(path.join(folder, 'runtime'));
+    assert.equal(store.read(), null, 'first start: no saved icon');
+    assert.equal(await store.save(windowImages()), true);
+    assert.equal(store.read(), store.file);
+    assert.equal(path.basename(store.file), 'app-icon.ico');
+    assert.deepEqual(fs.readdirSync(path.dirname(store.file)), ['app-icon.ico'], 'no temporary file left behind');
+    assert.ok(fs.readFileSync(store.file).equals(WindowIcon.encode(windowImages())));
+    assert.equal(await store.save(windowImages()), false, 'same icon: no write');
+    assert.equal(await new WindowIcon(path.join(folder, 'runtime')).save(windowImages()), false, 'same file on disk: no write');
+    const [first, second] = await Promise.all([store.save(windowImages([1, 1, 1, 255])), store.save(windowImages([2, 2, 2, 255]))]);
+    assert.deepEqual([first, second], [true, true]);
+    assert.ok(fs.readFileSync(store.file).equals(WindowIcon.encode(windowImages([2, 2, 2, 255]))), 'saves run in order: the last one wins');
+    await assert.rejects(store.save([]), /invalid window icon/i);
+    assert.ok(fs.readFileSync(store.file).equals(WindowIcon.encode(windowImages([2, 2, 2, 255]))), 'an invalid icon leaves the saved one');
+    fs.writeFileSync(store.file, 'damaged');
+    assert.equal(store.read(), null, 'a damaged file is ignored');
+  } finally {
+    fs.rmSync(folder, { recursive: true, force: true });
+  }
 });

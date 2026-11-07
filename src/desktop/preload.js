@@ -24,6 +24,7 @@ contextBridge.exposeInMainWorld('workspace', {
   ready: () => ipcRenderer.send('app-ready'),
   titleBarOverlay: process.argv.includes('--orbitkanban-title-bar=overlay'),
   windowChrome: chrome => ipcRenderer.send('window-chrome', chrome),
+  windowIcon: process.platform === 'win32' ? images => ipcRenderer.invoke('window-icon', images) : undefined,
   onChange: callback => {
     const listener = (_, info) => callback(info);
     ipcRenderer.on('workspace-changed', listener);
