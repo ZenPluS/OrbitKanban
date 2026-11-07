@@ -34,11 +34,16 @@ class DataFactory {
     settings.taskEditorLayout = TaskLayout.normalizeTaskEditorLayout(settings);
     return { version: 1, settings, tasks: [], issues: [] };
   }
-  static #DEMO_FIRST_RELEASE = '2025-01-01';
+  // Demo milestones fall every other Wednesday from January 2026 to January 2029. Releases up to the day the demo is
+  // created are completed, the next one is under way and the later ones are planned.
+  static #DEMO_FIRST_RELEASE = '2026-01-07';
+  static #DEMO_LAST_RELEASE = '2029-01-31';
   static demoReleaseDates(now = new Date()) {
-    const todayIso = Common.localIsoDate(now), past = [];
-    for (let date = DataFactory.#DEMO_FIRST_RELEASE; date <= todayIso; date = Common.addDays(date, 14)) past.push(date);
-    return { past, next: past.length ? Common.addDays(past[past.length - 1], 14) : DataFactory.#DEMO_FIRST_RELEASE };
+    const todayIso = Common.localIsoDate(now), past = [], planned = [];
+    for (let date = DataFactory.#DEMO_FIRST_RELEASE; date <= DataFactory.#DEMO_LAST_RELEASE; date = Common.addDays(date, 14)) (date <= todayIso ? past : planned).push(date);
+    // After the last milestone the open work moves to the following one, so every status still appears.
+    const [next = Common.addDays(past[past.length - 1], 14), ...future] = planned;
+    return { past, next, future };
   }
   static demoData(language = 'it', now = new Date()) {
     const data = DataFactory.baseData(language), L = text => Common.term(text, language);
@@ -69,16 +74,17 @@ class DataFactory {
       "Checkout and payments", "Mobile app", "Advanced search", "SAP integration", "User management", "Customer portal",
       "Promotion engine", "Warehouse", "E-invoicing", 'Audit log', 'Single sign-on', 'Data warehouse'
     ];
-    // The flag marks fixes that are always critical and linked to incidents.
+    // The flag marks fixes that are always critical and linked to incidents; planned releases leave them out.
     const actions = [
       ["performance optimization"], ["production bug fix", true], ["new filters and sorting"], ["interface redesign"],
       ["security library upgrade", true], ["regulatory compliance update"], ["migration to the new database"], ["automated end-to-end tests"],
       ["error handling and retries"], ["WCAG 2.2 accessibility"], ["Excel data export"], ["monitoring and alerting"],
       ["faster load times"], ["multi-language support"], ["session timeout hotfix", true], ["new approval workflow"]
     ];
+    const plannedActions = actions.filter(action => !action[1]);
     const teams = ['Finance', 'Customer Care', "Logistics", 'Marketing', "IT Security", "Sales"];
     const displayDate = date => date.split('-').reverse().join('/');
-    const { past, next } = DataFactory.demoReleaseDates(now);
+    const { past, next, future } = DataFactory.demoReleaseDates(now);
     const hideBefore = Common.addDays(Common.localIsoDate(now), -56);
     const tasks = [], issues = [];
     let incident = 4810, problem = 310, sharedProblem = '';
@@ -91,8 +97,8 @@ class DataFactory {
       }
       if (random() < 0.12) issues.push({ id: Common.id(), code, incident: '', problem: numbered('PRB', ++problem) });
     }
-    function addTask(releaseDate, statusId, urgencyId) {
-      const n = tasks.length, area = pick(areas), action = pick(actions), team = L(pick(teams));
+    function addTask(releaseDate, statusId, urgencyId, planned = false) {
+      const n = tasks.length, area = pick(areas), action = pick(planned ? plannedActions : actions), team = L(pick(teams));
       const title = `${L(area)}: ${L(action[0])}`;
       const external = n % 13 === 7;
       const code = external ? numbered('CHG', 41000 + n) : `ORB-${1001 + n}`;
@@ -125,12 +131,17 @@ class DataFactory {
       for (let i = 0; i < count; i++) addTask(date, latest && i < 2 ? review : done);
     });
     [doing, doing, doing, review, todo, todo].forEach(status => addTask(next, status));
+    future.forEach(date => {
+      const count = 3 + Math.floor(random() * 4);
+      for (let i = 0; i < count; i++) addTask(date, todo, '', true);
+    });
     for (let i = 0; i < 6; i++) addTask('', todo, pick([medium, low, low, high]));
     linkIssues(tasks[0].code, true);
     for (let i = 1; i <= 3; i++) issues.push({ id: Common.id(), code: `ORB-${1000 + tasks.length + i}`, incident: numbered('INC', ++incident), problem: numbered('PRB', problem) });
     const [attention, blocker, discuss, ready] = data.settings.highlights.map(highlight => highlight.id);
     const markers = [attention, '', blocker, discuss, '', ready, '', attention];
-    tasks.filter(task => task.statusId !== done).forEach((task, index) => { task.highlightId = markers[index % markers.length]; });
+    // Highlights mark the work at hand: the release under review, the next release and the backlog.
+    tasks.filter(task => task.statusId !== done && (!task.releaseDate || task.releaseDate <= next)).forEach((task, index) => { task.highlightId = markers[index % markers.length]; });
     tasks.filter(task => task.statusId === done && !task.hidden).slice(-3).forEach(task => { task.highlightId = ready; });
     // Dependencies between the next release and the backlog show both sides of the reference columns.
     const upcoming = tasks.filter(task => task.releaseDate === next), backlog = tasks.filter(task => !task.releaseDate);

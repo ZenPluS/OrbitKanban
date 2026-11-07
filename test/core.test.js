@@ -132,22 +132,28 @@ test('older archives gain missing presets without overwriting active, custom or 
   bad.settings.themes = [];
   assert.throws(() => ArchiveValidator.migrateArchive(bad), /invalid themes/i);
 });
-test('demo releases are on Wednesdays every two weeks from January 2025 up to the next release', () => {
-  const { past, next } = DataFactory.demoReleaseDates(new Date(2026, 4, 20, 10));
-  assert.equal(past[0], '2025-01-01');
+test('demo releases fall every other Wednesday from January 2026 to January 2029', () => {
+  const { past, next, future } = DataFactory.demoReleaseDates(new Date(2026, 4, 20, 10)), all = [...past, next, ...future];
+  assert.deepEqual([all[0], all.at(-1), all.length], ['2026-01-07', '2029-01-31', 81]);
   assert.ok(past.at(-1) <= '2026-05-20' && next > '2026-05-20');
-  for (const date of [...past, next]) assert.equal(new Date(`${date}T12:00:00Z`).getUTCDay(), 3, date);
-  [...past, next].slice(1).forEach((date, index) => assert.equal((Date.parse(date) - Date.parse([...past, next][index])) / 86400000, 14));
-  assert.deepEqual(DataFactory.demoReleaseDates(new Date(2025, 0, 1, 9)), { past: ['2025-01-01'], next: '2025-01-15' });
+  for (const date of all) assert.equal(new Date(`${date}T12:00:00Z`).getUTCDay(), 3, date);
+  all.slice(1).forEach((date, index) => assert.equal((Date.parse(date) - Date.parse(all[index])) / 86400000, 14));
+  assert.deepEqual(DataFactory.demoReleaseDates(new Date(2026, 0, 7, 9)), { past: ['2026-01-07'], next: '2026-01-21', future: all.slice(2) });
+  assert.deepEqual(DataFactory.demoReleaseDates(new Date(2025, 11, 1, 9)), { past: [], next: '2026-01-07', future: all.slice(1) });
+  assert.deepEqual(DataFactory.demoReleaseDates(new Date(2029, 5, 1, 9)), { past: all, next: '2029-02-14', future: [] }, 'after the last milestone the open work moves to the following one');
 });
 test('demo data shows every feature and is deterministic for the same day', () => {
   const now = new Date(2026, 4, 20, 10);
   const data = DataFactory.demoData('it', now), again = DataFactory.demoData('it', now);
-  const { past, next } = DataFactory.demoReleaseDates(now);
+  const { past, next, future } = DataFactory.demoReleaseDates(now);
   const [todo, doing, review, done] = data.settings.statuses.map(status => status.id);
   const shape = archive => archive.tasks.map(task => [task.code, task.releaseDate, archive.settings.statuses.findIndex(status => status.id === task.statusId), task.hidden, task.effortHours]);
   assert.deepEqual(shape(data), shape(again));
-  assert.deepEqual(new Set(data.tasks.filter(task => task.releaseDate).map(task => task.releaseDate)), new Set([...past, next]));
+  assert.deepEqual(new Set(data.tasks.filter(task => task.releaseDate).map(task => task.releaseDate)), new Set([...past, next, ...future]));
+  assert.ok(data.tasks.length > 350 && data.issues.length > 100);
+  assert.ok(data.tasks.filter(task => task.releaseDate && task.releaseDate <= '2026-05-20').every(task => [done, review].includes(task.statusId)));
+  const planned = data.tasks.filter(task => task.releaseDate > next), urgentFixes = ["production bug fix", "security library upgrade", "session timeout hotfix"].map(text => Common.term(text, 'it'));
+  assert.ok(planned.length && planned.every(task => task.statusId === todo && !task.hidden && !task.highlightId && !urgentFixes.some(fix => task.description.includes(fix))));
   assert.ok(data.tasks.some(task => !task.releaseDate && task.statusId === todo));
   for (const status of [todo, doing, review, done]) assert.ok(data.tasks.some(task => task.statusId === status));
   assert.ok(data.tasks.every(task => !task.hidden || (task.statusId === done && task.releaseDate < '2026-03-25')));
@@ -949,10 +955,10 @@ test('invalid saved view names, filters, sorts, and columns are rejected', () =>
   assert.throws(() => ArchiveValidator.validateData(duplicateNames), /invalid saved views/i);
 });
 test('demo data highlights a mix of open and recently released tasks', () => {
-  const data = DataFactory.demoData('it', new Date(2026, 4, 20, 10));
+  const data = DataFactory.demoData('it', new Date(2026, 4, 20, 10)), { next } = DataFactory.demoReleaseDates(new Date(2026, 4, 20, 10));
   const ids = new Set(data.settings.highlights.map(item => item.id));
   const marked = data.tasks.filter(task => task.highlightId);
-  assert.ok(marked.length >= 10);
+  assert.ok(marked.length >= 10 && marked.every(task => !task.releaseDate || task.releaseDate <= next));
   assert.ok(marked.every(task => ids.has(task.highlightId)));
   assert.equal(new Set(marked.map(task => task.highlightId)).size, 4);
   assert.ok(data.tasks.every(task => typeof task.highlightId === 'string'));

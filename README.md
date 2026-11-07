@@ -4,7 +4,7 @@
 
 | | |
 | --- | --- |
-| **Current version** | 3.0.0 |
+| **Current version** | 3.0.1 |
 | **Platform** | Windows 10 / 11, 64-bit |
 | **Distribution** | Single portable executable, `OrbitKanban-Portable.exe` |
 | **Network** | Not required. Used only for optional update checks against GitHub |
@@ -104,8 +104,8 @@ Windows SmartScreen may show a warning because the executable is not digitally s
 
 The demo organization shows every feature with realistic data:
 
-- one milestone every two weeks, released on Wednesdays, from 1 January 2025 to today, plus the next planned release;
-- more than 200 tasks covering all urgencies, statuses, efforts in days and hours, and rich-text descriptions and notes;
+- one milestone every two weeks, released on Wednesdays, from 7 January 2026 to 31 January 2029: releases up to the day the demo is created are completed (the latest still under review), the next one is in progress and later ones are planned;
+- more than 350 tasks covering all urgencies, statuses, efforts in days and hours, and rich-text descriptions and notes;
 - older completed tasks hidden from the list but still visible in Milestones and Kanban, and a backlog of unscheduled tasks;
 - more than 150 linked issues, including problems shared by several incidents, lowercase codes, problem-only rows and codes with no matching task;
 - two **Link to platform** columns: a ticket platform (`https://tickets.example.com/browse/{code}`) and a change platform for `CHG…` codes;
@@ -693,7 +693,7 @@ Tags are never moved. Bump the version before releasing new sources:
 npm version minor --no-git-tag-version --ignore-scripts
 ```
 
-For a specifically numbered release, use `npm version 3.0.0 --no-git-tag-version --ignore-scripts` instead. To update the local portable copy too, run the pipeline **without `-NoDeliver`** and close the app first. The script replaces only the executable, not `dist/data`.
+For a specifically numbered release, use `npm version 3.0.1 --no-git-tag-version --ignore-scripts` instead. To update the local portable copy too, run the pipeline **without `-NoDeliver`** and close the app first. The script replaces only the executable, not `dist/data`.
 
 The script refuses to reuse a tagged version for different sources. If a build or test fails, nothing is committed or pushed.
 
@@ -701,6 +701,7 @@ The script refuses to reuse a tagged version for different sources. If a build o
 
 | Version | Changes |
 | --- | --- |
+| **3.0.1** | Demo data spans January 2026 to January 2029: biweekly milestones are completed up to the day the demo is created, the next one is in progress and later ones are planned |
 | **3.0.0** | Flat HTML and CSS splash screen, also shown by the portable launcher, replacing the video clip; it opens in the colors and logo of the starting organization, or draws an animated, themed atom logo. **Themed app icon**: the atom in the sidebar, browser tab and window/taskbar icon takes the theme colors. Clean-up of unused code, styles, translations and build steps |
 | **2.70.1** | Object-oriented code base: one class per file, grouped by namespace under `src/` (shared, renderer, desktop, web) and `tools/`; no functional changes |
 | **2.70.0** | **Link to platform** columns, one per platform with their own templates, replace the organization portal link (migrated automatically); **Website** columns; **Reference parent/child** columns for predecessors and automatic successors; guide contents keep the last section highlighted |
