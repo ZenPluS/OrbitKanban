@@ -10,7 +10,7 @@ export class TaskDialog extends Component {
       effortHours: 0, releaseDate: '', notes: '', hidden: false, highlightId: '', tagIds: []
     };
     const days = Math.floor(t.effortHours / this.state.data.settings.hoursPerDay), hours = Math.round((t.effortHours - days * this.state.data.settings.hoursPerDay) * 100) / 100;
-    this.app.modal.openModal(this.ui`<form id="task-form" class="task-form"><div class="modal-heading"><div><div class="eyebrow">TASK</div><h2>${this.tr(existing ? "Edit task" : "A new direction")}</h2></div><button type="button" class="icon-button" data-close aria-label="Close">${this.ico('close')}</button></div><div class="task-edit-layout"></div><div class="task-edit-pool">
+    this.app.modal.openModal(this.ui`<form id="task-form" class="task-form"><div class="modal-heading"><div><div class="eyebrow">TASK</div><h2>${this.tr(existing ? "Edit task" : "A new direction")}</h2></div>${this.app.groupEditor.taskGroupsPicker(t.id)}<button type="button" class="icon-button" data-close aria-label="Close">${this.ico('close')}</button></div><div class="task-edit-layout"></div><div class="task-edit-pool">
     <label class="field">Portal code<input name="code" maxlength="200" value="${this.esc(t.code)}" placeholder="es. PRJ-1042"></label>
     <label class="field">Sequence<input name="sequence" type="number" min="0" step="1" value="${t.sequence}"></label>
     <label class="field">Urgency<select name="urgencyId">${this.app.presenter.optionList(this.state.data.settings.urgencies, t.urgencyId, "Unassigned")}</select></label>
@@ -42,6 +42,7 @@ export class TaskDialog extends Component {
     };
     form.elements.code?.addEventListener('input', updateMatches); updateMatches(); this.app.fieldEditors.wireEditors();
     this.app.cells.wirePlatformPreviews(form);
+    this.app.groupEditor.wireTaskGroupsPicker(form);
     form.onsubmit = this.app.notifier.action(async event => {
       event.preventDefault();
       const fields = new FormData(form);
@@ -62,6 +63,7 @@ export class TaskDialog extends Component {
         // An empty sequence takes the next free number, as for new tasks; a deleted sequence column stays empty.
         if (!sequence && this.hasColumn('sequence')) item.sequence = Math.max(0, ...next.tasks.filter(x => x.id !== item.id).map(x => x.sequence)) + 1;
         if (index >= 0) next.tasks[index] = { ...item, tagIds: next.tasks[index].tagIds }; else next.tasks.push(item);
+        this.app.groupEditor.applyTaskGroups(next, item.id, form);
       });
       this.$('#modal').close(); this.app.shell.rerenderPreservingView(); this.app.notifier.notify("Task saved.");
     });

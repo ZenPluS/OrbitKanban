@@ -26,7 +26,7 @@ export class AppShell extends Component {
     this.app.rowMarks.closeMarkMenu();
     this.app.tagMenu.closeTagMenu();
     this.app.sections.resolve();
-    const content = this.$('#content'), nextView = ['tasks', 'issues', 'milestones', 'kanban', 'settings', 'guide', 'views'][this.state.view];
+    const content = this.$('#content'), nextView = ['tasks', 'issues', 'milestones', 'kanban', 'settings', 'guide', 'views', 'groups'][this.state.view];
     if (content.dataset.workspaceView !== nextView) content.scrollTop = 0;
     content.dataset.workspaceView = nextView;
     this.#applyTheme();
@@ -53,6 +53,7 @@ export class AppShell extends Component {
     if (this.state.view === 4) this.app.settingsView.renderSettings();
     if (this.state.view === 5) this.app.guide.renderGuide();
     if (this.state.view === 6) this.app.viewsPage.renderViews();
+    if (this.state.view === 7) this.app.groupsPage.renderGroups();
   }
   adoptSnapshot(snapshot) {
     if (this.state.activeOrganizationId !== snapshot.activeOrganizationId) { this.state.columnFilters = { tasks: {}, issues: {} }; this.state.issueSearch = ''; this.state.taskSectionId = ''; this.state.taskSectionViewId = ''; this.state.standaloneView = null; }

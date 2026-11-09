@@ -2,7 +2,7 @@
 
 export class AppState {
   columnFilters = { tasks: {}, issues: {} }; issueSearch = '';
-  // Pages 0-3 are task, issue, milestone and kanban, 4 settings, 5 guide, 6 views.
+  // Pages 0-3 are task, issue, milestone and kanban, 4 settings, 5 guide, 6 views, 7 group activities.
   standaloneView = null;
   data; dataFolder; view = 0; sectionId = ''; taskSectionId = ''; taskSectionViewId = ''; search = ''; showHidden = false; duplicatesOnly = false; issueDuplicatesOnly = false; statusFilter = ''; highlightFilter = ''; highlighter = ''; sort = [{ key: 'releaseDate', direction: 'asc' }];
   settingsDraft; settingsBase; saving = false; organizationBusy = false; organizations = []; activeOrganizationId; lastOpenedLink = '';

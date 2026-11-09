@@ -21,6 +21,8 @@ import { ColumnFilterPanel } from './columns/ColumnFilterPanel.js';
 import { TaskList } from './tasks/TaskList.js';
 import { SavedViews } from './tasks/SavedViews.js';
 import { ViewsPage } from './tasks/ViewsPage.js';
+import { GroupsPage } from './groups/GroupsPage.js';
+import { GroupEditor } from './groups/GroupEditor.js';
 import { TaskRows } from './tasks/TaskRows.js';
 import { BulkEdit } from './tasks/BulkEdit.js';
 import { RowMarks } from './tasks/RowMarks.js';
@@ -78,6 +80,8 @@ export class App extends Component {
     this.taskList = new TaskList(this);
     this.savedViews = new SavedViews(this);
     this.viewsPage = new ViewsPage(this);
+    this.groupsPage = new GroupsPage(this);
+    this.groupEditor = new GroupEditor(this);
     this.taskRows = new TaskRows(this);
     this.bulkEdit = new BulkEdit(this);
     this.rowMarks = new RowMarks(this);

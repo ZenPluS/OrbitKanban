@@ -8,7 +8,7 @@ export class TaskRows extends Component {
     switch (column) {
       case 'sequence': return `<td class="sequence">${task.sequence}</td>`;
       case 'code': return `<td><button class="code-link" data-edit-task="${task.id}">${this.esc(task.code)}</button>${this.app.presenter.portalAnchor(TaskLinks.platformUrl(task, this.state.data.settings), task.code)}</td>`;
-      case 'description': return `<td class="description-col"><button class="description-cell" data-edit-task="${task.id}" title="${this.esc(this.app.richText.plain(task.description))}">${this.esc(this.app.richText.plain(task.description) || this.t("No description"))}</button></td>`;
+      case 'description': { const text = this.app.richText.plain(task.description); return `<td class="description-col"><button class="description-cell" data-edit-task="${task.id}" title="${this.esc(text)}"${text ? '' : ` aria-label="${this.esc(this.t("Edit task"))}"`}>${this.esc(text)}</button></td>`; }
       case 'urgency': return `<td>${this.app.presenter.pill(urgency.name, urgency.color)}</td>`;
       case 'status': return `<td>${this.app.presenter.pill(status.name, status.color, 'status-pill')}</td>`;
       case 'highlight': { const mark = this.app.presenter.highlightOf(task); return `<td>${mark ? this.app.presenter.pill(mark.name, mark.color, 'mark-pill') : none}</td>`; }
@@ -23,7 +23,7 @@ export class TaskRows extends Component {
       }
       case 'problem': return `<td class="references">${links.problems.map(this.esc).join('<br>') || none}</td>`;
       case 'releaseDate': return `<td><span class="date-pill" style="--date:${task.releaseDate ? TaskOrder.dateColor(task.releaseDate) : '#929bb2'}">${this.ico('calendar')}${this.app.presenter.formatDate(task.releaseDate)}</span></td>`;
-      case 'notes': return `<td class="notes-col"><button class="description-cell notes-cell" data-edit-task="${task.id}" title="${this.esc(this.app.richText.plain(task.notes) || this.t("Add notes"))}">${this.esc(this.app.richText.plain(task.notes) || this.t("Add notes"))}</button></td>`;
+      case 'notes': { const text = this.app.richText.plain(task.notes); return `<td class="notes-col"><button class="description-cell notes-cell" data-edit-task="${task.id}" title="${this.esc(text || this.t("Add notes"))}"${text ? '' : ` aria-label="${this.esc(this.t("Add notes"))}"`}>${this.esc(text)}</button></td>`; }
       default: return this.app.columns.columnDef(column)?.field ? this.app.cells.customCell(task, this.app.columns.columnDef(column).field) : '<td></td>';
     }
   }

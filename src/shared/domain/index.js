@@ -9,6 +9,7 @@ module.exports = {
   ThemeCatalog: require('./ThemeCatalog'),
   TaskLinks: require('./TaskLinks'),
   NavigationSections: require('./NavigationSections'),
+  TaskGroups: require('./TaskGroups'),
   ArchiveValidator: require('./ArchiveValidator'),
   DataFactory: require('./DataFactory'),
   OrganizationTransfer: require('./OrganizationTransfer'),

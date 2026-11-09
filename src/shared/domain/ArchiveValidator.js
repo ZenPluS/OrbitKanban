@@ -14,6 +14,7 @@ const TaskLayout = typeof module !== 'undefined' ? require('./TaskLayout') : glo
 const ThemeCatalog = typeof module !== 'undefined' ? require('./ThemeCatalog') : globalThis.OrbitKanban.Domain.ThemeCatalog;
 const TaskLinks = typeof module !== 'undefined' ? require('./TaskLinks') : globalThis.OrbitKanban.Domain.TaskLinks;
 const NavigationSections = typeof module !== 'undefined' ? require('./NavigationSections') : globalThis.OrbitKanban.Domain.NavigationSections;
+const TaskGroups = typeof module !== 'undefined' ? require('./TaskGroups') : globalThis.OrbitKanban.Domain.TaskGroups;
 
 class ArchiveValidator {
   static validateData(data) {
@@ -73,6 +74,7 @@ class ArchiveValidator {
     }
     Common.assert(Array.isArray(data.issues) && uniqueIds(data.issues), "Invalid issue list.");
     Common.assert(data.issues.every(x => ['id', 'code', 'incident', 'problem'].every(k => text(x[k])) && x.id), "Invalid issue list.");
+    if (data.groups !== undefined) TaskGroups.validateGroups(data.groups);
     ColumnValidator.validateCustomData(data);
     return data;
   }
@@ -101,6 +103,12 @@ class ArchiveValidator {
       TaskLinks.upgradeLegacyLink(organization.data?.settings, organization.data?.tasks, { language: organization.data?.settings?.language ?? 'it' });
       NavigationSections.upgradeLegacyTabNames(organization.data?.settings);
       ArchiveValidator.validateData(organization.data);
+      // Organizations saved before 3.2 get the group activities section once; the empty list marks them as upgraded.
+      if (organization.data.groups === undefined) {
+        NavigationSections.addMissingType(organization.data.settings, 'groups');
+        organization.data.groups = [];
+      }
+      TaskGroups.prune(organization.data);
       organization.data.settings.language ??= 'it';
       organization.data.settings.logo ??= '';
       organization.data.settings.fontSizes ??= Typography.defaultFontSizes();

@@ -44,7 +44,8 @@ export class ColorPicker extends Component {
     this.closeColorPicker();
     this.app.tagMenu.closeTagMenu(); this.app.rowMarks.closeMarkMenu();
     if (same) return;
-    const initial = button.value, theme = this.state.settingsDraft.themes.find(theme => theme.id === this.state.settingsDraft.themeId);
+    const settings = this.state.view === 4 && this.state.settingsDraft ? this.state.settingsDraft : this.state.data.settings;
+    const initial = button.value, theme = settings.themes.find(theme => theme.id === settings.themeId) || settings.themes[0];
     let hsv = ColorMath.hexToHsv(initial);
     const menu = document.createElement('form');
     menu.id = 'color-picker';

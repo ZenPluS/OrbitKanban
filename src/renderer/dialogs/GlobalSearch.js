@@ -11,6 +11,12 @@ export class GlobalSearch extends Component {
     const needle = query.trim().toLocaleLowerCase();
     if (!needle) return [];
     const results = [], issues = IssueMatcher.indexIssues(this.state.data.issues);
+    for (const group of this.state.data.groups || []) {
+      const description = this.app.richText.plain(group.description);
+      if (![group.name, description].some(value => value.toLocaleLowerCase().includes(needle))) continue;
+      results.push({ kind: 'group', id: group.id, title: group.name, detail: this.plural(group.taskIds.length, 'tasks'), subtitle: description });
+      if (results.length === 8) break;
+    }
     for (const task of this.state.data.tasks) {
       const links = this.matchIssues(task, issues), status = this.state.data.settings.statuses.find(item => item.id === task.statusId)?.name || '';
       const fields = this.app.cells.searchableValues(task, 'tasks', issues);
@@ -31,7 +37,7 @@ export class GlobalSearch extends Component {
     const input = this.$('#global-search-input'), list = this.$('#global-search-results');
     const draw = () => {
       const results = this.globalSearchResults(input.value);
-      list.innerHTML = results.length ? results.map((item, index) => `<button type="button" class="global-search-result" role="option" aria-selected="false" data-global-kind="${item.kind}" data-global-id="${this.esc(item.id)}" ${index === 0 ? 'data-first-result' : ''}><strong>${this.esc(item.title)}</strong><span class="global-search-kind">${this.esc(this.t(item.kind === 'task' ? "Tasks" : 'Issue'))}</span><small>${this.esc([item.detail, item.subtitle].filter(Boolean).join(' · '))}</small></button>`).join('') : input.value.trim() ? `<p class="backup-empty">${this.esc(this.t("No results."))}</p>` : `<p class="backup-empty">${this.esc(this.t("Search codes, incidents, problems or release dates."))}</p>`;
+      list.innerHTML = results.length ? results.map((item, index) => `<button type="button" class="global-search-result" role="option" aria-selected="false" data-global-kind="${item.kind}" data-global-id="${this.esc(item.id)}" ${index === 0 ? 'data-first-result' : ''}><strong>${this.esc(item.title)}</strong><span class="global-search-kind">${this.esc(this.t({ task: "Tasks", group: "Group" }[item.kind] || 'Issue'))}</span><small>${this.esc([item.detail, item.subtitle].filter(Boolean).join(' · '))}</small></button>`).join('') : input.value.trim() ? `<p class="backup-empty">${this.esc(this.t("No results."))}</p>` : `<p class="backup-empty">${this.esc(this.t("Search codes, incidents, problems or release dates."))}</p>`;
     };
     input.value = initial;
     input.oninput = draw;
@@ -41,11 +47,14 @@ export class GlobalSearch extends Component {
     list.onclick = this.app.notifier.action(async event => {
       const button = event.target.closest('[data-global-kind]');
       if (!button) return;
-      const item = button.dataset.globalKind === 'task' ? this.state.data.tasks.find(task => task.id === button.dataset.globalId) : this.state.data.issues.find(issue => issue.id === button.dataset.globalId);
+      const kind = button.dataset.globalKind, id = button.dataset.globalId;
+      const item = { task: this.state.data.tasks, issue: this.state.data.issues, group: this.state.data.groups || [] }[kind]?.find(entry => entry.id === id);
       if (!item) { this.app.notifier.notify("This item no longer exists.", true); return; }
       this.$('#modal').close();
-      await this.app.sections.openType(button.dataset.globalKind === 'task' ? 'tasks' : 'issues');
-      if (button.dataset.globalKind === 'task') this.app.taskDialog.taskDialog(item); else this.app.issues.issueDialog(item);
+      await this.app.sections.openType({ task: 'tasks', issue: 'issues', group: 'groups' }[kind]);
+      if (kind === 'task') this.app.taskDialog.taskDialog(item);
+      else if (kind === 'group') this.app.groupsPage.focusGroup(item.id);
+      else this.app.issues.issueDialog(item);
     });
     draw();
     input.focus();

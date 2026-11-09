@@ -5,9 +5,9 @@ const Common = typeof module !== 'undefined' ? require('./Common') : globalThis.
 
 class NavigationSections {
   // Settings and Guide keep their existing page numbers (4 and 5).
-  static VIEW_IDS = { tasks: 0, issues: 1, milestones: 2, kanban: 3, views: 6 };
+  static VIEW_IDS = { tasks: 0, issues: 1, milestones: 2, kanban: 3, views: 6, groups: 7 };
   static TYPES = Object.keys(NavigationSections.VIEW_IDS);
-  static DEFAULT_NAMES = { tasks: "Tasks", issues: "Linked issues", milestones: "Milestones", kanban: 'Kanban', views: "Views" };
+  static DEFAULT_NAMES = { tasks: "Tasks", issues: "Linked issues", milestones: "Milestones", kanban: 'Kanban', views: "Views", groups: "Group activities" };
   // Types that show tasks, so a saved view can filter them.
   static FILTERABLE = ['tasks', 'milestones', 'kanban'];
   static LIMIT = 12;
@@ -42,6 +42,15 @@ class NavigationSections {
     const known = new Set((settings.savedViews || []).map(view => view.id));
     for (const section of settings.navigation || []) if (section.viewId !== undefined && !known.has(section.viewId)) delete section.viewId;
     return settings;
+  }
+  // Menus saved before a view type existed get its section once, at the end, while there is room.
+  static addMissingType(settings, type) {
+    const list = settings?.navigation;
+    if (!Array.isArray(list) || list.some(section => section.type === type) || list.length >= NavigationSections.LIMIT) return false;
+    let id = type;
+    for (let counter = 2; list.some(section => section.id === id); counter++) id = `${type}-${counter}`;
+    list.push({ id, type, name: NavigationSections.defaultName(type, settings.language) });
+    return true;
   }
 }
 

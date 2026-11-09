@@ -80,8 +80,8 @@ export class SettingsView extends Component {
       await this.workspaceApi.browserAccess('copy', this.state.activeOrganizationId);
       this.app.notifier.notify(this.browserMode() ? "Address copied to the clipboard." : "Access link copied to the clipboard.");
     });
-    this.$('#clear-data').onclick = () => this.app.modal.confirmDialog("Clear this workspace?", "All tasks and issue associations in this organization will be deleted. Themes and settings will stay unchanged. Export a backup first to keep them.", async () => {
-      await this.app.history.commit(next => { next.tasks = []; next.issues = []; }); this.app.shell.render(); this.app.notifier.notify("Workspace cleared.");
+    this.$('#clear-data').onclick = () => this.app.modal.confirmDialog("Clear this workspace?", "All tasks, issue associations and groups in this organization will be deleted. Themes and settings will stay unchanged. Export a backup first to keep them.", async () => {
+      await this.app.history.commit(next => { next.tasks = []; next.issues = []; next.groups = []; }); this.app.shell.render(); this.app.notifier.notify("Workspace cleared.");
     });
     this.$('#add-theme').onclick = () => {
       const theme = structuredClone(this.state.settingsDraft.themes.find(t => t.id === this.state.settingsDraft.themeId));

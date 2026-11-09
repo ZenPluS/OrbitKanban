@@ -33,7 +33,7 @@ class DataFactory {
       requiredTaskColumns: [...RequiredFields.DEFAULT_REQUIRED.tasks], requiredIssueColumns: [...RequiredFields.DEFAULT_REQUIRED.issues]
     };
     settings.taskEditorLayout = TaskLayout.normalizeTaskEditorLayout(settings);
-    return { version: 1, settings, tasks: [], issues: [] };
+    return { version: 1, settings, tasks: [], issues: [], groups: [] };
   }
   // Demo milestones fall every other Wednesday from January 2026 to January 2029. Releases up to the day the demo is
   // created are completed, the next one is under way and the later ones are planned.
@@ -87,7 +87,7 @@ class DataFactory {
     const displayDate = date => date.split('-').reverse().join('/');
     const { past, next, future } = DataFactory.demoReleaseDates(now);
     const hideBefore = Common.addDays(Common.localIsoDate(now), -56);
-    const tasks = [], issues = [];
+    const tasks = [], issues = [], areaOf = new Map();
     let incident = 4810, problem = 310, sharedProblem = '';
     const numbered = (prefix, value) => `${prefix}${String(value).padStart(7, '0')}`;
     function linkIssues(code, forceMany) {
@@ -125,6 +125,7 @@ class DataFactory {
         tagIds: n % 5 === 0 ? [] : [n % 2 ? 'tag-frontend' : 'tag-backend', ...(action[1] ? ['tag-bug', 'tag-security'] : [])],
         customFields: { [external ? changePlatform.id : ticketPlatform.id]: code }
       });
+      areaOf.set(tasks[n].id, area);
       if (action[1] || random() < 0.2) linkIssues(code, action[1] && random() < 0.6);
     }
     past.forEach((date, index) => {
@@ -155,6 +156,13 @@ class DataFactory {
     data.settings.taskEditorLayout = TaskLayout.defaultTaskEditorLayout(data.settings);
     data.tasks = tasks;
     data.issues = issues;
+    // Group activities collect the visible work of a few related areas.
+    const membersOf = (...names) => tasks.filter(task => !task.hidden && names.includes(areaOf.get(task.id))).map(task => task.id);
+    data.groups = [
+      { id: 'group-checkout', name: L("Checkout and payments"), color: '#ff9f5a', description: `<p>${L("Every change to the checkout flow and to the payment providers.")}</p>`, taskIds: membersOf("Checkout and payments") },
+      { id: 'group-mobile', name: L("Mobile app"), color: '#4fcf8f', description: `<p><strong>${L("Mobile app")}</strong>: ${L("work planned for the next store releases.")}</p>`, taskIds: membersOf("Mobile app", "Push notifications") },
+      { id: 'group-identity', name: L("Identity and access"), color: '#b18cff', description: `<p>${L("Login, single sign-on and user management, reviewed together by the security team.")}</p><ul><li>${L("Analysis and estimate")}</li><li>${L("Production release")}</li></ul>`, taskIds: membersOf("Login and authentication", 'Single sign-on', "User management") }
+    ];
     return ArchiveValidator.validateData(data);
   }
   static initialData() { return DataFactory.demoData('it'); }

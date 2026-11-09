@@ -101,7 +101,7 @@ export class TransferPanel extends Component {
       }
       await this.app.history.commit(next => {
         const imported = OrganizationTransfer.applyOrganizationImport(next, file, options);
-        next.settings = imported.settings; next.tasks = imported.tasks; next.issues = imported.issues;
+        next.settings = imported.settings; next.tasks = imported.tasks; next.issues = imported.issues; next.groups = imported.groups;
       });
       this.state.statusFilter = '';
       this.$('#modal').close(); this.app.shell.render(); this.app.notifier.notify("Import completed.");

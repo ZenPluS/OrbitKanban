@@ -31,8 +31,8 @@
     Does not add the Copilot Co-authored-by trailer to the commit message.
 
 .EXAMPLE
-    npm version 3.1.1 --no-git-tag-version --ignore-scripts
-    pwsh -NoProfile -ExecutionPolicy Bypass -File .\build-and-push.ps1 -Message "3.1.1: views catalog and reliable section navigation"
+    npm version 3.2.0 --no-git-tag-version --ignore-scripts
+    pwsh -NoProfile -ExecutionPolicy Bypass -File .\build-and-push.ps1 -Message "3.2.0: group activities and bulk edit of every field"
     Close the local app first to replace dist\OrbitKanban-Portable.exe. Its data folder is never replaced.
     Add -NoDeliver only when the local executable must stay on the previous version.
 #>

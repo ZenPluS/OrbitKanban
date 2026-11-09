@@ -20,7 +20,7 @@ class GuideContent {
           'Do not run two copies on the same data folder at the same time.'
         ] },
         { title: 'Find your way around', items: [
-          'The sidebar holds the organization menu, the sections of the five view types, this **Guide** and **Settings**.',
+          'The sidebar holds the organization menu, the sections of the six view types, this **Guide** and **Settings**.',
           'The menu button **☰** at the left of the top bar, or `Ctrl+B`, folds the sidebar into a column of icons so the views get more space. Hover an icon to see its name; the building icon still switches organization. Press the button again to expand the sidebar; the choice is remembered.',
           'The top bar offers global search, undo and redo, and the archive status. **Open data folder** at the bottom shows where your data lives.',
           'Rename, reorder, remove or add the sections of each organization in **Settings → Navigation**.',
@@ -132,7 +132,8 @@ class GuideContent {
         ] },
         { title: 'Bulk edit', items: [
           '**Bulk edit** lists the selected tasks and the fields to change. Every field starts as **Keep unchanged**.',
-          'You can change status, urgency, highlight and visibility, set, shift or remove the release date, and add or remove tags.',
+          'You can change every field of the editor: portal code, status, urgency, highlight, effort, visibility, release date (set, shift or remove), description and notes (replace, add at the end or clear), custom columns, tags and groups. **Sequence** can be renumbered in list order.',
+          'Incidents and problems come from the associations and successors from the predecessor columns, so they are not edited here. Required fields cannot be emptied.',
           '**Delete…** removes the ticked tasks after a confirmation. In the milestones, the pencil of each release opens bulk edit for its tasks.'
         ] },
         { title: 'Undo and redo', items: [
@@ -195,6 +196,21 @@ class GuideContent {
           'There is one column per status, in the order set in the settings. Tasks without a status appear under **Unassigned**.',
           'Cards show code and description; hidden tasks are included and marked.',
           'To move a card, change the status of the task in the list or in its editor.'
+        ] }
+      ]
+    },
+    {
+      id: 'groups', icon: 'groups', tab: 7, go: [{ view: 7 }],
+      summary: 'Collect related tasks under a name and a description, and follow their progress together.',
+      topics: [
+        { title: 'Create a group', items: [
+          '**New group** asks for a name, a color and a rich text description, then lets you tick the tasks that belong to it. Search and **Selected only** help with long lists.',
+          'A task can belong to several groups and a group can stay empty. Group names must be unique in the organization.'
+        ] },
+        { title: 'Follow the progress', items: [
+          'Each card shows the description, the number of tasks, the total effort, the release dates and a bar with the tasks of each status.',
+          'Click a task to edit it. The **Groups** menu at the top of the task editor changes the groups of that task.',
+          'The **Bulk edit** button of a card changes every task of the group, hidden ones included. Deleting a group keeps its tasks.'
         ] }
       ]
     },
@@ -283,7 +299,7 @@ class GuideContent {
         ] },
         { title: 'Required fields', items: [
           'Mark a field as **Required** in the field properties of the form designer, or in **Settings → Column management** for tasks and issues. **Sequence** is required by default.',
-          'Required fields are checked when you save a task or an issue, but only when they are on the form: missing fields are highlighted with a message. **Bulk edit** cannot clear a required release date or highlight; imports are not checked.',
+          'Required fields are checked when you save a task or an issue, but only when they are on the form: missing fields are highlighted with a message. **Bulk edit** never empties a required field; imports are not checked.',
           'Yes/no fields and values that are not entered in the editor, such as tags, successors or the incidents and problems linked automatically, cannot be required.'
         ] },
         { title: 'Identity', items: [
@@ -291,7 +307,7 @@ class GuideContent {
         ] },
         { title: 'Navigation', items: [
           'In **Settings → Navigation** choose the sections of the sidebar: drag them or use the arrows to change their order, rename them, remove them or add new ones, up to 12.',
-          'Each section opens one of five types: tasks, linked issues, milestones, kanban or views. A type can have several sections, and a type without sections leaves the menu. **Guide** and **Settings** always stay at the bottom.',
+          'Each section opens one of six types: tasks, linked issues, milestones, kanban, views or group activities. A type can have several sections, and a type without sections leaves the menu. **Guide** and **Settings** always stay at the bottom.',
           'The **Views** section lists all saved views and automatic release views. Open one to apply it to the task list, even if its menu section was removed. Release views include hidden tasks.',
           'Link a saved view to a task, milestone or kanban section to show only its tasks, for example a board for one team. A task section applies its view when you open it; deleting the saved view brings back every task.',
           'Removing a section never deletes data. The first section opens when the app starts.'

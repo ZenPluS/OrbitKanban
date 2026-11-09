@@ -1,6 +1,6 @@
 // Undo/redo history per organization and saving of workspace changes.
 import { Component } from '../core/Component.js';
-import { ArchiveValidator, ColumnCleanup } from '../shared.js';
+import { ArchiveValidator, ColumnCleanup, TaskGroups } from '../shared.js';
 
 export class ChangeHistory extends Component {
   #historyFor(collection, organizationId = this.state.activeOrganizationId) {
@@ -81,7 +81,7 @@ export class ChangeHistory extends Component {
       if (typeof change !== 'function') return change;
       const next = structuredClone(this.state.data);
       change(next);
-      return ColumnCleanup.pruneReferences(next);
+      return TaskGroups.prune(ColumnCleanup.pruneReferences(next));
     };
     const organizationId = this.state.activeOrganizationId;
     let before = structuredClone(this.state.data);

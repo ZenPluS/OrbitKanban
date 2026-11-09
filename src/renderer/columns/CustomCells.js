@@ -80,8 +80,9 @@ export class CustomCells extends Component {
       update();
     });
   }
+  // Pickers marked data-own-picker (task groups, bulk edit) are wired by their own component.
   wireChoicePickers() {
-    document.querySelectorAll('[data-choice-picker]').forEach(button => button.onclick = () => {
+    document.querySelectorAll('[data-choice-picker]:not([data-own-picker])').forEach(button => button.onclick = () => {
       const kind = button.dataset.choiceKind, id = button.dataset.choiceRecord, fieldId = button.dataset.choiceField, form = button.closest('#task-form, #issue-form');
       const field = ColumnSchema.fieldsOf(this.state.data.settings, kind).find(field => field.id === fieldId);
       const record = this.state.data[kind].find(record => record.id === id);

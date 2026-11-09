@@ -15,6 +15,7 @@ const TaskLayout = typeof module !== 'undefined' ? require('./TaskLayout') : glo
 const ThemeCatalog = typeof module !== 'undefined' ? require('./ThemeCatalog') : globalThis.OrbitKanban.Domain.ThemeCatalog;
 const TaskLinks = typeof module !== 'undefined' ? require('./TaskLinks') : globalThis.OrbitKanban.Domain.TaskLinks;
 const NavigationSections = typeof module !== 'undefined' ? require('./NavigationSections') : globalThis.OrbitKanban.Domain.NavigationSections;
+const TaskGroups = typeof module !== 'undefined' ? require('./TaskGroups') : globalThis.OrbitKanban.Domain.TaskGroups;
 const ArchiveValidator = typeof module !== 'undefined' ? require('./ArchiveValidator') : globalThis.OrbitKanban.Domain.ArchiveValidator;
 const DataFactory = typeof module !== 'undefined' ? require('./DataFactory') : globalThis.OrbitKanban.Domain.DataFactory;
 
@@ -31,7 +32,8 @@ class OrganizationTransfer {
     section: ['id', 'type', 'name', 'viewId'],
     column: ['id', 'visible'],
     task: ['id', 'code', 'sequence', 'description', 'notes', 'releaseDate', 'statusId', 'urgencyId', 'effortHours', 'hidden', 'highlightId', 'tagIds', 'customFields'],
-    issue: ['id', 'code', 'incident', 'problem', 'customFields']
+    issue: ['id', 'code', 'incident', 'problem', 'customFields'],
+    group: ['id', 'name', 'color', 'description', 'taskIds']
   };
   static organizationExport(organization, kind, { appVersion = '', exportedAt = new Date().toISOString() } = {}) {
     Common.assert(OrganizationTransfer.ORGANIZATION_FILE_KINDS.includes(kind), "Unsupported export type.");
@@ -53,7 +55,7 @@ class OrganizationTransfer {
       };
     }
     if (parts.includes('data')) {
-      file.data = { statuses: structuredClone(settings.statuses), urgencies: structuredClone(settings.urgencies), highlights: structuredClone(highlights), tags: structuredClone(settings.tags || []), tasks: structuredClone(organization.data.tasks), issues: structuredClone(organization.data.issues) };
+      file.data = { statuses: structuredClone(settings.statuses), urgencies: structuredClone(settings.urgencies), highlights: structuredClone(highlights), tags: structuredClone(settings.tags || []), tasks: structuredClone(organization.data.tasks), issues: structuredClone(organization.data.issues), groups: structuredClone(organization.data.groups || []) };
       file.data.taskFields = structuredClone(settings.taskFields || []);
       file.data.issueFields = structuredClone(settings.issueFields || []);
       file.data.deletedTaskColumns = [...ColumnSchema.deletedOf(settings, 'tasks')];
@@ -154,13 +156,14 @@ class OrganizationTransfer {
       };
       if (source.highlights !== undefined) content.highlights = OrganizationTransfer.#fileRecords(source.highlights, OrganizationTransfer.#RECORD_KEYS.highlight, "Invalid highlighters.");
       if (source.tags !== undefined) content.tags = OrganizationTransfer.#fileRecords(source.tags, OrganizationTransfer.#RECORD_KEYS.highlight, "Invalid tags.");
+      if (source.groups !== undefined) content.groups = OrganizationTransfer.#fileRecords(source.groups, OrganizationTransfer.#RECORD_KEYS.group, "Invalid task groups.");
       for (const key of ['taskFields', 'issueFields', 'deletedTaskColumns', 'deletedIssueColumns']) if (source[key] !== undefined) content[key] = structuredClone(source[key]);
       ColumnCleanup.validateDeleted(content);
       for (const kind of ['tasks', 'issues']) ColumnValidator.validateFields(ColumnSchema.fieldsOf(content, kind), kind);
       const schema = { deletedTaskColumns: ColumnSchema.deletedOf(content, 'tasks'), deletedIssueColumns: ColumnSchema.deletedOf(content, 'issues') };
       check({ statuses: content.statuses, urgencies: content.urgencies, ...(content.highlights ? { highlights: content.highlights } : {}), tags: content.tags || [], taskFields: ColumnSchema.fieldsOf(content, 'tasks'), issueFields: ColumnSchema.fieldsOf(content, 'issues'), ...schema,
         taskColumns: ColumnLayout.listColumns({ ...content, ...schema }, 'tasks'), issueColumns: ColumnLayout.listColumns({ ...content, ...schema }, 'issues')
-      }, { tasks: content.tasks, issues: content.issues });
+      }, { tasks: content.tasks, issues: content.issues, ...(content.groups ? { groups: content.groups } : {}) });
       result.data = content;
     }
     return result;
@@ -281,8 +284,10 @@ class OrganizationTransfer {
           else if (!next.issues.some(existing => triple(existing) === triple(issue) && ColumnMerger.valuesKey(existing.customFields) === ColumnMerger.valuesKey(issue.customFields))) next.issues.push(issue);
         }
       }
+      // Files from versions without groups keep the current ones, limited to the tasks that still exist.
+      if (file.data.groups !== undefined) next.groups = options.dataMode === 'replace' ? structuredClone(file.data.groups) : TaskGroups.mergeGroups(next.groups, file.data.groups);
     }
-    return ArchiveValidator.normalizeTags(ArchiveValidator.validateData(ColumnCleanup.cleanData(next)));
+    return ArchiveValidator.normalizeTags(ArchiveValidator.validateData(TaskGroups.prune(ColumnCleanup.cleanData(next))));
   }
   static importedOrganizationData(file, options = {}, fallbackLanguage = 'it') {
     const withSettings = Boolean(options.settings && file.settings);

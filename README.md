@@ -1,10 +1,10 @@
 # OrbitKanban
 
-**A portable, offline-first task workspace for Windows.** OrbitKanban keeps release tasks, their linked incidents and problems, a milestone timeline and a read-only kanban board in a single executable that carries its data with it. There is no installer, account or server: copy the executable and its `data` folder, and the whole workspace moves with you.
+**A portable, offline-first task workspace for Windows.** OrbitKanban keeps release tasks, their linked incidents and problems, groups of related tasks, a milestone timeline and a read-only kanban board in a single executable that carries its data with it. There is no installer, account or server: copy the executable and its `data` folder, and the whole workspace moves with you.
 
 | | |
 | --- | --- |
-| **Current version** | 3.1.1 |
+| **Current version** | 3.2.0 |
 | **Platform** | Windows 10 / 11, 64-bit |
 | **Distribution** | Single portable executable, `OrbitKanban-Portable.exe` |
 | **Network** | Not required. Used only for optional update checks against GitHub |
@@ -21,12 +21,13 @@
 - [In-app guide](#in-app-guide)
 - [Portable data and backups](#portable-data-and-backups)
 - [Organizations](#organizations)
-- [The five view types](#the-five-view-types)
+- [The six view types](#the-six-view-types)
   - [Tasks](#tasks)
   - [Linked issues](#linked-issues)
   - [Milestones](#milestones)
   - [Kanban](#kanban)
   - [Views](#views)
+  - [Group activities](#group-activities)
   - [Navigation sections](#navigation-sections)
 - [Working with the lists](#working-with-the-lists)
   - [Sorting and manual order](#sorting-and-manual-order)
@@ -74,11 +75,11 @@
 ## Highlights
 
 - **Truly portable.** The executable and a `data` folder next to it are the whole installation, with automatic daily backups.
-- **Five view types**: Tasks, Linked issues, Milestones, Kanban and Views (the saved and release view catalog). The sidebar sections can be renamed, reordered, removed or added per organization, and a section can show a saved view.
+- **Six view types**: Tasks, Linked issues, Milestones, Kanban, Views (the saved and release view catalog) and Group activities (named groups of related tasks with their progress). The sidebar sections can be renamed, reordered, removed or added per organization, and a section can show a saved view.
 - **Collapsible sidebar** that folds into a column of icons (**☰** or `Ctrl+B`) to give the views more room.
 - **Automatic issue matching.** Incidents and problems recorded in Linked issues are resolved onto tasks by their portal code.
 - **Multiple organizations**, each with its own data, settings, logo, theme and language.
-- **Flexible lists**: multi-level sorting, drag-and-drop ordering, per-column filters, saved views, row highlights, tags, duplicate detection, bulk edit, and undo/redo.
+- **Flexible lists**: multi-level sorting, drag-and-drop ordering, per-column filters, saved views, row highlights, tags, duplicate detection, bulk edit of every field, and undo/redo.
 - **Custom columns** of twelve types, including links to any number of ticket platforms, websites and predecessor/successor references between tasks; every built-in column can also be removed.
 - **Form designer** for the task editor: drag fields into custom sections, size the window and mark fields as required, per organization.
 - **40 built-in themes**, custom themes, and palettes generated from an image or logo with WCAG AA contrast. The splash screen, the app logo and the window icon follow the theme too.
@@ -112,9 +113,10 @@ The demo organization shows every feature with realistic data:
 - more than 150 linked issues, including problems shared by several incidents, lowercase codes, problem-only rows and codes with no matching task;
 - two **Link to platform** columns: a ticket platform (`https://tickets.example.com/browse/{code}`) and a change platform for `CHG…` codes;
 - predecessors and successors between upcoming and backlog tasks;
+- three **Group activities**: checkout and payments, mobile app, identity and access;
 - an extra **Aurora** theme.
 
-Demo data is created only when no workspace exists yet, so updating the app never touches an existing `data` folder. To explore the demo next to your own data, create a new organization with **Include demo data**. **Clear tasks and issues** removes the demo content from the current organization and keeps its settings.
+Demo data is created only when no workspace exists yet, so updating the app never touches an existing `data` folder. To explore the demo next to your own data, create a new organization with **Include demo data**. **Clear tasks and issues** removes the demo content, groups included, from the current organization and keeps its settings.
 
 ### Moving and sharing the workspace
 
@@ -138,7 +140,7 @@ Since 2.45.0 the main window reports the **original portable launcher** to Windo
 
 The **Guide** button at the bottom of the sidebar, or `F1` from anywhere, opens a complete feature reference inside the app.
 
-- **17 sections**: getting started, organizations, every view, search and filters, highlights and tags, bulk edit, duplicates, columns, appearance, settings, data and backups, browser access, updates and keyboard shortcuts.
+- **19 sections**: getting started, organizations, every view including group activities, search and filters, highlights and tags, bulk edit, duplicates, columns, links and references, appearance, settings, data and backups, browser access, updates and keyboard shortcuts.
 - **Search box** that filters topics instantly; accents and letter case are ignored.
 - **Section navigation** that tracks your scroll position, and **Go to…** buttons that open the related view or settings tab directly.
 - Follows the organization language, active theme, font and text size, and works the same in browser access.
@@ -149,7 +151,7 @@ Everything OrbitKanban stores lives in the `data` folder next to the executable:
 
 | Path | Content |
 | --- | --- |
-| `data/workspace.json` | The workspace: all organizations, tasks, issues, settings, themes and logos |
+| `data/workspace.json` | The workspace: all organizations, tasks, issues, groups, settings, themes and logos |
 | `data/workspace.json.bak` | The previous save |
 | `data/backups/` | Daily snapshots of the whole workspace; the 14 most recent are kept |
 | `data/languages/` | Optional translation files and the English template |
@@ -162,7 +164,7 @@ The workspace format is version 2 (multi-organization). It cannot be opened by 1
 
 ## Organizations
 
-The menu under the **OrbitKanban** name in the sidebar switches the active organization. Each organization has its **own tasks and issues** and its own navigation sections, statuses, urgencies, highlights, tags, columns, themes, font, text sizes, hours per day, logo and language. Switching updates every view immediately and resets search and filters. The selection is remembered for the next launch. Identical codes in different organizations are never linked.
+The menu under the **OrbitKanban** name in the sidebar switches the active organization. Each organization has its **own tasks, issues and groups** and its own navigation sections, statuses, urgencies, highlights, tags, columns, themes, font, text sizes, hours per day, logo and language. Switching updates every view immediately and resets search and filters. The selection is remembered for the next launch. Identical codes in different organizations are never linked.
 
 - **Manage organizations** opens the related settings tab.
 - **New organization** asks for a name, language and optional logo. A preview shows the logo and the four colors of the theme that will be generated. New organizations start empty unless **Include demo data** is selected.
@@ -171,7 +173,7 @@ The menu under the **OrbitKanban** name in the sidebar switches the active organ
 
 **Upload logo and generate theme** accepts PNG, JPEG, WebP, GIF and BMP files up to 15 MB. The logo is converted to PNG, scaled to at most 512 px per side and embedded in the workspace, so the original file is no longer needed. Its colors generate a **Theme from logo**. Text and accent are adjusted to WCAG AA contrast, and surfaces are separated from the background, so even monochrome logos produce a readable theme. The theme is previewed immediately and kept with **Save settings**. **Remove logo** restores the default symbol without deleting the theme. The application name is always OrbitKanban and is not configurable.
 
-## The five view types
+## The six view types
 
 All views share compact headers. Their tables, timeline and board fill the window and scroll internally while respecting the configured text sizes. On Windows the app draws its own title bar: drag the top bar or logo to move the window, and double-click to maximize or restore it. The minimize, maximize and close buttons follow the active theme.
 
@@ -195,7 +197,7 @@ The main list. Each task can have:
 | Highlight and tags | See [Highlights and tags](#highlights-and-tags) |
 | Links and references | Optional columns for platform links, websites, predecessors and successors (see [Links and references](#links-and-references)) |
 
-Create tasks with **New task** or `Ctrl+N`. Open the editor by double-clicking a row or clicking the portal code. The editor follows the organization's [form layout](#task-editor-layout), by default with properties and links on the left and description and notes on the right, and keeps **Save**, **Cancel** and **Delete** always within reach. Descriptions and notes show up to three lines in the table, and hovering shows the full text.
+Create tasks with **New task** or `Ctrl+N`. Open the editor by double-clicking a row or clicking the portal code. The editor follows the organization's [form layout](#task-editor-layout), by default with properties and links on the left and description and notes on the right, and keeps **Save**, **Cancel** and **Delete** always within reach. Descriptions and notes show up to three lines in the table, and hovering shows the full text. Empty descriptions and notes leave the cell blank. The **Groups** menu at the top of the editor adds the task to [groups](#group-activities) or removes it from them; the change is saved with the task.
 
 ### Linked issues
 
@@ -218,17 +220,30 @@ A read-only board with one column per status, in the configured status order. An
 
 The fifth default section collects **Saved views**, **Upcoming releases** and **Past releases**, including an **Unassigned** view for tasks without a release date. Open an entry to apply it to the task list. Saved views retain their filters, sorting and columns; release views include hidden tasks. The catalog also works when all Tasks sections have been removed from the sidebar. Create or update saved views using **Views** in the task list.
 
+### Group activities
+
+The sixth default section collects **groups**: named sets of related tasks with a description, such as the tasks of a feature, a customer request or a migration. The section type is **Group activities**, and the section can be renamed like any other from **Settings → Navigation**.
+
+- **New group** asks for a name, a color and a rich-text description, then lets you tick the tasks that belong to it. Searching by code, description, release date or status, and **Selected only**, help with long lists. Names must be unique in the organization, ignoring letter case; up to 200 groups are allowed.
+- A task can belong to several groups, and a group can stay empty.
+- Each card shows the description, the number of tasks, the total effort, the range of release dates and a progress bar with the tasks of each status. Its tasks follow the task list order, and hidden tasks are included and marked.
+- Click a task on a card to edit it, or use the **Groups** menu at the top of the task editor to change the groups of that task.
+- The **Bulk edit** button of a card opens [bulk edit](#bulk-edit) for every task of the group, hidden ones included.
+- The search box above the cards filters groups by name, description, task codes and task descriptions. **Global search** also finds groups by name and description and scrolls to their card.
+- Deleting a group, after confirmation, keeps its tasks. Deleting a task removes it from its groups.
+- Groups belong to the organization data: they are covered by undo and redo, backups and **Export data**.
+
 ### Navigation sections
 
-The sidebar lists the **sections** of the organization. Each section opens one of the five view types under its own name. **Settings → Navigation** shows all sections in menu order:
+The sidebar lists the **sections** of the organization. Each section opens one of the six view types under its own name. **Settings → Navigation** shows all sections in menu order:
 
 - rename a section, or move it up and down to change the menu order;
 - remove a section: only the menu entry disappears, tasks and issues are never deleted;
-- **Add section** creates a new section of any of the five types, up to 12 sections. An empty name uses the name of the view type.
+- **Add section** creates a new section of any of the six types, up to 12 sections. An empty name uses the name of the view type.
 
 A Tasks, Milestones or Kanban section can be bound to a [saved view](#search-column-filters-and-views). A bound Tasks section applies the view each time it opens. A bound Milestones or Kanban section shows only the tasks of that view, hidden tasks included, and its header shows a **View** label with the view name. For example, *Kanban Security* can show only security tasks while the plain *Kanban* section shows everything. Deleting a saved view releases the sections bound to it.
 
-The first section of the menu opens at startup. **Guide** and **Settings** always stay at the bottom of the sidebar and cannot be removed. A section must have a name, and at least one section is required. When a view has no section, links to it, for example from global search, open the view under its default name. Workspaces from before 3.1 keep their former tab names and gain the Views section. Existing customized menus are preserved: add a **Views** section from **Settings → Navigation** if it is not already present.
+The first section of the menu opens at startup. **Guide** and **Settings** always stay at the bottom of the sidebar and cannot be removed. A section must have a name, and at least one section is required. When a view has no section, links to it, for example from global search, open the view under its default name. Workspaces from before 3.1 keep their former tab names and gain the Views section. Existing customized menus are preserved: add a **Views** section from **Settings → Navigation** if it is not already present. Workspaces from before 3.2 gain a **Group activities** section at the end of the menu once, when there is room. Importing settings exported before 3.2 replaces the menu as stored in the file, so add the section again if needed.
 
 ## Working with the lists
 
@@ -243,7 +258,7 @@ The first section of the menu opens at startup. **Guide** and **Settings** alway
 
 ### Search, column filters and views
 
-- **Global search** (`Ctrl+K`, top bar) finds tasks and issues by code, incident, problem, text content and release date. Choosing a result opens its editor.
+- **Global search** (`Ctrl+K`, top bar) finds tasks and issues by code, incident, problem, text content and release date, and groups by name and description. Choosing a task or issue opens its editor; choosing a group shows its card.
 - **List search** and the status, highlight and duplicate filters narrow the current list only. They never affect the other views.
 - **Column filters**: the funnel button in every header of both lists filters that column.
   - Text columns use *contains*.
@@ -285,12 +300,19 @@ The **incident** is the duplicate key, compared like portal codes. Rows with onl
 
 Select tasks with the checkboxes. `Shift+click` selects a range, and the header checkbox selects every visible task. The selection survives searches, filters and view changes; **Deselect** or `Esc` clears it.
 
-**Bulk edit…** opens a dialog listing the selected tasks. You can exclude individual tasks, or narrow the list by status with the chips. Every field starts as **— Keep unchanged —**, so only what you choose changes:
+**Bulk edit…** opens a dialog listing the selected tasks. You can exclude individual tasks, or narrow the list by status with the chips. Every field of the task editor is available, and each starts as **— Keep unchanged —**, so only what you choose changes:
 
-- status, urgency and highlight;
+- portal code, status, urgency and highlight;
+- sequence: renumber the checked tasks in list order from a starting number;
+- effort: set days and hours, or clear it;
 - release date: set a date, shift it by N days, or clear it;
 - visibility in the list;
-- each tag: add it or remove it.
+- description and notes: replace the text, add it at the end, or clear it;
+- custom columns, platform links and websites: set one value for all checked tasks, or clear it; predecessors can be added, removed, replaced or cleared;
+- each tag: add it or remove it;
+- each group: add the tasks to it or remove them.
+
+Incidents and problems come from Linked issues, and successors from the predecessor columns, so they are not edited here. Required fields never offer **Clear**, and a change that would leave one empty is rejected.
 
 **Apply** saves everything in one operation. **Delete** removes the checked tasks after confirmation; linked issues are not affected.
 
@@ -417,7 +439,7 @@ Mark a field as **Required** in the field properties of the form designer, or wi
 
 - Required fields show an asterisk. Saving a task or an issue with an empty required field highlights it with a message and keeps the editor open.
 - Task fields are checked only when they are on the form, as in model-driven forms; the designer warns about a required field left off the form.
-- **Bulk edit** cannot clear a required release date or highlight. CSV imports and organization imports are not checked.
+- **Bulk edit** never empties a required field. CSV imports and organization imports are not checked.
 - Yes/no fields, tags, successor (**Reference child**) columns, the incidents and problems resolved from Linked issues, and the computed **Link** column of Linked issues cannot be required.
 - Deleting a column also removes it from the required fields.
 
@@ -523,14 +545,14 @@ A file named after a built-in language, such as `it.json`, overrides only the te
 | --- | --- |
 | **Export themes** | All themes and the active theme |
 | **Export settings** | Language, navigation sections, hours per day, font, text sizes, statuses, urgencies, highlighters, tags, columns (with their platform templates) and logo |
-| **Export data** | Tasks and issues, with the catalogs needed to map them |
+| **Export data** | Tasks, issues and groups, with the catalogs needed to map them |
 | **Export everything** | All of the above in one file |
 
 **Import from file** accepts OrbitKanban exports up to 32 MB. It validates the file before changing anything and lets you pick which parts to import:
 
 - **Themes** with matching identifiers are updated, and the rest are added.
 - **Settings** replace the current ones. Tasks are remapped to statuses and urgencies by name, then by position. The logo is replaced only if you choose to.
-- **Data** can be imported with **Add and update**, which updates tasks with the same identifier, adds the rest and never duplicates identical issues. **Replace everything** replaces the current tasks and issues instead.
+- **Data** can be imported with **Add and update**, which updates tasks and groups with the same identifier, adds the rest and never duplicates identical issues; an imported group whose name is already taken gets a numbered name. **Replace everything** replaces the current tasks, issues and groups instead. Data exported before 3.2 keeps the current groups.
 - The destination can be **this organization** or **a new organization**.
 
 ### CSV import
@@ -596,7 +618,7 @@ Versions earlier than 2.45.0 must be updated manually once. From 2.45.0 onward, 
 | Shortcut | Action |
 | --- | --- |
 | `F1` | Open the in-app guide |
-| `Ctrl+K` | Search tasks and issues |
+| `Ctrl+K` | Search tasks, issues and groups |
 | `Ctrl+B` | Collapse or expand the sidebar |
 | `Ctrl+N` | Create a task from the task list |
 | `Ctrl+Z` | Undo the last change |
@@ -610,7 +632,7 @@ Versions earlier than 2.45.0 must be updated manually once. From 2.45.0 onward, 
 ## Privacy and security
 
 - **No telemetry and no accounts.** Data stays in the local `data` folder.
-- The only network traffic is the optional update check and download, which use GitHub's public API and download hosts. No tasks, issues, themes, logos or local paths are sent.
+- The only network traffic is the optional update check and download, which use GitHub's public API and download hosts. No tasks, issues, groups, themes, logos or local paths are sent.
 - Fonts, icons and images are local. Images used for theme generation are processed in memory only.
 - Rich text is sanitized: active content, remote images and unsupported HTML are removed. CSV descriptions are imported as plain text.
 - Browser access listens on 127.0.0.1 only and requires a secret key.
@@ -711,7 +733,7 @@ Tags are never moved. Bump the version before releasing new sources:
 npm version minor --no-git-tag-version --ignore-scripts
 ```
 
-For a specifically numbered release, use `npm version 3.1.1 --no-git-tag-version --ignore-scripts` instead. To update the local portable copy too, run the pipeline **without `-NoDeliver`** and close the app first. The script replaces only the executable, not `dist/data`.
+For a specifically numbered release, use `npm version 3.2.0 --no-git-tag-version --ignore-scripts` instead. To update the local portable copy too, run the pipeline **without `-NoDeliver`** and close the app first. The script replaces only the executable, not `dist/data`.
 
 The script refuses to reuse a tagged version for different sources. If a build or test fails, nothing is committed or pushed.
 
@@ -719,6 +741,7 @@ The script refuses to reuse a tagged version for different sources. If a build o
 
 | Version | Changes |
 | --- | --- |
+| **3.2.0** | Sixth section type **Group activities**: named groups of related tasks with a rich-text description, color, progress by status, total effort and release range; groups can be picked from the task editor, bulk edited, found by global search and exported with the data. **Bulk edit** covers every field, including portal code, sequence renumbering, effort, description and notes (replace, append or clear), custom columns and groups. Empty descriptions and notes stay blank in the list |
 | **3.1.1** | Fifth section type **Views**, collecting saved and release views. Search results and catalog entries open the task or issue page even without a menu section; regression checks cover asynchronous saved-view navigation |
 | **3.1.0** | **Settings → Navigation**: rename, reorder, remove and add sidebar sections (up to 12), each opening one of the four views; Tasks, Milestones and Kanban sections can be bound to a saved view. The former **Identity & navigation** tab is now **Identity** |
 | **3.0.1** | Demo data spans January 2026 to January 2029: biweekly milestones are completed up to the day the demo is created, the next one is in progress and later ones are planned |
