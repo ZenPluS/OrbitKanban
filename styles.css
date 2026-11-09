@@ -3530,17 +3530,47 @@ td .icon-button { width: calc(28px * var(--fs)); height: calc(28px * var(--fs));
   display: flex;
   flex: none;
   align-items: center;
-  gap: 12px;
-  padding: 10px 24px;
-  border-bottom: 1px solid var(--border);
-  background: color-mix(in srgb, var(--accent) 10%, var(--background));
+  gap: 14px;
+  padding: 14px 24px 14px 20px;
+  border-left: 4px solid var(--accent);
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 45%, var(--surface));
+  background: color-mix(in srgb, var(--accent) 20%, var(--background));
 }
-.update-notice-copy { display: grid; gap: 3px; flex: 1; min-width: 0; font-size: calc(12px * var(--fs)); }
-.update-notice-copy > span { color: var(--muted); }
-#update-badge { position: relative; width: calc(32px * var(--fs)); padding: 0; }
-.update-badge-dot { position: absolute; top: 4px; right: 4px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.update-notice-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: calc(40px * var(--fs));
+  height: calc(40px * var(--fs));
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  color: var(--accent);
+  background: var(--surface);
+}
+.update-notice-icon .ico { width: 24px; height: 24px; }
+.update-notice-copy { display: grid; gap: 4px; flex: 1; min-width: 0; font-size: calc(13px * var(--fs)); }
+.update-notice-copy > strong { font-size: calc(15px * var(--fs)); }
+.update-notice-copy > span { color: var(--text); }
+#update-notice-open { flex: none; }
+#update-badge {
+  position: relative;
+  flex: none;
+  gap: 7px;
+  padding: 0 calc(10px * var(--fs));
+  border-color: var(--accent);
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 22%, var(--surface));
+  font-weight: 600;
+  white-space: nowrap;
+}
+.update-badge-dot { position: absolute; top: -3px; right: -3px; width: 9px; height: 9px; border: 2px solid var(--background); border-radius: 50%; background: var(--accent); }
+@media (max-width: 1200px) {
+  #update-badge { width: calc(32px * var(--fs)); padding: 0; }
+  .update-badge-label { display: none; }
+}
 @media (max-width: 600px) {
-  #update-notice { flex-wrap: wrap; }
+  #update-notice { flex-wrap: wrap; gap: 10px; padding: 12px; }
+  .update-notice-copy { flex-basis: calc(100% - 60px * var(--fs)); }
 }
 /* ---- Task editor layout panel (Settings) ---- */
 .layout-overview {

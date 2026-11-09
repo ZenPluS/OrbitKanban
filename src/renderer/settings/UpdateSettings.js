@@ -38,8 +38,8 @@ export class UpdateSettings extends Component {
       badge = document.createElement('button');
       badge.id = 'update-badge';
       badge.type = 'button';
-      badge.className = 'button subtle topbar-tool';
-      badge.innerHTML = `${this.ico('reset')}<span class="update-badge-dot" aria-hidden="true"></span>`;
+      badge.className = 'button topbar-tool';
+      badge.innerHTML = `${this.ico('reset')}<span class="update-badge-label"></span><span class="update-badge-dot" aria-hidden="true"></span>`;
       this.$('.topbar-right').prepend(badge);
     }
     const available = !this.browserMode() && this.state.updateState.supported && Boolean(this.state.updateState.version) && !['idle', 'latest', 'installing'].includes(this.state.updateState.phase);
@@ -47,6 +47,7 @@ export class UpdateSettings extends Component {
     badge.hidden = !available;
     badge.title = title;
     badge.setAttribute('aria-label', title);
+    badge.querySelector('.update-badge-label').textContent = `${this.t("App update")} · v${this.state.updateState.version}`;
     badge.onclick = openUpdates;
     notice.hidden = !available || this.state.dismissedUpdateVersions.has(this.state.updateState.version);
     notice.setAttribute('aria-label', this.t("App update"));

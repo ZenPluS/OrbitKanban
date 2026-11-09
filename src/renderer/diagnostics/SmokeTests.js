@@ -1572,6 +1572,7 @@ export class SmokeTests extends Component {
         this.app.updates.adoptUpdateState({ ...testState, phase: 'available' });
         check(visible('#update-download') && !this.$('#update-download').disabled && !visible('#update-install') && this.$('#update-install').disabled && !this.$('#update-check').disabled, 'Available update offers download but not install');
         check(visible('#update-notice') && visible('#update-badge') && this.$('#update-notice-title').textContent.includes('99.0.0') && this.$('#update-notice .update-notice-copy').getAttribute('role') === 'status', 'Detected updates display a persistent accessible notification and a top-bar badge');
+        check(parseFloat(getComputedStyle(this.$('#update-notice')).borderLeftWidth) >= 4 && this.$('#update-notice-open').classList.contains('primary') && this.$('#update-badge .update-badge-label').textContent.includes('99.0.0'), 'Update alerts have an accent border, a primary action and a labeled version badge');
         this.state.view = 0; this.app.shell.render();
         check(visible('#update-notice') && visible('#update-badge'), 'Update notifications remain visible outside settings and across view changes');
         this.$('#update-notice-dismiss').click();
@@ -1587,6 +1588,7 @@ export class SmokeTests extends Component {
         this.$('#discard-settings').click();
         this.app.updates.adoptUpdateState({ ...testState, version: '99.0.1', phase: 'available' });
         check(visible('#update-notice') && this.$('#update-notice-title').textContent.includes('99.0.1'), 'A newer detected version appears even after an earlier notification was dismissed');
+        check(this.$('#update-badge .update-badge-label').textContent.includes('99.0.1'), 'The prominent update badge tracks the newly detected version');
         this.$('#update-notice-open').click(); await tick();
         this.app.updates.adoptUpdateState({ ...testState, phase: 'downloading', percent: 42 });
         check(visible('#update-progress') && this.$('#update-progress').value === 42 && this.$('#update-check').disabled && this.$('#update-auto').disabled && !visible('#update-download') && !visible('#update-install'), 'Download progress is accessible and blocks duplicate actions');

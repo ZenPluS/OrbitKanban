@@ -4,7 +4,7 @@
 
 | | |
 | --- | --- |
-| **Current version** | 3.2.0 |
+| **Current version** | 3.2.1 |
 | **Platform** | Windows 10 / 11, 64-bit |
 | **Distribution** | Single portable executable, `OrbitKanban-Portable.exe` |
 | **Network** | Not required. Used only for optional update checks against GitHub |
@@ -605,7 +605,7 @@ While the app is running, the same interface is available in a browser **on the 
 
 - **Check for updates at startup** is on by default. The preference is stored in `data/updates/settings.json` and applies to the whole portable copy.
 - **Check for updates** only checks and never downloads.
-- When a newer version is detected, a persistent banner appears in every desktop view. **View update** opens **App & updates**, protecting unsaved settings. Dismissing it leaves an update badge in the top bar; the same version stays dismissed for the session, while a newer version is announced again. Downloading and installation are never triggered just by opening the notification.
+- When a newer version is detected, a persistent, accent-colored banner appears in every desktop view, with a larger title and a prominent **View update** button. It opens **App & updates**, protecting unsaved settings. Dismissing it leaves a highlighted update badge with the version in the top bar (icon-only in narrower windows); the same version stays dismissed for the session, while a newer version is announced again. Downloading and installation are never triggered just by opening the notification.
 - **Download update** shows progress and verifies the size and SHA-256 digest published by GitHub. It accepts only the portable executable of this repository and HTTPS redirects to GitHub download hosts. Older versions, pre-releases and unverifiable packages are never installed.
 - **Install and restart** asks for confirmation and saves a full copy of the workspace. A small PowerShell helper then waits for the app to close, re-checks the hash, replaces the executable atomically and restarts the app. No administrator rights are needed.
 - If the new version cannot start, the helper restores the previous executable and reports the error. The downloaded file, `previous.exe`, `workspace-before-update.json` and the install log stay in a per-update folder under `data/updates`. Delete those folders once the new version works; keep `settings.json`.
@@ -733,7 +733,7 @@ Tags are never moved. Bump the version before releasing new sources:
 npm version minor --no-git-tag-version --ignore-scripts
 ```
 
-For a specifically numbered release, use `npm version 3.2.0 --no-git-tag-version --ignore-scripts` instead. To update the local portable copy too, run the pipeline **without `-NoDeliver`** and close the app first. The script replaces only the executable, not `dist/data`.
+For a specifically numbered release, use `npm version 3.2.1 --no-git-tag-version --ignore-scripts` instead. To update the local portable copy too, run the pipeline **without `-NoDeliver`** and close the app first. The script replaces only the executable, not `dist/data`.
 
 The script refuses to reuse a tagged version for different sources. If a build or test fails, nothing is committed or pushed.
 
@@ -741,6 +741,7 @@ The script refuses to reuse a tagged version for different sources. If a build o
 
 | Version | Changes |
 | --- | --- |
+| **3.2.1** | More visible update notifications: accent-colored banner with a larger title, highlighted icon and primary action; the top-bar update badge shows the version and stays highlighted after dismissing the banner, with a compact icon in narrower windows |
 | **3.2.0** | Sixth section type **Group activities**: named groups of related tasks with a rich-text description, color, progress by status, total effort and release range; groups can be picked from the task editor, bulk edited, found by global search and exported with the data. **Bulk edit** covers every field, including portal code, sequence renumbering, effort, description and notes (replace, append or clear), custom columns and groups. Empty descriptions and notes stay blank in the list |
 | **3.1.1** | Fifth section type **Views**, collecting saved and release views. Search results and catalog entries open the task or issue page even without a menu section; regression checks cover asynchronous saved-view navigation |
 | **3.1.0** | **Settings → Navigation**: rename, reorder, remove and add sidebar sections (up to 12), each opening one of the four views; Tasks, Milestones and Kanban sections can be bound to a saved view. The former **Identity & navigation** tab is now **Identity** |
