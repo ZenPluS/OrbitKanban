@@ -149,6 +149,13 @@ export class SmokeTests extends Component {
       this.app.taskDialog.taskDialog(this.state.data.tasks.find(task => !task.hidden));
       const editModal = this.$('#modal'), editBody = this.$('.task-edit-layout'), editWidth = editModal.clientWidth;
       const propertiesSection = this.$('#task-form [data-section="section-properties"]'), textSection = this.$('#task-form [data-section="section-text"]');
+      const attachmentFiles = this.$('#task-form .task-attachment-files');
+      attachmentFiles.innerHTML = '<button type="button" data-attachment-delete="smoke.txt">Delete test attachment</button>';
+      attachmentFiles.querySelector('[data-attachment-delete]').click();
+      check(this.$('.confirm-overlay [role="alertdialog"]') && getComputedStyle(this.$('.confirm-overlay')).backdropFilter.includes('blur') && this.$('.confirm-overlay .button.danger') && this.$('#modal').open, 'Attachment deletion uses the themed app confirmation without closing the task editor');
+      this.$('.confirm-overlay [data-confirm-cancel]').click();
+      check(!this.$('.confirm-overlay') && this.$('#modal').open, 'Canceling attachment deletion preserves the open task editor');
+      attachmentFiles.innerHTML = '';
       check(editWidth >= Math.min(1100, innerWidth * 0.9) && propertiesSection.getBoundingClientRect().right < textSection.getBoundingClientRect().left && this.$('#task-form .task-edit-pool').hidden, "Wide task editor places properties and text side by side");
       check(editModal.scrollHeight <= editModal.clientHeight + 1 && editBody.scrollHeight <= editBody.clientHeight + 1 && this.$('#task-form [type="submit"]').getBoundingClientRect().bottom <= innerHeight, 'Desktop editor fits onscreen without scrolling the modal');
       check(this.$('#task-form [data-form-field="sequence"] .required-mark') && this.$('#task-form').elements.sequence.getAttribute('aria-required') === 'true' && document.querySelectorAll('#task-form .required-mark').length === 1, 'Default required fields are marked in the task editor');

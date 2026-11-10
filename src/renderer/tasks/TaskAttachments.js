@@ -111,12 +111,12 @@ export class TaskAttachments extends Component {
         await this.workspaceApi.attachmentOpen(this.state.activeOrganizationId, task.id, open.dataset.attachmentOpen);
       })();
       const remove = event.target.closest('[data-attachment-delete]');
-      if (remove && window.confirm(this.app.transfer.fillText("Delete {0} permanently?", remove.dataset.attachmentDelete))) {
-        this.app.notifier.action(async () => {
+      if (remove) {
+        this.app.modal.confirmOverlay("Delete attachment?", this.app.transfer.fillText("Delete {0} permanently?", remove.dataset.attachmentDelete), async () => {
           await this.workspaceApi.attachmentRemove(this.state.activeOrganizationId, task.id, remove.dataset.attachmentDelete);
           this.app.notifier.notify("Attachment deleted.");
           await this.loadEditorSection(task);
-        })();
+        });
       }
     };
   }

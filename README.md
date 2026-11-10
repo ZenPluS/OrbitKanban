@@ -4,7 +4,7 @@
 
 | | |
 | --- | --- |
-| **Current version** | 3.3.1 |
+| **Current version** | 3.3.2 |
 | **Platform** | Windows 10 / 11, 64-bit |
 | **Distribution** | Single portable executable, `OrbitKanban-Portable.exe` |
 | **Network** | Not required. Used only for optional update checks against GitHub |
@@ -744,7 +744,7 @@ Tags are never moved. Bump the version before releasing new sources:
 npm version minor --no-git-tag-version --ignore-scripts
 ```
 
-For a specifically numbered release, use `npm version 3.3.1 --no-git-tag-version --ignore-scripts` instead. To update the local portable copy too, run the pipeline **without `-NoDeliver`** and close the app first. The script replaces only the executable, not `dist/data`.
+For a specifically numbered release, use `npm version 3.3.2 --no-git-tag-version --ignore-scripts` instead. To update the local portable copy too, run the pipeline **without `-NoDeliver`** and close the app first. The script replaces only the executable, not `dist/data`.
 
 The script refuses to reuse a tagged version for different sources. If a build or test fails, nothing is committed or pushed.
 
@@ -752,6 +752,7 @@ The script refuses to reuse a tagged version for different sources. If a build o
 
 | Version | Changes |
 | --- | --- |
+| **3.3.2** | Attachment deletion from the task editor uses a themed in-app confirmation overlay and keeps the editor open |
 | **3.3.1** | Task editor now has its own **Attachments** drop zone and file picker; the task-row paperclip remains a shortcut to the same attachment list |
 | **3.3.0** | **Task attachments**: drag and drop or select TXT, JSON, PDF, DOCX, PPTX, CSV, HTML, JS, SQL and XLSX files; store them in per-organization and per-task folders in portable `data/attachments`; open with the system app, scan disk for removed files and confirm physical deletion |
 | **3.2.1** | More visible update notifications: accent-colored banner with a larger title, highlighted icon and primary action; the top-bar update badge shows the version and stays highlighted after dismissing the banner, with a compact icon in narrower windows |
