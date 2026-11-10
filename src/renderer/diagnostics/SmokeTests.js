@@ -150,6 +150,12 @@ export class SmokeTests extends Component {
       const editModal = this.$('#modal'), editBody = this.$('.task-edit-layout'), editWidth = editModal.clientWidth;
       const propertiesSection = this.$('#task-form [data-section="section-properties"]'), textSection = this.$('#task-form [data-section="section-text"]');
       const attachmentFiles = this.$('#task-form .task-attachment-files');
+      const attachmentField = this.$('#task-form [data-form-field="attachments"]'), attachmentBox = attachmentField.getBoundingClientRect();
+      const attachmentOverlaps = [...attachmentField.parentElement.children].filter(element => element !== attachmentField).some(element => {
+        const box = element.getBoundingClientRect();
+        return Math.min(attachmentBox.right, box.right) - Math.max(attachmentBox.left, box.left) > 1 && Math.min(attachmentBox.bottom, box.bottom) - Math.max(attachmentBox.top, box.top) > 1;
+      });
+      check(attachmentField.closest('.task-form-grid') && !attachmentOverlaps, 'The attachment section follows the designed form grid without overlapping its fields');
       attachmentFiles.innerHTML = '<button type="button" data-attachment-delete="smoke.txt">Delete test attachment</button>';
       attachmentFiles.querySelector('[data-attachment-delete]').click();
       check(this.$('.confirm-overlay [role="alertdialog"]') && getComputedStyle(this.$('.confirm-overlay')).backdropFilter.includes('blur') && this.$('.confirm-overlay .button.danger') && this.$('#modal').open, 'Attachment deletion uses the themed app confirmation without closing the task editor');
@@ -184,6 +190,13 @@ export class SmokeTests extends Component {
         this.$('#open-form-designer').click();
         const designer = this.$('#form-designer'), inDesigner = selector => designer.querySelector(selector), onForm = id => inDesigner(`#designer-layout [data-designer-field="${id}"]`);
         check(designer?.open && designer.getBoundingClientRect().width >= innerWidth - 1 && designer.querySelectorAll('[data-palette-field]').length === fieldCount && designer.querySelectorAll('#designer-layout .designer-item').length === fieldCount && inDesigner('.designer-ghost .designer-ghost-app') && inDesigner('#designer-modal.task-form'), 'Form designer opens full screen with the field list, the blurred app and a live form preview');
+        const attachmentsSection = onForm('attachments')?.closest('[data-designer-section]')?.dataset.designerSection;
+        tap(onForm('attachments'));
+        change(inDesigner('#designer-field-section'), 'section-properties');
+        change(inDesigner('#designer-field-span'), 2);
+        const attachmentResizeWorks = onForm('attachments')?.style.gridColumn.includes('span 2');
+        change(inDesigner('#designer-field-section'), attachmentsSection);
+        check(attachmentsSection && inDesigner('[data-palette-field="attachments"]') && inDesigner('[data-designer-field="attachments"] .designer-attachment-preview') && attachmentResizeWorks && onForm('attachments')?.closest(`[data-designer-section="${attachmentsSection}"]`), 'Attachments can be moved and resized in the task form designer');
         check(!inDesigner('#designer-apply') && inDesigner('#designer-save.primary') && inDesigner('.designer-tools').querySelectorAll('.button.primary').length === 1, 'The designer offers a single save action');
         if (this.app.themePainter.customTitleBar()) {
           const area = navigator.windowControlsOverlay.getTitlebarAreaRect(), controls = innerWidth - area.x - area.width, bar = inDesigner('.designer-bar'), region = element => getComputedStyle(element).getPropertyValue('-webkit-app-region');

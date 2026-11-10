@@ -2831,7 +2831,6 @@ td.custom-cell > span {
   text-align: center;
 }
 .task-attachment-section {
-  grid-column: 1 / -1;
   min-width: 0;
   padding-top: 16px;
   border-top: 1px solid var(--border);
@@ -2855,6 +2854,12 @@ td.custom-cell > span {
 }
 .task-attachment-section .attachment-empty {
   padding: 5px 8px;
+}
+.designer-attachment-preview .attachment-dropzone {
+  pointer-events: none;
+}
+.designer-attachment-preview .attachment-files {
+  max-height: 60px;
 }
 .confirm-overlay {
   position: fixed;

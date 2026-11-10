@@ -4,7 +4,7 @@
 
 | | |
 | --- | --- |
-| **Current version** | 3.3.2 |
+| **Current version** | 3.3.3 |
 | **Platform** | Windows 10 / 11, 64-bit |
 | **Distribution** | Single portable executable, `OrbitKanban-Portable.exe` |
 | **Network** | Not required. Used only for optional update checks against GitHub |
@@ -82,6 +82,7 @@
 - **Multiple organizations**, each with its own data, settings, logo, theme and language.
 - **Flexible lists**: multi-level sorting, drag-and-drop ordering, per-column filters, saved views, row highlights, tags, duplicate detection, bulk edit of every field, and undo/redo.
 - **Task attachments**: drag and drop supported documents onto a task, open them with the system app, or delete them after confirmation; files travel in the portable `data` folder.
+- The task editor's **Attachments** section can be moved and resized in the form designer, or removed and restored from its field list.
 - **Custom columns** of twelve types, including links to any number of ticket platforms, websites and predecessor/successor references between tasks; every built-in column can also be removed.
 - **Form designer** for the task editor: drag fields into custom sections, size the window and mark fields as required, per organization.
 - **40 built-in themes**, custom themes, and palettes generated from an image or logo with WCAG AA contrast. The splash screen, the app logo and the window icon follow the theme too.
@@ -435,6 +436,7 @@ Leaving settings without saving restores the previous configuration. Themes, fon
   - *form*: width from 480 to 2000 px, a fixed height from 360 to 1600 px or **Automatic height (fits the content)**, and up to three layout columns with proportional widths;
   - *section*: name, name visibility, number of columns and position;
   - *field*: section, width in section columns, **Required**, position, and removal from the form.
+  - The built-in **Attachments** section is configurable like any other field: move it to avoid overlap, resize it, or remove and restore it from the field list.
 - Drag the edges of the window to resize it. `Ctrl+Z` and `Ctrl+Y` undo and redo every change made in the designer.
 - With the keyboard, `Enter` adds the selected field to the selected section, the arrow keys move the selected item and `Delete` removes it.
 - **Save** stores the form, together with any other settings changes still pending, and closes the designer. **Cancel** drops the designer changes, and **Restore default layout** rebuilds the default form.
@@ -744,7 +746,7 @@ Tags are never moved. Bump the version before releasing new sources:
 npm version minor --no-git-tag-version --ignore-scripts
 ```
 
-For a specifically numbered release, use `npm version 3.3.2 --no-git-tag-version --ignore-scripts` instead. To update the local portable copy too, run the pipeline **without `-NoDeliver`** and close the app first. The script replaces only the executable, not `dist/data`.
+For a specifically numbered release, use `npm version 3.3.3 --no-git-tag-version --ignore-scripts` instead. To update the local portable copy too, run the pipeline **without `-NoDeliver`** and close the app first. The script replaces only the executable, not `dist/data`.
 
 The script refuses to reuse a tagged version for different sources. If a build or test fails, nothing is committed or pushed.
 
@@ -752,6 +754,7 @@ The script refuses to reuse a tagged version for different sources. If a build o
 
 | Version | Changes |
 | --- | --- |
+| **3.3.3** | Task attachment area is part of the task form layout and can be moved, resized, or removed and restored in the form designer |
 | **3.3.2** | Attachment deletion from the task editor uses a themed in-app confirmation overlay and keeps the editor open |
 | **3.3.1** | Task editor now has its own **Attachments** drop zone and file picker; the task-row paperclip remains a shortcut to the same attachment list |
 | **3.3.0** | **Task attachments**: drag and drop or select TXT, JSON, PDF, DOCX, PPTX, CSV, HTML, JS, SQL and XLSX files; store them in per-organization and per-task folders in portable `data/attachments`; open with the system app, scan disk for removed files and confirm physical deletion |

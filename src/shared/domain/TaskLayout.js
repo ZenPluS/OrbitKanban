@@ -26,6 +26,7 @@ class TaskLayout {
       ...(linked ? [{ id: 'matches', name: 'Linked issues', builtin: true, type: 'matches', section: 'properties', span: 2 }] : []),
       ...custom.filter(item => item.type !== 'richtext').map(field),
       ...['description', 'notes'].filter(available).map(id => field(available(id))),
+      { id: 'attachments', name: 'Attachments', builtin: true, type: 'attachments', section: 'text', span: 1 },
       ...custom.filter(item => item.type === 'richtext').map(field)
     ];
   }

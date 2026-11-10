@@ -64,7 +64,7 @@ export class TaskAttachments extends Component {
   }
 
   editorSection(task, isSaved) {
-    return `<section class="task-attachment-section" data-task-attachment-section="${this.esc(task.id)}"><h3 class="task-form-section-title">${this.esc(this.t("Attachments"))}</h3>${isSaved ?
+    return `<section class="task-attachment-section" data-form-field="attachments" data-task-attachment-section="${this.esc(task.id)}"><h3 class="task-form-section-title">${this.esc(this.t("Attachments"))}</h3>${isSaved ?
       `<label class="attachment-dropzone task-attachment-dropzone"><input type="file" class="task-attachment-input" accept="${TaskAttachments.EXTENSIONS.map(ext => `.${ext}`).join(',')}" multiple><span class="attachment-drop-icon">${this.ico('transfer')}</span><strong>${this.esc(this.t("Drop files here or choose files"))}</strong><small>${this.esc(this.t("TXT, JSON, PDF, DOCX, PPTX, CSV, HTML, JS, SQL and XLSX · up to 100 MB per file"))}</small></label><div class="attachment-files task-attachment-files" aria-live="polite">${this.esc(this.t("Loading attachments…"))}</div>` :
       `<p class="muted">${this.esc(this.t("Save this task before adding attachments."))}</p>`}</section>`;
   }

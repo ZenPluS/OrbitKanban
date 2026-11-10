@@ -18,7 +18,10 @@ test('default task form keeps the 2.50 split: properties on the left and text pa
   assert.deepEqual(layout.columns.map(column => column.width), [40, 60]);
   const [properties, text] = sections(layout);
   assert.deepEqual({ ...properties, fields: undefined }, { id: 'section-properties', name: 'Properties', showName: false, columns: 2, fields: undefined });
-  assert.deepEqual(text.fields, [{ id: 'description', span: 1 }, { id: 'notes', span: 1 }]);
+  assert.deepEqual(text.fields, [{ id: 'description', span: 1 }, { id: 'notes', span: 1 }, { id: 'attachments', span: 1 }]);
+  assert.deepEqual(TaskLayout.taskEditorFields(data.settings).find(field => field.id === 'attachments'), {
+    id: 'attachments', name: 'Attachments', builtin: true, type: 'attachments', section: 'text', span: 1
+  });
   assert.equal(properties.fields[0].id, 'code');
   assert.ok(!properties.fields.some(field => field.id === 'link'));
   assert.equal(properties.fields.find(field => field.id === 'effort').span, 2);
@@ -37,7 +40,7 @@ test('workspaces without a layout or with a 2.50 layout migrate to sections', ()
   data.settings.taskEditorLayout = old;
   const migrated = ArchiveValidator.migrateArchive(data).organizations[0].data.settings.taskEditorLayout;
   assert.deepEqual(migrated.columns.map(column => column.width), [60, 40]);
-  assert.deepEqual(migrated.columns[0].sections[0].fields.map(field => field.id), ['sequence', 'description', 'notes']);
+  assert.deepEqual(migrated.columns[0].sections[0].fields.map(field => field.id), ['sequence', 'description', 'notes', 'attachments']);
   assert.equal(migrated.columns[1].sections[0].columns, 1);
   assert.ok(migrated.columns[1].sections[0].fields.every(field => field.span === 1));
   assert.deepEqual(migrated.unplaced, ['code']);
@@ -77,6 +80,21 @@ test('layout follows added and removed columns without touching the user arrange
   assert.equal(sectionOf(normalized, 'custom-review').fields.at(-1).span, 1);
   assert.equal(sectionOf(normalized, 'custom-score').id, 'section-properties');
   assert.ok(TaskLayout.taskEditorFields(settings).some(field => field.id === 'hidden'));
+});
+
+test('attachments remain a movable and resizable task form field across existing layouts', () => {
+  const settings = DataFactory.baseData('en').settings;
+  const layout = structuredClone(settings.taskEditorLayout);
+  const text = layout.columns.flatMap(column => column.sections).find(section => section.id === 'section-text');
+  text.fields = text.fields.filter(field => field.id !== 'attachments');
+  const properties = layout.columns[0].sections[0];
+  properties.fields.push({ id: 'attachments', span: 2 });
+  const normalized = TaskLayout.normalizeTaskEditorLayout(settings, layout);
+  assert.equal(sectionOf(normalized, 'attachments').id, properties.id);
+  assert.equal(sectionOf(normalized, 'attachments').fields.find(field => field.id === 'attachments').span, 2);
+  normalized.unplaced.push('attachments');
+  for (const section of sections(normalized)) section.fields = section.fields.filter(field => field.id !== 'attachments');
+  assert.deepEqual(TaskLayout.normalizeTaskEditorLayout(settings, normalized).unplaced, ['attachments']);
 });
 
 test('a layout without sections gets one for the fields that are not on the form yet', () => {
