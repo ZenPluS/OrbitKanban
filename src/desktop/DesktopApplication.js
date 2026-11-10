@@ -8,6 +8,7 @@ const os = require('node:os');
 const { Common } = require('../shared/domain');
 const { PlatformLinks } = require('../shared/columns');
 const WorkspaceStore = require('./storage/WorkspaceStore');
+const AttachmentStore = require('./storage/AttachmentStore');
 const LanguageStore = require('./storage/LanguageStore');
 const WebServer = require('../web/WebServer');
 const SplashScreen = require('./splash/SplashScreen');
@@ -30,7 +31,7 @@ class DesktopApplication {
   #launcherReleased = false;
   #win; #splash; #revealTimer; #revealed = false; #resolveAppReady;
   #appReady = new Promise(resolve => { this.#resolveAppReady = resolve; });
-  #store; #languages; #updater; #webServer;
+  #store; #attachments; #languages; #updater; #webServer;
   #splashTheme; #splashThemeTimer = null; #splashThemeSaving = Promise.resolve();
   #windowIcon; #windowIconApplied = null;
   #updateShutdown = false;
@@ -59,6 +60,7 @@ class DesktopApplication {
     app.setPath('sessionData', this.#runtimeFolder);
     app.setAppLogsPath(path.join(this.#dataFolder, 'logs'));
     this.#store = new WorkspaceStore({ dataFolder: this.#dataFolder, extras: () => ({ appVersion: app.getVersion(), browserUrl: this.#webServer.url }) });
+    this.#attachments = new AttachmentStore({ dataFolder: this.#dataFolder });
     this.#languages = new LanguageStore({ dataFolder: this.#dataFolder });
     this.#splashTheme = new SplashTheme(this.#runtimeFolder);
     this.#windowIcon = new WindowIcon(this.#runtimeFolder);
@@ -70,6 +72,12 @@ class DesktopApplication {
     this.#webServer = new WebServer({
       store: this.#store, appRoot, tokenFolder: this.#runtimeFolder, port: this.#smoke ? 0 : WebServer.DEFAULT_PORT,
       openDataFolder: this.#smoke ? async () => {} : () => this.#openDataFolder(),
+      attachments: this.#attachments,
+      openAttachment: async filePath => {
+        if (this.#smoke) return;
+        const error = await shell.openPath(filePath);
+        if (error) throw new Error(error);
+      },
       language: () => this.#store.language(),
       languages: operation => this.#languageOperation(operation)
     });
@@ -166,6 +174,13 @@ class DesktopApplication {
   async #openDataFolder() {
     const error = await shell.openPath(this.#dataFolder);
     if (error) throw new Error(error);
+  }
+  async #attachmentContext(organizationId, taskId) {
+    const snapshot = await this.#store.load(organizationId || undefined);
+    if (organizationId && snapshot.activeOrganizationId !== organizationId) throw new Error(this.#message("Organization not found.", organizationId));
+    const task = snapshot.data.tasks.find(item => item.id === taskId);
+    if (!task) throw new Error(this.#message("This task no longer exists.", organizationId));
+    return { organizationId: snapshot.activeOrganizationId, task };
   }
   #handle(channel, handler) {
     ipcMain.handle(channel, async (event, ...args) => {
@@ -280,6 +295,32 @@ class DesktopApplication {
       return url;
     });
     handle('open-data-folder', () => this.#openDataFolder());
+    handle('attachment-counts', async organizationId => {
+      const snapshot = await store.load(organizationId || undefined);
+      if (organizationId && snapshot.activeOrganizationId !== organizationId) throw new Error(message("Organization not found.", organizationId));
+      return this.#attachments.counts(snapshot.activeOrganizationId, snapshot.data.tasks);
+    });
+    handle('attachment-list', async (organizationId, taskId) => {
+      const context = await this.#attachmentContext(organizationId, taskId);
+      return this.#attachments.list(context.organizationId, context.task);
+    });
+    handle('attachment-add', async (organizationId, taskId, paths) => {
+      const context = await this.#attachmentContext(organizationId, taskId);
+      return this.#attachments.addPaths(context.organizationId, context.task, paths);
+    });
+    handle('attachment-remove', async (organizationId, taskId, name) => {
+      const context = await this.#attachmentContext(organizationId, taskId);
+      return this.#attachments.remove(context.organizationId, context.task, name);
+    });
+    handle('attachment-open', async (organizationId, taskId, name) => {
+      const context = await this.#attachmentContext(organizationId, taskId);
+      const filePath = await this.#attachments.openPath(context.organizationId, context.task, name);
+      if (!smoke) {
+        const error = await shell.openPath(filePath);
+        if (error) throw new Error(error);
+      }
+      return true;
+    });
     handle('languages', operation => this.#languageOperation(operation));
     handle('browser-access', async (operation, organizationId) => {
       if (!webServer.port) throw new Error(message("Browser access is not available."));

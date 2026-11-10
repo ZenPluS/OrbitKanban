@@ -8,9 +8,10 @@ const path = require('node:path');
 const ROOT = path.join(__dirname, '..');
 const { DataFactory } = require('../src/shared/domain');
 const WorkspaceStore = require('../src/desktop/storage/WorkspaceStore');
+const AttachmentStore = require('../src/desktop/storage/AttachmentStore');
 const WebServer = require('../src/web/WebServer');
 
-let folder, store, server, cookie, firstOrg, secondOrg;
+let folder, store, attachments, server, cookie, firstOrg, secondOrg, openedAttachment;
 
 function request(urlPath, { method = 'GET', headers = {}, body } = {}) {
   return new Promise((resolve, reject) => {
@@ -20,7 +21,7 @@ function request(urlPath, { method = 'GET', headers = {}, body } = {}) {
       res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, text: Buffer.concat(chunks).toString('utf8') }));
     });
     req.on('error', reject);
-    req.end(body === undefined ? undefined : typeof body === 'string' ? body : JSON.stringify(body));
+    req.end(body === undefined ? undefined : typeof body === 'string' || Buffer.isBuffer(body) || body instanceof Uint8Array ? body : JSON.stringify(body));
   });
 }
 const api = () => ({ Cookie: cookie, 'X-OrbitKanban': '1' });
@@ -28,10 +29,20 @@ const post = (urlPath, body, headers = {}) => request(urlPath, { method: 'POST',
 
 before(async () => {
   folder = await fs.mkdtemp(path.join(os.tmpdir(), 'orbitkanban-web-'));
-  store = new WorkspaceStore({ dataFolder: path.join(folder, 'data'), seed: () => DataFactory.baseData('it'), extras: () => ({ appVersion: '2.0.0-test' }) });
+  const dataFolder = path.join(folder, 'data');
+  store = new WorkspaceStore({ dataFolder, seed: () => DataFactory.baseData('it'), extras: () => ({ appVersion: '2.0.0-test' }) });
+  attachments = new AttachmentStore({ dataFolder });
   firstOrg = (await store.load()).activeOrganizationId;
   secondOrg = (await store.organization('create', { name: 'Second', language: 'en' }, firstOrg)).activeOrganizationId;
-  server = new WebServer({ store, appRoot: ROOT, tokenFolder: path.join(folder, 'runtime'), port: 0 });
+  const archive = JSON.parse(await store.exportText());
+  archive.organizations.find(organization => organization.id === firstOrg).data.tasks.push({
+    id: 'attachment-task', code: 'ATTACH-1', sequence: 1, url: '', description: '',
+    urgencyId: archive.organizations[0].data.settings.urgencies[0].id,
+    statusId: archive.organizations[0].data.settings.statuses[0].id,
+    effortHours: 2, releaseDate: '', notes: '', hidden: false
+  });
+  await store.replace(archive);
+  server = new WebServer({ store, attachments, openAttachment: async filePath => { openedAttachment = filePath; }, appRoot: ROOT, tokenFolder: path.join(folder, 'runtime'), port: 0 });
   await server.start();
 });
 after(async () => {
@@ -110,6 +121,30 @@ test('rejects DNS rebinding, cross-site requests, missing API header and foreign
   assert.equal((await post('/api/save', {}, { Origin: 'http://attacker.example' })).status, 403);
   const noOrigin = { ...api(), 'Content-Type': 'application/json' };
   assert.equal((await request('/api/save', { method: 'POST', body: {}, headers: noOrigin })).status, 403);
+});
+
+test('browser attachment APIs authenticate, constrain files to tasks and open with the system callback', async () => {
+  const task = (await store.load(firstOrg)).data.tasks.find(item => item.id === 'attachment-task'), query = new URLSearchParams({ org: firstOrg, task: task.id, name: 'notes.txt' });
+  const uploaded = await request(`/api/attachments/add?${query}`, {
+    method: 'POST',
+    headers: { ...api(), Origin: `http://127.0.0.1:${server.port}`, 'Content-Type': 'application/octet-stream' },
+    body: Buffer.from('local attachment')
+  });
+  assert.equal(uploaded.status, 200);
+  assert.equal(JSON.parse(uploaded.text)[0].name, 'notes.txt');
+  const listed = await request(`/api/attachments?org=${encodeURIComponent(firstOrg)}&task=${encodeURIComponent(task.id)}`, { headers: api() });
+  assert.deepEqual(JSON.parse(listed.text).map(file => file.name), ['notes.txt']);
+  const counts = await request(`/api/attachments?org=${encodeURIComponent(firstOrg)}`, { headers: api() });
+  assert.equal(JSON.parse(counts.text)[task.id], 1);
+  assert.equal((await post('/api/attachments/open', { organizationId: firstOrg, taskId: task.id, name: 'notes.txt' })).status, 200);
+  assert.match(openedAttachment, /notes\.txt$/);
+  assert.equal((await post('/api/attachments/open', { organizationId: secondOrg, taskId: task.id, name: 'notes.txt' })).status, 404);
+  assert.equal((await post('/api/attachments/remove', { organizationId: firstOrg, taskId: task.id, name: 'notes.txt' })).status, 200);
+  assert.deepEqual(JSON.parse((await request(`/api/attachments?org=${encodeURIComponent(firstOrg)}&task=${encodeURIComponent(task.id)}`, { headers: api() })).text), []);
+  const unsupported = await request(`/api/attachments/add?${new URLSearchParams({ org: firstOrg, task: task.id, name: 'payload.exe' })}`, {
+    method: 'POST', headers: { ...api(), Origin: `http://127.0.0.1:${server.port}`, 'Content-Type': 'application/octet-stream' }, body: Buffer.from('no')
+  });
+  assert.equal(unsupported.status, 400);
 });
 
 test('each browser tab loads its own organization and stale saves get a conflict', async () => {

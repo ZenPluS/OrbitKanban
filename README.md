@@ -4,7 +4,7 @@
 
 | | |
 | --- | --- |
-| **Current version** | 3.2.1 |
+| **Current version** | 3.3.0 |
 | **Platform** | Windows 10 / 11, 64-bit |
 | **Distribution** | Single portable executable, `OrbitKanban-Portable.exe` |
 | **Network** | Not required. Used only for optional update checks against GitHub |
@@ -45,6 +45,7 @@
   - [Links to platforms](#links-to-platforms)
   - [Websites](#websites)
   - [References between tasks](#references-between-tasks)
+- [Task attachments](#task-attachments)
 - [Settings](#settings)
   - [Task editor layout](#task-editor-layout)
   - [Required fields](#required-fields)
@@ -80,6 +81,7 @@
 - **Automatic issue matching.** Incidents and problems recorded in Linked issues are resolved onto tasks by their portal code.
 - **Multiple organizations**, each with its own data, settings, logo, theme and language.
 - **Flexible lists**: multi-level sorting, drag-and-drop ordering, per-column filters, saved views, row highlights, tags, duplicate detection, bulk edit of every field, and undo/redo.
+- **Task attachments**: drag and drop supported documents onto a task, open them with the system app, or delete them after confirmation; files travel in the portable `data` folder.
 - **Custom columns** of twelve types, including links to any number of ticket platforms, websites and predecessor/successor references between tasks; every built-in column can also be removed.
 - **Form designer** for the task editor: drag fields into custom sections, size the window and mark fields as required, per organization.
 - **40 built-in themes**, custom themes, and palettes generated from an image or logo with WCAG AA contrast. The splash screen, the app logo and the window icon follow the theme too.
@@ -157,8 +159,9 @@ Everything OrbitKanban stores lives in the `data` folder next to the executable:
 | `data/languages/` | Optional translation files and the English template |
 | `data/updates/` | Update preference, downloads and rollback copies |
 | `data/runtime/` | Cache, logs, the sidebar preference, the splash screen theme, the themed window icon and the browser access key |
+| `data/attachments/` | Task files, stored separately from workspace records |
 
-A daily backup is written before the first change of each day. **Settings → Data that travels with you** lists the backups with date and size. Restoring one asks for confirmation and replaces all organizations and settings; the current state is first saved to `workspace.json.bak`. Read and write errors are always reported, and a corrupted workspace is never silently replaced.
+A daily backup is written before the first change of each day. **Settings → Data that travels with you** lists the backups with date and size. Restoring one asks for confirmation and replaces all organizations and settings; the current state is first saved to `workspace.json.bak`. Read and write errors are always reported, and a corrupted workspace is never silently replaced. Attachments are stored outside the JSON workspace, so daily backups and JSON exports do not include their contents. Copy the complete `data` folder to preserve them.
 
 The workspace format is version 2 (multi-organization). It cannot be opened by 1.x releases. Older single-organization workspaces and backups are migrated automatically.
 
@@ -400,6 +403,14 @@ A **Reference parent** column lists the tasks that come before a task, its **pre
 - References show the portal code (or the sequence when the code is empty); click one to open that task.
 - Deleting a task removes it from every reference. Deleting either column of a pair deletes both, after confirmation, when settings are saved.
 - References exist only for tasks. They travel with backups and organization exports, but CSV import does not fill them.
+
+## Task attachments
+
+The paperclip at the end of each task row opens its attachment list. Drop files onto the drop zone or choose them from the device. OrbitKanban copies files into the portable workspace; it does not move or alter the originals. Supported formats are **TXT, JSON, PDF, DOCX, PPTX, CSV, HTML, JS, SQL and XLSX**, up to 100 MB per file and 20 files per drop. Repeated names are kept by adding a number.
+
+Files are stored under `data/attachments/`, separated by organization and task identity, in a folder named after the task code. If the task code changes, the folder is renamed the next time its attachments are accessed. The list is read from disk, so files removed outside OrbitKanban disappear on refresh. Open a file with the system's default app, or delete it permanently from the list after confirming the action. Deleting a task does not remove its files; this avoids unexpected data loss.
+
+Attachments are portable when the executable and its entire `data` folder are copied together. They are not included in daily JSON backups, **Export data** or organization JSON exports; copy `data/attachments/` separately when making those backups or exports.
 
 ## Settings
 
@@ -684,9 +695,9 @@ The code is object oriented: apart from entry points and preload scripts, every 
 | `src/shared/localization/` | **Localization**: the `Translator` engine |
 | `src/shared/graphics/` | **Graphics**: icon set, color math, the theme generator and the themed app logo (`AppLogo`) |
 | `src/shared/guide/` | **Guide**: in-app guide content |
-| `src/renderer/` | Interface as ES modules: `App` builds every component on the shared `AppState`; components extend `Component` and are grouped by area (`tasks`, `issues`, `milestones`, `kanban`, `settings`, `columns`, `controls`, `dialogs`, `layout`, `appearance`, `transfer`, …). `shared.js` imports the shared classes and `main.js` starts the app |
+| `src/renderer/` | Interface as ES modules: `App` builds every component on the shared `AppState`; components extend `Component` and are grouped by area (`tasks`, `issues`, `milestones`, `kanban`, `settings`, `columns`, `controls`, `dialogs`, `layout`, `appearance`, `transfer`, …). `TaskAttachments` manages the task file UI. `shared.js` imports the shared classes and `main.js` starts the app |
 | `src/desktop/` | Electron main process: `DesktopApplication` (windows, IPC, single instance), `preload.js` and the `main.js` entry point |
-| `src/desktop/storage/` | `WorkspaceStore` (atomic persistence, backups, organization transfer) and `LanguageStore` (external language files) |
+| `src/desktop/storage/` | `WorkspaceStore` (atomic persistence, backups, organization transfer), `AttachmentStore` (portable task files) and `LanguageStore` (external language files) |
 | `src/desktop/platform/` | `PortableLauncher` (portable paths, taskbar identity, shortcuts), `WindowChrome` (custom title bar), `WindowIcon` (themed window icon) and `IconFile` (ICO encoder and reader) |
 | `src/desktop/splash/` | `SplashScreen`, `SplashTheme` (saved splash screen colors and logo) and the splash screen page (`splash.html`, `splash.js`), shared with the portable launcher |
 | `src/desktop/update/` | `Updater` (check, download, verification), `UpdateLauncher` and `install-update.ps1` |
@@ -711,7 +722,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\build-and-push.ps1 -Message "Des
 The script:
 
 1. Checks the repository: active branch, no merge or rebase in progress, not behind the remote, and no unwanted files (`data`, `dist`, `node_modules`, executables, archives, or files over 5 MB).
-2. Runs `npm run check`, `npm test` and the smoke test from source, including the form designer, required fields, task layout persistence, preservation of values left off the form and update notifications.
+2. Runs `npm run check`, `npm test` and the smoke test from source, including task attachments, the form designer, required fields, task layout persistence, preservation of values left off the form and update notifications.
 3. Builds the portable executable into `dist-staging\<version>` and verifies its version and embedded icon.
 4. Smoke-tests the packaged app and the portable launcher in isolated temporary folders.
 5. Copies the tested executable to `dist\OrbitKanban-Portable.exe`, or to `dist\OrbitKanban-Portable-<version>.exe` when the former is running.
@@ -733,7 +744,7 @@ Tags are never moved. Bump the version before releasing new sources:
 npm version minor --no-git-tag-version --ignore-scripts
 ```
 
-For a specifically numbered release, use `npm version 3.2.1 --no-git-tag-version --ignore-scripts` instead. To update the local portable copy too, run the pipeline **without `-NoDeliver`** and close the app first. The script replaces only the executable, not `dist/data`.
+For a specifically numbered release, use `npm version 3.3.0 --no-git-tag-version --ignore-scripts` instead. To update the local portable copy too, run the pipeline **without `-NoDeliver`** and close the app first. The script replaces only the executable, not `dist/data`.
 
 The script refuses to reuse a tagged version for different sources. If a build or test fails, nothing is committed or pushed.
 
@@ -741,6 +752,7 @@ The script refuses to reuse a tagged version for different sources. If a build o
 
 | Version | Changes |
 | --- | --- |
+| **3.3.0** | **Task attachments**: drag and drop or select TXT, JSON, PDF, DOCX, PPTX, CSV, HTML, JS, SQL and XLSX files; store them in per-organization and per-task folders in portable `data/attachments`; open with the system app, scan disk for removed files and confirm physical deletion |
 | **3.2.1** | More visible update notifications: accent-colored banner with a larger title, highlighted icon and primary action; the top-bar update badge shows the version and stays highlighted after dismissing the banner, with a compact icon in narrower windows |
 | **3.2.0** | Sixth section type **Group activities**: named groups of related tasks with a rich-text description, color, progress by status, total effort and release range; groups can be picked from the task editor, bulk edited, found by global search and exported with the data. **Bulk edit** covers every field, including portal code, sequence renumbering, effort, description and notes (replace, append or clear), custom columns and groups. Empty descriptions and notes stay blank in the list |
 | **3.1.1** | Fifth section type **Views**, collecting saved and release views. Search results and catalog entries open the task or issue page even without a menu section; regression checks cover asynchronous saved-view navigation |

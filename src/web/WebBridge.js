@@ -44,6 +44,27 @@
       return raw ? response : response.json();
     }
 
+    async #uploadAttachment(organizationId, taskId, file) {
+      const url = new URL('/api/attachments/add', location.origin);
+      url.searchParams.set('org', organizationId);
+      url.searchParams.set('task', taskId);
+      url.searchParams.set('name', file.name);
+      let response;
+      try {
+        response = await fetch(url, {
+          method: 'POST', credentials: 'same-origin', cache: 'no-store',
+          headers: { 'X-OrbitKanban': '1', 'Content-Type': 'application/octet-stream' }, body: file
+        });
+      } catch {
+        throw WebBridge.#codedError('offline', "OrbitKanban is not reachable: reopen the app on the PC and reload the page.");
+      }
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw WebBridge.#codedError(payload.code || (response.status === 401 ? 'unauthorized' : 'error'), payload.error || `HTTP ${response.status}`);
+      }
+      return response.json();
+    }
+
     static #download(blob, fileName) {
       const href = URL.createObjectURL(blob);
       const link = Object.assign(document.createElement('a'), { href, download: fileName });
@@ -115,6 +136,24 @@
           return url;
         },
         openDataFolder: () => this.#request('/api/open-data-folder', {}),
+        attachmentCounts: organizationId => {
+          const query = new URLSearchParams();
+          if (organizationId) query.set('org', organizationId);
+          return this.#request(`/api/attachments?${query}`);
+        },
+        attachmentList: (organizationId, taskId) => {
+          const query = new URLSearchParams({ org: organizationId, task: taskId });
+          return this.#request(`/api/attachments?${query}`);
+        },
+        async attachmentAdd(organizationId, taskId, files) {
+          const selected = [...files];
+          if (!selected.length || selected.length > 20) throw new Error(bridge.#say("Choose between 1 and 20 files."));
+          let result;
+          for (const file of selected) result = await bridge.#uploadAttachment(organizationId, taskId, file);
+          return result;
+        },
+        attachmentRemove: (organizationId, taskId, name) => this.#request('/api/attachments/remove', { organizationId, taskId, name }),
+        attachmentOpen: (organizationId, taskId, name) => this.#request('/api/attachments/open', { organizationId, taskId, name }),
         languages: (operation = 'info') => operation === 'info' ? this.#request('/api/languages') : this.#request('/api/languages', { operation }),
         onChange(callback) {
           const source = new EventSource('/api/events');

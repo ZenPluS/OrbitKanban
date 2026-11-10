@@ -67,6 +67,11 @@ class GuideContent {
           'By default, the editor shows properties on the left and description and notes on the right.',
           'The icon next to the code opens the task on its platform, in your default browser. It appears when a **Link to platform** column has a value.'
         ] },
+        { title: 'Attachments', items: [
+          'The paperclip on a task row opens its attachments. Drop files there or choose TXT, JSON, PDF, DOCX, PPTX, CSV, HTML, JS, SQL or XLSX files (up to 100 MB each). Click a file to open it with the system default app.',
+          'Attachments are copied into `data/attachments`, in a folder named after the task code. The app scans that folder when you open it, so files removed outside the app disappear from the list.',
+          'Use the trash icon to delete a file permanently after confirming.'
+        ] },
         { title: 'Sort the list', items: [
           'The default order is by release date, ascending. Click a column header to sort; `Shift`+click adds further sort levels.',
           'Statuses and urgencies sort by their configured order. Descriptions and notes cannot be sorted.',

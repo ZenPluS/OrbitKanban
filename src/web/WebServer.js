@@ -12,6 +12,7 @@ class WebServer {
   static HOST = '127.0.0.1';
   static #BODY_LIMIT = 64 * 1024 * 1024;
   static #JAVASCRIPT = 'text/javascript; charset=utf-8';
+  static #ATTACHMENT_LIMIT = 100 * 1024 * 1024;
   static #FIXED_FILES = [
     ['/styles.css', 'text/css; charset=utf-8'],
     ['/fonts/fonts.css', 'text/css; charset=utf-8'],
@@ -22,7 +23,7 @@ class WebServer {
   // Folders whose scripts the interface loads; the Node-only namespace barrels (index.js under src/shared) are not served.
   static #SCRIPT_FOLDERS = ['src/shared', 'src/renderer'];
   static #CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
-  static #STATUS_BY_CODE = { conflict: 409, 'missing-organization': 404, unauthorized: 401, forbidden: 403, 'not-found': 404, 'too-large': 413 };
+  static #STATUS_BY_CODE = { conflict: 409, 'missing-organization': 404, unauthorized: 401, forbidden: 403, 'not-found': 404, 'bad-request': 400, 'too-large': 413 };
   static #ENTRY_SCRIPT = '<script type="module" src="src/renderer/main.js"></script>';
 
   static #digest(value) { return crypto.createHash('sha256').update(String(value)).digest(); }
@@ -69,18 +70,20 @@ class WebServer {
     return found;
   }
 
-  #store; #appRoot; #tokenFolder; #requestedPort; #openDataFolder; #language; #languages;
+  #store; #appRoot; #tokenFolder; #requestedPort; #openDataFolder; #attachments; #openAttachment; #language; #languages;
   #server; #token; #actualPort; #indexHtml; #keepAlive;
   #streams = new Set();
   #staticCache = new Map();
   #staticFiles = new Map(WebServer.#FIXED_FILES);
 
-  constructor({ store, appRoot, tokenFolder, port = WebServer.DEFAULT_PORT, openDataFolder = async () => {}, language = () => 'it', languages = async () => WebServer.#builtInLanguages() }) {
+  constructor({ store, appRoot, tokenFolder, port = WebServer.DEFAULT_PORT, openDataFolder = async () => {}, attachments, openAttachment, language = () => 'it', languages = async () => WebServer.#builtInLanguages() }) {
     this.#store = store;
     this.#appRoot = appRoot;
     this.#tokenFolder = tokenFolder;
     this.#requestedPort = port;
     this.#openDataFolder = openDataFolder;
+    this.#attachments = attachments;
+    this.#openAttachment = openAttachment;
     this.#language = language;
     this.#languages = languages;
   }
@@ -126,6 +129,28 @@ class WebServer {
     try { return JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}'); }
     catch { throw new Error(this.#say("Invalid request.")); }
   }
+  async #readAttachment(req) {
+    const chunks = [];
+    let size = 0;
+    for await (const chunk of req) {
+      size += chunk.length;
+      if (size > WebServer.#ATTACHMENT_LIMIT) throw WebServer.#httpError('too-large', this.#say("Each attachment must be 100 MB or smaller."));
+      chunks.push(chunk);
+    }
+    return Buffer.concat(chunks, size);
+  }
+  async #attachmentTask(organizationId, taskId) {
+    if (!this.#attachments) throw new Error(this.#say("Attachments are not available."));
+    const snapshot = await this.#store.load(organizationId || undefined);
+    if (organizationId && snapshot.activeOrganizationId !== organizationId) throw WebServer.#httpError('not-found', this.#say("Organization not found."));
+    const task = snapshot.data.tasks.find(item => item.id === taskId);
+    if (!task) throw WebServer.#httpError('not-found', this.#say("This task no longer exists."));
+    return { organizationId: snapshot.activeOrganizationId, task };
+  }
+  #attachmentFailure(error) {
+    if (!error.code && /^(Invalid attachment|Unsupported attachment|Attachments must|Each attachment|Choose between|Too many files|The attachment no longer exists|The attachment is not a regular file)/.test(error.message)) error.code = 'bad-request';
+    throw error;
+  }
   async #staticFile(name) {
     if (!this.#staticCache.has(name)) this.#staticCache.set(name, await fs.readFile(path.join(this.#appRoot, name.slice(1))));
     return this.#staticCache.get(name);
@@ -167,13 +192,49 @@ class WebServer {
       const exported = await store.exportOrganization(url.searchParams.get('org') || undefined, url.searchParams.get('kind') || '');
       return this.#send(res, 200, exported.text, 'application/json; charset=utf-8', { 'Content-Disposition': `attachment; filename="${exported.fileName}"` });
     }
+    if (route === 'GET /api/attachments') {
+      if (!this.#attachments) throw new Error(this.#say("Attachments are not available."));
+      const organizationId = url.searchParams.get('org') || undefined, taskId = url.searchParams.get('task');
+      try {
+        const snapshot = await store.load(organizationId);
+        if (organizationId && snapshot.activeOrganizationId !== organizationId) throw WebServer.#httpError('not-found', this.#say("Organization not found."));
+        if (taskId) {
+          const context = await this.#attachmentTask(snapshot.activeOrganizationId, taskId);
+          return this.#json(res, 200, await this.#attachments.list(context.organizationId, context.task));
+        }
+        return this.#json(res, 200, await this.#attachments.counts(snapshot.activeOrganizationId, snapshot.data.tasks));
+      } catch (error) { this.#attachmentFailure(error); }
+    }
     if (route === 'GET /api/languages') return this.#json(res, 200, await this.#languages('info'));
     if (req.method !== 'POST') throw WebServer.#httpError('not-found', this.#say("Not found."));
+    if (url.pathname === '/api/attachments/add') {
+      if (!/^application\/octet-stream(?:\s*;|$)/i.test(req.headers['content-type'] || '')) throw WebServer.#httpError('forbidden', this.#say("Request not allowed."));
+      try {
+        const context = await this.#attachmentTask(url.searchParams.get('org'), url.searchParams.get('task'));
+        const bytes = await this.#readAttachment(req);
+        return this.#json(res, 200, await this.#attachments.addBuffer(context.organizationId, context.task, url.searchParams.get('name'), bytes));
+      } catch (error) { this.#attachmentFailure(error); }
+    }
     const body = await this.#readBody(req);
     if (url.pathname === '/api/save') return this.#json(res, 200, await store.save(body.data, body.organizationId, body.organizationName, body.revision));
     if (url.pathname === '/api/organization') return this.#json(res, 200, await store.organization(body.operation, body.payload, body.organizationId));
     if (url.pathname === '/api/import') return this.#json(res, 200, await store.replace(body.archive));
     if (url.pathname === '/api/backups' && body.operation === 'restore') return this.#json(res, 200, await store.restoreBackup(body.fileName));
+    if (url.pathname === '/api/attachments/remove') {
+      try {
+        const context = await this.#attachmentTask(body.organizationId, body.taskId);
+        return this.#json(res, 200, await this.#attachments.remove(context.organizationId, context.task, body.name));
+      } catch (error) { this.#attachmentFailure(error); }
+    }
+    if (url.pathname === '/api/attachments/open') {
+      if (typeof this.#openAttachment !== 'function') throw new Error(this.#say("Opening attachments is not available."));
+      try {
+        const context = await this.#attachmentTask(body.organizationId, body.taskId);
+        const filePath = await this.#attachments.openPath(context.organizationId, context.task, body.name);
+        await this.#openAttachment(filePath);
+        return this.#json(res, 200, { ok: true });
+      } catch (error) { this.#attachmentFailure(error); }
+    }
     if (url.pathname === '/api/languages') return this.#json(res, 200, await this.#languages(body.operation));
     if (url.pathname === '/api/open-data-folder') { await this.#openDataFolder(); return this.#json(res, 200, { ok: true }); }
     throw WebServer.#httpError('not-found', this.#say("Not found."));

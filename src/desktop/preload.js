@@ -1,5 +1,5 @@
 'use strict';
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 contextBridge.exposeInMainWorld('workspace', {
   mode: 'desktop',
   load: organizationId => ipcRenderer.invoke('load', organizationId),
@@ -12,6 +12,11 @@ contextBridge.exposeInMainWorld('workspace', {
   backups: (operation = 'list', fileName) => ipcRenderer.invoke('backups', operation, fileName),
   openLink: url => ipcRenderer.invoke('open-link', url),
   openDataFolder: () => ipcRenderer.invoke('open-data-folder'),
+  attachmentCounts: organizationId => ipcRenderer.invoke('attachment-counts', organizationId),
+  attachmentList: (organizationId, taskId) => ipcRenderer.invoke('attachment-list', organizationId, taskId),
+  attachmentAdd: (organizationId, taskId, files) => ipcRenderer.invoke('attachment-add', organizationId, taskId, [...files].map(file => webUtils.getPathForFile(file))),
+  attachmentRemove: (organizationId, taskId, name) => ipcRenderer.invoke('attachment-remove', organizationId, taskId, name),
+  attachmentOpen: (organizationId, taskId, name) => ipcRenderer.invoke('attachment-open', organizationId, taskId, name),
   languages: (operation = 'info') => ipcRenderer.invoke('languages', operation),
   updates: (operation = 'info', value) => ipcRenderer.invoke('updates', operation, value),
   createShortcut: () => ipcRenderer.invoke('create-shortcut'),

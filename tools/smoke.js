@@ -7,7 +7,7 @@ const { spawnSync } = require('node:child_process');
 const { DataFactory, ArchiveValidator } = require('../src/shared/domain');
 
 class SmokeRunner {
-  static #MIN_CHECKS = 506;
+  static #MIN_CHECKS = 507;
   static #ROOT = path.join(__dirname, '..');
 
   static #seed(folder) {

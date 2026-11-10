@@ -24,6 +24,7 @@ import { ViewsPage } from './tasks/ViewsPage.js';
 import { GroupsPage } from './groups/GroupsPage.js';
 import { GroupEditor } from './groups/GroupEditor.js';
 import { TaskRows } from './tasks/TaskRows.js';
+import { TaskAttachments } from './tasks/TaskAttachments.js';
 import { BulkEdit } from './tasks/BulkEdit.js';
 import { RowMarks } from './tasks/RowMarks.js';
 import { SortableList } from './controls/SortableList.js';
@@ -83,6 +84,7 @@ export class App extends Component {
     this.groupsPage = new GroupsPage(this);
     this.groupEditor = new GroupEditor(this);
     this.taskRows = new TaskRows(this);
+    this.attachments = new TaskAttachments(this);
     this.bulkEdit = new BulkEdit(this);
     this.rowMarks = new RowMarks(this);
     this.sortable = new SortableList(this);
