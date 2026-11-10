@@ -52,11 +52,73 @@ export class TaskAttachments extends Component {
 
   #dialog(task, files, state = 'ready') {
     const title = this.app.transfer.fillText("Attachments for {0}", task.code || this.t("Uncoded task"));
-    const content = state === 'loading' ? `<p class="muted">${this.esc(this.t("Loading attachments…"))}</p>` :
+    const content = this.#filesContent(files, state);
+    return `<section id="attachment-manager" data-task-id="${this.esc(task.id)}"><div class="modal-heading"><div><div class="eyebrow">${this.esc(this.t("TASK ATTACHMENTS"))}</div><h2>${this.esc(title)}</h2></div><button type="button" class="icon-button" data-close aria-label="${this.esc(this.t("Close"))}">${this.ico('close')}</button></div><label class="attachment-dropzone" id="attachment-dropzone"><input type="file" id="attachment-input" accept="${TaskAttachments.EXTENSIONS.map(ext => `.${ext}`).join(',')}" multiple><span class="attachment-drop-icon">${this.ico('transfer')}</span><strong>${this.esc(this.t("Drop files here or choose files"))}</strong><small>${this.esc(this.t("TXT, JSON, PDF, DOCX, PPTX, CSV, HTML, JS, SQL and XLSX · up to 100 MB per file"))}</small></label><div class="attachment-files" aria-live="polite">${content}</div><div class="modal-actions"><span class="spacer"></span><button type="button" class="button" data-close>${this.esc(this.t("Close"))}</button></div></section>`;
+  }
+
+  #filesContent(files, state = 'ready') {
+    return state === 'loading' ? `<p class="muted">${this.esc(this.t("Loading attachments…"))}</p>` :
       state === 'error' ? `<p class="muted">${this.esc(this.t("Attachments could not be loaded. Close and try again."))}</p>` :
       files.length ? `<ul class="attachment-list">${files.map(file => `<li class="attachment-item"><button type="button" class="attachment-open" data-attachment-open="${this.esc(file.name)}" title="${this.esc(this.t("Open with the system default app"))}">${this.#fileIcon(file.extension)}<span class="attachment-file-name">${this.esc(file.name)}</span><small class="attachment-file-size">${this.#size(file.size)}</small></button><button type="button" class="icon-button delete-option" data-attachment-delete="${this.esc(file.name)}" aria-label="${this.esc(this.app.transfer.fillText("Delete attachment: {0}", file.name))}" title="${this.esc(this.t("Delete attachment"))}">${this.ico('close')}</button></li>`).join('')}</ul>` :
         `<p class="muted attachment-empty">${this.esc(this.t("No attachments yet. Drop files here or choose them from your device."))}</p>`;
-    return `<section id="attachment-manager" data-task-id="${this.esc(task.id)}"><div class="modal-heading"><div><div class="eyebrow">${this.esc(this.t("TASK ATTACHMENTS"))}</div><h2>${this.esc(title)}</h2></div><button type="button" class="icon-button" data-close aria-label="${this.esc(this.t("Close"))}">${this.ico('close')}</button></div><label class="attachment-dropzone" id="attachment-dropzone"><input type="file" id="attachment-input" accept="${TaskAttachments.EXTENSIONS.map(ext => `.${ext}`).join(',')}" multiple><span class="attachment-drop-icon">${this.ico('transfer')}</span><strong>${this.esc(this.t("Drop files here or choose files"))}</strong><small>${this.esc(this.t("TXT, JSON, PDF, DOCX, PPTX, CSV, HTML, JS, SQL and XLSX · up to 100 MB per file"))}</small></label><div class="attachment-files" aria-live="polite">${content}</div><div class="modal-actions"><span class="spacer"></span><button type="button" class="button" data-close>${this.esc(this.t("Close"))}</button></div></section>`;
+  }
+
+  editorSection(task, isSaved) {
+    return `<section class="task-attachment-section" data-task-attachment-section="${this.esc(task.id)}"><h3 class="task-form-section-title">${this.esc(this.t("Attachments"))}</h3>${isSaved ?
+      `<label class="attachment-dropzone task-attachment-dropzone"><input type="file" class="task-attachment-input" accept="${TaskAttachments.EXTENSIONS.map(ext => `.${ext}`).join(',')}" multiple><span class="attachment-drop-icon">${this.ico('transfer')}</span><strong>${this.esc(this.t("Drop files here or choose files"))}</strong><small>${this.esc(this.t("TXT, JSON, PDF, DOCX, PPTX, CSV, HTML, JS, SQL and XLSX · up to 100 MB per file"))}</small></label><div class="attachment-files task-attachment-files" aria-live="polite">${this.esc(this.t("Loading attachments…"))}</div>` :
+      `<p class="muted">${this.esc(this.t("Save this task before adding attachments."))}</p>`}</section>`;
+  }
+
+  async loadEditorSection(task) {
+    const section = this.$(`[data-task-attachment-section="${CSS.escape(task.id)}"]`);
+    if (!section) return;
+    this.#wireEditorSection(task, section);
+    try {
+      const files = await this.workspaceApi.attachmentList(this.state.activeOrganizationId, task.id);
+      if (!section.isConnected) return;
+      this.#counts[task.id] = files.length;
+      document.querySelectorAll(`[data-task-attachments="${CSS.escape(task.id)}"]`).forEach(button => this.#updateButton(button, files.length));
+      section.querySelector('.task-attachment-files').innerHTML = this.#filesContent(files);
+    } catch (error) {
+      if (!section.isConnected) return;
+      console.error('Task attachments could not be loaded:', error);
+      section.querySelector('.task-attachment-files').innerHTML = this.#filesContent([], 'error');
+      this.app.notifier.notify(error.message, true);
+    }
+  }
+
+  #wireEditorSection(task, section) {
+    const input = section.querySelector('.task-attachment-input'), dropzone = section.querySelector('.task-attachment-dropzone');
+    input.onchange = this.app.notifier.action(async () => {
+      await this.#addToPanel(task, [...input.files], input, dropzone, () => this.loadEditorSection(task));
+      input.value = '';
+    });
+    dropzone.ondragover = event => {
+      event.preventDefault();
+      dropzone.classList.add('is-dragging');
+    };
+    dropzone.ondragleave = event => {
+      if (!dropzone.contains(event.relatedTarget)) dropzone.classList.remove('is-dragging');
+    };
+    dropzone.ondrop = this.app.notifier.action(async event => {
+      event.preventDefault();
+      dropzone.classList.remove('is-dragging');
+      await this.#addToPanel(task, [...(event.dataTransfer?.files || [])], input, dropzone, () => this.loadEditorSection(task));
+    });
+    section.onclick = event => {
+      const open = event.target.closest('[data-attachment-open]');
+      if (open) this.app.notifier.action(async () => {
+        await this.workspaceApi.attachmentOpen(this.state.activeOrganizationId, task.id, open.dataset.attachmentOpen);
+      })();
+      const remove = event.target.closest('[data-attachment-delete]');
+      if (remove && window.confirm(this.app.transfer.fillText("Delete {0} permanently?", remove.dataset.attachmentDelete))) {
+        this.app.notifier.action(async () => {
+          await this.workspaceApi.attachmentRemove(this.state.activeOrganizationId, task.id, remove.dataset.attachmentDelete);
+          this.app.notifier.notify("Attachment deleted.");
+          await this.loadEditorSection(task);
+        })();
+      }
+    };
   }
 
   async open(task) {
@@ -127,6 +189,10 @@ export class TaskAttachments extends Component {
   }
 
   async #add(task, files) {
+    return this.#addToPanel(task, files, this.$('#attachment-input'), this.$('#attachment-dropzone'), () => this.open(task));
+  }
+
+  async #addToPanel(task, files, input, dropzone, refresh) {
     if (!files.length) return;
     if (files.length > 20) throw new Error(this.t("Choose between 1 and 20 files."));
     for (const file of files) {
@@ -134,15 +200,14 @@ export class TaskAttachments extends Component {
       if (!TaskAttachments.EXTENSIONS.includes(extension)) throw new Error(this.app.transfer.fillText("Unsupported attachment type: {0}.", file.name));
       if (file.size > TaskAttachments.MAX_FILE_BYTES) throw new Error(this.t("Each attachment must be 100 MB or smaller."));
     }
-    this.$('#attachment-input').disabled = true;
-    this.$('#attachment-dropzone').classList.add('is-uploading');
+    input.disabled = true;
+    dropzone.classList.add('is-uploading');
     try {
       await this.workspaceApi.attachmentAdd(this.state.activeOrganizationId, task.id, files);
       this.app.notifier.notify(this.app.transfer.fillText("{0} attachment(s) added.", files.length));
-      await this.open(task);
+      await refresh();
     } finally {
-      const input = this.$('#attachment-input');
-      if (input) input.disabled = false;
+      if (input?.isConnected) input.disabled = false;
     }
   }
 }

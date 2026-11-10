@@ -4,7 +4,7 @@
 
 | | |
 | --- | --- |
-| **Current version** | 3.3.0 |
+| **Current version** | 3.3.1 |
 | **Platform** | Windows 10 / 11, 64-bit |
 | **Distribution** | Single portable executable, `OrbitKanban-Portable.exe` |
 | **Network** | Not required. Used only for optional update checks against GitHub |
@@ -406,7 +406,7 @@ A **Reference parent** column lists the tasks that come before a task, its **pre
 
 ## Task attachments
 
-The paperclip at the end of each task row opens its attachment list. Drop files onto the drop zone or choose them from the device. OrbitKanban copies files into the portable workspace; it does not move or alter the originals. Supported formats are **TXT, JSON, PDF, DOCX, PPTX, CSV, HTML, JS, SQL and XLSX**, up to 100 MB per file and 20 files per drop. Repeated names are kept by adding a number.
+The task editor has an **Attachments** section with a visible drop zone and file picker; the paperclip at the end of each task row opens the same list. Save a new task before adding files. OrbitKanban copies files into the portable workspace; it does not move or alter the originals. Supported formats are **TXT, JSON, PDF, DOCX, PPTX, CSV, HTML, JS, SQL and XLSX**, up to 100 MB per file and 20 files per drop. Repeated names are kept by adding a number.
 
 Files are stored under `data/attachments/`, separated by organization and task identity, in a folder named after the task code. If the task code changes, the folder is renamed the next time its attachments are accessed. The list is read from disk, so files removed outside OrbitKanban disappear on refresh. Open a file with the system's default app, or delete it permanently from the list after confirming the action. Deleting a task does not remove its files; this avoids unexpected data loss.
 
@@ -744,7 +744,7 @@ Tags are never moved. Bump the version before releasing new sources:
 npm version minor --no-git-tag-version --ignore-scripts
 ```
 
-For a specifically numbered release, use `npm version 3.3.0 --no-git-tag-version --ignore-scripts` instead. To update the local portable copy too, run the pipeline **without `-NoDeliver`** and close the app first. The script replaces only the executable, not `dist/data`.
+For a specifically numbered release, use `npm version 3.3.1 --no-git-tag-version --ignore-scripts` instead. To update the local portable copy too, run the pipeline **without `-NoDeliver`** and close the app first. The script replaces only the executable, not `dist/data`.
 
 The script refuses to reuse a tagged version for different sources. If a build or test fails, nothing is committed or pushed.
 
@@ -752,6 +752,7 @@ The script refuses to reuse a tagged version for different sources. If a build o
 
 | Version | Changes |
 | --- | --- |
+| **3.3.1** | Task editor now has its own **Attachments** drop zone and file picker; the task-row paperclip remains a shortcut to the same attachment list |
 | **3.3.0** | **Task attachments**: drag and drop or select TXT, JSON, PDF, DOCX, PPTX, CSV, HTML, JS, SQL and XLSX files; store them in per-organization and per-task folders in portable `data/attachments`; open with the system app, scan disk for removed files and confirm physical deletion |
 | **3.2.1** | More visible update notifications: accent-colored banner with a larger title, highlighted icon and primary action; the top-bar update badge shows the version and stays highlighted after dismissing the banner, with a compact icon in narrower windows |
 | **3.2.0** | Sixth section type **Group activities**: named groups of related tasks with a rich-text description, color, progress by status, total effort and release range; groups can be picked from the task editor, bulk edited, found by global search and exported with the data. **Bulk edit** covers every field, including portal code, sequence renumbering, effort, description and notes (replace, append or clear), custom columns and groups. Empty descriptions and notes stay blank in the list |

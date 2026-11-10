@@ -29,6 +29,11 @@ export class TaskDialog extends Component {
     this.app.csvImport.pruneColumnEditors(form, 'tasks');
     if (!this.hasColumn('code') || !this.hasColumn('code', 'issues') || !['incident', 'problem'].some(id => this.hasColumn(id) && this.hasColumn(id, 'issues'))) this.$('#match-preview').remove();
     this.app.taskForm.applyTaskEditorLayout(form);
+    const attachmentTask = { id: t.id, code: t.code };
+    const formLayout = this.$('.task-edit-layout');
+    formLayout.insertAdjacentHTML('beforeend', this.app.attachments.editorSection(attachmentTask, Boolean(existing)));
+    formLayout.style.gridTemplateRows = 'minmax(0, 1fr) auto';
+    if (existing) this.app.attachments.loadEditorSection(attachmentTask);
     this.app.taskForm.markRequiredFields(form, 'tasks');
     const updateMatches = () => {
       if (!this.$('#match-preview')) return;

@@ -68,8 +68,9 @@ class GuideContent {
           'The icon next to the code opens the task on its platform, in your default browser. It appears when a **Link to platform** column has a value.'
         ] },
         { title: 'Attachments', items: [
-          'The paperclip on a task row opens its attachments. Drop files there or choose TXT, JSON, PDF, DOCX, PPTX, CSV, HTML, JS, SQL or XLSX files (up to 100 MB each). Click a file to open it with the system default app.',
+          'The task editor includes an **Attachments** section with a drop zone and file picker. The paperclip on a task row opens the same list. Drop or choose TXT, JSON, PDF, DOCX, PPTX, CSV, HTML, JS, SQL or XLSX files (up to 100 MB each). Click a file to open it with the system default app.',
           'Attachments are copied into `data/attachments`, in a folder named after the task code. The app scans that folder when you open it, so files removed outside the app disappear from the list.',
+          'Save a new task before adding attachments.',
           'Use the trash icon to delete a file permanently after confirming.'
         ] },
         { title: 'Sort the list', items: [

@@ -1150,6 +1150,8 @@ export class SmokeTests extends Component {
       this.state.view = 0; this.app.shell.render();
       doubleClick(smokeRow().querySelector('.sequence'));
       check(this.$('#modal').open && this.$('#task-form').elements.code.value === 'SMOKE-1', "Double-clicking a cell opens the corresponding task editor");
+      await waitFor(() => this.$('#task-form [data-task-attachment-section] .task-attachment-dropzone')?.ondrop);
+      check(this.$('#task-form [data-task-attachment-section] .task-attachment-dropzone')?.ondrop && this.$('#task-form .task-attachment-input').multiple, 'Task editor contains its own drag-and-drop attachment section');
       check(getComputedStyle(this.$('#task-form').elements.code).userSelect === 'text' && getComputedStyle(this.$('#description-editor strong')).userSelect === 'text', 'Rich-text fields and content remain selectable');
       this.$('#notes-editor').innerHTML += '<p>Double-click verified</p>';
       this.$('#task-form').requestSubmit();
