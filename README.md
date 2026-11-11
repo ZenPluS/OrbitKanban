@@ -4,7 +4,7 @@
 
 | | |
 | --- | --- |
-| **Current version** | 3.3.3 |
+| **Current version** | 3.3.4 |
 | **Platform** | Windows 10 / 11, 64-bit |
 | **Distribution** | Single portable executable, `OrbitKanban-Portable.exe` |
 | **Network** | Not required. Used only for optional update checks against GitHub |
@@ -746,7 +746,7 @@ Tags are never moved. Bump the version before releasing new sources:
 npm version minor --no-git-tag-version --ignore-scripts
 ```
 
-For a specifically numbered release, use `npm version 3.3.3 --no-git-tag-version --ignore-scripts` instead. To update the local portable copy too, run the pipeline **without `-NoDeliver`** and close the app first. The script replaces only the executable, not `dist/data`.
+For a specifically numbered release, use `npm version 3.3.4 --no-git-tag-version --ignore-scripts` instead. To update the local portable copy too, run the pipeline **without `-NoDeliver`** and close the app first. The script replaces only the executable, not `dist/data`.
 
 The script refuses to reuse a tagged version for different sources. If a build or test fails, nothing is committed or pushed.
 
@@ -754,6 +754,7 @@ The script refuses to reuse a tagged version for different sources. If a build o
 
 | Version | Changes |
 | --- | --- |
+| **3.3.4** | Unsupported attachment type errors stay in front of the active dialog for both file-picker and drag-and-drop uploads |
 | **3.3.3** | Task attachment area is part of the task form layout and can be moved, resized, or removed and restored in the form designer |
 | **3.3.2** | Attachment deletion from the task editor uses a themed in-app confirmation overlay and keeps the editor open |
 | **3.3.1** | Task editor now has its own **Attachments** drop zone and file picker; the task-row paperclip remains a shortcut to the same attachment list |

@@ -14,6 +14,23 @@ export class SmokeTests extends Component {
       const pickColor = (button, color) => { button.click(); enterColor(color); this.$('#color-picker').requestSubmit(); };
       const doubleClick = element => element.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true, button: 0 }));
       const tick = () => new Promise(resolve => setTimeout(resolve));
+      const invalidAttachment = () => {
+        const files = new DataTransfer();
+        files.items.add(new File(['unsupported'], 'unsupported.exe'));
+        return files;
+      };
+      const pickerUploadError = async input => {
+        input.files = invalidAttachment().files;
+        await input.onchange(new Event('change'));
+      };
+      const dropUploadError = async dropzone => {
+        await dropzone.ondrop({ preventDefault() {}, dataTransfer: invalidAttachment() });
+      };
+      const attachmentErrorIsForeground = () => {
+        const toast = this.$('#toast');
+        return toast.parentElement === this.$('#modal') && toast.classList.contains('visible') && toast.classList.contains('error') &&
+          getComputedStyle(toast).position === 'fixed' && Number(getComputedStyle(toast).zIndex) >= 20;
+      };
       const pointer = (target, type, x, y) => target.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, composed: true, clientX: x, clientY: y, pointerId: 7, isPrimary: true, pointerType: 'mouse', button: 0, buttons: type === 'pointerup' ? 0 : 1 }));
       // Presses on grip, drags it over the upper or lower half of target (depending on the direction) and drops it, or presses Esc.
       function dragTo(grip, target, finish = 'drop') {
@@ -48,8 +65,13 @@ export class SmokeTests extends Component {
       attachmentButton.click();
       await waitFor(() => this.$('#attachment-manager .attachment-empty') || this.$('#attachment-manager .attachment-list'));
       check(this.$('#attachment-dropzone')?.ondrop && this.$('#attachment-manager [aria-live="polite"]') && this.$('#attachment-input').multiple && this.$('#attachment-input').accept.split(',').length === 10, 'Task attachment manager supports all ten file types and drag-and-drop');
+      await pickerUploadError(this.$('#attachment-input'));
+      check(attachmentErrorIsForeground() && this.$('#toast').textContent.includes(this.t("Unsupported attachment type: {0}.").replace('{0}', 'unsupported.exe')), 'Unsupported files selected in the attachment manager show an error above the dialog');
+      await dropUploadError(this.$('#attachment-dropzone'));
+      check(attachmentErrorIsForeground(), 'Unsupported files dropped in the attachment manager show an error above the dialog');
       this.$('#attachment-manager [data-close]').click();
       await waitFor(() => !this.$('#modal').open);
+      await waitFor(() => this.$('#toast').parentElement === document.body);
       const rootStyle = getComputedStyle(document.documentElement), hexOf = rgb => '#' + rgb.match(/\d+/g).slice(0, 3).map(n => Number(n).toString(16).padStart(2, '0')).join('');
       check(getComputedStyle(this.$('#navigation .nav-icon .ico')).getPropertyValue('--ico-front').trim() === 'url(#ig-blue)' && Object.keys(ThemeGenerator.ICON_FAMILIES).every(family => /^#[0-9a-f]{6}$/i.test(rootStyle.getPropertyValue(`--ig-${family}-1`).trim())), 'Feature icons use per-theme gradient stops');
       const activeTheme = () => this.state.data.settings.themes.find(theme => theme.id === this.state.data.settings.themeId), themedLogo = this.app.logoPainter.themedLogo(activeTheme());
@@ -1172,6 +1194,10 @@ export class SmokeTests extends Component {
       check(this.$('#modal').open && this.$('#task-form').elements.code.value === 'SMOKE-1', "Double-clicking a cell opens the corresponding task editor");
       await waitFor(() => this.$('#task-form [data-task-attachment-section] .task-attachment-dropzone')?.ondrop);
       check(this.$('#task-form [data-task-attachment-section] .task-attachment-dropzone')?.ondrop && this.$('#task-form .task-attachment-input').multiple, 'Task editor contains its own drag-and-drop attachment section');
+      await pickerUploadError(this.$('#task-form .task-attachment-input'));
+      check(attachmentErrorIsForeground(), 'Unsupported files selected in the task editor show an error above the dialog');
+      await dropUploadError(this.$('#task-form [data-task-attachment-section] .task-attachment-dropzone'));
+      check(attachmentErrorIsForeground(), 'Unsupported files dropped on the task editor show an error above the dialog');
       check(getComputedStyle(this.$('#task-form').elements.code).userSelect === 'text' && getComputedStyle(this.$('#description-editor strong')).userSelect === 'text', 'Rich-text fields and content remain selectable');
       this.$('#notes-editor').innerHTML += '<p>Double-click verified</p>';
       this.$('#task-form').requestSubmit();
