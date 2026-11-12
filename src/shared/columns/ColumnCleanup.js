@@ -77,6 +77,10 @@ class ColumnCleanup {
       const catalogs = fields.filter(field => ['select', 'multiselect'].includes(field.type)).map(field => ({ field, known: new Set(ColumnSchema.choices(field).map(option => option.id)) }));
       for (const record of data[kind]) {
         for (const field of removed) record[field.property] = structuredClone(field.empty);
+        if (kind === 'tasks') {
+          const known = new Set((settings.highlights || []).map(option => option.id));
+          ColumnSchema.setTaskHighlightIds(record, ColumnSchema.hasColumn(settings, kind, 'highlight') ? ColumnSchema.taskHighlightIds(record).filter(id => known.has(id)) : []);
+        }
         if (record.customFields) record.customFields = Object.fromEntries(Object.entries(record.customFields).filter(([id]) => customIds.has(id)));
         for (const { field, known } of catalogs) {
           const value = ColumnSchema.getValue(record, field);

@@ -61,7 +61,7 @@ export class BulkEdit extends Component {
       if (!Number.isInteger(days) || !days || Math.abs(days) > 3650) throw new Error("Enter how many days to move the release: a whole number other than zero.");
       steps.push(task => { if (task.releaseDate) task.releaseDate = this.#shiftDate(task.releaseDate, days); });
     } else if (mode === 'clear') steps.push(task => { task.releaseDate = ''; });
-    if (mark) steps.push(task => { task.highlightId = mark === '__none' ? '' : mark; });
+    if (mark) steps.push(task => { ColumnSchema.setTaskHighlightIds(task, mark === '__none' ? [] : [mark]); });
     if (modeOf('effort') === 'set') {
       const days = Number(fields.get('effortDays') || 0), hours = Number(fields.get('effortHours') || 0);
       if (![days, hours].every(value => Number.isFinite(value) && value >= 0)) throw new Error("Enter a valid effort: days and hours from 0.");

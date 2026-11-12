@@ -1302,8 +1302,47 @@ export class SmokeTests extends Component {
       this.$(`#mark-menu [data-mark-choice="${this.app.presenter.highlightsOf()[0].id}"]`).click();
       await waitFor(() => !this.state.saving && !this.app.rowMarks.markFlush);
       check(!this.$('#mark-menu') && smokeTask().highlightId === this.app.presenter.highlightsOf()[0].id && smokeRow().classList.contains('marked') && smokeRow().querySelector('.mark-button.is-marked'), "Color chosen from the menu is applied to the row");
+      this.$(`.highlighter-bar [data-highlighter="${paint.id}"]`).click();
+      smokeRow().cells[1].click();
+      await waitFor(() => !this.state.saving && !this.app.rowMarks.markFlush);
+      const firstMark = this.app.presenter.highlightsOf()[0];
+      check(smokeTask().highlightId === firstMark.id && smokeTask().additionalHighlightIds.includes(paint.id) &&
+        (await this.workspaceApi.load()).data.tasks.find(task => task.id === smokeTask().id).additionalHighlightIds.includes(paint.id) &&
+        smokeRow().style.getPropertyValue('--mark-background').includes(firstMark.color) &&
+        smokeRow().style.getPropertyValue('--mark-background').includes(paint.color) &&
+        getComputedStyle(smokeRow()).backgroundImage.includes('linear-gradient'), 'Painting a second highlight preserves the first and displays both colors');
+      const autoStatus = { highlight: true, color: '#123456' };
+      check(this.app.presenter.highlightStyle(this.app.presenter.taskHighlights(smokeTask()), autoStatus).includes(autoStatus.color) &&
+        new DOMParser().parseFromString(this.app.milestones.miniTask(smokeTask()), 'text/html').querySelectorAll('.mark-chip').length === 2,
+      'Automatic status color combines with manual colors and cards display both labels');
+      smokeRow().querySelector('[data-select-task]').click();
+      check(getComputedStyle(smokeRow().cells[1]).backgroundImage.includes('linear-gradient'), 'Selected rows keep multiple highlight colors visible');
+      smokeRow().querySelector('[data-select-task]').click();
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      smokeRow().querySelector('[data-mark-task]').click();
+      check(this.$(`#mark-menu [data-mark-choice="${firstMark.id}"]`).getAttribute('aria-checked') === 'true' &&
+        this.$(`#mark-menu [data-mark-choice="${paint.id}"]`).getAttribute('aria-checked') === 'true', 'Highlight menu shows every selected color');
+      this.$(`#mark-menu [data-mark-choice="${paint.id}"]`).click();
+      await waitFor(() => !this.state.saving && !this.app.rowMarks.markFlush);
+      check(smokeTask().highlightId === firstMark.id && !smokeTask().additionalHighlightIds, 'Removing one menu highlight preserves the other');
+      smokeRow().querySelector('[data-mark-task]').click();
+      this.$(`#mark-menu [data-mark-choice="${paint.id}"]`).click();
+      await waitFor(() => !this.state.saving && !this.app.rowMarks.markFlush);
+      check(smokeTask().additionalHighlightIds.includes(paint.id), 'The row menu can add a second highlight');
+      smokeRow().querySelector('[data-mark-task]').click();
+      this.$('#mark-menu [data-mark-choice=""]').click();
+      await waitFor(() => !this.state.saving && !this.app.rowMarks.markFlush);
+      check(!smokeTask().highlightId && !smokeTask().additionalHighlightIds && !smokeRow().classList.contains('marked'), 'The row menu clears all manual colors');
+      smokeRow().querySelector('[data-mark-task]').click();
+      this.$(`#mark-menu [data-mark-choice="${firstMark.id}"]`).click();
+      await waitFor(() => !this.state.saving && !this.app.rowMarks.markFlush);
+      smokeRow().querySelector('[data-mark-task]').click();
+      this.$(`#mark-menu [data-mark-choice="${paint.id}"]`).click();
+      await waitFor(() => !this.state.saving && !this.app.rowMarks.markFlush);
       const listedRows = () => [...document.querySelectorAll('#task-rows tr[data-task-row]')];
       const setHighlightFilter = value => { this.$('#highlight-filter').value = value; this.$('#highlight-filter').dispatchEvent(new Event('change')); };
+      setHighlightFilter(paint.id);
+      check(listedRows().includes(smokeRow()), 'A task matches a filter for its additional highlight');
       setHighlightFilter(this.app.presenter.highlightsOf()[0].id);
       check(listedRows().length > 0 && listedRows().every(row => this.state.data.tasks.find(task => task.id === row.dataset.taskRow).highlightId === this.app.presenter.highlightsOf()[0].id) && listedRows().includes(smokeRow()), 'Filter the list by highlight color');
       setHighlightFilter('__none');
@@ -1311,8 +1350,13 @@ export class SmokeTests extends Component {
       setHighlightFilter('');
       check(listedRows().length === this.app.taskFilter.filteredTasks().length && this.state.highlightFilter === '', 'Highlight filter is cleared');
       smokeRow().querySelector('.code-link').click();
-      check(this.$('#task-form').elements.highlightId.value === this.app.presenter.highlightsOf()[0].id && this.$('#task-form').elements.highlightId.options.length === this.app.presenter.highlightsOf().length + 1, "Highlight field in the task editor");
-      this.$('#task-form').elements.highlightId.value = this.app.presenter.highlightsOf()[2].id;
+      this.$('#task-form [data-choice-picker="task-highlight"]').click();
+      check(this.$(`#tag-menu input[value="${firstMark.id}"]`).checked && this.$(`#tag-menu input[value="${paint.id}"]`).checked, "Highlight field in the task editor supports multiple selected colors");
+      this.$(`#tag-menu input[value="${firstMark.id}"]`).checked = false;
+      this.$(`#tag-menu input[value="${paint.id}"]`).checked = false;
+      this.$(`#tag-menu input[value="${this.app.presenter.highlightsOf()[2].id}"]`).checked = true;
+      this.$('#tag-menu').requestSubmit();
+      await waitFor(() => !this.$('#tag-menu'));
       this.$('#task-form').requestSubmit();
       await waitFor(() => !this.state.saving && !this.$('#modal').open && smokeTask().highlightId === this.app.presenter.highlightsOf()[2].id);
       check(smokeRow().classList.contains('marked') && smokeRow().style.getPropertyValue('--mark').trim() === this.app.presenter.highlightsOf()[2].color, "Highlight can be edited in the task editor");

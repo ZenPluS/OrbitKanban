@@ -6,6 +6,7 @@
   "locale": "en-GB",
   "notes": "English is the source language. Keep message, term, and plural keys in English; translate only values. Empty or missing values fall back to English. Preserve placeholders such as {0}. Guide texts are terms: keep the **bold** and `key` markers, and write key names such as Shift or Enter as in their own terms.",
   "messages": {
+    "e.g. PRJ-1042": "e.g. PRJ-1042",
     "Task editor layout": "Task editor layout",
     "Invalid task editor layout.": "Invalid task editor layout.",
     "Restore default layout": "Restore default layout",
@@ -1195,8 +1196,8 @@
     "Make important rows stand out and group tasks with your own labels.": "Make important rows stand out and group tasks with your own labels.",
     "Automatic highlights": "Automatic highlights",
     "Turn on the star of a status in its label settings: every task in that status is highlighted automatically.": "Turn on the star of a status in its label settings: every task in that status is highlighted automatically.",
-    "Pick a color in the highlighter bar, then click rows to color them; click again to remove the color. The **Eraser** clears highlights and `Esc` stops.": "Pick a color in the highlighter bar, then click rows to color them; click again to remove the color. The **Eraser** clears highlights and `Esc` stops.",
-    "The ● button at the end of each row and the task editor set the highlight too. The highlight filter shows highlighted rows, rows without highlight or a single color.": "The ● button at the end of each row and the task editor set the highlight too. The highlight filter shows highlighted rows, rows without highlight or a single color.",
+    "Pick a color in the highlighter bar, then click rows to add or remove that color. A row can have several colors alongside its automatic status color. The **Eraser** clears all manual colors and `Esc` stops.": "Pick a color in the highlighter bar, then click rows to add or remove that color. A row can have several colors alongside its automatic status color. The **Eraser** clears all manual colors and `Esc` stops.",
+    "The ● button at the end of each row and the task editor also let you select multiple colors. The highlight filter shows highlighted rows, rows without highlight or those containing a selected color.": "The ● button at the end of each row and the task editor also let you select multiple colors. The highlight filter shows highlighted rows, rows without highlight or those containing a selected color.",
     "Names, colors and order of up to 16 highlighters are managed in the settings.": "Names, colors and order of up to 16 highlighters are managed in the settings.",
     "Tags are a catalog of up to 100 colored labels, with names up to 60 characters.": "Tags are a catalog of up to 100 colored labels, with names up to 60 characters.",
     "Assign several tags to a task from its tags cell in the list, then press **Apply**. Bulk edit adds or removes tags on many tasks at once.": "Assign several tags to a task from its tags cell in the list, then press **Apply**. Bulk edit adds or removes tags on many tasks at once.",

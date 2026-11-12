@@ -12,6 +12,7 @@ export class ColumnFilterPanel extends Component {
     const field = this.app.columns.columnDef(id, kind)?.field;
     if (field) return field.type === 'richtext' ? this.app.richText.plain(record.customFields?.[id] || '') : ColumnSchema.REFERENCE_TYPES.includes(field.type) ? this.app.cells.referenceTasks(this.app.cells.customValue(record, field)).map(this.app.cells.referenceName) : record.customFields?.[id];
     if (kind === 'issues') return id === 'linked' ? context.get(record.code.trim().toUpperCase()) || 0 : record[id];
+    if (id === 'highlight') return this.app.presenter.taskHighlights(record).map(highlight => highlight.id);
     if (id === 'incident' || id === 'problem') return this.matchIssues(record, context)[id === 'incident' ? 'incidents' : 'problems'];
     if (id === 'description' || id === 'notes') return this.app.richText.plain(record[id]);
     return record[{ status: 'statusId', urgency: 'urgencyId', highlight: 'highlightId', tags: 'tagIds', effort: 'effortHours' }[id] || id];

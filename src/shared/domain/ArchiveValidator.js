@@ -68,6 +68,9 @@ class ArchiveValidator {
       Common.assert(Number.isFinite(t.effortHours) && t.effortHours >= 0, "Invalid effort.");
       Common.assert(typeof t.hidden === 'boolean', "Invalid visibility.");
       Common.assert(t.highlightId === undefined || (text(t.highlightId) && t.highlightId.length <= 200), "Invalid task highlight.");
+      Common.assert(t.additionalHighlightIds === undefined || (Array.isArray(t.additionalHighlightIds) && t.additionalHighlightIds.length < Limits.HIGHLIGHT_LIMIT &&
+        t.additionalHighlightIds.every(id => text(id) && id && id.length <= 200 && id !== t.highlightId) &&
+        new Set(t.additionalHighlightIds).size === t.additionalHighlightIds.length), "Invalid task highlight.");
       Common.assert(t.tagIds === undefined || (Array.isArray(t.tagIds) && t.tagIds.length <= Limits.TAG_LIMIT && t.tagIds.every(tagId => text(tagId) && tagId && tagId.length <= 200) && new Set(t.tagIds).size === t.tagIds.length), "Invalid task tags.");
       Common.assert(!t.releaseDate || (/^\d{4}-\d{2}-\d{2}$/.test(t.releaseDate) && !Number.isNaN(Date.parse(t.releaseDate)) && new Date(t.releaseDate).toISOString().slice(0, 10) === t.releaseDate), "Invalid release date.");
       Common.assert((!t.statusId || s.statuses.some(x => x.id === t.statusId)) && (!t.urgencyId || s.urgencies.some(x => x.id === t.urgencyId)), "Missing status or urgency.");
@@ -134,7 +137,7 @@ class ArchiveValidator {
     settings.highlights ??= ThemeCatalog.defaultHighlights(settings.language || 'it');
     settings.taskColumns = ColumnLayout.listColumns(settings, 'tasks');
     const known = new Set(settings.highlights.map(highlight => highlight.id));
-    for (const task of data.tasks) if (!known.has(task.highlightId)) task.highlightId = '';
+    for (const task of data.tasks) ColumnSchema.setTaskHighlightIds(task, ColumnSchema.taskHighlightIds(task).filter(id => known.has(id)));
     return data;
   }
   static normalizeTags(data) {

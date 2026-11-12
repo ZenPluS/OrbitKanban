@@ -44,6 +44,13 @@ class ColumnSchema {
     ...ColumnSchema.BUILTIN_FIELDS[kind].filter(field => ColumnSchema.hasColumn(settings, kind, field.id)).map(field => ({ ...field, builtin: true, options: field.catalog ? settings[field.catalog] || [] : [] })),
     ...ColumnSchema.fieldsOf(settings, kind)
   ];
+  static taskHighlightIds = task => [task.highlightId, ...(task.additionalHighlightIds || [])].filter(Boolean);
+  static setTaskHighlightIds(task, ids) {
+    const unique = [...new Set(ids.filter(Boolean))];
+    task.highlightId = unique[0] || '';
+    if (unique.length > 1) task.additionalHighlightIds = unique.slice(1);
+    else delete task.additionalHighlightIds;
+  }
   static getValue = (record, field) => field.builtin ? record[field.property] : record.customFields?.[field.id];
   static setValue(record, field, value) {
     if (field.builtin) record[field.property] = value;

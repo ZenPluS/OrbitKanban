@@ -1,5 +1,6 @@
 // Row highlighter and highlight menu.
 import { Component } from '../core/Component.js';
+import { ColumnSchema } from '../shared.js';
 
 export class RowMarks extends Component {
   drawHighlighter() {
@@ -26,20 +27,35 @@ export class RowMarks extends Component {
     });
     bar.querySelector('[data-manage-highlights]').onclick = () => this.app.settings.openSettingsTab('highlights');
   }
-  #applyRowMark(row, value) {
-    const mark = this.app.presenter.highlightsOf().find(h => h.id === value);
-    row.classList.toggle('marked', Boolean(mark));
-    if (mark) row.style.setProperty('--mark', mark.color); else row.style.removeProperty('--mark');
-    row.querySelector('.mark-button')?.classList.toggle('is-marked', Boolean(mark));
+  #applyRowMark(row, ids, task) {
+    const marks = this.app.presenter.highlightsOf().filter(highlight => ids.includes(highlight.id));
+    const styles = this.app.presenter.highlightStyle(marks, this.statusOf(task));
+    row.classList.toggle('marked', Boolean(marks.length));
+    for (const name of ['--mark', '--mark-colors', '--mark-background']) row.style.removeProperty(name);
+    if (styles) {
+      const sample = document.createElement('span');
+      sample.style.cssText = styles;
+      for (const name of ['--mark', '--mark-colors', '--mark-background']) row.style.setProperty(name, sample.style.getPropertyValue(name));
+    }
+    const button = row.querySelector('.mark-button');
+    if (button) {
+      button.classList.toggle('is-marked', Boolean(marks.length));
+      const label = marks.length ? this.app.transfer.fillText("Highlight: {0}", marks.map(mark => mark.name).join(', ')) : this.t("Highlight row");
+      button.title = label;
+      button.setAttribute('aria-label', label);
+    }
   }
   pendingMarks = new Map();
   markFlush = null;
-  currentMark = task => this.pendingMarks.has(task.id) ? this.pendingMarks.get(task.id) : this.app.presenter.highlightOf(task)?.id || '';
+  currentMarks = task => this.pendingMarks.has(task.id) ? this.pendingMarks.get(task.id) : ColumnSchema.taskHighlightIds(task);
+  #toggleMark(ids, value) {
+    return !value || value === 'erase' ? [] : ids.includes(value) ? ids.filter(id => id !== value) : [...ids, value];
+  }
   paintRow(row) {
     const task = this.state.data.tasks.find(item => item.id === row.dataset.taskRow);
     if (!task) return;
-    const value = this.state.highlighter === 'erase' || this.currentMark(task) === this.state.highlighter ? '' : this.state.highlighter;
-    this.#applyRowMark(row, value);
+    const value = this.#toggleMark(this.currentMarks(task), this.state.highlighter);
+    this.#applyRowMark(row, value, task);
     this.#setTaskHighlight(task.id, value);
   }
   // Clicks are applied to the page at once and saved in order, batching the rows colored while a save is running.
@@ -54,7 +70,7 @@ export class RowMarks extends Component {
         while (this.state.saving || this.state.organizationBusy) await new Promise(resolve => setTimeout(resolve, 30));
         const batch = new Map(this.pendingMarks);
         if (![...batch.keys()].some(id => this.state.data.tasks.some(task => task.id === id))) { this.pendingMarks.clear(); break; }
-        await this.app.history.commit(next => { for (const [id, value] of batch) { const task = next.tasks.find(item => item.id === id); if (task) task.highlightId = value; } });
+        await this.app.history.commit(next => { for (const [id, value] of batch) { const task = next.tasks.find(item => item.id === id); if (task) ColumnSchema.setTaskHighlightIds(task, value); } });
         for (const [id, value] of batch) if (this.pendingMarks.get(id) === value) this.pendingMarks.delete(id);
       }
     } catch (error) {
@@ -77,8 +93,11 @@ export class RowMarks extends Component {
     if (open) { const same = open.dataset.task === id; this.closeMarkMenu(); if (same) return; }
     const task = this.state.data.tasks.find(item => item.id === id);
     if (!task) return;
-    const current = this.currentMark(task);
-    const item = (value, label, swatch) => `<button type="button" role="menuitemradio" aria-checked="${value === current}" class="mark-choice" data-mark-choice="${this.esc(value)}">${swatch}<span>${this.esc(label)}</span>${value === current ? `<b aria-hidden="true">${this.ico('check')}</b>` : ''}</button>`;
+    const current = this.currentMarks(task);
+    const item = (value, label, swatch) => {
+      const checked = value ? current.includes(value) : !current.length;
+      return `<button type="button" role="menuitemcheckbox" aria-checked="${checked}" class="mark-choice" data-mark-choice="${this.esc(value)}">${swatch}<span>${this.esc(label)}</span>${checked ? `<b aria-hidden="true">${this.ico('check')}</b>` : ''}</button>`;
+    };
     const menu = document.createElement('div');
     menu.id = 'mark-menu';
     menu.className = 'mark-menu';
@@ -97,10 +116,10 @@ export class RowMarks extends Component {
       if (event.target.closest('[data-manage-highlights]')) { this.closeMarkMenu(); this.app.settings.openSettingsTab('highlights'); return; }
       const choice = event.target.closest('[data-mark-choice]');
       if (!choice) return;
-      const value = choice.dataset.markChoice;
+      const value = this.#toggleMark(this.currentMarks(task), choice.dataset.markChoice);
       this.closeMarkMenu();
       const row = document.querySelector(`tr[data-task-row="${CSS.escape(id)}"]`);
-      if (row) this.#applyRowMark(row, value);
+      if (row) this.#applyRowMark(row, value, task);
       this.#setTaskHighlight(id, value).then(() => document.querySelector(`[data-mark-task="${CSS.escape(id)}"]`)?.focus({ preventScroll: true }));
     });
     menu.addEventListener('keydown', event => {

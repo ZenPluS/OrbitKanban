@@ -7,7 +7,7 @@ export class TaskFilter extends Component {
     if (!this.state.highlightFilter) return true;
     if (this.state.highlightFilter === '__any') return Boolean(this.app.presenter.highlightOf(task));
     if (this.state.highlightFilter === '__none') return !this.app.presenter.highlightOf(task);
-    return task.highlightId === this.state.highlightFilter;
+    return this.app.presenter.taskHighlights(task).some(highlight => highlight.id === this.state.highlightFilter);
   }
   duplicatesOf = () => {
     const duplicates = IssueMatcher.findDuplicates(this.state.data.tasks, this.state.data.issues);

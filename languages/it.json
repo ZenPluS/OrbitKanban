@@ -6,6 +6,7 @@
   "locale": "it-IT",
   "notes": "English is the source language of OrbitKanban. Keep message, term, and plural keys in English; translate their values into Italian. Preserve placeholders such as {0}.",
   "messages": {
+    "e.g. PRJ-1042": "es. PRJ-1042",
     "Task editor layout": "Layout della scheda attività",
     "Invalid task editor layout.": "Layout della scheda attività non valido.",
     "Restore default layout": "Ripristina layout predefinito",
@@ -1195,8 +1196,8 @@
     "Make important rows stand out and group tasks with your own labels.": "Fai risaltare le righe importanti e raggruppa le attività con etichette tue.",
     "Automatic highlights": "Evidenziazioni automatiche",
     "Turn on the star of a status in its label settings: every task in that status is highlighted automatically.": "Attiva la stella di uno stato nelle impostazioni delle etichette: ogni attività in quello stato viene evidenziata in automatico.",
-    "Pick a color in the highlighter bar, then click rows to color them; click again to remove the color. The **Eraser** clears highlights and `Esc` stops.": "Scegli un colore nella barra degli evidenziatori, poi fai clic sulle righe per colorarle; un nuovo clic toglie il colore. La **Gomma** cancella le evidenziazioni e `Esc` termina.",
-    "The ● button at the end of each row and the task editor set the highlight too. The highlight filter shows highlighted rows, rows without highlight or a single color.": "Anche il pulsante ● in fondo a ogni riga e l'editor dell'attività impostano l'evidenziazione. Il filtro evidenziazione mostra le righe evidenziate, quelle senza evidenziazione o un singolo colore.",
+    "Pick a color in the highlighter bar, then click rows to add or remove that color. A row can have several colors alongside its automatic status color. The **Eraser** clears all manual colors and `Esc` stops.": "Scegli un colore nella barra degli evidenziatori, poi fai clic sulle righe per aggiungere o rimuovere quel colore. Una riga può avere più colori insieme al colore automatico dello stato. La **Gomma** cancella tutti i colori manuali e `Esc` termina.",
+    "The ● button at the end of each row and the task editor also let you select multiple colors. The highlight filter shows highlighted rows, rows without highlight or those containing a selected color.": "Anche il pulsante ● in fondo a ogni riga e l'editor dell'attività permettono di scegliere più colori. Il filtro evidenziazione mostra le righe evidenziate, quelle senza evidenziazione o quelle che contengono il colore selezionato.",
     "Names, colors and order of up to 16 highlighters are managed in the settings.": "Nomi, colori e ordine di un massimo di 16 evidenziatori si gestiscono nelle impostazioni.",
     "Tags are a catalog of up to 100 colored labels, with names up to 60 characters.": "I tag sono un catalogo di massimo 100 etichette colorate, con nomi lunghi fino a 60 caratteri.",
     "Assign several tags to a task from its tags cell in the list, then press **Apply**. Bulk edit adds or removes tags on many tasks at once.": "Assegna più tag a un'attività dalla sua cella dei tag nella lista, poi premi **Applica**. La modifica multipla aggiunge o toglie tag a molte attività insieme.",

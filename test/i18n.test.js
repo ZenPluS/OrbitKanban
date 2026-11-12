@@ -13,6 +13,7 @@ test('English is the source language and Italian translates source strings', () 
   assert.equal(Translator.translate('Save settings', 'it'), 'Salva impostazioni');
   assert.equal(Translator.translate('Manage organizations', 'it'), 'Gestisci organizzazioni');
   assert.equal(Translator.translate('Organization logo', 'it'), 'Logo dell’organizzazione');
+  assert.equal(Translator.translate('<input placeholder="e.g. PRJ-1042">', 'it'), '<input placeholder="es. PRJ-1042">');
   assert.deepEqual([
     'YOUR PERSONAL WORKSPACE', 'Organization', 'Manage organizations', 'Open in browser', 'Main views', 'LOCAL',
     'Settings', 'Only on your device', 'Your data. Always with you.', 'No cloud. No account. Everything under control.',

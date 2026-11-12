@@ -1181,10 +1181,10 @@ input[type=radio] {
   white-space: nowrap;
 }
 .activity-table tr.marked {
-  background: color-mix(in srgb, var(--mark) 16%, transparent);
+  background: var(--mark-background);
 }
 .activity-table tr.marked:hover {
-  background: color-mix(in srgb, var(--mark) 22%, transparent);
+  background: var(--mark-background);
 }
 .activity-table tr.marked td:first-child {
   box-shadow: inset 4px 0 var(--mark);
@@ -1224,10 +1224,10 @@ input[type=radio] {
   background: color-mix(in srgb, var(--row-color) 12%, var(--surface));
 }
 .activity-table tr.marked td.row-actions {
-  background: color-mix(in srgb, var(--mark) 16%, var(--surface));
+  background: var(--mark-background), var(--surface);
 }
 .activity-table tr.marked:hover td.row-actions {
-  background: color-mix(in srgb, var(--mark) 22%, var(--surface));
+  background: var(--mark-background), var(--surface);
 }
 .mark-button {
   display: inline-flex;
@@ -1244,7 +1244,7 @@ input[type=radio] {
 }
 .mark-button.is-marked .mark-dot {
   border: 2px solid color-mix(in srgb, var(--mark) 55%, var(--text));
-  background: var(--mark);
+  background: var(--mark-colors);
 }
 .mark-menu {
   --fs: var(--fs-tables);
@@ -1312,7 +1312,7 @@ input[type=radio] {
   gap: 6px;
   padding: 2px 8px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--mark) 18%, transparent);
+  background: color-mix(in srgb, var(--pill) 18%, transparent);
   color: var(--text);
   font-size: calc(11px * var(--fs));
   white-space: nowrap;
@@ -1321,7 +1321,7 @@ input[type=radio] {
   width: calc(8px * var(--fs));
   height: calc(8px * var(--fs));
   border-radius: 50%;
-  background: var(--mark);
+  background: var(--pill);
 }
 .task-card.is-marked {
   border-color: color-mix(in srgb, var(--mark) 55%, var(--border));
@@ -2049,6 +2049,9 @@ tr.duplicate-row td:last-child {
 }
 .activity-table tbody tr.selected td.row-actions {
   background: color-mix(in srgb, var(--accent) 9%, var(--surface));
+}
+.activity-table tbody tr.selected.marked td {
+  background: var(--mark-background), color-mix(in srgb, var(--accent) 9%, var(--surface));
 }
 .table-footer.has-selection {
   background: color-mix(in srgb, var(--accent) 7%, transparent);

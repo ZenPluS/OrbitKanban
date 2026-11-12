@@ -125,7 +125,7 @@ export class ExcelExport extends Component {
             case 'notes': return cell(this.richText(task.notes), { wrap: true });
             case 'urgency': return cell(urgency.name, { fill: this.tint(urgency.color, 0.35) });
             case 'status': return cell(status.name, { fill: this.tint(status.color, 0.35), bold: Boolean(status.highlight) });
-            case 'highlight': return cell(mark?.name || '', mark ? { fill: this.tint(mark.color, 0.45) } : {});
+            case 'highlight': return cell(this.app.presenter.taskHighlights(task).map(item => item.name).join(', '), mark ? { fill: this.tint(mark.color, 0.45), wrap: true } : {});
             case 'tags': return cell(this.app.presenter.tagsOf(task).map(tag => tag.name).join(', '), { wrap: true });
             case 'effort': return cell(task.effortHours ? this.app.presenter.effort(task.effortHours) : '');
             case 'effortHours': return cell(task.effortHours);

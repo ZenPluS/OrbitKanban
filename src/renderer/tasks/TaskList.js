@@ -6,7 +6,8 @@ export class TaskList extends Component {
   sortedRows(tasks) {
     const highlights = this.app.presenter.highlightsOf();
     const ranked = tasks.map(t => {
-      const highlightRank = highlights.findIndex(h => h.id === t.highlightId);
+      const selected = this.app.presenter.taskHighlights(t);
+      const highlightRank = highlights.findIndex(h => selected.some(item => item.id === h.id));
       return { ...t,
         ...Object.fromEntries(ColumnSchema.fieldsOf(this.state.data.settings, 'tasks').map(field => [field.id, field.type === 'select' ? (t.customFields?.[field.id] ? ColumnSchema.choices(field).findIndex(option => option.id === t.customFields[field.id]) : '') : t.customFields?.[field.id] ?? ''])),
         urgencyRank: this.state.data.settings.urgencies.findIndex(s => s.id === t.urgencyId),

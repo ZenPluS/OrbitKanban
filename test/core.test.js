@@ -3,7 +3,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { Common, DataFactory, ArchiveValidator, IssueMatcher, TaskOrder, TaskLinks, OrganizationTransfer, Typography, Limits, ThemeCatalog, TaskColumns, NavigationSections, TaskGroups } = require('../src/shared/domain');
 const { ThemeGenerator, ColorMath } = require('../src/shared/graphics');
-const { PlatformLinks } = require('../src/shared/columns');
+const { ColumnCleanup, ColumnSchema, PlatformLinks } = require('../src/shared/columns');
 
 test('picker HSV conversion handles endpoints, achromatic colors and short HEX', () => {
   for (const [hex, hsv] of [
@@ -1070,6 +1070,28 @@ test('highlighters and columns travel with settings and data exports', () => {
   assert.equal(applied.tasks.find(item => item.id === red.id).highlightId, 'other-red');
   assert.equal(applied.tasks.find(item => item.id === task.id).highlightId, '');
   assert.deepEqual(applied.settings.taskColumns, settings.taskColumns);
+});
+test('multiple task highlights survive archive and organization transfers and are cleaned independently', () => {
+  const organization = sampleOrganization(), task = organization.data.tasks[0];
+  const [first, second] = organization.data.settings.highlights;
+  ColumnSchema.setTaskHighlightIds(task, [first.id, second.id]);
+  const archive = ArchiveValidator.migrateArchive({ version: 2, activeOrganizationId: organization.id, organizations: [organization] });
+  assert.deepEqual(ColumnSchema.taskHighlightIds(archive.organizations[0].data.tasks[0]), [first.id, second.id]);
+  const file = OrganizationTransfer.parseOrganizationFile(OrganizationTransfer.organizationExport(organization, 'organization'));
+  const imported = OrganizationTransfer.importedOrganizationData(file, { themes: true, settings: true, data: true }, 'en');
+  assert.deepEqual(ColumnSchema.taskHighlightIds(imported.tasks[0]), [first.id, second.id]);
+  const settings = OrganizationTransfer.organizationExport(organization, 'settings');
+  settings.settings.highlights = [{ ...second, id: 'remapped-second' }];
+  const remapped = OrganizationTransfer.applyOrganizationImport(organization.data, OrganizationTransfer.parseOrganizationFile(settings), { settings: true });
+  assert.deepEqual(ColumnSchema.taskHighlightIds(remapped.tasks[0]), ['remapped-second']);
+  const cleaned = structuredClone(organization.data);
+  cleaned.settings.highlights = cleaned.settings.highlights.filter(option => option.id !== first.id);
+  ColumnCleanup.cleanData(cleaned);
+  assert.deepEqual(ColumnSchema.taskHighlightIds(cleaned.tasks[0]), [second.id]);
+  assert.equal(cleaned.tasks[0].additionalHighlightIds, undefined);
+  const invalid = structuredClone(organization.data);
+  invalid.tasks[0].additionalHighlightIds = [first.id];
+  assert.throws(() => ArchiveValidator.validateData(invalid), /invalid task highlight/i);
 });
 test('organization files from previous versions still import and keep current highlights', () => {
   const organization = sampleOrganization();

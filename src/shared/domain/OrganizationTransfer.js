@@ -31,7 +31,7 @@ class OrganizationTransfer {
     highlight: ['id', 'name', 'color'],
     section: ['id', 'type', 'name', 'viewId'],
     column: ['id', 'visible'],
-    task: ['id', 'code', 'sequence', 'description', 'notes', 'releaseDate', 'statusId', 'urgencyId', 'effortHours', 'hidden', 'highlightId', 'tagIds', 'customFields'],
+    task: ['id', 'code', 'sequence', 'description', 'notes', 'releaseDate', 'statusId', 'urgencyId', 'effortHours', 'hidden', 'highlightId', 'additionalHighlightIds', 'tagIds', 'customFields'],
     issue: ['id', 'code', 'incident', 'problem', 'customFields'],
     group: ['id', 'name', 'color', 'description', 'taskIds']
   };
@@ -227,7 +227,7 @@ class OrganizationTransfer {
       }
       if (incoming.highlights) {
         const highlight = OrganizationTransfer.#colorOptionRemapper(settings.highlights || [], incoming.highlights);
-        for (const task of next.tasks) task.highlightId = highlight(task.highlightId);
+        for (const task of next.tasks) ColumnSchema.setTaskHighlightIds(task, ColumnSchema.taskHighlightIds(task).map(highlight));
         settings.highlights = incoming.highlights;
       }
       if (incoming.tags) {
@@ -260,16 +260,21 @@ class OrganizationTransfer {
       settings.tags ??= [];
       const tag = OrganizationTransfer.#tagRemapper(file.data.tags || [], settings.tags, true);
       // Files from versions without highlighters do not erase the highlight of the tasks they update.
-      const existing = new Map(options.dataMode === 'replace' ? [] : next.tasks.map(task => [task.id, task.highlightId]));
+      const existing = new Map(options.dataMode === 'replace' ? [] : next.tasks.map(task => [task.id, ColumnSchema.taskHighlightIds(task)]));
       const existingTags = new Map(options.dataMode === 'replace' ? [] : next.tasks.map(task => [task.id, task.tagIds || []]));
       const oldTasks = new Map(options.dataMode === 'replace' ? [] : next.tasks.map(task => [task.id, task.customFields]));
       const oldIssues = new Map(options.dataMode === 'replace' ? [] : next.issues.map(issue => [issue.id, issue.customFields]));
-      const tasks = structuredClone(file.data.tasks).map(task => ({
-        ...task, statusId: status(task.statusId), urgencyId: urgency(task.urgencyId),
-        highlightId: task.highlightId === undefined ? existing.get(task.id) || '' : highlight(task.highlightId),
-        tagIds: task.tagIds === undefined ? existingTags.get(task.id) || [] : [...new Set(task.tagIds.map(tag).filter(Boolean))],
-        ...(task.customFields !== undefined || oldTasks.get(task.id) !== undefined ? { customFields: { ...(oldTasks.get(task.id) || {}), ...ColumnMerger.remapValues(task.customFields, maps.tasks.mapping, maps.tasks.valueMappings) } } : {})
-      }));
+      const tasks = structuredClone(file.data.tasks).map(task => {
+        const highlights = task.highlightId === undefined && task.additionalHighlightIds === undefined
+          ? existing.get(task.id) || [] : ColumnSchema.taskHighlightIds(task).map(highlight);
+        const result = {
+          ...task, statusId: status(task.statusId), urgencyId: urgency(task.urgencyId),
+          tagIds: task.tagIds === undefined ? existingTags.get(task.id) || [] : [...new Set(task.tagIds.map(tag).filter(Boolean))],
+          ...(task.customFields !== undefined || oldTasks.get(task.id) !== undefined ? { customFields: { ...(oldTasks.get(task.id) || {}), ...ColumnMerger.remapValues(task.customFields, maps.tasks.mapping, maps.tasks.valueMappings) } } : {})
+        };
+        ColumnSchema.setTaskHighlightIds(result, highlights);
+        return result;
+      });
       const issues = structuredClone(file.data.issues).map(issue => ({ ...issue, ...(issue.customFields !== undefined || oldIssues.get(issue.id) !== undefined ? { customFields: { ...(oldIssues.get(issue.id) || {}), ...ColumnMerger.remapValues(issue.customFields, maps.issues.mapping, maps.issues.valueMappings) } } : {}) }));
       if (options.dataMode === 'replace') { next.tasks = tasks; next.issues = issues; }
       else {

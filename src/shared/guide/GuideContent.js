@@ -118,8 +118,8 @@ class GuideContent {
           'Turn on the star of a status in its label settings: every task in that status is highlighted automatically.'
         ] },
         { title: 'Highlighters', items: [
-          'Pick a color in the highlighter bar, then click rows to color them; click again to remove the color. The **Eraser** clears highlights and `Esc` stops.',
-          'The ● button at the end of each row and the task editor set the highlight too. The highlight filter shows highlighted rows, rows without highlight or a single color.',
+          'Pick a color in the highlighter bar, then click rows to add or remove that color. A row can have several colors alongside its automatic status color. The **Eraser** clears all manual colors and `Esc` stops.',
+          'The ● button at the end of each row and the task editor also let you select multiple colors. The highlight filter shows highlighted rows, rows without highlight or those containing a selected color.',
           'Names, colors and order of up to 16 highlighters are managed in the settings.'
         ] },
         { title: 'Tags', items: [

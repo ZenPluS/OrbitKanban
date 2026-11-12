@@ -1,6 +1,6 @@
 // Task editor dialog.
 import { Component } from '../core/Component.js';
-import { IssueMatcher } from '../shared.js';
+import { ColumnSchema, IssueMatcher } from '../shared.js';
 
 export class TaskDialog extends Component {
   taskDialog(existing) {
@@ -10,13 +10,15 @@ export class TaskDialog extends Component {
       effortHours: 0, releaseDate: '', notes: '', hidden: false, highlightId: '', tagIds: []
     };
     const days = Math.floor(t.effortHours / this.state.data.settings.hoursPerDay), hours = Math.round((t.effortHours - days * this.state.data.settings.hoursPerDay) * 100) / 100;
+    const highlightOptions = this.app.presenter.highlightsOf();
+    const highlightControl = values => `<button type="button" class="task-tags-button" data-choice-picker="task-highlight" data-choice-field="highlight" data-own-picker aria-haspopup="dialog" aria-expanded="false" aria-label="${this.esc(this.t("Highlight"))}"><span class="tag-chips">${highlightOptions.filter(mark => values.includes(mark.id)).map(mark => this.app.presenter.pill(mark.name, mark.color, 'tag-pill')).join('') || `<span class="muted">${this.esc(this.t("No highlight"))}</span>`}</span>${this.ico('chevron-down')}</button>${values.map(id => `<input type="hidden" name="highlightId" value="${this.esc(id)}">`).join('')}`;
     this.app.modal.openModal(this.ui`<form id="task-form" class="task-form"><div class="modal-heading"><div><div class="eyebrow">TASK</div><h2>${this.tr(existing ? "Edit task" : "A new direction")}</h2></div>${this.app.groupEditor.taskGroupsPicker(t.id)}<button type="button" class="icon-button" data-close aria-label="Close">${this.ico('close')}</button></div><div class="task-edit-layout"></div><div class="task-edit-pool">
-    <label class="field">Portal code<input name="code" maxlength="200" value="${this.esc(t.code)}" placeholder="es. PRJ-1042"></label>
+    <label class="field">Portal code<input name="code" maxlength="200" value="${this.esc(t.code)}" placeholder="e.g. PRJ-1042"></label>
     <label class="field">Sequence<input name="sequence" type="number" min="0" step="1" value="${t.sequence}"></label>
     <label class="field">Urgency<select name="urgencyId">${this.app.presenter.optionList(this.state.data.settings.urgencies, t.urgencyId, "Unassigned")}</select></label>
     <label class="field">Status<select name="statusId">${this.app.presenter.optionList(this.state.data.settings.statuses, t.statusId, "Unassigned")}</select></label>
     <label class="field">Release date<input name="releaseDate" type="date" value="${this.esc(t.releaseDate)}"></label>
-    <label class="field" title="Colors the row in the task list. Colors are managed in Settings › Highlighters.">Highlight<select name="highlightId">${this.app.presenter.optionList(this.app.presenter.highlightsOf(), this.app.rowMarks.currentMark(t), "No highlight")}</select></label>
+    ${this.hasColumn('highlight') ? `<div class="field" data-form-field="highlight"><span class="field-label">${this.esc(this.t("Highlight"))}</span><div class="highlight-picker">${highlightControl(this.app.rowMarks.currentMarks(t))}</div></div>` : ''}
     <label class="field"><span class="task-effort-label">Effort in days <small>${this.esc(this.app.transfer.fillText("1 day = {0} hours", this.state.data.settings.hoursPerDay))}</small></span><input name="days" type="number" min="0" step="0.01" value="${days}"></label>
     <label class="field">Additional effort in hours<input name="hours" type="number" min="0" step="0.01" value="${hours}"></label>
     <label class="field full checkbox-field"><input type="checkbox" name="hidden" ${t.hidden ? 'checked' : ''}> Hide from the task list only (still visible in milestones and kanban)</label>
@@ -46,11 +48,26 @@ export class TaskDialog extends Component {
     form.elements.code?.addEventListener('input', updateMatches); updateMatches(); this.app.fieldEditors.wireEditors();
     this.app.cells.wirePlatformPreviews(form);
     this.app.groupEditor.wireTaskGroupsPicker(form);
+    const wireHighlightPicker = () => {
+      const container = form.querySelector('.highlight-picker'), button = container?.querySelector('[data-choice-picker]');
+      if (!button) return;
+      button.onclick = () => this.app.tagMenu.openTagMenu(button, {
+        form, field: { id: 'highlight', name: this.t("Highlight"), options: highlightOptions },
+        values: new FormData(form).getAll('highlightId'),
+        apply: async (_added, _removed, chosen) => {
+          container.innerHTML = highlightControl(chosen);
+          container.dispatchEvent(new Event('change', { bubbles: true }));
+          wireHighlightPicker();
+        }
+      });
+    };
+    wireHighlightPicker();
     form.onsubmit = this.app.notifier.action(async event => {
       event.preventDefault();
       const fields = new FormData(form);
       this.app.taskForm.checkRequiredFields(form, 'tasks', {
-        effort: () => Number(fields.get('days')) * this.state.data.settings.hoursPerDay + Number(fields.get('hours')) <= 0
+        effort: () => Number(fields.get('days')) * this.state.data.settings.hoursPerDay + Number(fields.get('hours')) <= 0,
+        highlight: () => !fields.getAll('highlightId').length
       });
       const sequence = String(fields.get('sequence') ?? '').trim();
       const item = {
@@ -58,8 +75,9 @@ export class TaskDialog extends Component {
         description: this.app.richText.sanitize(this.$('#description-editor')?.innerHTML || ''), notes: this.app.richText.sanitize(this.$('#notes-editor')?.innerHTML || ''),
         urgencyId: fields.get('urgencyId') || '', statusId: fields.get('statusId') || '', releaseDate: fields.get('releaseDate') || '',
         effortHours: Math.round((Number(fields.get('days')) * this.state.data.settings.hoursPerDay + Number(fields.get('hours'))) * 100) / 100,
-        hidden: fields.has('hidden'), highlightId: fields.get('highlightId') || '', customFields: this.app.fieldEditors.readCustomEditors(form, 'tasks')
+        hidden: fields.has('hidden'), customFields: this.app.fieldEditors.readCustomEditors(form, 'tasks')
       };
+      ColumnSchema.setTaskHighlightIds(item, fields.getAll('highlightId'));
       this.app.rowMarks.pendingMarks.delete(item.id);
       await this.app.history.commit(next => {
         const index = next.tasks.findIndex(x => x.id === item.id);

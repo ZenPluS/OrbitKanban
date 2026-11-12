@@ -4,7 +4,7 @@
 
 | | |
 | --- | --- |
-| **Current version** | 3.3.4 |
+| **Current version** | 3.4.0 |
 | **Platform** | Windows 10 / 11, 64-bit |
 | **Distribution** | Single portable executable, `OrbitKanban-Portable.exe` |
 | **Network** | Not required. Used only for optional update checks against GitHub |
@@ -283,12 +283,12 @@ The round button at the end of a row hides the task **from the task list only**,
 There are two independent ways to make rows stand out:
 
 - **Status highlight (automatic).** The ★ next to a status highlights every task in that status.
-- **Highlighters (manual).** These are named colors, up to 16 per organization, such as *Attention*, *Blocking* or *Ready*. A highlighter takes precedence over the status star. You can apply one in any of these ways:
-  - pick a color in the **Highlighter** bar and click rows (**Eraser** removes the color; `Esc` stops highlighting);
-  - use the ● menu at the end of a row;
-  - set the **Highlight** field in the task editor.
+- **Highlighters (manual).** These are named colors, up to 16 per organization, such as *Attention*, *Blocking* or *Ready*. A task can have several: the row displays bands for each color and also its automatic status color, if enabled. You can apply them in any of these ways:
+  - pick a color in the **Highlighter** bar and click rows to toggle that color (**Eraser** removes all manual colors; `Esc` stops highlighting);
+  - use the ● menu at the end of a row to toggle individual colors or clear them all;
+  - choose multiple colors in the **Highlight** field in the task editor.
 
-  Highlights also appear on milestone and kanban cards and can be filtered and searched.
+  Highlights also appear on milestone and kanban cards and can be filtered and searched. Bulk editing a highlight replaces the selected tasks' manual colors with the chosen color, or clears them.
 
 **Tags** form a catalog of up to 100 colored labels per organization, with unique names of up to 60 characters. Assign several tags to a task from its tags cell in the list and press **Apply**. Bulk edit adds or removes tags across many tasks. Renaming, recoloring or reordering a tag updates every task that uses it. Deleting a tag removes it from all tasks when settings are saved.
 
@@ -746,7 +746,7 @@ Tags are never moved. Bump the version before releasing new sources:
 npm version minor --no-git-tag-version --ignore-scripts
 ```
 
-For a specifically numbered release, use `npm version 3.3.4 --no-git-tag-version --ignore-scripts` instead. To update the local portable copy too, run the pipeline **without `-NoDeliver`** and close the app first. The script replaces only the executable, not `dist/data`.
+For a specifically numbered release, use `npm version 3.4.0 --no-git-tag-version --ignore-scripts` instead. To update the local portable copy too, run the pipeline **without `-NoDeliver`** and close the app first. The script replaces only the executable, not `dist/data`.
 
 The script refuses to reuse a tagged version for different sources. If a build or test fails, nothing is committed or pushed.
 
@@ -754,6 +754,7 @@ The script refuses to reuse a tagged version for different sources. If a build o
 
 | Version | Changes |
 | --- | --- |
+| **3.4.0** | Multiple simultaneous task highlights, including automatic status colors, with independent toggles and compatible archive transfer |
 | **3.3.4** | Unsupported attachment type errors stay in front of the active dialog for both file-picker and drag-and-drop uploads |
 | **3.3.3** | Task attachment area is part of the task form layout and can be moved, resized, or removed and restored in the form designer |
 | **3.3.2** | Attachment deletion from the task editor uses a themed in-app confirmation overlay and keeps the editor open |
