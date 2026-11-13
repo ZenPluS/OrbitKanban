@@ -35,6 +35,17 @@ class ColorMath {
     return (Math.max(first, second) + 0.05) / (Math.min(first, second) + 0.05);
   }
   static meetsContrast = (color, against, minimum) => against.every(other => ColorMath.contrastRatio(color, other) >= minimum);
+  static readableSurface(color) {
+    const text = ColorMath.contrastRatio(color, '#000000') >= ColorMath.contrastRatio(color, '#ffffff') ? '#000000' : '#ffffff';
+    const base = ColorMath.hexToRgb(color), target = ColorMath.hexToRgb(text);
+    const mix = amount => ColorMath.rgbToHex(base.map((channel, index) => channel * (1 - amount) + target[index] * amount));
+    let low = 0, high = 0.12;
+    for (let step = 0; step < 16; step++) {
+      const middle = (low + high) / 2;
+      if (ColorMath.contrastRatio(mix(middle), text) >= ColorMath.WCAG_TEXT_CONTRAST) low = middle; else high = middle;
+    }
+    return { text, header: mix(low) };
+  }
   // OKLCH keeps hue and chroma while only the perceived lightness moves, so corrected colors stay recognisable.
   static toOklch(color) {
     const [r, g, b] = ColorMath.hexToRgb(color).map(ColorMath.#srgbToLinear);

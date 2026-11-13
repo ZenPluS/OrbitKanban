@@ -15,15 +15,16 @@ export class FieldEditors extends Component {
         editor.focus(); document.execCommand(b.dataset.command, false);
       };
     });
-    document.querySelectorAll('.editable').forEach(el => {
-      el.addEventListener('paste', e => {
-        e.preventDefault();
-        const html = e.clipboardData.getData('text/html');
-        if (html) document.execCommand('insertHTML', false, this.app.richText.sanitize(html));
-        else document.execCommand('insertText', false, e.clipboardData.getData('text/plain'));
-      });
-      el.addEventListener('drop', e => e.preventDefault());
+    document.querySelectorAll('.editable').forEach(el => this.wireEditable(el));
+  }
+  wireEditable(el) {
+    el.addEventListener('paste', e => {
+      e.preventDefault();
+      const html = e.clipboardData.getData('text/html');
+      if (html) document.execCommand('insertHTML', false, this.app.richText.sanitize(html));
+      else document.execCommand('insertText', false, e.clipboardData.getData('text/plain'));
     });
+    el.addEventListener('drop', e => e.preventDefault());
   }
   customEditors(kind, record, wrap = true) {
     const fields = ColumnSchema.fieldsOf(this.state.data.settings, kind);

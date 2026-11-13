@@ -931,13 +931,54 @@ export class SmokeTests extends Component {
         this.$('#new-todo').click();
         const form = this.$('#todo-form');
         form.elements.title.value = 'Smoke checklist';
-        form.elements.text.value = 'Portable note';
+        const editor = this.$('#todo-note-editor');
+        editor.textContent = 'Portable note';
+        const noteColor = this.$('#todo-color');
+        noteColor.value = '#ffffff'; noteColor.dispatchEvent(new Event('input'));
+        const headerColor = getComputedStyle(form.querySelector('.todo-form-header')).backgroundColor;
+        check(getComputedStyle(form).backgroundColor === 'rgb(255, 255, 255)' && headerColor !== 'rgb(255, 255, 255)' && getComputedStyle(editor).color === 'rgb(0, 0, 0)', 'White sticky note uses a darker header and readable text');
+        for (const key of ['b', 'i', 'u']) {
+          editor.focus();
+          const selection = window.getSelection(), range = document.createRange();
+          range.selectNodeContents(editor); selection.removeAllRanges(); selection.addRange(range);
+          editor.dispatchEvent(new KeyboardEvent('keydown', { key, ctrlKey: true, bubbles: true, cancelable: true }));
+        }
+        check(Boolean(editor.querySelector('b, strong')) && Boolean(editor.querySelector('i, em')) && Boolean(editor.querySelector('u')), 'Ctrl+B, Ctrl+I and Ctrl+U format selected note text');
         this.$('#todo-add-item').click();
-        this.$('.todo-item-text').value = 'First item';
+        const itemEditor = this.$('.todo-item-text');
+        itemEditor.textContent = 'First item';
+        for (const key of ['b', 'i', 'u']) {
+          itemEditor.focus();
+          const itemRange = document.createRange(), itemSelection = window.getSelection();
+          itemRange.selectNodeContents(itemEditor); itemSelection.removeAllRanges(); itemSelection.addRange(itemRange);
+          itemEditor.dispatchEvent(new KeyboardEvent('keydown', { key, ctrlKey: true, bubbles: true, cancelable: true }));
+        }
+        check(Boolean(itemEditor.querySelector('b, strong')) && Boolean(itemEditor.querySelector('i, em')) && Boolean(itemEditor.querySelector('u')), 'All three keyboard formatting shortcuts also work on checklist items');
         form.requestSubmit();
         await waitFor(() => !this.state.saving && !this.$('#modal').open && this.state.data.todos.some(card => card.title === 'Smoke checklist'));
         const card = this.state.data.todos.find(entry => entry.title === 'Smoke checklist'), row = () => this.$(`[data-todo="${CSS.escape(card.id)}"]`);
-        check(row().textContent.includes('Portable note') && (await this.workspaceApi.load()).data.todos.find(entry => entry.id === card.id).items[0].text === 'First item', 'To-do cards and checklist items persist in the portable archive');
+        const savedCard = (await this.workspaceApi.load()).data.todos.find(entry => entry.id === card.id);
+        check(row().textContent.includes('Portable note') && row().querySelector('b, strong') && row().querySelector('i, em') && row().querySelector('u') && savedCard.items[0].text === 'First item' && savedCard.items[0].textHtml.includes('<b>') && savedCard.textHtml.includes('<u>'), 'Formatted to-do cards and checklist items persist in the portable archive');
+        await this.app.history.commit(next => {
+          next.todos.push({ id: 'todo-drag-a', title: 'Drag A', text: 'Old <note>\nSecond line', color: '#ffffff', pinned: false, items: [{ id: 'old-item', text: 'Old <item>', done: false }] }, { id: 'todo-drag-b', title: 'Drag B', text: '', color: '#000000', pinned: false, items: [] });
+        });
+        this.app.shell.render();
+        this.$('[data-todo="todo-drag-a"] [data-todo-edit]').click();
+        check(this.$('#todo-note-editor').innerText === 'Old <note>\nSecond line' && this.$('.todo-item-text').innerText === 'Old <item>' && !this.$('#todo-note-editor note'), 'Legacy plain-text notes and checklist items open without interpreting markup');
+        this.$('#todo-form').requestSubmit();
+        await waitFor(() => !this.state.saving && !this.$('#modal').open);
+        check(this.state.data.todos.find(entry => entry.id === 'todo-drag-a').text === 'Old <note>\nSecond line' && this.state.data.todos.find(entry => entry.id === 'todo-drag-a').items[0].text === 'Old <item>', 'Saving an unchanged legacy card preserves its text and line breaks');
+        const from = this.$('[data-todo="todo-drag-b"] [data-drag-handle]'), target = this.$('[data-todo="todo-drag-a"]'), transfer = new DataTransfer(), rect = target.getBoundingClientRect();
+        from.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: transfer }));
+        target.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: transfer, clientX: rect.left + 5 }));
+        target.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: transfer, clientX: rect.left + 5 }));
+        await waitFor(() => !this.state.saving && this.state.data.todos.findIndex(entry => entry.id === 'todo-drag-b') < this.state.data.todos.findIndex(entry => entry.id === 'todo-drag-a'));
+        check((await this.workspaceApi.load()).data.todos.map(entry => entry.id).indexOf('todo-drag-b') < (await this.workspaceApi.load()).data.todos.map(entry => entry.id).indexOf('todo-drag-a'), 'Dragging sticky notes changes their persisted order');
+        this.$('[data-todo="todo-drag-b"] [data-drag-handle]').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+        await waitFor(() => !this.state.saving && this.state.data.todos.findIndex(entry => entry.id === 'todo-drag-a') < this.state.data.todos.findIndex(entry => entry.id === 'todo-drag-b'));
+        check(document.activeElement.closest('[data-todo]')?.dataset.todo === 'todo-drag-b', 'Keyboard reordering saves the order and retains focus');
+        await this.app.history.commit(next => { next.todos = next.todos.filter(entry => !['todo-drag-a', 'todo-drag-b'].includes(entry.id)); });
+        this.app.shell.render();
         row().querySelector('[data-todo-item]').click();
         await waitFor(() => !this.state.saving && this.state.data.todos.find(entry => entry.id === card.id).items[0].done);
         check(row().querySelector('.is-done') && (await this.workspaceApi.load()).data.todos.find(entry => entry.id === card.id).items[0].done, 'Checking an item saves its completed state');

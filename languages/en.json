@@ -6,6 +6,10 @@
   "locale": "en-GB",
   "notes": "English is the source language. Keep message, term, and plural keys in English; translate only values. Empty or missing values fall back to English. Preserve placeholders such as {0}. Guide texts are terms: keep the **bold** and `key` markers, and write key names such as Shift or Enter as in their own terms.",
   "messages": {
+    "The checklist item is too long.": "The checklist item is too long.",
+    "The note is too long.": "The note is too long.",
+    "Card order saved.": "Card order saved.",
+    "Pinned cards stay above unpinned cards. Pin or unpin a card to move it between groups.": "Pinned cards stay above unpinned cards. Pin or unpin a card to move it between groups.",
     "Tasks and issues are replaced; groups and cards are replaced if present in the file.": "Tasks and issues are replaced; groups and cards are replaced if present in the file.",
     "All current tasks and issues will be deleted and replaced; groups and cards will also be replaced if present in the file.": "All current tasks and issues will be deleted and replaced; groups and cards will also be replaced if present in the file.",
     "Clear workspace data": "Clear workspace data",
@@ -1076,6 +1080,8 @@
     "Invalid task identifier.": "Invalid task identifier."
   },
   "terms": {
+    "Use **New card** to add a title, a formatted note, a color and checklist items. Use `Ctrl`+`B`, `Ctrl`+`I` and `Ctrl`+`U` for bold, italic and underline. Check items directly on the card.": "Use **New card** to add a title, a formatted note, a color and checklist items. Use `Ctrl`+`B`, `Ctrl`+`I` and `Ctrl`+`U` for bold, italic and underline. Check items directly on the card.",
+    "Drag a card by its handle, or use the arrow keys, to reorder it. Pinned cards stay above unpinned cards; pin or unpin a card to move it between groups.": "Drag a card by its handle, or use the arrow keys, to reorder it. Pinned cards stay above unpinned cards; pin or unpin a card to move it between groups.",
     "**Clear workspace data** deletes the tasks, associations, groups and to-do cards of the organization, keeping settings and themes.": "**Clear workspace data** deletes the tasks, associations, groups and to-do cards of the organization, keeping settings and themes.",
     "To-do lists": "To-do lists",
     "Keep notes and checklists together in this organization.": "Keep notes and checklists together in this organization.",

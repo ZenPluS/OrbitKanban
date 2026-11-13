@@ -1,7 +1,7 @@
 'use strict';
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { Common, DataFactory, ArchiveValidator, IssueMatcher, TaskOrder, TaskLinks, OrganizationTransfer, Typography, Limits, ThemeCatalog, TaskColumns, NavigationSections, TaskGroups } = require('../src/shared/domain');
+const { Common, DataFactory, ArchiveValidator, IssueMatcher, TaskOrder, TaskLinks, OrganizationTransfer, Typography, Limits, ThemeCatalog, TaskColumns, NavigationSections, TaskGroups, TodoLists } = require('../src/shared/domain');
 const { ThemeGenerator, ColorMath } = require('../src/shared/graphics');
 const { ColumnCleanup, ColumnSchema, PlatformLinks } = require('../src/shared/columns');
 
@@ -26,6 +26,14 @@ test('picker HSV roundtrips preserve RGB values without cumulative drift', () =>
 test('picker color conversion rejects invalid channels and HEX strings', () => {
   for (const color of ['', '#12', '#abcd', '#aabbccdd', '#zzzzzz', 'red', null]) assert.throws(() => ColorMath.hexToHsv(color), /Invalid color/);
   for (const values of [{ h: -1, s: 0, v: 0 }, { h: 361, s: 0, v: 0 }, { h: 0, s: 101, v: 0 }, { h: 0, s: 0, v: -1 }, { h: 0, s: NaN, v: 0 }, {}]) assert.throws(() => ColorMath.hsvToHex(values), /Invalid color/);
+});
+test('sticky note text contrasts with both the selected color and its header', () => {
+  for (let r = 0; r < 256; r += 17) for (let g = 0; g < 256; g += 17) for (let b = 0; b < 256; b += 17) {
+    const color = ColorMath.rgbToHex([r, g, b]), style = ColorMath.readableSurface(color);
+    assert.ok(ColorMath.contrastRatio(color, style.text) >= 4.5, color);
+    assert.ok(ColorMath.contrastRatio(style.header, style.text) >= 4.5, color);
+  }
+  assert.ok(ColorMath.relativeLuminance(ColorMath.readableSurface('#ffffff').header) < ColorMath.relativeLuminance('#ffffff'));
 });
 
 test('font choices are validated and migrate without changing existing data', () => {
@@ -1223,7 +1231,7 @@ test('to-do cards migrate once and survive archive and organization transfers', 
   migrated.settings.navigation.pop();
   assert.ok(!ArchiveValidator.migrateArchive(migrated).organizations[0].data.settings.navigation.some(section => section.type === 'todos'));
   const source = DataFactory.baseData('en');
-  source.todos = [{ id: 'card', title: 'Plan', text: 'Notes', color: '#123456', pinned: true, items: [{ id: 'item', text: 'First', done: true }] }];
+  source.todos = [{ id: 'card', title: 'Plan', text: 'Notes', textHtml: '<b>Notes</b>', color: '#123456', pinned: true, items: [{ id: 'item', text: 'First', textHtml: '<i>First</i>', done: true }] }];
   const restored = ArchiveValidator.migrateArchive(source).organizations[0].data;
   assert.deepEqual(restored.todos, source.todos);
   const file = OrganizationTransfer.parseOrganizationFile(OrganizationTransfer.organizationExport({ name: 'Source', data: source }, 'data'));
@@ -1239,4 +1247,14 @@ test('to-do cards migrate once and survive archive and organization transfers', 
   broken.todos[0].items.pop();
   broken.todos[0].color = 'invalid';
   assert.throws(() => ArchiveValidator.validateData(broken), /Invalid to-do cards/);
+});
+test('to-do cards reorder by target without losing other cards or crossing pinned groups', () => {
+  const card = (id, pinned = false) => ({ id, pinned });
+  const cards = [card('a'), card('hidden'), card('b'), card('c'), card('pin', true)];
+  TodoLists.move(cards, 'c', 'a', false);
+  assert.deepEqual(cards.map(entry => entry.id), ['c', 'a', 'hidden', 'b', 'pin']);
+  TodoLists.move(cards, 'c', 'b', true);
+  assert.deepEqual(cards.map(entry => entry.id), ['a', 'hidden', 'b', 'c', 'pin']);
+  assert.throws(() => TodoLists.move(cards, 'c', 'pin', true), /Pinned cards/);
+  assert.throws(() => TodoLists.move(cards, 'missing', 'a', false), /no longer exists/);
 });

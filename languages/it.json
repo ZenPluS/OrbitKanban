@@ -6,6 +6,10 @@
   "locale": "it-IT",
   "notes": "English is the source language of OrbitKanban. Keep message, term, and plural keys in English; translate their values into Italian. Preserve placeholders such as {0}.",
   "messages": {
+    "The checklist item is too long.": "La voce della checklist è troppo lunga.",
+    "The note is too long.": "La nota è troppo lunga.",
+    "Card order saved.": "Ordine delle schede salvato.",
+    "Pinned cards stay above unpinned cards. Pin or unpin a card to move it between groups.": "Le schede fissate restano sopra le altre. Fissa o rimuovi una scheda dai fissati per spostarla tra i gruppi.",
     "Tasks and issues are replaced; groups and cards are replaced if present in the file.": "Le attività e le issue vengono sostituite; i gruppi e le schede vengono sostituiti se presenti nel file.",
     "All current tasks and issues will be deleted and replaced; groups and cards will also be replaced if present in the file.": "Tutte le attività e le issue correnti saranno eliminate e sostituite; anche i gruppi e le schede saranno sostituiti se presenti nel file.",
     "Clear workspace data": "Cancella dati dello spazio di lavoro",
@@ -1076,6 +1080,8 @@
     "The task code folder must be a regular directory.": "La cartella del codice attività deve essere una directory regolare."
   },
   "terms": {
+    "Use **New card** to add a title, a formatted note, a color and checklist items. Use `Ctrl`+`B`, `Ctrl`+`I` and `Ctrl`+`U` for bold, italic and underline. Check items directly on the card.": "Usa **Nuova scheda** per aggiungere titolo, nota formattata, colore e voci alla checklist. Usa `Ctrl`+`B`, `Ctrl`+`I` e `Ctrl`+`U` per grassetto, corsivo e sottolineato. Spunta le voci direttamente sulla scheda.",
+    "Drag a card by its handle, or use the arrow keys, to reorder it. Pinned cards stay above unpinned cards; pin or unpin a card to move it between groups.": "Trascina una scheda dalla maniglia, oppure usa le frecce, per riordinarla. Le schede fissate restano sopra le altre; fissa o rimuovi una scheda dai fissati per spostarla tra i gruppi.",
     "**Clear workspace data** deletes the tasks, associations, groups and to-do cards of the organization, keeping settings and themes.": "**Cancella dati dello spazio di lavoro** elimina le attività, le associazioni, i gruppi e le schede da fare dell'organizzazione, conservando impostazioni e temi.",
     "To-do lists": "Liste da fare",
     "Keep notes and checklists together in this organization.": "Raccogli note e checklist in questa organizzazione.",

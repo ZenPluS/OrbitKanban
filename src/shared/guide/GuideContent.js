@@ -225,7 +225,8 @@ class GuideContent {
       summary: 'Keep notes and checklists together in this organization.',
       topics: [
         { title: 'Notes and checklists', items: [
-          'Use **New card** to add a title, a note, a color and checklist items. Check items directly on the card, or edit and remove them.',
+          'Use **New card** to add a title, a formatted note, a color and checklist items. Use `Ctrl`+`B`, `Ctrl`+`I` and `Ctrl`+`U` for bold, italic and underline. Check items directly on the card.',
+          'Drag a card by its handle, or use the arrow keys, to reorder it. Pinned cards stay above unpinned cards; pin or unpin a card to move it between groups.',
           'Pin important cards to the top, search their contents, or delete a card after confirmation.',
           'Cards are independent of tasks and travel with the organization data, backups, undo and redo.'
         ] }

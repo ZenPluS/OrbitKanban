@@ -35,7 +35,7 @@ class OrganizationTransfer {
     task: ['id', 'code', 'sequence', 'description', 'notes', 'releaseDate', 'statusId', 'urgencyId', 'effortHours', 'hidden', 'highlightId', 'additionalHighlightIds', 'tagIds', 'customFields'],
     issue: ['id', 'code', 'incident', 'problem', 'customFields'],
     group: ['id', 'name', 'color', 'description', 'taskIds'],
-    todo: ['id', 'title', 'text', 'color', 'pinned', 'items']
+    todo: ['id', 'title', 'text', 'textHtml', 'color', 'pinned', 'items']
   };
   static organizationExport(organization, kind, { appVersion = '', exportedAt = new Date().toISOString() } = {}) {
     Common.assert(OrganizationTransfer.ORGANIZATION_FILE_KINDS.includes(kind), "Unsupported export type.");
