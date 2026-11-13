@@ -6,6 +6,7 @@
   "locale": "it-IT",
   "notes": "English is the source language of OrbitKanban. Keep message, term, and plural keys in English; translate their values into Italian. Preserve placeholders such as {0}.",
   "messages": {
+    "Formatting": "Formattazione",
     "The checklist item is too long.": "La voce della checklist è troppo lunga.",
     "The note is too long.": "La nota è troppo lunga.",
     "Card order saved.": "Ordine delle schede salvato.",

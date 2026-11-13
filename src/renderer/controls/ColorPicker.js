@@ -65,7 +65,7 @@ export class ColorPicker extends Component {
     <p id="color-error" class="color-error" aria-live="polite" hidden>Enter a HEX color with 3 or 6 digits, for example #A392FF.</p>
     <div class="color-picker-swatches" role="group" aria-label="Theme colors and presets">${swatches.map(color => `<button type="button" class="color-preset" data-color-preset="${color}" style="--picked-color:${color}" aria-label="${color.toUpperCase()}" title="${color.toUpperCase()}"></button>`).join('')}</div>
     <div class="color-picker-actions"><button type="button" class="button small" data-color-cancel>Cancel</button><button type="submit" class="button small primary">Apply</button></div>`;
-    document.body.append(menu);
+    (button.closest('dialog') || document.body).append(menu);
     this.#activeColorPicker = { menu, button, initial };
     const hex = menu.querySelector('#color-hex'), plane = menu.querySelector('.color-plane');
     function update(fromText = false) {

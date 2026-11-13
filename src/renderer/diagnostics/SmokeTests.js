@@ -937,6 +937,26 @@ export class SmokeTests extends Component {
         noteColor.value = '#ffffff'; noteColor.dispatchEvent(new Event('input'));
         const headerColor = getComputedStyle(form.querySelector('.todo-form-header')).backgroundColor;
         check(getComputedStyle(form).backgroundColor === 'rgb(255, 255, 255)' && headerColor !== 'rgb(255, 255, 255)' && getComputedStyle(editor).color === 'rgb(0, 0, 0)', 'White sticky note uses a darker header and readable text');
+        check(form.querySelector('.rich-toolbar').hidden && getComputedStyle(editor).borderWidth === '0px', 'Sticky note opens with a borderless editor and hidden formatting tools');
+        this.$('#todo-format').click();
+        check(!form.querySelector('.rich-toolbar').hidden, 'Formatting tools can be expanded on demand');
+        this.$('#todo-format').click();
+        noteColor.click();
+        const picker = this.$('#color-picker'), preset = picker.querySelector('[data-color-preset]'), presetColor = preset.dataset.colorPreset;
+        preset.focus();
+        const presetBox = preset.getBoundingClientRect();
+        check(picker.parentElement === this.$('#modal') && document.activeElement === preset &&
+          picker.contains(document.elementFromPoint(presetBox.left + presetBox.width / 2, presetBox.top + presetBox.height / 2)),
+        'Color picker inside a modal is focusable and receives real pointer hits');
+        preset.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, isPrimary: true, button: 0 }));
+        preset.click();
+        check(this.$('#color-picker') === picker && noteColor.value === presetColor, 'Choosing a color keeps the modal picker open and previews the selection');
+        picker.requestSubmit();
+        check(!this.$('#color-picker') && noteColor.value === presetColor && this.$('#modal').open, 'Applying a color keeps the note open and retains the chosen color');
+        noteColor.click();
+        this.$('#color-picker [data-color-preset="#ffffff"]')?.click();
+        this.$('#color-picker [data-color-cancel]').click();
+        check(noteColor.value === presetColor, 'Cancelling the modal picker restores its accepted color');
         for (const key of ['b', 'i', 'u']) {
           editor.focus();
           const selection = window.getSelection(), range = document.createRange();
@@ -958,7 +978,7 @@ export class SmokeTests extends Component {
         await waitFor(() => !this.state.saving && !this.$('#modal').open && this.state.data.todos.some(card => card.title === 'Smoke checklist'));
         const card = this.state.data.todos.find(entry => entry.title === 'Smoke checklist'), row = () => this.$(`[data-todo="${CSS.escape(card.id)}"]`);
         const savedCard = (await this.workspaceApi.load()).data.todos.find(entry => entry.id === card.id);
-        check(row().textContent.includes('Portable note') && row().querySelector('b, strong') && row().querySelector('i, em') && row().querySelector('u') && savedCard.items[0].text === 'First item' && savedCard.items[0].textHtml.includes('<b>') && savedCard.textHtml.includes('<u>'), 'Formatted to-do cards and checklist items persist in the portable archive');
+        check(row().textContent.includes('Portable note') && row().querySelector('b, strong') && row().querySelector('i, em') && row().querySelector('u') && savedCard.items[0].text === 'First item' && savedCard.items[0].textHtml.includes('<b>') && savedCard.textHtml.includes('<u>') && savedCard.color === presetColor, 'Formatted to-do cards, chosen colors and checklist items persist in the portable archive');
         await this.app.history.commit(next => {
           next.todos.push({ id: 'todo-drag-a', title: 'Drag A', text: 'Old <note>\nSecond line', color: '#ffffff', pinned: false, items: [{ id: 'old-item', text: 'Old <item>', done: false }] }, { id: 'todo-drag-b', title: 'Drag B', text: '', color: '#000000', pinned: false, items: [] });
         });

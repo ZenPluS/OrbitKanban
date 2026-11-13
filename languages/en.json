@@ -6,6 +6,7 @@
   "locale": "en-GB",
   "notes": "English is the source language. Keep message, term, and plural keys in English; translate only values. Empty or missing values fall back to English. Preserve placeholders such as {0}. Guide texts are terms: keep the **bold** and `key` markers, and write key names such as Shift or Enter as in their own terms.",
   "messages": {
+    "Formatting": "Formatting",
     "The checklist item is too long.": "The checklist item is too long.",
     "The note is too long.": "The note is too long.",
     "Card order saved.": "Card order saved.",

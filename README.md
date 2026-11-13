@@ -4,7 +4,7 @@
 
 | | |
 | --- | --- |
-| **Current version** | 3.6.0 |
+| **Current version** | 3.6.1 |
 | **Platform** | Windows 10 / 11, 64-bit |
 | **Distribution** | Single portable executable, `OrbitKanban-Portable.exe` |
 | **Network** | Not required. Used only for optional update checks against GitHub |
@@ -241,6 +241,8 @@ The sixth default section collects **groups**: named sets of related tasks with 
 ### To-do lists
 
 The To-do lists section collects independent sticky notes and checklist cards for each organization. Each card uses its selected background color, a contrasting header and readable text. Create a card with a title, formatted note, color and checklist items; use **Ctrl+B**, **Ctrl+I** and **Ctrl+U** to format note and checklist text, and tick items directly on the card. Drag the card handle or use its arrow keys to reorder cards; pinned cards stay above unpinned cards, so pin or unpin a card to move it between those groups. Search card contents and delete cards after confirmation. Cards and their order are included in undo/redo, backups and data exports. Older archives receive the section once when there is room; it can also be added in **Settings → Navigation**.
+
+The compact card editor keeps the title, note and checklist borderless. Use **Formatting** in the bottom toolbar to show or hide formatting tools, and the color swatch to preview a background color. **Apply** accepts the color without closing the card; **Cancel** in the picker restores its previous color. Use **Save card** to save your edits.
 
 ### Navigation sections
 
@@ -751,7 +753,7 @@ Tags are never moved. Bump the version before releasing new sources:
 npm version minor --no-git-tag-version --ignore-scripts
 ```
 
-For a specifically numbered release, use `npm version 3.6.0 --no-git-tag-version --ignore-scripts` instead. To update the local portable copy too, run the pipeline **without `-NoDeliver`** and close the app first. The script replaces only the executable, not `dist/data`.
+For a specifically numbered release, use `npm version 3.6.1 --no-git-tag-version --ignore-scripts` instead. To update the local portable copy too, run the pipeline **without `-NoDeliver`** and close the app first. The script replaces only the executable, not `dist/data`.
 
 The script refuses to reuse a tagged version for different sources. If a build or test fails, nothing is committed or pushed.
 
@@ -759,6 +761,7 @@ The script refuses to reuse a tagged version for different sources. If a build o
 
 | Version | Changes |
 | --- | --- |
+| **3.6.1** | Fix color picker interaction inside modals; simplify the sticky note editor with borderless fields and on-demand formatting tools |
 | **3.6.0** | Sticky note design with contrasting text and headers, drag-and-drop ordering and rich-text shortcuts for notes and checklist items |
 | **3.5.0** | To-do lists: organization-local colored note and checklist cards with search, pinning, portable storage and data transfer |
 | **3.4.1** | Repeating diagonal stripes for multiple task highlights, including selected rows |

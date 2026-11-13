@@ -129,9 +129,16 @@ export class TodoPage extends Component {
     this.app.modal.openModal(this.ui`<form id="todo-form" style="${this.esc(this.#style(card.color))}"><div class="todo-form-header"><label class="field"><span class="sr-only">Title</span><input name="title" maxlength="${TodoLists.TITLE_MAX}" value="${this.esc(card.title)}" placeholder="Title" autocomplete="off"></label><button type="button" class="icon-button" data-close aria-label="Close">${this.ico('close')}</button></div>
       <div class="todo-form-fields">${this.app.fieldEditors.editor('todo-note-editor', "Note", this.#html(card))}
       <fieldset class="todo-editor-items"><legend>Checklist</legend><div id="todo-editor-items"></div><button type="button" class="button small" id="todo-add-item">${this.ico('plus')}Add item</button></fieldset></div>
-      <div class="todo-form-footer"><div class="todo-color-field"><span class="field-label">Color</span>${this.app.colorPicker.colorControl(card.color, this.t("Card"), 'id="todo-color"', true)}</div><span class="spacer"></span><button type="button" class="button" data-close>Cancel</button><button type="submit" class="button primary">Save card</button></div></form>`);
+      <div class="todo-form-footer"><button type="button" class="icon-button" id="todo-format" aria-label="Formatting" title="Formatting" aria-expanded="false"><u>A</u></button>${this.app.colorPicker.colorControl(card.color, this.t("Card"), 'id="todo-color"')}<span class="spacer"></span><button type="button" class="button" data-close>Cancel</button><button type="submit" class="button primary">Save card</button></div></form>`);
     const form = this.$('#todo-form'), list = this.$('#todo-editor-items'), color = this.$('#todo-color'), editor = this.$('#todo-note-editor');
     this.app.fieldEditors.wireEditors();
+    const toolbar = form.querySelector('.rich-toolbar');
+    toolbar.hidden = true;
+    this.$('#todo-format').onclick = event => {
+      toolbar.hidden = !toolbar.hidden;
+      event.currentTarget.setAttribute('aria-expanded', String(!toolbar.hidden));
+    };
+    editor.setAttribute('data-placeholder', this.t("Note"));
     form.onkeydown = event => {
       if (!event.target.matches('#todo-note-editor, .todo-item-text')) return;
       const commands = { b: 'bold', i: 'italic', u: 'underline' }, command = commands[event.key.toLowerCase()];
