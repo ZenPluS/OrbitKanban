@@ -4,7 +4,7 @@
 
 | | |
 | --- | --- |
-| **Current version** | 3.6.1 |
+| **Current version** | 3.7.0 |
 | **Platform** | Windows 10 / 11, 64-bit |
 | **Distribution** | Single portable executable, `OrbitKanban-Portable.exe` |
 | **Network** | Not required. Used only for optional update checks against GitHub |
@@ -174,6 +174,7 @@ The menu under the **OrbitKanban** name in the sidebar switches the active organ
 - **Manage organizations** opens the related settings tab.
 - **New organization** asks for a name, language and optional logo. A preview shows the logo and the four colors of the theme that will be generated. New organizations start empty unless **Include demo data** is selected.
 - Rename an organization by editing its name and pressing **Save settings**. **Delete organization** asks for confirmation, and at least one organization must remain.
+- In **Settings → Identity**, **Logo crop** offers a circle, square, rounded square, triangle, diamond or hexagon centered on the uploaded logo. The original PNG is preserved, so **Original** removes the crop without losing the image. Save settings to use the same transparent cropped logo in the sidebar, browser tab and startup screen. Both the crop and original travel with backups and organization settings exports.
 - If you switch organization with unsaved settings, you can save them, discard them or stay.
 
 **Upload logo and generate theme** accepts PNG, JPEG, WebP, GIF and BMP files up to 15 MB. The logo is converted to PNG, scaled to at most 512 px per side and embedded in the workspace, so the original file is no longer needed. Its colors generate a **Theme from logo**. Text and accent are adjusted to WCAG AA contrast, and surfaces are separated from the background, so even monochrome logos produce a readable theme. The theme is previewed immediately and kept with **Save settings**. **Remove logo** restores the default symbol without deleting the theme. The application name is always OrbitKanban and is not configurable.
@@ -243,6 +244,8 @@ The sixth default section collects **groups**: named sets of related tasks with 
 The To-do lists section collects independent sticky notes and checklist cards for each organization. Each card uses its selected background color, a contrasting header and readable text. Create a card with a title, formatted note, color and checklist items; use **Ctrl+B**, **Ctrl+I** and **Ctrl+U** to format note and checklist text, and tick items directly on the card. Drag the card handle or use its arrow keys to reorder cards; pinned cards stay above unpinned cards, so pin or unpin a card to move it between those groups. Search card contents and delete cards after confirmation. Cards and their order are included in undo/redo, backups and data exports. Older archives receive the section once when there is room; it can also be added in **Settings → Navigation**.
 
 The compact card editor keeps the title, note and checklist borderless. Use **Formatting** in the bottom toolbar to show or hide formatting tools, and the color swatch to preview a background color. **Apply** accepts the color without closing the card; **Cancel** in the picker restores its previous color. Use **Save card** to save your edits.
+
+Use the pushpin to pin or unpin a note. Pinned notes have a filled upright pin and a labeled area above the other cards; unpinned notes have an outlined tilted pin. Active editor fields show only a thin underline instead of a prominent frame.
 
 ### Navigation sections
 
@@ -753,7 +756,7 @@ Tags are never moved. Bump the version before releasing new sources:
 npm version minor --no-git-tag-version --ignore-scripts
 ```
 
-For a specifically numbered release, use `npm version 3.6.1 --no-git-tag-version --ignore-scripts` instead. To update the local portable copy too, run the pipeline **without `-NoDeliver`** and close the app first. The script replaces only the executable, not `dist/data`.
+For a specifically numbered release, use `npm version 3.7.0 --no-git-tag-version --ignore-scripts` instead. To update the local portable copy too, run the pipeline **without `-NoDeliver`** and close the app first. The script replaces only the executable, not `dist/data`.
 
 The script refuses to reuse a tagged version for different sources. If a build or test fails, nothing is committed or pushed.
 
@@ -761,6 +764,7 @@ The script refuses to reuse a tagged version for different sources. If a build o
 
 | Version | Changes |
 | --- | --- |
+| **3.7.0** | Distinct pushpin states and pinned note areas, subtle editor focus, reversible geometric organization logo crops shared with startup |
 | **3.6.1** | Fix color picker interaction inside modals; simplify the sticky note editor with borderless fields and on-demand formatting tools |
 | **3.6.0** | Sticky note design with contrasting text and headers, drag-and-drop ordering and rich-text shortcuts for notes and checklist items |
 | **3.5.0** | To-do lists: organization-local colored note and checklist cards with search, pinning, portable storage and data transfer |

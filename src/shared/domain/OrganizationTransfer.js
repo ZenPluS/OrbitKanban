@@ -45,7 +45,7 @@ class OrganizationTransfer {
     const highlights = structuredClone(settings.highlights ?? ThemeCatalog.defaultHighlights(settings.language || 'it'));
     if (parts.includes('settings')) {
       file.settings = {
-        language: settings.language || 'it', logo: settings.logo || '',
+        language: settings.language || 'it', logo: settings.logo || '', logoSource: settings.logoSource === undefined ? '' : settings.logoSource, logoShape: settings.logoShape === undefined ? 'none' : settings.logoShape,
         navigation: structuredClone(settings.navigation), hoursPerDay: settings.hoursPerDay, fontSizes: { ...(settings.fontSizes || Typography.defaultFontSizes()) }, fontFamily: settings.fontFamily ?? Typography.DEFAULT_FONT_FAMILY,
         statuses: structuredClone(settings.statuses), urgencies: structuredClone(settings.urgencies),
         highlights: structuredClone(highlights), tags: structuredClone(settings.tags || []),
@@ -122,7 +122,7 @@ class OrganizationTransfer {
     if (parts.includes('settings')) {
       const source = file.settings;
       const settings = {
-        language: source.language, logo: source.logo ?? '',
+        language: source.language, logo: source.logo ?? '', logoSource: source.logoSource === undefined ? '' : source.logoSource, logoShape: source.logoShape === undefined ? 'none' : source.logoShape,
         navigation: Array.isArray(source.navigation) ? OrganizationTransfer.#fileRecords(source.navigation, OrganizationTransfer.#RECORD_KEYS.section, "Invalid navigation sections.") : source.navigation, hoursPerDay: source.hoursPerDay,
         statuses: OrganizationTransfer.#fileRecords(source.statuses, OrganizationTransfer.#RECORD_KEYS.status, "Invalid or empty status list."),
         urgencies: OrganizationTransfer.#fileRecords(source.urgencies, OrganizationTransfer.#RECORD_KEYS.urgency, "Invalid or empty urgency list.")
@@ -246,7 +246,11 @@ class OrganizationTransfer {
         ...(view.columnFilters && { columnFilters: ColumnMerger.remapValues(view.columnFilters, maps.tasks.mapping, maps.tasks.valueMappings, true) })
       }));
       NavigationSections.normalizeNavigation(settings);
-      if (options.logo) settings.logo = incoming.logo;
+      if (options.logo) {
+        settings.logo = incoming.logo;
+        settings.logoSource = incoming.logoSource;
+        settings.logoShape = incoming.logoShape;
+      }
     }
     if (wanted('themes')) {
       for (const theme of structuredClone(file.themes.themes)) {

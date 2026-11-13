@@ -19,7 +19,7 @@ export class SettingsView extends Component {
     <button class="button danger small" id="delete-organization" ${this.state.organizations.length === 1 ? 'disabled' : ''}>Delete organization</button></section>
         <section class="panel settings-section" id="identity-panel"><h2>Identity</h2><p class="section-description">Make this space truly yours.</p><div class="form-grid"><label class="field full">Organization name<input id="organization-name" maxlength="100" required value="${this.esc(organization.name)}"></label>
     <label class="field">Hours per effort day<input id="hours-per-day" type="number" min="0.01" max="24" step="0.01" value="${this.state.data.settings.hoursPerDay}"><small>Changes the display in days. Previously recorded hours stay the same.</small></label>
-    <div class="full logo-settings"><h3>Organization logo</h3><div id="logo-preview"></div><label class="field">Upload logo and generate theme<input id="logo-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp"></label><p class="muted">The logo and theme belong only to this organization and travel with the archive.</p><button class="button small" id="remove-logo" type="button">Remove logo</button><output id="logo-result" aria-live="polite"></output></div></div></section>${this.app.navigationSettings.navigationPanel()}
+    <div class="full logo-settings"><h3>Organization logo</h3><div id="logo-preview"></div><label class="field">Upload logo and generate theme<input id="logo-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp"></label><label class="field">Logo crop<select id="logo-shape">${this.app.logo.shapeOptions()}</select><small>Shapes crop the center of the image. The original is kept so you can change or remove the crop.</small></label><p class="muted">The logo and theme belong only to this organization and travel with the archive.</p><p class="muted">The saved crop is also used on the startup screen.</p><button class="button small" id="remove-logo" type="button">Remove logo</button><output id="logo-result" aria-live="polite"></output></div></div></section>${this.app.navigationSettings.navigationPanel()}
     <section class="panel settings-section full" id="languages-panel"><h2>Language & translations</h2><p class="section-description">Choose the language of this organization. Translations are plain JSON files: you can add more without changing the app.</p><div class="form-grid"><label class="field">Interface language<select id="language">${this.app.languages.languageOptions(this.state.data.settings.language)}</select><small>Language is saved per organization. Custom names and content are not translated.</small></label><p class="language-missing" id="language-missing" role="status" hidden>This language is not installed on this PC: texts are shown in English.</p></div><div id="languages-details"></div></section>
     <section class="panel settings-section" id="themes-panel"><div class="themes-heading"><div><h2>Themes & atmosphere</h2><p class="section-description">Choose a palette or create your own.</p></div><button class="button" id="add-theme">${this.ico('plus')}Create theme</button></div><div class="themes-layout"><div class="theme-browser"><div class="theme-toolbar"><label class="theme-search"><span aria-hidden="true">${this.ico('search')}</span><input type="search" id="theme-search" placeholder="Search themes…" aria-label="Search themes" autocomplete="off" spellcheck="false" value="${this.esc(this.state.themeQuery)}"></label><span class="theme-count" id="theme-count" aria-live="polite"></span></div><div class="theme-gallery" id="theme-list"></div></div><div class="theme-editor-panel" id="theme-editor"></div></div></section>${this.app.fontSettings.fontSizePanel()}
     ${this.app.taskLayout.taskLayoutPanel()}<section class="panel settings-section" id="columns-panel"><h2>List columns</h2><p class="section-description">Choose which columns the task list shows and in what order. Hiding a column does not delete any data. You can also do this with the “Columns” button above the table.</p><div id="columns-editor"></div><button type="button" class="button" id="reset-columns">${this.ico('reset')}Restore default columns</button></section>${this.app.customColumns.customColumnsPanel()}
@@ -28,23 +28,27 @@ export class SettingsView extends Component {
         this.$('.settings-panels').insertAdjacentHTML('beforeend', this.app.updates.updatesPanel());
         this.app.settings.showSettingsTab(this.state.settingsTab); this.app.settings.wireSettingsNav(); this.app.updates.wireUpdates();
         this.app.optionLists.drawOptionLists(); this.app.navigationSettings.drawNavigation(); this.app.themes.drawThemes(); this.app.logo.drawLogoPreview(); this.app.organizationManager.wireOrganizationCreation(); this.app.fontSettings.wireFontSizes(); this.app.languages.wireLanguages();
+        this.app.logo.wireLogoShape();
         this.app.columnEditor.columnEditor(this.$('#columns-editor'), this.state.settingsDraft.taskColumns, 'tasks', this.state.settingsDraft);
         this.$('#reset-columns').onclick = () => { this.state.settingsDraft.taskColumns.splice(0, this.state.settingsDraft.taskColumns.length, ...this.configuredColumns('tasks', this.state.settingsDraft, [])); this.app.columnEditor.columnEditor(this.$('#columns-editor'), this.state.settingsDraft.taskColumns, 'tasks', this.state.settingsDraft); };
         this.app.customColumns.wireCustomColumns();
         this.$('#theme-search').oninput = event => { this.state.themeQuery = event.target.value; this.app.themes.drawThemeChoices(); };
     for (const type of ['input', 'change', 'click']) this.$('#settings-page').addEventListener(type, () => queueMicrotask(this.app.settings.refreshSettingsState));
     this.$('#delete-organization').onclick = () => this.app.modal.confirmDialog("Delete this organization?", "All its data, logo and settings will be deleted. Other organizations will not be changed. Export a backup first.", () => this.app.organizationManager.organizationAction('delete', { id: this.state.activeOrganizationId }));
-    const logoFile = this.$('#logo-file'), logoResult = this.$('#logo-result');
+    const logoFile = this.$('#logo-file'), logoResult = this.$('#logo-result'), logoShape = this.$('#logo-shape'), removeLogo = this.$('#remove-logo');
     logoFile.onchange = this.app.notifier.action(async () => {
       const file = logoFile.files[0];
       if (!file) return;
       logoFile.disabled = true;
+      logoShape.disabled = removeLogo.disabled = true;
       logoResult.textContent = this.t("Loading image…");
       const draft = this.state.settingsDraft;
       try {
         const { logo, palette } = await this.app.logo.processLogo(file);
+        const cropped = await this.app.logo.cropLogo(logo, draft.logoShape ?? 'none');
         if (this.state.settingsDraft !== draft || !logoFile.isConnected) return;
-        draft.logo = logo;
+        draft.logoSource = logo;
+        draft.logo = cropped;
         let theme = draft.themes.find(theme => theme.id === 'organization-logo');
         if (!theme) {
           theme = { id: 'organization-logo', name: this.t("Theme from logo") };
@@ -55,9 +59,12 @@ export class SettingsView extends Component {
         this.app.logo.drawLogoPreview(); this.app.themes.drawThemes(); this.app.settings.refreshSettingsState();
         logoResult.textContent = this.t("Logo loaded and theme previewed. Save settings to keep them.");
       } catch (error) { logoResult.textContent = this.t(error.message); throw error; }
-      finally { logoFile.disabled = false; logoFile.value = ''; }
+      finally {
+        logoFile.disabled = removeLogo.disabled = false; logoFile.value = '';
+        if (logoFile.isConnected && this.state.settingsDraft === draft) this.app.logo.drawLogoPreview();
+      }
     });
-    this.$('#remove-logo').onclick = () => { this.state.settingsDraft.logo = ''; this.app.logo.drawLogoPreview(); logoResult.textContent = ''; };
+    this.$('#remove-logo').onclick = () => { Object.assign(this.state.settingsDraft, { logo: '', logoSource: '', logoShape: 'none' }); this.app.logo.drawLogoPreview(); logoResult.textContent = ''; };
     this.$('#save-settings').onclick = this.$('#save-settings-inline').onclick = this.app.notifier.action(async () => {
       await this.app.settings.saveSettings(); this.app.shell.rerenderPreservingView(); this.app.notifier.notify("Settings saved.");
     });

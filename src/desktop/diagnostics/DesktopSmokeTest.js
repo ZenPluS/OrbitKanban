@@ -14,13 +14,13 @@ class DesktopSmokeTest {
   static #LOGO = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==';
 
   // A hidden loading screen opened with a saved light theme and a custom logo, as the next start would show it.
-  static async #checkThemedSplash(application, icon) {
+  static async #checkThemedSplash(application, icon, logo = DesktopSmokeTest.#LOGO) {
     const data = DataFactory.initialData(), themes = (data.organizations?.[0]?.data.settings ?? data.settings).themes;
     const folder = path.join(application.root, 'splash-theme-check'), daylight = themes.find(theme => theme.id === 'daylight');
     if (!daylight) throw new Error('The Daylight theme is missing.');
     const store = new SplashTheme(folder);
     try {
-      await store.save({ themeId: daylight.id, themes, logo: DesktopSmokeTest.#LOGO });
+      await store.save({ themeId: daylight.id, themes, logo });
       const splash = new SplashScreen({ BrowserWindow, screen, appRoot: application.appRoot, title: app.getName(), icon, version: app.getVersion(), theme: store.read(), show: false });
       try {
         const expected = `rgb(${[1, 3, 5].map(index => parseInt(daylight.background.slice(index, index + 2), 16)).join(', ')})`;
@@ -31,6 +31,8 @@ class DesktopSmokeTest {
         }
         if (splash.window.getBackgroundColor().toLowerCase() !== daylight.background.toLowerCase()) throw new Error('The loading window does not open in the theme background.');
         if (state?.logo !== 'custom' || state.background !== expected || !state.animated || !state.version.endsWith(app.getVersion())) throw new Error(`The loading screen ignores its saved theme: ${JSON.stringify(state)}`);
+        const actualLogo = await splash.window.webContents.executeJavaScript('getComputedStyle(document.querySelector(".logo-custom")).backgroundImage');
+        if (actualLogo !== `url("${logo}")`) throw new Error('The startup screen does not use the saved cropped organization logo.');
       } finally {
         splash.close();
       }
@@ -136,6 +138,8 @@ class DesktopSmokeTest {
       await new Promise(resolve => setTimeout(resolve, 1200));
       const result = await win.webContents.executeJavaScript('window.runSmokeTests()');
       if (!result.ok) throw new Error('UI smoke test failed.');
+      await DesktopSmokeTest.#checkThemedSplash(application, icon, (await store.load()).data.settings.logo);
+      result.checks.push('Startup screen displays the same saved geometric crop as the organization sidebar');
       result.checks.unshift(...splashChecks);
       if (customTitleBar) {
         await new Promise(resolve => setTimeout(resolve, 100));

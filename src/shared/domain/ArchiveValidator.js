@@ -16,6 +16,7 @@ const TaskLinks = typeof module !== 'undefined' ? require('./TaskLinks') : globa
 const NavigationSections = typeof module !== 'undefined' ? require('./NavigationSections') : globalThis.OrbitKanban.Domain.NavigationSections;
 const TaskGroups = typeof module !== 'undefined' ? require('./TaskGroups') : globalThis.OrbitKanban.Domain.TaskGroups;
 const TodoLists = typeof module !== 'undefined' ? require('./TodoLists') : globalThis.OrbitKanban.Domain.TodoLists;
+const LogoCrop = typeof module !== 'undefined' ? require('../graphics/LogoCrop') : globalThis.OrbitKanban.Graphics.LogoCrop;
 
 class ArchiveValidator {
   static validateData(data) {
@@ -31,6 +32,8 @@ class ArchiveValidator {
     const color = v => /^#[0-9a-f]{6}$/i.test(v);
     Common.assert(s.language === undefined || Common.validLanguage(s.language), "Unsupported language.");
     Common.assert(s.logo === undefined || s.logo === '' || (text(s.logo) && s.logo.length <= 1500000 && /^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/.test(s.logo)), "Invalid logo.");
+    Common.assert(s.logoSource === undefined || s.logoSource === '' || (text(s.logoSource) && s.logoSource.length <= 1500000 && /^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/.test(s.logoSource)), "Invalid original logo.");
+    Common.assert(s.logoShape === undefined || LogoCrop.valid(s.logoShape), "Invalid logo shape.");
     Common.assert(s.fontSizes === undefined || Typography.validFontSizes(s.fontSizes), "Invalid text sizes.");
     Common.assert(s.fontFamily === undefined || Typography.validFontFamily(s.fontFamily), "Invalid font.");
     Common.assert(s.taskEditorLayout === undefined || TaskLayout.validTaskEditorLayout(s.taskEditorLayout), "Invalid task editor layout.");
@@ -120,6 +123,8 @@ class ArchiveValidator {
       TaskGroups.prune(organization.data);
       organization.data.settings.language ??= 'it';
       organization.data.settings.logo ??= '';
+      organization.data.settings.logoSource ??= '';
+      organization.data.settings.logoShape ??= 'none';
       organization.data.settings.fontSizes ??= Typography.defaultFontSizes();
       organization.data.settings.fontFamily ??= Typography.DEFAULT_FONT_FAMILY;
       organization.data.settings.savedViews ??= [];

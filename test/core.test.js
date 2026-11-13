@@ -505,7 +505,7 @@ test('filled accent buttons and gradient icons stay readable on every built-in t
 test('legacy archive migrates without losing task IDs, settings, associations or themes', () => {
   const legacy = DataFactory.initialData();
   legacy.settings.appName = 'Legacy organization';
-  delete legacy.settings.logo; delete legacy.settings.language;
+  delete legacy.settings.logo; delete legacy.settings.logoSource; delete legacy.settings.logoShape; delete legacy.settings.language;
   const original = JSON.parse(JSON.stringify(legacy));
   const archive = ArchiveValidator.migrateArchive(legacy);
   assert.equal(archive.version, 2);
@@ -516,6 +516,8 @@ test('legacy archive migrates without losing task IDs, settings, associations or
   assert.deepEqual(archive.organizations[0].data.settings.themes, legacy.settings.themes);
   assert.equal(archive.organizations[0].data.settings.language, 'it');
   assert.equal(archive.organizations[0].data.settings.logo, '');
+  assert.equal(archive.organizations[0].data.settings.logoSource, '');
+  assert.equal(archive.organizations[0].data.settings.logoShape, 'none');
   assert.equal(archive.organizations[0].name, 'Legacy organization');
   assert.equal(archive.organizations[0].data.settings.appName, undefined);
   assert.deepEqual(legacy, original);
@@ -713,6 +715,37 @@ const sampleOrganization = () => {
   return { id: 'org-1', name: 'Àcme Srl / Team #1', data };
 };
 const sections = file => ['themes', 'settings', 'data'].filter(part => part in file);
+test('geometric logo crops roundtrip with their original image and import only when requested', () => {
+  const organization = sampleOrganization(), settings = organization.data.settings;
+  Object.assign(settings, { logoShape: 'circle', logoSource: 'data:image/png;base64,AAAA' });
+  const file = OrganizationTransfer.organizationExport(organization, 'settings');
+  const parsed = OrganizationTransfer.parseOrganizationFile(file);
+  const current = DataFactory.baseData('en');
+  Object.assign(current.settings, { logo: 'data:image/png;base64,BBBB', logoSource: 'data:image/png;base64,CCCC', logoShape: 'diamond' });
+  const unchanged = OrganizationTransfer.applyOrganizationImport(current, parsed, { settings: true });
+  for (const key of ['logo', 'logoSource', 'logoShape']) assert.equal(unchanged.settings[key], current.settings[key]);
+  const imported = OrganizationTransfer.applyOrganizationImport(current, parsed, { settings: true, logo: true });
+  for (const key of ['logo', 'logoSource', 'logoShape']) assert.equal(imported.settings[key], settings[key]);
+  const archive = ArchiveValidator.migrateArchive(imported);
+  assert.equal(archive.organizations[0].data.settings.logoSource, settings.logoSource);
+  delete file.settings.logoSource; delete file.settings.logoShape;
+  const legacy = OrganizationTransfer.applyOrganizationImport(current, OrganizationTransfer.parseOrganizationFile(file), { settings: true, logo: true });
+  assert.deepEqual([legacy.settings.logo, legacy.settings.logoSource, legacy.settings.logoShape], [settings.logo, '', 'none']);
+});
+test('logo cropping rejects unsupported shapes and unsafe original image sources', () => {
+  for (const change of [
+    settings => { settings.logoShape = 'url(javascript:alert(1))'; },
+    settings => { settings.logoShape = null; },
+    settings => { settings.logoSource = 'https://example.com/logo.png'; },
+    settings => { settings.logoSource = 'data:image/svg+xml;base64,AAAA'; },
+    settings => { settings.logoSource = 'data:image/png;base64,' + 'A'.repeat(1500000); }
+  ]) {
+    const organization = sampleOrganization();
+    change(organization.data.settings);
+    assert.throws(() => ArchiveValidator.validateData(organization.data), /logo/i);
+    assert.throws(() => OrganizationTransfer.parseOrganizationFile(OrganizationTransfer.organizationExport(organization, 'settings')), /logo/i);
+  }
+});
 test('organization exports contain only the requested parts as independent copies', () => {
   const organization = sampleOrganization(), exportedAt = '2026-05-20T08:00:00.000Z';
   assert.deepEqual(OrganizationTransfer.ORGANIZATION_FILE_KINDS, ['themes', 'settings', 'data', 'organization']);
@@ -726,7 +759,7 @@ test('organization exports contain only the requested parts as independent copie
   assert.deepEqual(sections(files.data), ['data']);
   assert.deepEqual(sections(files.organization), ['themes', 'settings', 'data']);
   assert.deepEqual(files.themes.themes, { themeId: organization.data.settings.themeId, themes: organization.data.settings.themes });
-  assert.deepEqual(Object.keys(files.settings.settings).sort(), ['deletedIssueColumns', 'deletedTaskColumns', 'fontFamily', 'fontSizes', 'highlights', 'hoursPerDay', 'issueColumns', 'issueFields', 'language', 'logo', 'navigation', 'requiredIssueColumns', 'requiredTaskColumns', 'savedViews', 'statuses', 'tags', 'taskColumns', 'taskEditorLayout', 'taskFields', 'urgencies']);
+  assert.deepEqual(Object.keys(files.settings.settings).sort(), ['deletedIssueColumns', 'deletedTaskColumns', 'fontFamily', 'fontSizes', 'highlights', 'hoursPerDay', 'issueColumns', 'issueFields', 'language', 'logo', 'logoShape', 'logoSource', 'navigation', 'requiredIssueColumns', 'requiredTaskColumns', 'savedViews', 'statuses', 'tags', 'taskColumns', 'taskEditorLayout', 'taskFields', 'urgencies']);
   assert.deepEqual(files.settings.settings.highlights, organization.data.settings.highlights);
   assert.deepEqual(files.data.data.highlights, organization.data.settings.highlights);
   assert.deepEqual(files.settings.settings.fontSizes, Typography.defaultFontSizes());

@@ -1,6 +1,6 @@
 // End-to-end interface checks run by the smoke test (window.runSmokeTests).
 import { Component } from '../core/Component.js';
-import { ColorMath, ColumnCleanup, ColumnFilters, ColumnLayout, ColumnSchema, Common, DataFactory, GuideContent, IconLibrary, NavigationSections, OrganizationTransfer, TaskColumns, TaskLayout, TaskLinks, TaskOrder, ThemeCatalog, ThemeGenerator, Translator, Typography, XlsxWriter } from '../shared.js';
+import { ColorMath, ColumnCleanup, ColumnFilters, ColumnLayout, ColumnSchema, Common, DataFactory, GuideContent, IconLibrary, LogoCrop, NavigationSections, OrganizationTransfer, TaskColumns, TaskLayout, TaskLinks, TaskOrder, ThemeCatalog, ThemeGenerator, Translator, Typography, XlsxWriter } from '../shared.js';
 
 export class SmokeTests extends Component {
   install() {
@@ -1004,7 +1004,13 @@ export class SmokeTests extends Component {
         check(row().querySelector('.is-done') && (await this.workspaceApi.load()).data.todos.find(entry => entry.id === card.id).items[0].done, 'Checking an item saves its completed state');
         row().querySelector('[data-todo-pin]').click();
         await waitFor(() => !this.state.saving && this.state.data.todos.find(entry => entry.id === card.id).pinned);
-        check(row().querySelector('.todo-pinned'), 'Cards can be pinned');
+        check(row().classList.contains('is-pinned') && row().querySelector('[data-todo-pin]').getAttribute('aria-pressed') === 'true' &&
+          row().querySelector('[data-todo-pin] use').getAttribute('href') === '#i-pin' && this.$('.todo-grid-label').textContent === this.t("Pinned cards"),
+        'Pinned cards have a filled pushpin, pressed state and a labeled area');
+        row().querySelector('[data-todo-pin]').click();
+        await waitFor(() => !this.state.saving && !this.state.data.todos.find(entry => entry.id === card.id).pinned);
+        check(!row().classList.contains('is-pinned') && row().querySelector('[data-todo-pin]').getAttribute('aria-pressed') === 'false' && !this.$('.todo-grid-label'),
+          'Unpinning restores the outlined pushpin and removes the empty pinned area');
         this.$('#todo-search').value = 'First item'; this.$('#todo-search').dispatchEvent(new Event('input'));
         check(Boolean(row()), 'Card search includes checklist items');
         row().querySelector('[data-todo-edit]').click();
@@ -2210,6 +2216,40 @@ export class SmokeTests extends Component {
       this.$('#logo-file').files = firstLogoUpload.files;
       this.$('#logo-file').dispatchEvent(new Event('change'));
       await waitFor(() => Boolean(this.state.settingsDraft.logo) && !this.$('#logo-file').disabled);
+      const originalLogo = this.state.settingsDraft.logo;
+      const cropSource = document.createElement('canvas');
+      cropSource.width = 96; cropSource.height = 64;
+      const cropContext = cropSource.getContext('2d');
+      cropContext.fillStyle = '#ff0088'; cropContext.fillRect(0, 0, 96, 64);
+      cropContext.fillStyle = '#1188cc'; cropContext.fillRect(16, 0, 64, 64);
+      for (const { id } of LogoCrop.shapes.filter(shape => shape.id !== 'none')) {
+        const croppedImage = new Image();
+        croppedImage.src = await this.app.logo.cropLogo(cropSource.toDataURL('image/png'), id);
+        await croppedImage.decode();
+        const sample = document.createElement('canvas'); sample.width = sample.height = 64;
+        const context = sample.getContext('2d'); context.drawImage(croppedImage, 0, 0);
+        const center = [...context.getImageData(32, 32, 1, 1).data], cornerAlpha = context.getImageData(0, 0, 1, 1).data[3];
+        const expectedEdges = {
+          circle: [255, 0, 255, 0], square: [255, 255, 255, 255], 'rounded-square': [255, 255, 255, 255],
+          triangle: [0, 0, 0, 0], diamond: [255, 0, 0, 0], hexagon: [255, 0, 255, 255]
+        }[id];
+        const edges = [[2, 32], [8, 8], [8, 20], [16, 1]].map(([x, y]) => context.getImageData(x, y, 1, 1).data[3]);
+        check(croppedImage.width === 64 && croppedImage.height === 64 && center.join() === '17,136,204,255' && cornerAlpha === (id === 'square' ? 255 : 0) && edges.join() === expectedEdges.join(),
+          `${id} logo crop keeps the centered image and its distinct transparent silhouette`);
+      }
+      const changeLogoShape = async shape => {
+        this.$('#logo-shape').value = shape;
+        this.$('#logo-shape').dispatchEvent(new Event('change', { bubbles: true }));
+        await waitFor(() => !this.$('#logo-file').disabled);
+      };
+      await changeLogoShape('circle');
+      const circleLogo = this.state.settingsDraft.logo;
+      check(circleLogo !== originalLogo && this.state.settingsDraft.logoSource === originalLogo && this.$('#logo-preview img').src === circleLogo &&
+        !this.$('#settings-tab-identity .settings-tab-dot').hidden, 'Changing a logo shape previews a reversible crop and marks Identity as unsaved');
+      await changeLogoShape('diamond');
+      await changeLogoShape('none');
+      check(this.state.settingsDraft.logo === originalLogo, 'Removing a crop restores the original PNG exactly after multiple shape changes');
+      await changeLogoShape('circle');
       this.$('#organization-name').value = "First organization with logo";
       selectOrganization(secondOrganizationId);
       this.$('#save-switch').click();
@@ -2238,6 +2278,9 @@ export class SmokeTests extends Component {
       check(finalSnapshot.organizations.length === 2 && finalSnapshot.data.settings.logo.startsWith('data:image/png;base64,'), "Organizations and embedded logo persist on disk");
       await this.app.organizationManager.organizationAction('switch', { id: firstOrganizationId });
       check(this.state.data.settings.logo !== secondLogo && organizationName() === "First organization with logo", "Each organization retains a distinct logo after repeated switches");
+      check(this.state.data.settings.logo === circleLogo && this.state.data.settings.logoSource === originalLogo && this.state.data.settings.logoShape === 'circle' &&
+        this.$('.brand-icon img').src === circleLogo && (await this.workspaceApi.load()).data.settings.logo === circleLogo,
+      'Logo crop and original image persist per organization and the sidebar uses the cropped PNG');
       check(document.title === Common.APP_NAME && this.$('#brand-name').textContent === Common.APP_NAME && this.state.data.settings.appName === undefined, "OrbitKanban name stays fixed regardless of organization or language");
       this.state.view = 4; this.app.shell.render();
       check(this.$('#browser-panel') && /^http:\/\/127\.0\.0\.1:\d+\/$/.test(this.$('#browser-url').textContent) && !this.$('#browser-open').disabled && !this.$('#browser-copy').disabled, 'Browser access section shows a local address');

@@ -60,6 +60,7 @@ class IconLibrary {
     groups: ['violet', [['bs', '<path d="M3.2 12.3l8.8 4.5 8.8-4.5M3.2 16.7l8.8 4.5 8.8-4.5"/>', 2.2], ['r', '<path d="M12 2.8l8.8 4.6-8.8 4.6-8.8-4.6z"/>']]]
   };
   static #LINE = {
+    pin: '<path d="M8 3h8l-1 7 3 4H6l3-4z" style="fill:var(--pin-fill,none)"/><path d="M12 14v7"/>',
     file: '<path d="M7 3.5h6.5l4.5 4.5v12a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 6 20V5a1.5 1.5 0 0 1 1-1.5z"/><path d="M13 3.8V9h5M9 13h6M9 16.5h6"/>',
     paperclip: '<path d="m8.5 12.5 6.7-6.7a3.2 3.2 0 0 1 4.5 4.5l-8.8 8.8a5 5 0 0 1-7.1-7.1l8.4-8.4"/>',
     search: '<circle cx="10.5" cy="10.5" r="6.3"/><path d="M15.3 15.3l5 5"/>',

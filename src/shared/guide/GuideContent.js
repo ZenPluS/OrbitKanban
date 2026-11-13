@@ -45,7 +45,8 @@ class GuideContent {
           'The logo (PNG, JPEG, WebP, GIF or BMP up to 15 MB) is stored with the organization and generates a matching theme.'
         ] },
         { title: 'Rename and change the logo', items: [
-          'Rename the organization and change or remove its logo in **Settings → Identity**.'
+          'Rename the organization and change or remove its logo in **Settings → Identity**.',
+          'Choose **Logo crop** to use a circle, square, rounded square, triangle, diamond or hexagon. The original image is kept; **Original** removes the crop. Save settings to apply the same cropped logo to the sidebar and startup screen.'
         ] }
       ]
     },
@@ -228,6 +229,7 @@ class GuideContent {
           'Use **New card** to add a title, a formatted note, a color and checklist items. Use `Ctrl`+`B`, `Ctrl`+`I` and `Ctrl`+`U` for bold, italic and underline. Check items directly on the card.',
           'Drag a card by its handle, or use the arrow keys, to reorder it. Pinned cards stay above unpinned cards; pin or unpin a card to move it between groups.',
           'Pin important cards to the top, search their contents, or delete a card after confirmation.',
+          'Use the pushpin to pin or unpin a card. Pinned cards show a filled upright pin and appear in a labeled area above the other cards.',
           'Cards are independent of tasks and travel with the organization data, backups, undo and redo.'
         ] }
       ]

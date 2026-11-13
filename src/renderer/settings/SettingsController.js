@@ -18,7 +18,7 @@ export class SettingsController extends Component {
     return this.app.customColumns.pendingCustomColumns().length > 0 || JSON.stringify(this.#collectSettings()) !== JSON.stringify(this.state.data.settings) || this.$('#organization-name').value.trim() !== this.state.organizations.find(o => o.id === this.state.activeOrganizationId).name;
   }
   settingsTabs = [
-    { id: 'identity', group: "Organization", icon: 'id', label: "Identity", panel: 'identity-panel', keys: ['hoursPerDay', 'logo'] },
+    { id: 'identity', group: "Organization", icon: 'id', label: "Identity", panel: 'identity-panel', keys: ['hoursPerDay', 'logo', 'logoSource', 'logoShape'] },
     { id: 'navigation', group: "Organization", icon: 'menu', label: "Navigation", panel: 'navigation-panel', keys: ['navigation'] },
     { id: 'languages', group: "Organization", icon: 'translate', label: "Language & translations", panel: 'languages-panel', keys: ['language'] },
     { id: 'organizations', group: "Organization", icon: 'building', label: "Organizations", panel: 'organizations-panel', keys: [] },

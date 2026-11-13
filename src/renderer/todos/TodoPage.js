@@ -14,9 +14,9 @@ export class TodoPage extends Component {
   }
   #card(card) {
     const id = this.esc(card.id), label = card.title || this.t("Untitled card");
-    const action = (attribute, icon, text) => `<button type="button" class="icon-button" ${attribute}="${id}" title="${this.esc(this.t(text))}" aria-label="${this.esc(this.t(text) + ': ' + label)}">${this.ico(icon)}</button>`;
-    return `<article class="todo-card" data-todo="${id}" style="${this.esc(this.#style(card.color))}">
-      <header>${this.app.sortable.dragHandle(label).replace('data-drag-handle', 'data-drag-handle draggable="true"')}<h2>${this.esc(label)}</h2><span class="${card.pinned ? 'todo-pinned' : ''}">${action('data-todo-pin', 'star', card.pinned ? "Unpin card" : "Pin card")}</span></header>
+    const action = (attribute, icon, text, attributes = '') => `<button type="button" class="icon-button" ${attribute}="${id}" ${attributes} title="${this.esc(this.t(text))}" aria-label="${this.esc(this.t(text) + ': ' + label)}">${this.ico(icon)}</button>`;
+    return `<article class="todo-card${card.pinned ? ' is-pinned' : ''}" data-todo="${id}" style="${this.esc(this.#style(card.color))}">
+      <header>${this.app.sortable.dragHandle(label).replace('data-drag-handle', 'data-drag-handle draggable="true"')}<h2>${this.esc(label)}</h2>${action('data-todo-pin', 'pin', card.pinned ? "Unpin card" : "Pin card", `aria-pressed="${card.pinned}"`)}</header>
       ${card.text ? `<div class="todo-text">${this.#html(card)}</div>` : ''}
       ${card.items.length ? `<ul class="todo-items">${card.items.map(item => `<li class="${item.done ? 'is-done' : ''}"><label><input type="checkbox" data-todo-item="${this.esc(item.id)}" ${item.done ? 'checked' : ''}><span>${this.#html(item)}</span></label></li>`).join('')}</ul>` : ''}
       <footer>${action('data-todo-edit', 'edit', "Edit card")}${action('data-todo-delete', 'close', "Delete card")}</footer></article>`;
@@ -29,7 +29,9 @@ export class TodoPage extends Component {
     }).sort((a, b) => Number(b.pinned) - Number(a.pinned));
     this.$('#content').innerHTML = this.app.columns.heading(this.app.sections.title('todos'), "Keep notes and checklists together in this organization.", `<button type="button" class="button primary" id="new-todo">${this.ico('plus')}${this.esc(this.t("New card"))}</button>`) +
       `<div id="todo-page"><label class="group-search"><span aria-hidden="true">${this.ico('search')}</span><input id="todo-search" type="search" autocomplete="off" value="${this.esc(this.query)}" placeholder="${this.esc(this.t("Search cards…"))}" aria-label="${this.esc(this.t("Search cards…"))}"></label>` +
-      (visible.length ? `<div class="todo-grid">${visible.map(card => this.#card(card)).join('')}</div>` : `<section class="panel empty"><p>${this.esc(this.t(cards.length ? "No cards match the search." : "No cards yet. Create a note or checklist."))}</p></section>`) + '</div>';
+      (visible.length ? `<div class="todo-grid">${visible.map((card, index) =>
+        `${visible[0].pinned && (index === 0 || card.pinned !== visible[index - 1].pinned) ? `<h2 class="todo-grid-label">${this.esc(this.t(card.pinned ? "Pinned cards" : "Other cards"))}</h2>` : ''}${this.#card(card)}`
+      ).join('')}</div>` : `<section class="panel empty"><p>${this.esc(this.t(cards.length ? "No cards match the search." : "No cards yet. Create a note or checklist."))}</p></section>`) + '</div>';
     const search = this.$('#todo-search');
     search.oninput = () => {
       this.query = search.value;
