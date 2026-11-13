@@ -1306,17 +1306,28 @@ export class SmokeTests extends Component {
       smokeRow().cells[1].click();
       await waitFor(() => !this.state.saving && !this.app.rowMarks.markFlush);
       const firstMark = this.app.presenter.highlightsOf()[0];
+      const singleMarkStyle = this.app.presenter.highlightStyle([firstMark], { highlight: false });
+      const manyMarks = Array.from({ length: 16 }, (_, index) => ({ color: `#${index.toString(16).padStart(6, '0')}` }));
+      const manyMarkStyle = this.app.presenter.highlightStyle(manyMarks, { highlight: false });
+      check(!singleMarkStyle.includes('repeating-linear-gradient') &&
+        manyMarkStyle.includes('repeating-linear-gradient(135deg') &&
+        manyMarks.every(mark => manyMarkStyle.includes(mark.color)) && manyMarkStyle.includes('150px 160px'),
+      'One highlight remains solid and all 16 colors fit in the repeating stripe pattern');
       check(smokeTask().highlightId === firstMark.id && smokeTask().additionalHighlightIds.includes(paint.id) &&
         (await this.workspaceApi.load()).data.tasks.find(task => task.id === smokeTask().id).additionalHighlightIds.includes(paint.id) &&
         smokeRow().style.getPropertyValue('--mark-background').includes(firstMark.color) &&
         smokeRow().style.getPropertyValue('--mark-background').includes(paint.color) &&
-        getComputedStyle(smokeRow()).backgroundImage.includes('linear-gradient'), 'Painting a second highlight preserves the first and displays both colors');
+        getComputedStyle(smokeRow()).backgroundImage.includes('repeating-linear-gradient(135deg'), 'Painting a second highlight displays both colors in repeating diagonal stripes');
       const autoStatus = { highlight: true, color: '#123456' };
-      check(this.app.presenter.highlightStyle(this.app.presenter.taskHighlights(smokeTask()), autoStatus).includes(autoStatus.color) &&
+      check(this.app.presenter.highlightStyle(this.app.presenter.taskHighlights(smokeTask()), autoStatus).includes('repeating-linear-gradient(135deg') &&
+        this.app.presenter.highlightStyle(this.app.presenter.taskHighlights(smokeTask()), autoStatus).includes(autoStatus.color) &&
         new DOMParser().parseFromString(this.app.milestones.miniTask(smokeTask()), 'text/html').querySelectorAll('.mark-chip').length === 2,
       'Automatic status color combines with manual colors and cards display both labels');
       smokeRow().querySelector('[data-select-task]').click();
-      check(getComputedStyle(smokeRow().cells[1]).backgroundImage.includes('linear-gradient'), 'Selected rows keep multiple highlight colors visible');
+      check(getComputedStyle(smokeRow()).backgroundImage.includes('repeating-linear-gradient(135deg') &&
+        getComputedStyle(smokeRow().cells[1]).backgroundImage === 'none' &&
+        getComputedStyle(smokeRow().querySelector('.row-actions')).backgroundImage.includes('repeating-linear-gradient(135deg'),
+      'Selected rows keep continuous diagonal stripes with a highlighted sticky action cell');
       smokeRow().querySelector('[data-select-task]').click();
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
       smokeRow().querySelector('[data-mark-task]').click();

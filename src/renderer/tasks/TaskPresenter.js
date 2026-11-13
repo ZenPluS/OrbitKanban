@@ -45,7 +45,10 @@ export class TaskPresenter extends Component {
       const value = tint ? `color-mix(in srgb, ${color} 16%, transparent)` : color;
       return `${value} ${index * 100 / items.length}% ${(index + 1) * 100 / items.length}%`;
     }).join(', ')})`;
-    return `--mark:${colors[0]};--mark-colors:${gradient(colors, false)};--mark-background:${gradient(backgroundColors, true)}`;
+    const background = backgroundColors.length === 1 ? gradient(backgroundColors, true)
+      : `repeating-linear-gradient(135deg, ${backgroundColors.map((color, index) =>
+        `color-mix(in srgb, ${color} 16%, transparent) ${index * 10}px ${(index + 1) * 10}px`).join(', ')})`;
+    return `--mark:${colors[0]};--mark-colors:${gradient(colors, false)};--mark-background:${background}`;
   }
   tagsOf = task => (this.hasColumn('tags') ? this.state.data.settings.tags || [] : []).filter(tag => task.tagIds?.includes(tag.id));
   tagChips(task) { return `<span class="tag-chips">${this.tagsOf(task).map(tag => this.pill(tag.name, tag.color, 'tag-pill')).join('')}</span>`; }

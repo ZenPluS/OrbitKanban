@@ -2050,7 +2050,13 @@ tr.duplicate-row td:last-child {
 .activity-table tbody tr.selected td.row-actions {
   background: color-mix(in srgb, var(--accent) 9%, var(--surface));
 }
+.activity-table tbody tr.selected.marked {
+  background: var(--mark-background), color-mix(in srgb, var(--accent) 9%, var(--surface));
+}
 .activity-table tbody tr.selected.marked td {
+  background: transparent;
+}
+.activity-table tbody tr.selected.marked td.row-actions {
   background: var(--mark-background), color-mix(in srgb, var(--accent) 9%, var(--surface));
 }
 .table-footer.has-selection {
