@@ -22,6 +22,7 @@ import { TaskList } from './tasks/TaskList.js';
 import { SavedViews } from './tasks/SavedViews.js';
 import { ViewsPage } from './tasks/ViewsPage.js';
 import { GroupsPage } from './groups/GroupsPage.js';
+import { TodoPage } from './todos/TodoPage.js';
 import { GroupEditor } from './groups/GroupEditor.js';
 import { TaskRows } from './tasks/TaskRows.js';
 import { TaskAttachments } from './tasks/TaskAttachments.js';
@@ -82,6 +83,7 @@ export class App extends Component {
     this.savedViews = new SavedViews(this);
     this.viewsPage = new ViewsPage(this);
     this.groupsPage = new GroupsPage(this);
+    this.todoPage = new TodoPage(this);
     this.groupEditor = new GroupEditor(this);
     this.taskRows = new TaskRows(this);
     this.attachments = new TaskAttachments(this);

@@ -4,7 +4,7 @@
 
 | | |
 | --- | --- |
-| **Current version** | 3.4.1 |
+| **Current version** | 3.5.0 |
 | **Platform** | Windows 10 / 11, 64-bit |
 | **Distribution** | Single portable executable, `OrbitKanban-Portable.exe` |
 | **Network** | Not required. Used only for optional update checks against GitHub |
@@ -21,13 +21,14 @@
 - [In-app guide](#in-app-guide)
 - [Portable data and backups](#portable-data-and-backups)
 - [Organizations](#organizations)
-- [The six view types](#the-six-view-types)
+- [The seven view types](#the-seven-view-types)
   - [Tasks](#tasks)
   - [Linked issues](#linked-issues)
   - [Milestones](#milestones)
   - [Kanban](#kanban)
   - [Views](#views)
   - [Group activities](#group-activities)
+  - [To-do lists](#to-do-lists)
   - [Navigation sections](#navigation-sections)
 - [Working with the lists](#working-with-the-lists)
   - [Sorting and manual order](#sorting-and-manual-order)
@@ -76,7 +77,7 @@
 ## Highlights
 
 - **Truly portable.** The executable and a `data` folder next to it are the whole installation, with automatic daily backups.
-- **Six view types**: Tasks, Linked issues, Milestones, Kanban, Views (the saved and release view catalog) and Group activities (named groups of related tasks with their progress). The sidebar sections can be renamed, reordered, removed or added per organization, and a section can show a saved view.
+- **Seven view types**: Tasks, Linked issues, Milestones, Kanban, Views, Group activities and To-do lists. The sidebar sections can be renamed, reordered, removed or added per organization, and a task-based section can show a saved view.
 - **Collapsible sidebar** that folds into a column of icons (**☰** or `Ctrl+B`) to give the views more room.
 - **Automatic issue matching.** Incidents and problems recorded in Linked issues are resolved onto tasks by their portal code.
 - **Multiple organizations**, each with its own data, settings, logo, theme and language.
@@ -119,7 +120,7 @@ The demo organization shows every feature with realistic data:
 - three **Group activities**: checkout and payments, mobile app, identity and access;
 - an extra **Aurora** theme.
 
-Demo data is created only when no workspace exists yet, so updating the app never touches an existing `data` folder. To explore the demo next to your own data, create a new organization with **Include demo data**. **Clear tasks and issues** removes the demo content, groups included, from the current organization and keeps its settings.
+Demo data is created only when no workspace exists yet, so updating the app never touches an existing `data` folder. To explore the demo next to your own data, create a new organization with **Include demo data**. **Clear workspace data** removes tasks, issues, groups and to-do cards from the current organization and keeps its settings.
 
 ### Moving and sharing the workspace
 
@@ -154,7 +155,7 @@ Everything OrbitKanban stores lives in the `data` folder next to the executable:
 
 | Path | Content |
 | --- | --- |
-| `data/workspace.json` | The workspace: all organizations, tasks, issues, groups, settings, themes and logos |
+| `data/workspace.json` | The workspace: all organizations, tasks, issues, groups, to-do cards, settings, themes and logos |
 | `data/workspace.json.bak` | The previous save |
 | `data/backups/` | Daily snapshots of the whole workspace; the 14 most recent are kept |
 | `data/languages/` | Optional translation files and the English template |
@@ -168,7 +169,7 @@ The workspace format is version 2 (multi-organization). It cannot be opened by 1
 
 ## Organizations
 
-The menu under the **OrbitKanban** name in the sidebar switches the active organization. Each organization has its **own tasks, issues and groups** and its own navigation sections, statuses, urgencies, highlights, tags, columns, themes, font, text sizes, hours per day, logo and language. Switching updates every view immediately and resets search and filters. The selection is remembered for the next launch. Identical codes in different organizations are never linked.
+The menu under the **OrbitKanban** name in the sidebar switches the active organization. Each organization has its **own tasks, issues, groups and to-do cards** and its own navigation sections, statuses, urgencies, highlights, tags, columns, themes, font, text sizes, hours per day, logo and language. Switching updates every view immediately and resets search and filters. The selection is remembered for the next launch. Identical codes in different organizations are never linked.
 
 - **Manage organizations** opens the related settings tab.
 - **New organization** asks for a name, language and optional logo. A preview shows the logo and the four colors of the theme that will be generated. New organizations start empty unless **Include demo data** is selected.
@@ -177,7 +178,7 @@ The menu under the **OrbitKanban** name in the sidebar switches the active organ
 
 **Upload logo and generate theme** accepts PNG, JPEG, WebP, GIF and BMP files up to 15 MB. The logo is converted to PNG, scaled to at most 512 px per side and embedded in the workspace, so the original file is no longer needed. Its colors generate a **Theme from logo**. Text and accent are adjusted to WCAG AA contrast, and surfaces are separated from the background, so even monochrome logos produce a readable theme. The theme is previewed immediately and kept with **Save settings**. **Remove logo** restores the default symbol without deleting the theme. The application name is always OrbitKanban and is not configurable.
 
-## The six view types
+## The seven view types
 
 All views share compact headers. Their tables, timeline and board fill the window and scroll internally while respecting the configured text sizes. On Windows the app draws its own title bar: drag the top bar or logo to move the window, and double-click to maximize or restore it. The minimize, maximize and close buttons follow the active theme.
 
@@ -237,13 +238,17 @@ The sixth default section collects **groups**: named sets of related tasks with 
 - Deleting a group, after confirmation, keeps its tasks. Deleting a task removes it from its groups.
 - Groups belong to the organization data: they are covered by undo and redo, backups and **Export data**.
 
+### To-do lists
+
+The To-do lists section collects independent note and checklist cards for each organization. Create a card with a title, plain-text note, color and checklist items; tick items directly on the card. Edit or remove individual items, pin important cards to the top, search card contents, and delete cards after confirmation. Cards are included in undo/redo, backups and data exports. Older archives receive the section once when there is room; it can also be added in **Settings → Navigation**.
+
 ### Navigation sections
 
-The sidebar lists the **sections** of the organization. Each section opens one of the six view types under its own name. **Settings → Navigation** shows all sections in menu order:
+The sidebar lists the **sections** of the organization. Each section opens one of the seven view types under its own name. **Settings → Navigation** shows all sections in menu order:
 
 - rename a section, or move it up and down to change the menu order;
 - remove a section: only the menu entry disappears, tasks and issues are never deleted;
-- **Add section** creates a new section of any of the six types, up to 12 sections. An empty name uses the name of the view type.
+- **Add section** creates a new section of any of the seven types, up to 12 sections. An empty name uses the name of the view type.
 
 A Tasks, Milestones or Kanban section can be bound to a [saved view](#search-column-filters-and-views). A bound Tasks section applies the view each time it opens. A bound Milestones or Kanban section shows only the tasks of that view, hidden tasks included, and its header shows a **View** label with the view name. For example, *Kanban Security* can show only security tasks while the plain *Kanban* section shows everything. Deleting a saved view releases the sections bound to it.
 
@@ -558,14 +563,14 @@ A file named after a built-in language, such as `it.json`, overrides only the te
 | --- | --- |
 | **Export themes** | All themes and the active theme |
 | **Export settings** | Language, navigation sections, hours per day, font, text sizes, statuses, urgencies, highlighters, tags, columns (with their platform templates) and logo |
-| **Export data** | Tasks, issues and groups, with the catalogs needed to map them |
+| **Export data** | Tasks, issues, groups and to-do cards, with the catalogs needed to map them |
 | **Export everything** | All of the above in one file |
 
 **Import from file** accepts OrbitKanban exports up to 32 MB. It validates the file before changing anything and lets you pick which parts to import:
 
 - **Themes** with matching identifiers are updated, and the rest are added.
 - **Settings** replace the current ones. Tasks are remapped to statuses and urgencies by name, then by position. The logo is replaced only if you choose to.
-- **Data** can be imported with **Add and update**, which updates tasks and groups with the same identifier, adds the rest and never duplicates identical issues; an imported group whose name is already taken gets a numbered name. **Replace everything** replaces the current tasks, issues and groups instead. Data exported before 3.2 keeps the current groups.
+- **Data** can be imported with **Add and update**, which updates tasks, groups and cards with the same identifier, adds the rest and never duplicates identical issues; an imported group whose name is already taken gets a numbered name. **Replace everything** replaces the current tasks and issues and any groups and cards present in the file. Older exports without groups or cards keep the current ones.
 - The destination can be **this organization** or **a new organization**.
 
 ### CSV import
@@ -746,7 +751,7 @@ Tags are never moved. Bump the version before releasing new sources:
 npm version minor --no-git-tag-version --ignore-scripts
 ```
 
-For a specifically numbered release, use `npm version 3.4.1 --no-git-tag-version --ignore-scripts` instead. To update the local portable copy too, run the pipeline **without `-NoDeliver`** and close the app first. The script replaces only the executable, not `dist/data`.
+For a specifically numbered release, use `npm version 3.5.0 --no-git-tag-version --ignore-scripts` instead. To update the local portable copy too, run the pipeline **without `-NoDeliver`** and close the app first. The script replaces only the executable, not `dist/data`.
 
 The script refuses to reuse a tagged version for different sources. If a build or test fails, nothing is committed or pushed.
 
@@ -754,6 +759,7 @@ The script refuses to reuse a tagged version for different sources. If a build o
 
 | Version | Changes |
 | --- | --- |
+| **3.5.0** | To-do lists: organization-local colored note and checklist cards with search, pinning, portable storage and data transfer |
 | **3.4.1** | Repeating diagonal stripes for multiple task highlights, including selected rows |
 | **3.4.0** | Multiple simultaneous task highlights, including automatic status colors, with independent toggles and compatible archive transfer |
 | **3.3.4** | Unsupported attachment type errors stay in front of the active dialog for both file-picker and drag-and-drop uploads |

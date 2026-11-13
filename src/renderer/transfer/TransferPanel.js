@@ -52,7 +52,7 @@ export class TransferPanel extends Component {
       file.settings && part('settings', "Settings", this.esc(this.t(file.settings.tags ? "Language, navigation sections, hours per day, text sizes, statuses, urgencies, highlighters, tags, list columns and platform links. Replaces current settings." : file.settings.highlights ? "Language, navigation sections, hours per day, text sizes, statuses, urgencies, highlighters and list columns. Replaces the current settings." : file.settings.fontSizes ? "Language, navigation sections, hours per day, text sizes, statuses and urgencies. Replaces the current settings." : "Language, navigation sections, hours per day, statuses and urgencies. Replaces the current settings.")),
         file.settings.logo ? `<label class="import-sub"><input type="checkbox" name="logo"><img class="import-logo" src="${file.settings.logo}" alt=""><span>${this.esc(this.t("Also replace the logo"))}</span></label>` : ''),
       file.data && part('data', "Data", `${this.plural(file.data.tasks.length, "tasks")} · ${this.plural(file.data.issues.length, 'issue')}`,
-        `<div class="import-sub import-modes" id="import-data-mode">${radio('dataMode', 'merge', "Add and update", this.esc(this.t("Tasks with the same identifier are updated, issues already present are not duplicated.")), true)}${radio('dataMode', 'replace', "Replace everything", this.esc(this.t("Current tasks and issues are replaced by those in the file.")), false)}</div>`)
+        `<div class="import-sub import-modes" id="import-data-mode">${radio('dataMode', 'merge', "Add and update", this.esc(this.t("Tasks and cards with the same identifier are updated, issues already present are not duplicated.")), true)}${radio('dataMode', 'replace', "Replace everything", this.esc(this.t("Tasks and issues are replaced; groups and cards are replaced if present in the file.")), false)}</div>`)
     ].filter(Boolean).join('');
     const destinations = radio('destination', 'current', "Into this organization", this.esc(current.name), !toNew) + radio('destination', 'new', "Into a new organization", this.esc(this.t("The current organization is left unchanged.")), toNew);
     const suggestedName = OrganizationTransfer.uniqueOrganizationName(file.organization.name, this.state.organizations.map(o => o.name), this.t("Imported organization"));
@@ -80,7 +80,7 @@ export class TransferPanel extends Component {
       else {
         if (selected('settings')) notes.push("The current settings will be replaced: existing tasks are kept and mapped to the file’s statuses and urgencies with the same name, otherwise to the same position.");
         else if (selected('data')) notes.push("Statuses and urgencies of the imported tasks are mapped to this organization’s ones with the same name, otherwise to the same position.");
-        if (selected('data') && fields.dataMode.value === 'replace') notes.push("All current tasks and issues of this organization will be deleted and replaced by those in the file.");
+        if (selected('data') && fields.dataMode.value === 'replace') notes.push("All current tasks and issues will be deleted and replaced; groups and cards will also be replaced if present in the file.");
         notes.push("To be able to go back, first export a backup or the full organization.");
       }
       this.$('#import-notes').innerHTML = notes.map(note => `<li>${this.esc(this.t(note))}</li>`).join('');
@@ -101,7 +101,7 @@ export class TransferPanel extends Component {
       }
       await this.app.history.commit(next => {
         const imported = OrganizationTransfer.applyOrganizationImport(next, file, options);
-        next.settings = imported.settings; next.tasks = imported.tasks; next.issues = imported.issues; next.groups = imported.groups;
+        next.settings = imported.settings; next.tasks = imported.tasks; next.issues = imported.issues; next.groups = imported.groups; next.todos = imported.todos;
       });
       this.state.statusFilter = '';
       this.$('#modal').close(); this.app.shell.render(); this.app.notifier.notify("Import completed.");

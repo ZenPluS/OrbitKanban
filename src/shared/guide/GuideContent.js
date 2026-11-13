@@ -20,7 +20,7 @@ class GuideContent {
           'Do not run two copies on the same data folder at the same time.'
         ] },
         { title: 'Find your way around', items: [
-          'The sidebar holds the organization menu, the sections of the six view types, this **Guide** and **Settings**.',
+          'The sidebar holds the organization menu, the sections of the seven view types, this **Guide** and **Settings**.',
           'The menu button **☰** at the left of the top bar, or `Ctrl+B`, folds the sidebar into a column of icons so the views get more space. Hover an icon to see its name; the building icon still switches organization. Press the button again to expand the sidebar; the choice is remembered.',
           'The top bar offers global search, undo and redo, and the archive status. **Open data folder** at the bottom shows where your data lives.',
           'Rename, reorder, remove or add the sections of each organization in **Settings → Navigation**.',
@@ -221,6 +221,17 @@ class GuideContent {
       ]
     },
     {
+      id: 'todos', icon: 'tasks', tab: 8, go: [{ view: 8 }],
+      summary: 'Keep notes and checklists together in this organization.',
+      topics: [
+        { title: 'Notes and checklists', items: [
+          'Use **New card** to add a title, a note, a color and checklist items. Check items directly on the card, or edit and remove them.',
+          'Pin important cards to the top, search their contents, or delete a card after confirmation.',
+          'Cards are independent of tasks and travel with the organization data, backups, undo and redo.'
+        ] }
+      ]
+    },
+    {
       id: 'columns', icon: 'column-plus', title: 'Columns', go: [{ settings: 'columns' }, { settings: 'custom-columns' }],
       summary: 'Decide which columns each list shows and add the fields your team needs.',
       topics: [
@@ -347,7 +358,7 @@ class GuideContent {
           'Choose the tasks (as shown, all or selected), the columns and the sheets. Colors, links and real dates are kept.'
         ] },
         { title: 'Start over', items: [
-          '**Clear tasks and issues** deletes all the tasks and associations of the organization, keeping settings and themes.'
+          '**Clear workspace data** deletes the tasks, associations, groups and to-do cards of the organization, keeping settings and themes.'
         ] }
       ]
     },

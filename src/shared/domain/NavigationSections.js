@@ -5,9 +5,9 @@ const Common = typeof module !== 'undefined' ? require('./Common') : globalThis.
 
 class NavigationSections {
   // Settings and Guide keep their existing page numbers (4 and 5).
-  static VIEW_IDS = { tasks: 0, issues: 1, milestones: 2, kanban: 3, views: 6, groups: 7 };
+  static VIEW_IDS = { tasks: 0, issues: 1, milestones: 2, kanban: 3, views: 6, groups: 7, todos: 8 };
   static TYPES = Object.keys(NavigationSections.VIEW_IDS);
-  static DEFAULT_NAMES = { tasks: "Tasks", issues: "Linked issues", milestones: "Milestones", kanban: 'Kanban', views: "Views", groups: "Group activities" };
+  static DEFAULT_NAMES = { tasks: "Tasks", issues: "Linked issues", milestones: "Milestones", kanban: 'Kanban', views: "Views", groups: "Group activities", todos: "To-do lists" };
   // Types that show tasks, so a saved view can filter them.
   static FILTERABLE = ['tasks', 'milestones', 'kanban'];
   static LIMIT = 12;

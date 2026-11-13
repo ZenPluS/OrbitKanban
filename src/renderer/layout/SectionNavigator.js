@@ -5,7 +5,7 @@ import { ColumnLayout, NavigationSections } from '../shared.js';
 export class SectionNavigator extends Component {
   list = (settings = this.state.data.settings) => settings.navigation;
   typeOf = NavigationSections.typeOf;
-  iconOf = type => ({ views: this.ico('list'), groups: this.ico('groups') })[type] || this.icons[NavigationSections.typeIndex(type)];
+  iconOf = type => ({ views: this.ico('list'), groups: this.ico('groups'), todos: this.ico('tasks') })[type] || this.icons[NavigationSections.typeIndex(type)];
   // Several sections can open the same view: the one picked last wins, then the one whose filters the task list holds.
   current() {
     const type = this.typeOf(this.state.view), list = this.list();

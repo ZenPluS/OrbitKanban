@@ -189,17 +189,17 @@ test('demo data is localized and only added to new organizations on request', ()
   const demo = DataFactory.createOrganization('Demo', 'en', '', undefined, true);
   assert.ok(demo.data.tasks.length > 200 && demo.data.issues.length > 100);
 });
-test('navigation sections default to six views, validate their limits and upgrade legacy tab names', () => {
+test('navigation sections default to seven views, validate their limits and upgrade legacy tab names', () => {
   assert.deepEqual(NavigationSections.defaultSections('en'), [
     { id: 'tasks', type: 'tasks', name: 'Tasks' }, { id: 'issues', type: 'issues', name: 'Linked issues' },
     { id: 'milestones', type: 'milestones', name: 'Milestones' }, { id: 'kanban', type: 'kanban', name: 'Kanban' },
-    { id: 'views', type: 'views', name: 'Views' }, { id: 'groups', type: 'groups', name: 'Group activities' }
+    { id: 'views', type: 'views', name: 'Views' }, { id: 'groups', type: 'groups', name: 'Group activities' }, { id: 'todos', type: 'todos', name: 'To-do lists' }
   ]);
   assert.equal(DataFactory.baseData('it').settings.navigation[0].name, Common.term('Tasks', 'it'));
   assert.equal(DataFactory.baseData('it').settings.navigation[4].name, 'Viste');
   assert.equal(DataFactory.baseData('it').settings.navigation[5].name, 'Gruppi di attività');
-  assert.deepEqual(NavigationSections.TYPES.map(NavigationSections.typeIndex), [0, 1, 2, 3, 6, 7]);
-  assert.deepEqual([0, 1, 2, 3, 4, 5, 6, 7, 8].map(NavigationSections.typeOf), ['tasks', 'issues', 'milestones', 'kanban', undefined, undefined, 'views', 'groups', undefined]);
+  assert.deepEqual(NavigationSections.TYPES.map(NavigationSections.typeIndex), [0, 1, 2, 3, 6, 7, 8]);
+  assert.deepEqual([0, 1, 2, 3, 4, 5, 6, 7, 8].map(NavigationSections.typeOf), ['tasks', 'issues', 'milestones', 'kanban', undefined, undefined, 'views', 'groups', 'todos']);
   const section = index => ({ id: `s-${index}`, type: NavigationSections.TYPES[index % 6], name: `Section ${index}` });
   assert.equal(NavigationSections.validateNavigation([section(1)]).length, 1);
   assert.equal(NavigationSections.validateNavigation(Array.from({ length: 12 }, (_, i) => section(i))).length, 12);
@@ -215,7 +215,7 @@ test('navigation sections default to six views, validate their limits and upgrad
   delete legacy.settings.navigation;
   legacy.settings.tabNames = ['List', 'Links', 'Roadmap', 'Board'];
   const upgraded = ArchiveValidator.migrateArchive(structuredClone(legacy)).organizations[0].data.settings;
-  assert.deepEqual(upgraded.navigation.map(item => [item.id, item.type, item.name]), [['tasks', 'tasks', 'List'], ['issues', 'issues', 'Links'], ['milestones', 'milestones', 'Roadmap'], ['kanban', 'kanban', 'Board'], ['views', 'views', 'Viste'], ['groups', 'groups', 'Gruppi di attività']]);
+  assert.deepEqual(upgraded.navigation.map(item => [item.id, item.type, item.name]), [['tasks', 'tasks', 'List'], ['issues', 'issues', 'Links'], ['milestones', 'milestones', 'Roadmap'], ['kanban', 'kanban', 'Board'], ['views', 'views', 'Viste'], ['groups', 'groups', 'Gruppi di attività'], ['todos', 'todos', 'Liste da fare']]);
   assert.ok(!('tabNames' in upgraded));
   const invalidLegacy = structuredClone(legacy);
   invalidLegacy.settings.tabNames[0] = null;
@@ -251,7 +251,7 @@ test('navigation sections can be reordered, removed, repeated and bound to saved
   const legacyFile = OrganizationTransfer.organizationExport({ name: 'Source', data: DataFactory.baseData('en') }, 'settings');
   delete legacyFile.settings.navigation;
   legacyFile.settings.tabNames = ['A', 'B', 'C', 'D'];
-  assert.deepEqual(OrganizationTransfer.parseOrganizationFile(legacyFile).settings.navigation.map(item => item.name), ['A', 'B', 'C', 'D', 'Views', 'Group activities']);
+  assert.deepEqual(OrganizationTransfer.parseOrganizationFile(legacyFile).settings.navigation.map(item => item.name), ['A', 'B', 'C', 'D', 'Views', 'Group activities', 'To-do lists']);
   const broken = structuredClone(file);
   broken.settings.navigation = [];
   assert.throws(() => OrganizationTransfer.parseOrganizationFile(broken), /at least one navigation section/);
@@ -1182,7 +1182,7 @@ test('task groups validate their records, keep unique names and follow the tasks
 test('organizations from previous versions get the group activities section once and groups travel with the data', () => {
   const legacy = DataFactory.baseData('en');
   delete legacy.groups;
-  legacy.settings.navigation = legacy.settings.navigation.filter(section => section.type !== 'groups');
+  legacy.settings.navigation = legacy.settings.navigation.filter(section => !['groups', 'todos'].includes(section.type));
   const migrated = ArchiveValidator.migrateArchive(structuredClone(legacy)).organizations[0].data;
   assert.deepEqual(migrated.groups, []);
   assert.deepEqual(migrated.settings.navigation.map(section => section.type), ['tasks', 'issues', 'milestones', 'kanban', 'views', 'groups']);
@@ -1212,4 +1212,31 @@ test('organizations from previous versions get the group activities section once
   assert.throws(() => OrganizationTransfer.parseOrganizationFile(invalid), /Invalid task groups/);
   const created = OrganizationTransfer.importedOrganizationData(file, { data: true }, 'it');
   assert.deepEqual(created.groups, source.groups);
+});
+test('to-do cards migrate once and survive archive and organization transfers', () => {
+  const legacy = DataFactory.baseData('en');
+  delete legacy.todos;
+  legacy.settings.navigation = legacy.settings.navigation.filter(section => section.type !== 'todos');
+  const migrated = ArchiveValidator.migrateArchive(legacy).organizations[0].data;
+  assert.deepEqual(migrated.todos, []);
+  assert.equal(migrated.settings.navigation.at(-1).type, 'todos');
+  migrated.settings.navigation.pop();
+  assert.ok(!ArchiveValidator.migrateArchive(migrated).organizations[0].data.settings.navigation.some(section => section.type === 'todos'));
+  const source = DataFactory.baseData('en');
+  source.todos = [{ id: 'card', title: 'Plan', text: 'Notes', color: '#123456', pinned: true, items: [{ id: 'item', text: 'First', done: true }] }];
+  const restored = ArchiveValidator.migrateArchive(source).organizations[0].data;
+  assert.deepEqual(restored.todos, source.todos);
+  const file = OrganizationTransfer.parseOrganizationFile(OrganizationTransfer.organizationExport({ name: 'Source', data: source }, 'data'));
+  const current = DataFactory.baseData('en');
+  current.todos = [{ ...structuredClone(source.todos[0]), id: 'local' }];
+  assert.deepEqual(OrganizationTransfer.applyOrganizationImport(current, file, { data: true }).todos.map(card => card.id), ['local', 'card']);
+  assert.deepEqual(OrganizationTransfer.applyOrganizationImport(current, file, { data: true, dataMode: 'replace' }).todos, source.todos);
+  delete file.data.todos;
+  assert.deepEqual(OrganizationTransfer.applyOrganizationImport(current, file, { data: true, dataMode: 'replace' }).todos, current.todos);
+  const broken = structuredClone(source);
+  broken.todos[0].items.push({ ...broken.todos[0].items[0] });
+  assert.throws(() => ArchiveValidator.validateData(broken), /Invalid to-do cards/);
+  broken.todos[0].items.pop();
+  broken.todos[0].color = 'invalid';
+  assert.throws(() => ArchiveValidator.validateData(broken), /Invalid to-do cards/);
 });

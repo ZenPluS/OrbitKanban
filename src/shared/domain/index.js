@@ -10,6 +10,7 @@ module.exports = {
   TaskLinks: require('./TaskLinks'),
   NavigationSections: require('./NavigationSections'),
   TaskGroups: require('./TaskGroups'),
+  TodoLists: require('./TodoLists'),
   ArchiveValidator: require('./ArchiveValidator'),
   DataFactory: require('./DataFactory'),
   OrganizationTransfer: require('./OrganizationTransfer'),

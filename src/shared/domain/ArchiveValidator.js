@@ -15,6 +15,7 @@ const ThemeCatalog = typeof module !== 'undefined' ? require('./ThemeCatalog') :
 const TaskLinks = typeof module !== 'undefined' ? require('./TaskLinks') : globalThis.OrbitKanban.Domain.TaskLinks;
 const NavigationSections = typeof module !== 'undefined' ? require('./NavigationSections') : globalThis.OrbitKanban.Domain.NavigationSections;
 const TaskGroups = typeof module !== 'undefined' ? require('./TaskGroups') : globalThis.OrbitKanban.Domain.TaskGroups;
+const TodoLists = typeof module !== 'undefined' ? require('./TodoLists') : globalThis.OrbitKanban.Domain.TodoLists;
 
 class ArchiveValidator {
   static validateData(data) {
@@ -78,6 +79,7 @@ class ArchiveValidator {
     Common.assert(Array.isArray(data.issues) && uniqueIds(data.issues), "Invalid issue list.");
     Common.assert(data.issues.every(x => ['id', 'code', 'incident', 'problem'].every(k => text(x[k])) && x.id), "Invalid issue list.");
     if (data.groups !== undefined) TaskGroups.validateGroups(data.groups);
+    if (data.todos !== undefined) TodoLists.validate(data.todos);
     ColumnValidator.validateCustomData(data);
     return data;
   }
@@ -110,6 +112,10 @@ class ArchiveValidator {
       if (organization.data.groups === undefined) {
         NavigationSections.addMissingType(organization.data.settings, 'groups');
         organization.data.groups = [];
+      }
+      if (organization.data.todos === undefined) {
+        NavigationSections.addMissingType(organization.data.settings, 'todos');
+        organization.data.todos = [];
       }
       TaskGroups.prune(organization.data);
       organization.data.settings.language ??= 'it';

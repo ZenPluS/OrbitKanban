@@ -28,7 +28,7 @@ test('guide sections are complete and point to real destinations', () => {
   const ids = GuideContent.sections.map(section => section.id);
   assert.equal(new Set(ids).size, ids.length);
   assert.ok(ids.length >= 15);
-  assert.deepEqual(GuideContent.sections.filter(section => section.tab !== undefined).map(section => section.tab), [0, 1, 2, 3, 7]);
+  assert.deepEqual(GuideContent.sections.filter(section => section.tab !== undefined).map(section => section.tab), [0, 1, 2, 3, 7, 8]);
   for (const section of GuideContent.sections) {
     assert.match(section.id, /^[a-z][a-z-]*$/, section.id);
     assert.ok(IconLibrary.names().includes(section.icon), `${section.id}: icon ${section.icon}`);
