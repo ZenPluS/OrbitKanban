@@ -279,14 +279,20 @@ class GuideContent {
       ]
     },
     {
-      id: 'appearance', icon: 'palette', title: 'Themes, fonts and text size', go: [{ settings: 'themes' }, { settings: 'fonts' }],
+      id: 'appearance', icon: 'palette', title: 'Themes, fonts and text size', go: [{ settings: 'themes' }, { settings: 'appearance' }, { settings: 'fonts' }],
       summary: 'Make the workspace yours: every change is previewed live and kept when you save.',
       topics: [
         { title: 'Themes', items: [
-          'Choose from 40 built-in themes, 27 dark and 13 light, or create your own from four colors: background, surface, text and accent.',
-          'Built-in themes can be edited for each organization and brought back with **Restore built-in theme**; your own themes can be edited and deleted.',
+          'Midnight is the only theme defined in code. The other 39 official themes come from orbit_themes and are included as an offline snapshot. Create your own from four colors: background, surface, text and accent.',
+          'Official and repository themes can be edited for each organization and brought back with **Restore theme preset**; your own themes can be edited and deleted.',
           'Built-in palettes meet WCAG AA contrast: text at least 4.5:1 and accent at least 3:1, on both background and surfaces.',
           'The app icon takes the theme colors too, like themed icons on a phone: in the sidebar, in the browser tab and on the app window in the taskbar. The executable file and pinned shortcuts keep the original icon.'
+        ] },
+        { title: 'Appearance repositories', items: [
+          'In **Settings → Appearance repositories**, add public GitHub repositories as `owner/repository`, choosing icons or themes. One repository can contain several packs.',
+          'Orbit icons come from **orbit_icons**. Select another **Icon pack** to override them; missing icons keep their defaults. **Restore default icons** returns to Orbit.',
+          '**Refresh** downloads and validates the package. Startup works offline using the portable cache in **data/appearance** and the included official snapshots. Save settings to keep your selections.',
+          'Refreshing preserves edited theme palettes. Removing a reference keeps its saved themes and the active palette. Copy the whole data folder to share cached community icons; JSON backups contain only references and theme palettes.'
         ] },
         { title: 'Theme from an image', items: [
           'Upload an image and all four colors are extracted automatically, then adjusted as little as possible, in lightness only, to meet WCAG AA.',

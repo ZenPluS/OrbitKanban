@@ -10,6 +10,7 @@ const { PlatformLinks } = require('../shared/columns');
 const WorkspaceStore = require('./storage/WorkspaceStore');
 const AttachmentStore = require('./storage/AttachmentStore');
 const LanguageStore = require('./storage/LanguageStore');
+const AppearancePackStore = require('./storage/AppearancePackStore');
 const WebServer = require('../web/WebServer');
 const SplashScreen = require('./splash/SplashScreen');
 const SplashTheme = require('./splash/SplashTheme');
@@ -31,7 +32,7 @@ class DesktopApplication {
   #launcherReleased = false;
   #win; #splash; #revealTimer; #revealed = false; #resolveAppReady;
   #appReady = new Promise(resolve => { this.#resolveAppReady = resolve; });
-  #store; #attachments; #languages; #updater; #webServer;
+  #store; #attachments; #languages; #updater; #webServer; #appearance;
   #splashTheme; #splashThemeTimer = null; #splashThemeSaving = Promise.resolve();
   #windowIcon; #windowIconApplied = null;
   #updateShutdown = false;
@@ -59,7 +60,8 @@ class DesktopApplication {
     app.setPath('userData', this.#runtimeFolder);
     app.setPath('sessionData', this.#runtimeFolder);
     app.setAppLogsPath(path.join(this.#dataFolder, 'logs'));
-    this.#store = new WorkspaceStore({ dataFolder: this.#dataFolder, extras: () => ({ appVersion: app.getVersion(), browserUrl: this.#webServer.url }) });
+    this.#appearance = new AppearancePackStore({ dataFolder: this.#dataFolder });
+    this.#store = new WorkspaceStore({ dataFolder: this.#dataFolder, extras: settings => ({ appVersion: app.getVersion(), browserUrl: this.#webServer.url, appearance: this.#appearance.catalog(settings.packSources) }) });
     this.#attachments = new AttachmentStore({ dataFolder: this.#dataFolder });
     this.#languages = new LanguageStore({ dataFolder: this.#dataFolder });
     this.#splashTheme = new SplashTheme(this.#runtimeFolder);
@@ -79,7 +81,8 @@ class DesktopApplication {
         if (error) throw new Error(error);
       },
       language: () => this.#store.language(),
-      languages: operation => this.#languageOperation(operation)
+      languages: operation => this.#languageOperation(operation),
+      appearance: (operation, payload) => this.#appearanceOperation(operation, payload)
     });
   }
 
@@ -102,6 +105,11 @@ class DesktopApplication {
   get windowIconApplied() { return this.#windowIconApplied; }
 
   #message(text, organizationId) { return this.#store.message(text, organizationId); }
+  async #appearanceOperation(operation, payload = {}) {
+    if (operation === 'refresh') await this.#appearance.refresh(payload.kind, payload.repository);
+    else if (operation !== 'info') throw new Error('Unsupported operation.');
+    return this.#appearance.catalog(payload.sources);
+  }
 
   // The next start shows the loading screen in the theme and logo of the organization that opens first (the active one).
   // Saves run one after another, so quitting can wait for the last one and two writes never race.
@@ -322,6 +330,7 @@ class DesktopApplication {
       return true;
     });
     handle('languages', operation => this.#languageOperation(operation));
+    handle('appearance', (operation, payload) => this.#appearanceOperation(operation, payload));
     handle('browser-access', async (operation, organizationId) => {
       if (!webServer.port) throw new Error(message("Browser access is not available."));
       if (operation === 'open') { if (!smoke) await shell.openExternal(webServer.authUrl(organizationId)); }
@@ -342,6 +351,7 @@ class DesktopApplication {
     try { await this.#languages.reload(); }
     catch (error) { console.error('Additional languages could not be loaded:', error); }
     let settings;
+    await this.#appearance.initialize();
     try { settings = (await this.#store.load()).data.settings; }
     catch (error) { console.error('Workspace archive could not be preloaded:', error); }
     if (settings) await this.saveSplashTheme(settings);

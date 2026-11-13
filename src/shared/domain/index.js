@@ -4,6 +4,7 @@ module.exports = {
   Common: require('./Common'),
   Typography: require('./Typography'),
   Limits: require('./Limits'),
+  AppearancePacks: require('./AppearancePacks'),
   TaskColumns: require('./TaskColumns'),
   TaskLayout: require('./TaskLayout'),
   ThemeCatalog: require('./ThemeCatalog'),

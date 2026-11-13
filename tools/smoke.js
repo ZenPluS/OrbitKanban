@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 const { spawnSync } = require('node:child_process');
+const { createHash } = require('node:crypto');
 const { DataFactory, ArchiveValidator } = require('../src/shared/domain');
 
 class SmokeRunner {
@@ -12,7 +13,23 @@ class SmokeRunner {
 
   static #seed(folder) {
     fs.mkdirSync(path.join(folder, 'data'));
-    fs.writeFileSync(path.join(folder, 'data', 'workspace.json'), JSON.stringify(DataFactory.initialData()));
+    const data = DataFactory.initialData();
+    data.settings.packSources = [{ kind: 'icons', repository: 'smoke/appearance' }, { kind: 'themes', repository: 'smoke/appearance' }];
+    fs.writeFileSync(path.join(folder, 'data', 'workspace.json'), JSON.stringify(data));
+    const appearance = path.join(folder, 'data', 'appearance');
+    fs.mkdirSync(appearance);
+    for (const kind of ['icons', 'themes']) {
+      const pack = kind === 'icons' ? {
+        id: 'sketch', name: 'Offline sketch', icons: {
+          tasks: { family: 'line', layers: [{ style: 'line', shapes: [{ tag: 'path', attrs: { d: 'M2 2L22 22' } }] }] },
+          search: { family: 'blue', layers: [{ style: 'f', shapes: [{ tag: 'circle', attrs: { cx: 12, cy: 12, r: 8 } }] }] }
+        }
+      } : { id: 'palettes', name: 'Offline palettes', themes: [{ id: 'paper', name: 'Offline paper', background: '#ffffff', surface: '#eeeeee', text: '#111111', accent: '#224488' }] };
+      fs.writeFileSync(path.join(appearance, `${createHash('sha256').update(kind + 'smoke/appearance').digest('hex')}.json`), JSON.stringify({
+        format: 'orbitkanban-pack-cache', version: 1, kind, repository: 'smoke/appearance', updatedAt: '2026-01-01T00:00:00.000Z',
+        manifest: { format: `orbitkanban-${kind}`, version: 1, packs: [pack] }
+      }));
+    }
     fs.mkdirSync(path.join(folder, 'data', 'languages'));
     fs.writeFileSync(path.join(folder, 'data', 'languages', 'de.json'), JSON.stringify({ format: 'orbitkanban-language', version: 1, code: 'de', name: 'Deutsch', locale: 'de-DE', messages: { Settings: 'Einstellungen', 'Save settings': 'Einstellungen speichern' } }));
     fs.writeFileSync(path.join(folder, 'data', 'languages', 'broken.json'), '{ broken');

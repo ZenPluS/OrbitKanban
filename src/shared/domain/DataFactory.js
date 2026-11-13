@@ -29,7 +29,8 @@ class DataFactory {
     const settings = {
       language, logo: '', logoSource: '', logoShape: 'none', navigation: NavigationSections.defaultSections(language),
       hoursPerDay: 8, fontSizes: Typography.defaultFontSizes(), fontFamily: Typography.DEFAULT_FONT_FAMILY, statuses, urgencies, highlights: ThemeCatalog.defaultHighlights(language), tags: [], taskColumns: TaskColumns.defaultTaskColumns(), themeId: 'midnight',
-      themes: ThemeCatalog.defaultThemes(), savedViews: [], taskFields: [], issueFields: [], issueColumns: ColumnLayout.normalizeIssueColumns(),
+      themes: ThemeCatalog.availableThemes(), savedViews: [], taskFields: [], issueFields: [], issueColumns: ColumnLayout.normalizeIssueColumns(),
+      packSources: [], iconPack: 'default', packThemeBases: Object.fromEntries(ThemeCatalog.availableThemes().filter(theme => theme.id !== 'midnight').map(theme => [theme.id, { ...theme }])),
       requiredTaskColumns: [...RequiredFields.DEFAULT_REQUIRED.tasks], requiredIssueColumns: [...RequiredFields.DEFAULT_REQUIRED.issues]
     };
     settings.taskEditorLayout = TaskLayout.normalizeTaskEditorLayout(settings);

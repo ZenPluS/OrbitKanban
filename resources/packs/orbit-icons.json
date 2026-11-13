@@ -1,0 +1,2035 @@
+{
+  "format": "orbitkanban-icons",
+  "version": 1,
+  "packs": [
+    {
+      "id": "orbit",
+      "name": "Orbit",
+      "icons": {
+        "tasks": {
+          "family": "blue",
+          "layers": [
+            {
+              "style": "b",
+              "shapes": [
+                {
+                  "tag": "rect",
+                  "attrs": {
+                    "x": 6.5,
+                    "y": 2,
+                    "width": 15,
+                    "height": 17,
+                    "rx": 3.5
+                  }
+                }
+              ]
+            },
+            {
+              "style": "f",
+              "shapes": [
+                {
+                  "tag": "rect",
+                  "attrs": {
+                    "x": 2.5,
+                    "y": 5,
+                    "width": 15,
+                    "height": 17,
+                    "rx": 3.5
+                  }
+                }
+              ]
+            },
+            {
+              "style": "ds",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M6 11.3l1.5 1.5 2.8-3M6 17.3l1.5 1.5 2.8-3M12.6 11.4h2M12.6 17.4h2"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "link": {
+          "family": "violet",
+          "layers": [
+            {
+              "style": "bs",
+              "width": 2.8,
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M10.4 13.6a4 4 0 0 1 0-5.6l2.9-2.9a4 4 0 0 1 5.6 5.6l-1.4 1.4"
+                  }
+                }
+              ]
+            },
+            {
+              "style": "s",
+              "width": 2.8,
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M13.6 10.4a4 4 0 0 1 0 5.6l-2.9 2.9a4 4 0 0 1-5.6-5.6l1.4-1.4"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "flag": {
+          "family": "amber",
+          "layers": [
+            {
+              "style": "b",
+              "shapes": [
+                {
+                  "tag": "rect",
+                  "attrs": {
+                    "x": 3.6,
+                    "y": 2.5,
+                    "width": 2.8,
+                    "height": 19.5,
+                    "rx": 1.4
+                  }
+                }
+              ]
+            },
+            {
+              "style": "r",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M7.8 4.3c2.5-1.4 4.8-1.4 7 0 1.8 1.1 3.6 1.2 5.6.3.4-.2.9.1.9.6v8.3c0 .4-.2.7-.6.9-2 .9-4 .8-5.9-.4-2.2-1.4-4.5-1.4-7 0z"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "kanban": {
+          "family": "teal",
+          "layers": [
+            {
+              "style": "b",
+              "shapes": [
+                {
+                  "tag": "rect",
+                  "attrs": {
+                    "x": 2.5,
+                    "y": 3,
+                    "width": 19,
+                    "height": 18,
+                    "rx": 4
+                  }
+                }
+              ]
+            },
+            {
+              "style": "f",
+              "shapes": [
+                {
+                  "tag": "rect",
+                  "attrs": {
+                    "x": 5,
+                    "y": 5.8,
+                    "width": 4,
+                    "height": 12.4,
+                    "rx": 1.4
+                  }
+                },
+                {
+                  "tag": "rect",
+                  "attrs": {
+                    "x": 10,
+                    "y": 5.8,
+                    "width": 4,
+                    "height": 8,
+                    "rx": 1.4
+                  }
+                },
+                {
+                  "tag": "rect",
+                  "attrs": {
+                    "x": 15,
+                    "y": 5.8,
+                    "width": 4,
+                    "height": 10.2,
+                    "rx": 1.4
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "settings": {
+          "family": "slate",
+          "layers": [
+            {
+              "style": "r",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M10.27 4.8L10.64 1.89L13.36 1.89L13.73 4.8L15.87 5.69L18.19 3.89L20.11 5.81L18.31 8.13L19.2 10.27L22.11 10.64L22.11 13.36L19.2 13.73L18.31 15.87L20.11 18.19L18.19 20.11L15.87 18.31L13.73 19.2L13.36 22.11L10.64 22.11L10.27 19.2L8.13 18.31L5.81 20.11L3.89 18.19L5.69 15.87L4.8 13.73L1.89 13.36L1.89 10.64L4.8 10.27L5.69 8.13L3.89 5.81L5.81 3.89L8.13 5.69Z"
+                  }
+                }
+              ]
+            },
+            {
+              "style": "d",
+              "shapes": [
+                {
+                  "tag": "circle",
+                  "attrs": {
+                    "cx": 12,
+                    "cy": 12,
+                    "r": 3.3
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "id": {
+          "family": "blue",
+          "layers": [
+            {
+              "style": "f",
+              "shapes": [
+                {
+                  "tag": "rect",
+                  "attrs": {
+                    "x": 2,
+                    "y": 4.5,
+                    "width": 20,
+                    "height": 15,
+                    "rx": 3.5
+                  }
+                }
+              ]
+            },
+            {
+              "style": "d",
+              "shapes": [
+                {
+                  "tag": "circle",
+                  "attrs": {
+                    "cx": 8.2,
+                    "cy": 10.3,
+                    "r": 2.3
+                  }
+                },
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M4.8 16.2c.5-2 1.8-3 3.4-3s2.9 1 3.4 3z"
+                  }
+                },
+                {
+                  "tag": "rect",
+                  "attrs": {
+                    "x": 13.3,
+                    "y": 8.8,
+                    "width": 5.6,
+                    "height": 1.9,
+                    "rx": 0.95
+                  }
+                },
+                {
+                  "tag": "rect",
+                  "attrs": {
+                    "x": 13.3,
+                    "y": 12.8,
+                    "width": 4,
+                    "height": 1.9,
+                    "rx": 0.95
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "translate": {
+          "family": "teal",
+          "layers": [
+            {
+              "style": "b",
+              "shapes": [
+                {
+                  "tag": "rect",
+                  "attrs": {
+                    "x": 8.5,
+                    "y": 8,
+                    "width": 13.5,
+                    "height": 13,
+                    "rx": 3.2
+                  }
+                }
+              ]
+            },
+            {
+              "style": "s",
+              "width": 1.5,
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M12.3 12.6h6.4M15.5 11.2v1.4M17.6 12.6c-.6 2.4-2.1 4.1-4.5 5M14.4 14.6c.9 1.3 2.2 2.3 3.9 2.9"
+                  }
+                }
+              ]
+            },
+            {
+              "style": "r",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M5 2.5h8a2.5 2.5 0 0 1 2.5 2.5v6a2.5 2.5 0 0 1-2.5 2.5H8.6l-3.4 2.7c-.4.3-.9 0-.9-.4v-2.5A2.5 2.5 0 0 1 2.5 11V5A2.5 2.5 0 0 1 5 2.5z"
+                  }
+                }
+              ]
+            },
+            {
+              "style": "ds",
+              "width": 1.5,
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M6.4 11l2.6-6 2.6 6M7.4 9h3.2"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "portal": {
+          "family": "blue",
+          "layers": [
+            {
+              "style": "b",
+              "shapes": [
+                {
+                  "tag": "rect",
+                  "attrs": {
+                    "x": 2.5,
+                    "y": 5.5,
+                    "width": 16,
+                    "height": 16,
+                    "rx": 3.5
+                  }
+                }
+              ]
+            },
+            {
+              "style": "f",
+              "shapes": [
+                {
+                  "tag": "circle",
+                  "attrs": {
+                    "cx": 17,
+                    "cy": 7,
+                    "r": 5.5
+                  }
+                }
+              ]
+            },
+            {
+              "style": "ds",
+              "width": 1.6,
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M15 9l4-4M16.1 5h2.9v2.9"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "building": {
+          "family": "violet",
+          "layers": [
+            {
+              "style": "b",
+              "shapes": [
+                {
+                  "tag": "rect",
+                  "attrs": {
+                    "x": 13,
+                    "y": 8,
+                    "width": 8.5,
+                    "height": 13.5,
+                    "rx": 2.2
+                  }
+                }
+              ]
+            },
+            {
+              "style": "f",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M5 2.5h7A2.5 2.5 0 0 1 14.5 5v16.5h-12V5A2.5 2.5 0 0 1 5 2.5z"
+                  }
+                }
+              ]
+            },
+            {
+              "style": "d",
+              "shapes": [
+                {
+                  "tag": "rect",
+                  "attrs": {
+                    "x": 5.4,
+                    "y": 6,
+                    "width": 2.2,
+                    "height": 2.2,
+                    "rx": 0.6
+                  }
+                },
+                {
+                  "tag": "rect",
+                  "attrs": {
+                    "x": 9.4,
+                    "y": 6,
+                    "width": 2.2,
+                    "height": 2.2,
+                    "rx": 0.6
+                  }
+                },
+                {
+                  "tag": "rect",
+                  "attrs": {
+                    "x": 5.4,
+                    "y": 10,
+                    "width": 2.2,
+                    "height": 2.2,
+                    "rx": 0.6
+                  }
+                },
+                {
+                  "tag": "rect",
+                  "attrs": {
+                    "x": 9.4,
+                    "y": 10,
+                    "width": 2.2,
+                    "height": 2.2,
+                    "rx": 0.6
+                  }
+                },
+                {
+                  "tag": "rect",
+                  "attrs": {
+                    "x": 5.4,
+                    "y": 14,
+                    "width": 2.2,
+                    "height": 2.2,
+                    "rx": 0.6
+                  }
+                },
+                {
+                  "tag": "rect",
+                  "attrs": {
+                    "x": 9.4,
+                    "y": 14,
+                    "width": 2.2,
+                    "height": 2.2,
+                    "rx": 0.6
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "palette": {
+          "family": "rose",
+          "layers": [
+            {
+              "style": "f",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M12 2.5c-5.5 0-9.5 4-9.5 9.3 0 5.4 4.3 9.7 9.4 9.7 1.6 0 2.6-.9 2.6-2.2 0-.6-.3-1.1-.6-1.5-.3-.4-.6-.9-.6-1.5 0-1.2 1-2.1 2.2-2.1h2.3c2.6 0 4.7-2.1 4.7-4.7C22.5 6.2 17.9 2.5 12 2.5z"
+                  }
+                }
+              ]
+            },
+            {
+              "style": "d",
+              "shapes": [
+                {
+                  "tag": "circle",
+                  "attrs": {
+                    "cx": 7.2,
+                    "cy": 12.4,
+                    "r": 1.6
+                  }
+                },
+                {
+                  "tag": "circle",
+                  "attrs": {
+                    "cx": 8.6,
+                    "cy": 7.6,
+                    "r": 1.6
+                  }
+                },
+                {
+                  "tag": "circle",
+                  "attrs": {
+                    "cx": 13.2,
+                    "cy": 6.2,
+                    "r": 1.6
+                  }
+                },
+                {
+                  "tag": "circle",
+                  "attrs": {
+                    "cx": 17.3,
+                    "cy": 8.9,
+                    "r": 1.6
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "font": {
+          "family": "violet",
+          "layers": [
+            {
+              "style": "bs",
+              "width": 2.2,
+              "shapes": [
+                {
+                  "tag": "circle",
+                  "attrs": {
+                    "cx": 18,
+                    "cy": 16.4,
+                    "r": 3.3
+                  }
+                },
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M21.3 12.8v7.6"
+                  }
+                }
+              ]
+            },
+            {
+              "style": "s",
+              "width": 2.6,
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M2.8 20.3 8.6 4.2l5.8 16.1M5 14.4h7.2"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "list": {
+          "family": "teal",
+          "layers": [
+            {
+              "style": "b",
+              "shapes": [
+                {
+                  "tag": "rect",
+                  "attrs": {
+                    "x": 9,
+                    "y": 4.5,
+                    "width": 12.5,
+                    "height": 3.4,
+                    "rx": 1.7
+                  }
+                },
+                {
+                  "tag": "rect",
+                  "attrs": {
+                    "x": 9,
+                    "y": 10.3,
+                    "width": 12.5,
+                    "height": 3.4,
+                    "rx": 1.7
+                  }
+                },
+                {
+                  "tag": "rect",
+                  "attrs": {
+                    "x": 9,
+                    "y": 16.1,
+                    "width": 12.5,
+                    "height": 3.4,
+                    "rx": 1.7
+                  }
+                }
+              ]
+            },
+            {
+              "style": "f",
+              "shapes": [
+                {
+                  "tag": "circle",
+                  "attrs": {
+                    "cx": 4.8,
+                    "cy": 6.2,
+                    "r": 2.3
+                  }
+                },
+                {
+                  "tag": "circle",
+                  "attrs": {
+                    "cx": 4.8,
+                    "cy": 12,
+                    "r": 2.3
+                  }
+                },
+                {
+                  "tag": "circle",
+                  "attrs": {
+                    "cx": 4.8,
+                    "cy": 17.8,
+                    "r": 2.3
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "flame": {
+          "family": "rose",
+          "layers": [
+            {
+              "style": "f",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M12.2 2.3c.7 3.1-1.7 4.8-3.4 6.8-1.3 1.6-2.3 3.4-2.3 5.6 0 3.8 2.5 7 5.5 7s5.5-3.2 5.5-7c0-2.4-1-4.4-2.4-5.9-.2 1.4-1 2.6-2.1 3 .6-3.1-.1-6.5-.8-9.5z"
+                  }
+                }
+              ]
+            },
+            {
+              "style": "d",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M12 13.2c1.6 1.3 2.6 2.7 2.6 4.2a2.6 2.6 0 0 1-5.2 0c0-1.5 1-2.9 2.6-4.2z"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "highlighter": {
+          "family": "amber",
+          "layers": [
+            {
+              "style": "b",
+              "shapes": [
+                {
+                  "tag": "rect",
+                  "attrs": {
+                    "x": 2.5,
+                    "y": 19,
+                    "width": 19,
+                    "height": 3,
+                    "rx": 1.5
+                  }
+                }
+              ]
+            },
+            {
+              "style": "r",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M15.9 3.3a2.2 2.2 0 0 1 3.1 0l1.7 1.7a2.2 2.2 0 0 1 0 3.1L11 17.8H6.2v-4.8z"
+                  }
+                }
+              ]
+            },
+            {
+              "style": "ds",
+              "width": 1.4,
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M8.6 10.6l4.8 4.8"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "tag": {
+          "family": "green",
+          "layers": [
+            {
+              "style": "f",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M3 5.5V11c0 .7.3 1.3.7 1.8l7.6 7.6a2.4 2.4 0 0 0 3.4 0l5.7-5.7a2.4 2.4 0 0 0 0-3.4L12.8 3.7A2.5 2.5 0 0 0 11 3H5.5A2.5 2.5 0 0 0 3 5.5z"
+                  }
+                }
+              ]
+            },
+            {
+              "style": "d",
+              "shapes": [
+                {
+                  "tag": "circle",
+                  "attrs": {
+                    "cx": 7.7,
+                    "cy": 7.7,
+                    "r": 1.9
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "columns": {
+          "family": "blue",
+          "layers": [
+            {
+              "style": "b",
+              "shapes": [
+                {
+                  "tag": "rect",
+                  "attrs": {
+                    "x": 2.5,
+                    "y": 3.5,
+                    "width": 19,
+                    "height": 17,
+                    "rx": 3.5
+                  }
+                }
+              ]
+            },
+            {
+              "style": "f",
+              "shapes": [
+                {
+                  "tag": "rect",
+                  "attrs": {
+                    "x": 5,
+                    "y": 6,
+                    "width": 3.6,
+                    "height": 12,
+                    "rx": 1.2
+                  }
+                },
+                {
+                  "tag": "rect",
+                  "attrs": {
+                    "x": 10.2,
+                    "y": 6,
+                    "width": 3.6,
+                    "height": 12,
+                    "rx": 1.2
+                  }
+                },
+                {
+                  "tag": "rect",
+                  "attrs": {
+                    "x": 15.4,
+                    "y": 6,
+                    "width": 3.6,
+                    "height": 12,
+                    "rx": 1.2
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "column-plus": {
+          "family": "violet",
+          "layers": [
+            {
+              "style": "b",
+              "shapes": [
+                {
+                  "tag": "rect",
+                  "attrs": {
+                    "x": 2.5,
+                    "y": 3.5,
+                    "width": 14,
+                    "height": 17,
+                    "rx": 3.2
+                  }
+                }
+              ]
+            },
+            {
+              "style": "f",
+              "shapes": [
+                {
+                  "tag": "rect",
+                  "attrs": {
+                    "x": 5,
+                    "y": 6,
+                    "width": 3.4,
+                    "height": 12,
+                    "rx": 1.2
+                  }
+                },
+                {
+                  "tag": "rect",
+                  "attrs": {
+                    "x": 10.3,
+                    "y": 6,
+                    "width": 3.4,
+                    "height": 7.5,
+                    "rx": 1.2
+                  }
+                },
+                {
+                  "tag": "circle",
+                  "attrs": {
+                    "cx": 17.5,
+                    "cy": 17,
+                    "r": 5
+                  }
+                }
+              ]
+            },
+            {
+              "style": "ds",
+              "width": 1.7,
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M17.5 14.6v4.8M15.1 17h4.8"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "transfer": {
+          "family": "teal",
+          "layers": [
+            {
+              "style": "b",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M16 21l-4.6-4.6c-.5-.5-.1-1.3.6-1.3h2.4V4.1a1.6 1.6 0 0 1 3.2 0v11H20c.7 0 1.1.8.6 1.3z"
+                  }
+                }
+              ]
+            },
+            {
+              "style": "f",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M8 3l4.6 4.6c.5.5.1 1.3-.6 1.3H9.6v11a1.6 1.6 0 0 1-3.2 0v-11H4c-.7 0-1.1-.8-.6-1.3z"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "database": {
+          "family": "slate",
+          "layers": [
+            {
+              "style": "b",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M4 6v12c0 1.9 3.6 3.5 8 3.5s8-1.6 8-3.5V6z"
+                  }
+                }
+              ]
+            },
+            {
+              "style": "s",
+              "width": 1.8,
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M4 12c0 1.9 3.6 3.5 8 3.5s8-1.6 8-3.5"
+                  }
+                }
+              ]
+            },
+            {
+              "style": "f",
+              "shapes": [
+                {
+                  "tag": "ellipse",
+                  "attrs": {
+                    "cx": 12,
+                    "cy": 6,
+                    "rx": 8,
+                    "ry": 3.5
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "globe": {
+          "family": "blue",
+          "layers": [
+            {
+              "style": "f",
+              "shapes": [
+                {
+                  "tag": "circle",
+                  "attrs": {
+                    "cx": 12,
+                    "cy": 12,
+                    "r": 9.5
+                  }
+                }
+              ]
+            },
+            {
+              "style": "ds",
+              "width": 1.4,
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M2.9 12h18.2M12 2.6c2.5 2.6 3.8 5.7 3.8 9.4s-1.3 6.8-3.8 9.4M12 2.6C9.5 5.2 8.2 8.3 8.2 12s1.3 6.8 3.8 9.4"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "folder": {
+          "family": "amber",
+          "layers": [
+            {
+              "style": "b",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M2.5 6.5A2.5 2.5 0 0 1 5 4h4.2c.7 0 1.3.3 1.8.8l1.5 1.7H19A2.5 2.5 0 0 1 21.5 9v1h-19z"
+                  }
+                }
+              ]
+            },
+            {
+              "style": "f",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M2.5 9.5h19V18a2.5 2.5 0 0 1-2.5 2.5H5A2.5 2.5 0 0 1 2.5 18z"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "warning": {
+          "family": "amber",
+          "layers": [
+            {
+              "style": "r",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M10.3 3.7a2 2 0 0 1 3.4 0l8 13.9a2 2 0 0 1-1.7 3H4a2 2 0 0 1-1.7-3z"
+                  }
+                }
+              ]
+            },
+            {
+              "style": "d",
+              "shapes": [
+                {
+                  "tag": "rect",
+                  "attrs": {
+                    "x": 10.9,
+                    "y": 8.4,
+                    "width": 2.2,
+                    "height": 6.6,
+                    "rx": 1.1
+                  }
+                },
+                {
+                  "tag": "circle",
+                  "attrs": {
+                    "cx": 12,
+                    "cy": 17.6,
+                    "r": 1.3
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "star": {
+          "family": "amber",
+          "layers": [
+            {
+              "style": "r",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M12 2.9l2.7 5.5 6.1.9-4.4 4.2 1 6.1L12 16.7l-5.4 2.9 1-6.1-4.4-4.2 6.1-.9z"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "lock": {
+          "family": "slate",
+          "layers": [
+            {
+              "style": "s",
+              "width": 2.4,
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M7.6 10.5V8a4.4 4.4 0 0 1 8.8 0v2.5"
+                  }
+                }
+              ]
+            },
+            {
+              "style": "f",
+              "shapes": [
+                {
+                  "tag": "rect",
+                  "attrs": {
+                    "x": 4.5,
+                    "y": 10,
+                    "width": 15,
+                    "height": 11.5,
+                    "rx": 3
+                  }
+                }
+              ]
+            },
+            {
+              "style": "d",
+              "shapes": [
+                {
+                  "tag": "circle",
+                  "attrs": {
+                    "cx": 12,
+                    "cy": 14.9,
+                    "r": 1.8
+                  }
+                },
+                {
+                  "tag": "rect",
+                  "attrs": {
+                    "x": 11.2,
+                    "y": 15,
+                    "width": 1.6,
+                    "height": 3.4,
+                    "rx": 0.8
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "excel": {
+          "family": "green",
+          "layers": [
+            {
+              "style": "b",
+              "shapes": [
+                {
+                  "tag": "rect",
+                  "attrs": {
+                    "x": 7,
+                    "y": 2.5,
+                    "width": 14.5,
+                    "height": 19,
+                    "rx": 3
+                  }
+                }
+              ]
+            },
+            {
+              "style": "s",
+              "width": 1.5,
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M14.3 7.5h4.2M14.3 12h4.2M14.3 16.5h4.2"
+                  }
+                }
+              ]
+            },
+            {
+              "style": "f",
+              "shapes": [
+                {
+                  "tag": "rect",
+                  "attrs": {
+                    "x": 2.5,
+                    "y": 6.5,
+                    "width": 11,
+                    "height": 11,
+                    "rx": 2.6
+                  }
+                }
+              ]
+            },
+            {
+              "style": "ds",
+              "width": 1.7,
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M5.8 9.7l4.4 4.6M10.2 9.7l-4.4 4.6"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "import": {
+          "family": "teal",
+          "layers": [
+            {
+              "style": "b",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M2.5 14.5h4.3c.6 0 1.1.4 1.3 1l.4 1.2c.2.6.7 1 1.3 1h4.4c.6 0 1.1-.4 1.3-1l.4-1.2c.2-.6.7-1 1.3-1h4.3V18a3 3 0 0 1-3 3h-13a3 3 0 0 1-3-3z"
+                  }
+                }
+              ]
+            },
+            {
+              "style": "f",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M12 2.5c.8 0 1.5.7 1.5 1.5v6.4l1.9-1.9a1.5 1.5 0 0 1 2.1 2.1L13 15.1a1.5 1.5 0 0 1-2.1 0l-4.5-4.5a1.5 1.5 0 0 1 2.1-2.1l1.9 1.9V4c0-.8.7-1.5 1.5-1.5z"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "export": {
+          "family": "teal",
+          "layers": [
+            {
+              "style": "b",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M2.5 14.5h4.3c.6 0 1.1.4 1.3 1l.4 1.2c.2.6.7 1 1.3 1h4.4c.6 0 1.1-.4 1.3-1l.4-1.2c.2-.6.7-1 1.3-1h4.3V18a3 3 0 0 1-3 3h-13a3 3 0 0 1-3-3z"
+                  }
+                }
+              ]
+            },
+            {
+              "style": "f",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M12 14.5c.8 0 1.5-.7 1.5-1.5V6.6l1.9 1.9a1.5 1.5 0 0 0 2.1-2.1L13 1.9a1.5 1.5 0 0 0-2.1 0L6.4 6.4a1.5 1.5 0 0 0 2.1 2.1l1.9-1.9V13c0 .8.7 1.5 1.5 1.5z"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "sparkle": {
+          "family": "accent",
+          "layers": [
+            {
+              "style": "r",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M10 3.2l1.2 4.2c.3 1.1 1.2 2 2.3 2.3l4.2 1.2-4.2 1.2c-1.1.3-2 1.2-2.3 2.3L10 18.6l-1.2-4.2c-.3-1.1-1.2-2-2.3-2.3L2.3 10.9l4.2-1.2c1.1-.3 2-1.2 2.3-2.3z"
+                  }
+                }
+              ]
+            },
+            {
+              "style": "b",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M18.5 2.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8zM18 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "eraser": {
+          "family": "rose",
+          "layers": [
+            {
+              "style": "b",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M3.6 13.6a2.2 2.2 0 0 1 0-3.1l2.3-2.3 8.7 8.7-1.9 1.9H8.3z"
+                  }
+                }
+              ]
+            },
+            {
+              "style": "r",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M13.6 3.6a2.2 2.2 0 0 1 3.1 0l3.7 3.7a2.2 2.2 0 0 1 0 3.1l-5.8 5.8-8.7-8.7z"
+                  }
+                }
+              ]
+            },
+            {
+              "style": "s",
+              "width": 2,
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M12.5 20.6h8"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "clock": {
+          "family": "amber",
+          "layers": [
+            {
+              "style": "f",
+              "shapes": [
+                {
+                  "tag": "circle",
+                  "attrs": {
+                    "cx": 12,
+                    "cy": 12,
+                    "r": 9.5
+                  }
+                }
+              ]
+            },
+            {
+              "style": "ds",
+              "width": 1.9,
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M12 7v5.2l3.4 2"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "diamond": {
+          "family": "accent",
+          "layers": [
+            {
+              "style": "r",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M12 3.2l8.8 8.8-8.8 8.8L3.2 12z"
+                  }
+                }
+              ]
+            },
+            {
+              "style": "d",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M12 8.5l3.5 3.5-3.5 3.5L8.5 12z"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "book": {
+          "family": "rose",
+          "layers": [
+            {
+              "style": "b",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M11.2 6.3C9.3 4.9 6.8 4.3 3.8 4.4c-.7 0-1.3.6-1.3 1.3v11.7c0 .7.6 1.3 1.3 1.3 2.9-.1 5.3.5 7.4 1.9z"
+                  }
+                }
+              ]
+            },
+            {
+              "style": "r",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M12.8 6.3c1.9-1.4 4.4-2 7.4-1.9.7 0 1.3.6 1.3 1.3v11.7c0 .7-.6 1.3-1.3 1.3-2.9-.1-5.3.5-7.4 1.9z"
+                  }
+                }
+              ]
+            },
+            {
+              "style": "ds",
+              "width": 1.5,
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M15.3 9.4c1.2-.4 2.4-.5 3.6-.4M15.3 12.9c1.2-.4 2.4-.5 3.6-.4"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "keyboard": {
+          "family": "slate",
+          "layers": [
+            {
+              "style": "f",
+              "shapes": [
+                {
+                  "tag": "rect",
+                  "attrs": {
+                    "x": 2,
+                    "y": 5.5,
+                    "width": 20,
+                    "height": 13,
+                    "rx": 3
+                  }
+                }
+              ]
+            },
+            {
+              "style": "d",
+              "shapes": [
+                {
+                  "tag": "rect",
+                  "attrs": {
+                    "x": 5,
+                    "y": 8.4,
+                    "width": 2.2,
+                    "height": 2,
+                    "rx": 0.6
+                  }
+                },
+                {
+                  "tag": "rect",
+                  "attrs": {
+                    "x": 8.6,
+                    "y": 8.4,
+                    "width": 2.2,
+                    "height": 2,
+                    "rx": 0.6
+                  }
+                },
+                {
+                  "tag": "rect",
+                  "attrs": {
+                    "x": 12.2,
+                    "y": 8.4,
+                    "width": 2.2,
+                    "height": 2,
+                    "rx": 0.6
+                  }
+                },
+                {
+                  "tag": "rect",
+                  "attrs": {
+                    "x": 15.8,
+                    "y": 8.4,
+                    "width": 3.2,
+                    "height": 2,
+                    "rx": 0.6
+                  }
+                },
+                {
+                  "tag": "rect",
+                  "attrs": {
+                    "x": 5,
+                    "y": 11.8,
+                    "width": 3.2,
+                    "height": 2,
+                    "rx": 0.6
+                  }
+                },
+                {
+                  "tag": "rect",
+                  "attrs": {
+                    "x": 9.6,
+                    "y": 11.8,
+                    "width": 2.2,
+                    "height": 2,
+                    "rx": 0.6
+                  }
+                },
+                {
+                  "tag": "rect",
+                  "attrs": {
+                    "x": 13.2,
+                    "y": 11.8,
+                    "width": 2.2,
+                    "height": 2,
+                    "rx": 0.6
+                  }
+                },
+                {
+                  "tag": "rect",
+                  "attrs": {
+                    "x": 16.8,
+                    "y": 11.8,
+                    "width": 2.2,
+                    "height": 2,
+                    "rx": 0.6
+                  }
+                },
+                {
+                  "tag": "rect",
+                  "attrs": {
+                    "x": 7.5,
+                    "y": 15.2,
+                    "width": 9,
+                    "height": 1.8,
+                    "rx": 0.9
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "groups": {
+          "family": "violet",
+          "layers": [
+            {
+              "style": "bs",
+              "width": 2.2,
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M3.2 12.3l8.8 4.5 8.8-4.5M3.2 16.7l8.8 4.5 8.8-4.5"
+                  }
+                }
+              ]
+            },
+            {
+              "style": "r",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M12 2.8l8.8 4.6-8.8 4.6-8.8-4.6z"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "pin": {
+          "family": "line",
+          "layers": [
+            {
+              "style": "line",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M8 3h8l-1 7 3 4H6l3-4z",
+                    "fill": "pin"
+                  }
+                },
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M12 14v7"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "file": {
+          "family": "line",
+          "layers": [
+            {
+              "style": "line",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M7 3.5h6.5l4.5 4.5v12a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 6 20V5a1.5 1.5 0 0 1 1-1.5z"
+                  }
+                },
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M13 3.8V9h5M9 13h6M9 16.5h6"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "paperclip": {
+          "family": "line",
+          "layers": [
+            {
+              "style": "line",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "m8.5 12.5 6.7-6.7a3.2 3.2 0 0 1 4.5 4.5l-8.8 8.8a5 5 0 0 1-7.1-7.1l8.4-8.4"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "search": {
+          "family": "line",
+          "layers": [
+            {
+              "style": "line",
+              "shapes": [
+                {
+                  "tag": "circle",
+                  "attrs": {
+                    "cx": 10.5,
+                    "cy": 10.5,
+                    "r": 6.3
+                  }
+                },
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M15.3 15.3l5 5"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "menu": {
+          "family": "line",
+          "layers": [
+            {
+              "style": "line",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M4 6.5h16M4 12h16M4 17.5h16"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "undo": {
+          "family": "line",
+          "layers": [
+            {
+              "style": "line",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M9 14 4 9l5-5"
+                  }
+                },
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M4 9h10.5a5.5 5.5 0 0 1 0 11H11"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "redo": {
+          "family": "line",
+          "layers": [
+            {
+              "style": "line",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "m15 14 5-5-5-5"
+                  }
+                },
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M20 9H9.5a5.5 5.5 0 0 0 0 11H13"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "plus": {
+          "family": "line",
+          "layers": [
+            {
+              "style": "line",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M12 5v14M5 12h14"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "minus": {
+          "family": "line",
+          "layers": [
+            {
+              "style": "line",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M5 12h14"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "close": {
+          "family": "line",
+          "layers": [
+            {
+              "style": "line",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M6.5 6.5l11 11M17.5 6.5l-11 11"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "more": {
+          "family": "line",
+          "layers": [
+            {
+              "style": "line",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M5.5 12h.01M12 12h.01M18.5 12h.01",
+                    "stroke-width": 3.2
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "chevron-down": {
+          "family": "line",
+          "layers": [
+            {
+              "style": "line",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "m6.5 9.5 5.5 5.5 5.5-5.5"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "arrow-up": {
+          "family": "line",
+          "layers": [
+            {
+              "style": "line",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M12 19V5M6 11l6-6 6 6"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "arrow-down": {
+          "family": "line",
+          "layers": [
+            {
+              "style": "line",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M12 5v14M6 13l6 6 6-6"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "sort": {
+          "family": "line",
+          "layers": [
+            {
+              "style": "line",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M8 19V5M4 9l4-4 4 4M16 5v14M12 15l4 4 4-4"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "filter": {
+          "family": "line",
+          "layers": [
+            {
+              "style": "line",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M4 5.2h16l-6.2 7.4v5.6l-3.6 1.6v-7.2z"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "check": {
+          "family": "line",
+          "layers": [
+            {
+              "style": "line",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "m5 12.5 4.5 4.5L19 7.5"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "external": {
+          "family": "line",
+          "layers": [
+            {
+              "style": "line",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M14 4h6v6M20 4l-8.5 8.5M18 14v3.5a2.5 2.5 0 0 1-2.5 2.5h-9A2.5 2.5 0 0 1 4 17.5v-9A2.5 2.5 0 0 1 6.5 6H10"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "eye": {
+          "family": "line",
+          "layers": [
+            {
+              "style": "line",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"
+                  }
+                },
+                {
+                  "tag": "circle",
+                  "attrs": {
+                    "cx": 12,
+                    "cy": 12,
+                    "r": 3
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "eye-off": {
+          "family": "line",
+          "layers": [
+            {
+              "style": "line",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M10.6 5.6c.5-.1.9-.1 1.4-.1 6 0 9.5 6.5 9.5 6.5a17 17 0 0 1-2.3 3.1M6.7 6.9C4 8.6 2.5 12 2.5 12S6 18.5 12 18.5c1.8 0 3.4-.6 4.7-1.4M9.9 9.9a3 3 0 0 0 4.2 4.2M3.5 3.5l17 17"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "copy": {
+          "family": "line",
+          "layers": [
+            {
+              "style": "line",
+              "shapes": [
+                {
+                  "tag": "rect",
+                  "attrs": {
+                    "x": 8.5,
+                    "y": 8.5,
+                    "width": 12,
+                    "height": 12,
+                    "rx": 2.5
+                  }
+                },
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M15.5 8.5V6.5A2.5 2.5 0 0 0 13 4H6.5A2.5 2.5 0 0 0 4 6.5V13a2.5 2.5 0 0 0 2.5 2.5h2"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "calendar": {
+          "family": "line",
+          "layers": [
+            {
+              "style": "line",
+              "shapes": [
+                {
+                  "tag": "rect",
+                  "attrs": {
+                    "x": 3.5,
+                    "y": 5,
+                    "width": 17,
+                    "height": 15.5,
+                    "rx": 3
+                  }
+                },
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M3.5 10h17M8 3v4M16 3v4"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "reset": {
+          "family": "line",
+          "layers": [
+            {
+              "style": "line",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M4 4v5h5"
+                  }
+                },
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M4.7 14a7.8 7.8 0 1 0 1.9-8.1L4 8.6"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "edit": {
+          "family": "line",
+          "layers": [
+            {
+              "style": "line",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M4 20h4.2L19 9.2a2.9 2.9 0 0 0-4.2-4.2L4 15.8z"
+                  }
+                },
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "m13.4 6.4 4.2 4.2"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "arrow-in": {
+          "family": "line",
+          "layers": [
+            {
+              "style": "line",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M12 4v11M7 10l5 5 5-5M5 20h14"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "arrow-out": {
+          "family": "line",
+          "layers": [
+            {
+              "style": "line",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M12 15V4M7 9l5-5 5 5M5 20h14"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "arrows-h": {
+          "family": "line",
+          "layers": [
+            {
+              "style": "line",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M7 8l-4 4 4 4M17 8l4 4-4 4M3 12h18"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "star-line": {
+          "family": "line",
+          "layers": [
+            {
+              "style": "line",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M12 3.4l2.6 5.3 5.8.8-4.2 4.1 1 5.8L12 16.7l-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "gear": {
+          "family": "line",
+          "layers": [
+            {
+              "style": "line",
+              "shapes": [
+                {
+                  "tag": "path",
+                  "attrs": {
+                    "d": "M10.39 5.29L10.75 2.68L13.25 2.68L13.61 5.29L15.61 6.12L17.7 4.53L19.47 6.3L17.88 8.39L18.71 10.39L21.32 10.75L21.32 13.25L18.71 13.61L17.88 15.61L19.47 17.7L17.7 19.47L15.61 17.88L13.61 18.71L13.25 21.32L10.75 21.32L10.39 18.71L8.39 17.88L6.3 19.47L4.53 17.7L6.12 15.61L5.29 13.61L2.68 13.25L2.68 10.75L5.29 10.39L6.12 8.39L4.53 6.3L6.3 4.53L8.39 6.12Z"
+                  }
+                },
+                {
+                  "tag": "circle",
+                  "attrs": {
+                    "cx": 12,
+                    "cy": 12,
+                    "r": 2.9
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

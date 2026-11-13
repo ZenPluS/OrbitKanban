@@ -35,5 +35,5 @@ export class Component {
   term = text => Translator.term(text, this.currentLanguage());
   plural = (count, key) => Translator.plural(count, key, this.currentLanguage());
   ico = (name, family) => IconLibrary.icon(name, family);
-  icons = ['tasks', 'link', 'flag', 'kanban'].map(name => this.ico(name));
+  get icons() { return ['tasks', 'link', 'flag', 'kanban'].map(name => this.ico(name)); }
 }

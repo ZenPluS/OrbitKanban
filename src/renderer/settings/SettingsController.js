@@ -23,6 +23,7 @@ export class SettingsController extends Component {
     { id: 'languages', group: "Organization", icon: 'translate', label: "Language & translations", panel: 'languages-panel', keys: ['language'] },
     { id: 'organizations', group: "Organization", icon: 'building', label: "Organizations", panel: 'organizations-panel', keys: [] },
     { id: 'themes', group: "Appearance", icon: 'palette', label: "Themes & atmosphere", panel: 'themes-panel', keys: ['themes', 'themeId'] },
+    { id: 'appearance', group: "Appearance", icon: 'palette', label: "Appearance repositories", panel: 'appearance-panel', keys: ['packSources', 'iconPack', 'packThemeBases'] },
     { id: 'fonts', group: "Appearance", icon: 'font', label: "Font and text size", panel: 'font-size-panel', keys: ['fontSizes', 'fontFamily'] },
     { id: 'task-layout', group: "Appearance", icon: 'columns', label: "Task editor layout", panel: 'task-layout-panel', keys: ['taskEditorLayout', 'requiredTaskColumns'] },
     { id: 'columns', group: "Workflow", icon: 'columns', label: "List columns", panel: 'columns-panel', keys: ['taskColumns'] },
@@ -47,7 +48,7 @@ export class SettingsController extends Component {
   // Ordered: the first matching pattern decides which settings tab holds the field to fix.
   // Validation messages are English source text, except those the store localizes in the organization language, so the patterns also list the Italian wording.
   #settingsErrorTabs = [[/navigation|navigazione/i, 'navigation'], [/custom columns?|deleted columns|required columns|colonne obbligatorie|columns changed|colonne eliminate|colonne modificate|column options|column names and identifiers|colonn[ae] personalizzat|opzioni della colonna|nomi e identificativi delle colonne|platform link|link alla piattaforma|successor|successori/i, 'custom-columns'], [/\btags?\b/i, 'tags'], [/evidenziatori|highlighter/i, 'highlights'], [/colonne della lista|list columns/i, 'columns'], [/dimensioni del testo|text sizes|\bfont\b/i, 'fonts'], [/\b(?:temi|tema|themes?)\b/i, 'themes'], [/urgen/i, 'urgencies'], [/\b(?:stati|status|statuses)\b/i, 'statuses'], [/\b(?:lingua|language)\b/i, 'languages'], [/organizzazione|organization|ore per giorno|hours per day|logo/i, 'identity']];
-  settingsErrorTab = message => /task editor layout|layout della scheda attività/i.test(String(message)) ? 'task-layout' : this.#settingsErrorTabs.find(([pattern]) => pattern.test(String(message)))?.[1];
+  settingsErrorTab = message => /appearance|icon pack/i.test(String(message)) ? 'appearance' : /task editor layout|layout della scheda attività/i.test(String(message)) ? 'task-layout' : this.#settingsErrorTabs.find(([pattern]) => pattern.test(String(message)))?.[1];
   settingsNav() {
     const tabs = this.allSettingsTabs(), groups = [...new Set(tabs.map(tab => tab.group))];
     return `<nav class="settings-nav" aria-label="${this.esc(this.t("Settings sections"))}">${groups.map((group, index) => `<div class="settings-nav-group" role="group" aria-labelledby="settings-group-${index}"><span class="settings-nav-label" id="settings-group-${index}">${this.esc(this.t(group))}</span>${tabs.filter(tab => tab.group === group).map(tab => `<button type="button" class="settings-tab" id="settings-tab-${tab.id}" data-settings-tab="${tab.id}" aria-controls="${tab.panel}"><span class="settings-tab-icon" aria-hidden="true">${this.ico(tab.icon, tab.family)}</span><span class="settings-tab-text">${this.esc(tab.custom ? tab.label : this.t(tab.label))}</span><span class="settings-tab-dot" role="img" aria-label="${this.esc(this.t("Unsaved changes"))}" title="${this.esc(this.t("Unsaved changes"))}" hidden></span></button>`).join('')}</div>`).join('')}</nav>`;
@@ -111,6 +112,7 @@ export class SettingsController extends Component {
   async saveSettings() {
     this.app.colorPicker.closeColorPicker();
     try {
+      if (this.app.packs.busy) throw new Error(this.t("Appearance packs are loading."));
       if (this.$('#logo-file')?.disabled || this.$('#theme-image-file')?.disabled || this.$('#create-logo-file')?.disabled) throw new Error(this.t("Loading image…"));
       const settings = structuredClone(this.#collectSettings());
       for (const form of this.app.customColumns.pendingCustomColumns()) {
@@ -146,6 +148,7 @@ export class SettingsController extends Component {
     transfer: ["Save settings before continuing?", "You have unsaved changes: export and import use the saved settings. Save or discard them before continuing.", "Discard and continue", "Save and continue"]
   };
   async withSavedSettings(callback, purpose = 'switch') {
+    if (this.app.packs.busy) { this.app.notifier.notify("Appearance packs are loading.", true); return; }
     if (this.state.saving || this.state.organizationBusy) { this.app.notifier.notify("A save is in progress. Please try again in a moment.", true); return; }
     if (this.$('#logo-file')?.disabled || this.$('#theme-image-file')?.disabled || this.$('#create-logo-file')?.disabled) { this.app.notifier.notify("Loading image…", true); return; }
     if (!this.settingsChanged()) { await callback(); return; }

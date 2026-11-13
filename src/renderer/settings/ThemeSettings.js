@@ -4,11 +4,12 @@ import { ThemeCatalog, ThemeGenerator } from '../shared.js';
 
 export class ThemeSettings extends Component {
   themeFields = [['background', "Background"], ['surface', "Surfaces"], ['text', "Text"], ['accent', "Accent"]];
-  #themePresets = new Map(ThemeCatalog.defaultThemes().map(theme => [theme.id, theme]));
+  get #themePresets() { return new Map([...ThemeCatalog.defaultThemes(), ...Object.values(this.state.settingsDraft?.packThemeBases || {})].map(theme => [theme.id, theme])); }
   #themeKind(theme) {
     const preset = this.#themePresets.get(theme.id);
     if (!preset) return "Custom";
-    return theme.name === preset.name && this.themeFields.every(([key]) => theme[key].toLowerCase() === preset[key]) ? "Built-in" : "Modified built-in";
+    const same = theme.name === preset.name && this.themeFields.every(([key]) => theme[key].toLowerCase() === preset[key].toLowerCase());
+    return theme.id === 'midnight' ? same ? "Built-in" : "Modified built-in" : same ? "Repository theme" : "Modified repository theme";
   }
   drawThemeChoices() {
     const query = this.state.themeQuery.trim().toLocaleLowerCase(), total = this.state.settingsDraft.themes.length;
@@ -67,7 +68,7 @@ export class ThemeSettings extends Component {
     this.app.themePainter.paintTheme(theme);
     this.$('#theme-editor').innerHTML = this.ui`<div class="theme-edit"><h3 class="theme-edit-title">Edit theme</h3><label class="field">Theme name<input id="theme-name" value="${this.esc(theme.name)}"></label><div class="theme-colors">${this.themeFields.map(([key, label]) => `<div class="theme-color-field"><span>${this.esc(this.t(label))}</span>${this.app.colorPicker.colorControl(theme[key], this.t(label), `data-theme-color="${key}"`, true)}</div>`).join('')}</div>
     <div class="image-picker"><label class="field">Generate 4 colors from an image<input id="theme-image-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp"></label><p class="muted">Upload an image: background, surfaces, text and accent are extracted and assigned automatically. You can then adjust them with the color controls. Transparency is shown on white. Colors are adjusted as little as possible to meet WCAG AA contrast.</p><canvas id="theme-image-canvas" hidden role="img" aria-label="Image used to automatically generate the four theme colors"></canvas><label class="field">Optional adjustment: color to sample with a click<select id="theme-image-target">${this.themeFields.map(([key, label]) => `<option value="${key}">${this.t(label)}</option>`).join('')}</select></label><output id="theme-image-result" aria-live="polite">The image stays local and is not saved: only colors are stored in the theme.</output></div>
-    <small class="muted">Live preview: the theme is applied to the app immediately. Save settings to keep it, otherwise the previous one remains.</small>${this.#themePresets.has(theme.id) ? this.ui`<button class="button small" id="reset-theme">Restore built-in theme</button>` : this.ui`<button class="button small" id="delete-theme">Delete theme</button>`}</div>`;
+    <small class="muted">Live preview: the theme is applied to the app immediately. Save settings to keep it, otherwise the previous one remains.</small>${this.#themePresets.has(theme.id) ? this.ui`<button class="button small" id="reset-theme">Restore theme preset</button>` : this.ui`<button class="button small" id="delete-theme">Delete theme</button>`}</div>`;
     this.$('#theme-name').oninput = e => { theme.name = e.target.value; this.drawThemeChoices(); };
     document.querySelectorAll('[data-theme-color]').forEach(button => {
       button.onclick = () => this.app.colorPicker.openColorPicker(button);

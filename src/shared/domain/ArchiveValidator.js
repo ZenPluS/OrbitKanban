@@ -16,12 +16,14 @@ const TaskLinks = typeof module !== 'undefined' ? require('./TaskLinks') : globa
 const NavigationSections = typeof module !== 'undefined' ? require('./NavigationSections') : globalThis.OrbitKanban.Domain.NavigationSections;
 const TaskGroups = typeof module !== 'undefined' ? require('./TaskGroups') : globalThis.OrbitKanban.Domain.TaskGroups;
 const TodoLists = typeof module !== 'undefined' ? require('./TodoLists') : globalThis.OrbitKanban.Domain.TodoLists;
+const AppearancePacks = typeof module !== 'undefined' ? require('./AppearancePacks') : globalThis.OrbitKanban.Domain.AppearancePacks;
 const LogoCrop = typeof module !== 'undefined' ? require('../graphics/LogoCrop') : globalThis.OrbitKanban.Graphics.LogoCrop;
 
 class ArchiveValidator {
   static validateData(data) {
     Common.assert(data && data.version === 1, "Unsupported archive format.");
     const s = data.settings;
+    AppearancePacks.validateSettings(s || {});
     ColumnCleanup.validateDeleted(s || {});
     RequiredFields.validateRequired(s || {});
     Common.assert(s && (s.appName === undefined || (typeof s.appName === 'string' && s.appName.trim().length > 0 && s.appName.length <= 100)), "Invalid organization name.");
@@ -125,6 +127,9 @@ class ArchiveValidator {
       organization.data.settings.logo ??= '';
       organization.data.settings.logoSource ??= '';
       organization.data.settings.logoShape ??= 'none';
+      if (organization.data.settings.packSources === undefined) organization.data.settings.packSources = [];
+      if (organization.data.settings.iconPack === undefined) organization.data.settings.iconPack = 'default';
+      if (organization.data.settings.packThemeBases === undefined) organization.data.settings.packThemeBases = Object.fromEntries(ThemeCatalog.availableThemes().filter(theme => theme.id !== 'midnight').map(theme => [theme.id, { ...theme }]));
       organization.data.settings.fontSizes ??= Typography.defaultFontSizes();
       organization.data.settings.fontFamily ??= Typography.DEFAULT_FONT_FAMILY;
       organization.data.settings.savedViews ??= [];

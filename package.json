@@ -1,6 +1,6 @@
 {
   "name": "orbitkanban-portable",
-  "version": "3.7.0",
+  "version": "3.8.0",
   "description": "A fully local workspace for tasks, issues, milestones, and Kanban.",
   "main": "src/desktop/main.js",
   "author": "OrbitKanban",
@@ -27,6 +27,7 @@
     "productName": "OrbitKanban",
     "asar": true,
     "files": [
+      "resources/packs/*.json",
       "src/**/*",
       "languages/*.json",
       "index.html",

@@ -16,7 +16,7 @@ for (const failsToStart of [false, true]) {
       __dirname,
       process: childProcess,
       require(name) {
-        if (name === '../src/shared/domain') return { DataFactory: { initialData: () => ({}) }, ArchiveValidator: {} };
+        if (name === '../src/shared/domain') return { DataFactory: { initialData: () => ({ settings: {} }) }, ArchiveValidator: {} };
         if (name === 'node:child_process') {
           return {
             spawnSync(executable, args, options) {

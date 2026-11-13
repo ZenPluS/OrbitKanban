@@ -90,8 +90,9 @@ test('row reordering handles duplicate sequences and saves the visible order acr
   const restored = ArchiveValidator.validateData(JSON.parse(JSON.stringify(data)));
   assert.deepEqual(TaskOrder.sortTasks(restored.tasks, [{ key: 'sequence', direction: 'asc' }]).map(task => task.id), [...ids.slice(1), ids[0]]);
 });
-test('40 distinct built-in themes have four colors with readable text and accents', () => {
-  const themes = ThemeCatalog.defaultThemes();
+test('Midnight and 39 external offline themes have four colors with readable text and accents', () => {
+  assert.deepEqual(ThemeCatalog.defaultThemes().map(theme => theme.id), ['midnight']);
+  const themes = ThemeCatalog.availableThemes();
   assert.equal(themes.length, 40);
   for (const key of ['id', 'name']) assert.equal(new Set(themes.map(theme => theme[key])).size, 40);
   assert.equal(new Set(themes.map(({ background, surface, text, accent }) => [background, surface, text, accent].join())).size, 40);
@@ -125,7 +126,7 @@ test('older archives gain missing presets without overwriting active, custom or 
   const oldV2 = structuredClone(migrated);
   oldV2.organizations[0].data.settings.themes = original.settings.themes;
   const second = DataFactory.createOrganization('Other');
-  second.data.settings.themes = ThemeCatalog.defaultThemes().filter(theme => theme.id === 'everforest');
+  second.data.settings.themes = ThemeCatalog.availableThemes().filter(theme => theme.id === 'everforest');
   second.data.settings.themeId = 'everforest';
   oldV2.organizations.push(second);
   const upgraded = ArchiveValidator.migrateArchive(oldV2);
@@ -488,8 +489,8 @@ test('every image palette satisfies WCAG AA, keeps its background and is stable 
   }
   for (const single of ['#557799', '#000000', '#ffffff', '#767676']) assert.ok(meetsThemeContrast(ThemeGenerator.themeFromImage(imagePixels([single]))), single);
 });
-test('filled accent buttons and gradient icons stay readable on every built-in theme', () => {
-  for (const theme of ThemeCatalog.defaultThemes()) {
+test('filled accent buttons and gradient icons stay readable on every official theme', () => {
+  for (const theme of ThemeCatalog.availableThemes()) {
     const label = ThemeGenerator.onAccentColor(theme);
     assert.ok(contrast(label, theme.accent) >= 4.5, theme.id);
     const icons = ThemeGenerator.iconPalette(theme);
@@ -759,7 +760,7 @@ test('organization exports contain only the requested parts as independent copie
   assert.deepEqual(sections(files.data), ['data']);
   assert.deepEqual(sections(files.organization), ['themes', 'settings', 'data']);
   assert.deepEqual(files.themes.themes, { themeId: organization.data.settings.themeId, themes: organization.data.settings.themes });
-  assert.deepEqual(Object.keys(files.settings.settings).sort(), ['deletedIssueColumns', 'deletedTaskColumns', 'fontFamily', 'fontSizes', 'highlights', 'hoursPerDay', 'issueColumns', 'issueFields', 'language', 'logo', 'logoShape', 'logoSource', 'navigation', 'requiredIssueColumns', 'requiredTaskColumns', 'savedViews', 'statuses', 'tags', 'taskColumns', 'taskEditorLayout', 'taskFields', 'urgencies']);
+  assert.deepEqual(Object.keys(files.settings.settings).sort(), ['deletedIssueColumns', 'deletedTaskColumns', 'fontFamily', 'fontSizes', 'highlights', 'hoursPerDay', 'iconPack', 'issueColumns', 'issueFields', 'language', 'logo', 'logoShape', 'logoSource', 'navigation', 'packSources', 'packThemeBases', 'requiredIssueColumns', 'requiredTaskColumns', 'savedViews', 'statuses', 'tags', 'taskColumns', 'taskEditorLayout', 'taskFields', 'urgencies']);
   assert.deepEqual(files.settings.settings.highlights, organization.data.settings.highlights);
   assert.deepEqual(files.data.data.highlights, organization.data.settings.highlights);
   assert.deepEqual(files.settings.settings.fontSizes, Typography.defaultFontSizes());
@@ -856,7 +857,7 @@ test('importing themes merges by identifier and activates the file theme only on
   const file = OrganizationTransfer.parseOrganizationFile(OrganizationTransfer.organizationExport({ name: 'Source', data: source }, 'themes'));
   const kept = OrganizationTransfer.applyOrganizationImport(current, file, { themes: true });
   assert.equal(kept.settings.themeId, current.settings.themeId);
-  assert.deepEqual(kept.settings.themes.map(theme => theme.id), [...ThemeCatalog.defaultThemes().map(theme => theme.id), 'brand']);
+  assert.deepEqual(kept.settings.themes.map(theme => theme.id), [...ThemeCatalog.availableThemes().map(theme => theme.id), 'brand']);
   assert.deepEqual([kept.settings.themes[0].name, kept.settings.themes[0].accent], ['Midnight 2', '#ff0000']);
   const activated = OrganizationTransfer.applyOrganizationImport(current, file, { themes: true, activateTheme: true });
   assert.equal(activated.settings.themeId, 'brand');

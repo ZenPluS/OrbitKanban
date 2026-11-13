@@ -1,6 +1,6 @@
 // End-to-end interface checks run by the smoke test (window.runSmokeTests).
 import { Component } from '../core/Component.js';
-import { ColorMath, ColumnCleanup, ColumnFilters, ColumnLayout, ColumnSchema, Common, DataFactory, GuideContent, IconLibrary, LogoCrop, NavigationSections, OrganizationTransfer, TaskColumns, TaskLayout, TaskLinks, TaskOrder, ThemeCatalog, ThemeGenerator, Translator, Typography, XlsxWriter } from '../shared.js';
+import { AppearancePacks, ColorMath, ColumnCleanup, ColumnFilters, ColumnLayout, ColumnSchema, Common, DataFactory, GuideContent, IconLibrary, LogoCrop, NavigationSections, OrganizationTransfer, TaskColumns, TaskLayout, TaskLinks, TaskOrder, ThemeCatalog, ThemeGenerator, Translator, Typography, XlsxWriter } from '../shared.js';
 
 export class SmokeTests extends Component {
   install() {
@@ -1768,12 +1768,49 @@ export class SmokeTests extends Component {
       check(visibleSettingsPanels().join() === 'themes' && this.$('#settings-tab-themes').classList.contains('active'), 'Settings tab remains selected after rerender');
       this.$('#settings-tab-themes').focus();
       this.$('#settings-tab-themes').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
-      check(this.state.settingsTab === 'fonts' && visibleSettingsPanels().join() === 'fonts' && document.activeElement === this.$('#settings-tab-fonts'), 'Settings tabs are keyboard navigable');
+      check(this.state.settingsTab === 'appearance' && visibleSettingsPanels().join() === 'appearance' && document.activeElement === this.$('#settings-tab-appearance'), 'Settings tabs are keyboard navigable');
       this.app.settings.showSettingsTab('themes');
       const accent = () => document.documentElement.style.getPropertyValue('--accent');
       const savedAccent = this.state.data.settings.themes.find(theme => theme.id === this.state.data.settings.themeId).accent;
       check(this.$('#unsaved-banner').hidden && !this.app.settings.settingsChanged() && accent() === savedAccent, 'No warning appears when settings have not changed');
-      check(ThemeCatalog.defaultThemes().length === 40 && ThemeCatalog.defaultThemes().every(theme => this.state.data.settings.themes.some(saved => saved.id === theme.id)) && this.$('#reset-theme') && !this.$('#delete-theme') && [...document.querySelectorAll('#theme-list .theme-kind')].filter(label => label.textContent === this.t("Built-in")).length === 40, "Catalog of 40 default themes is available without importing");
+      check(ThemeCatalog.defaultThemes().length === 1 && ThemeCatalog.availableThemes().length === 40 && ThemeCatalog.availableThemes().every(theme => this.state.data.settings.themes.some(saved => saved.id === theme.id)) && this.$('#reset-theme') && !this.$('#delete-theme') && [...document.querySelectorAll('#theme-list .theme-kind')].filter(label => label.textContent === this.t("Built-in")).length === 1 && [...document.querySelectorAll('#theme-list .theme-kind')].filter(label => label.textContent === this.t("Repository theme")).length === 39, "Midnight and 39 repository themes are available offline without importing");
+      {
+        this.app.settings.showSettingsTab('appearance');
+        check(document.querySelectorAll('[data-pack-refresh]').length === 4 && document.querySelectorAll('[data-pack-remove]').length === 2 && this.$('#appearance-icon option[value="smoke/appearance:sketch"]'), 'Official references and cached community packs are available offline');
+        const choose = value => { this.$('#appearance-icon').value = value; this.$('#appearance-icon').dispatchEvent(new Event('change', { bubbles: true })); };
+        choose('smoke/appearance:sketch');
+        check(IconLibrary.isLine('tasks') && !IconLibrary.isLine('search') && this.$('#global-search svg').classList.contains('ico-blue') && this.$('#navigation svg').classList.contains('ico-line') && this.$('#orbit-icon-sprite #i-tasks path').getAttribute('d') === 'M2 2L22 22' && this.$('#orbit-icon-sprite #i-settings'), 'Partial packs replace geometry and existing icon families while missing icons retain Orbit defaults');
+        await this.app.settings.saveSettings();
+        this.app.shell.adoptSnapshot(await this.workspaceApi.load(this.state.activeOrganizationId));
+        this.app.shell.render();
+        check(this.state.data.settings.iconPack === 'smoke/appearance:sketch' && IconLibrary.isLine('tasks'), 'Community icon selection survives save and offline reload');
+        this.$('#appearance-reset').click();
+        check(!IconLibrary.isLine('tasks') && IconLibrary.isLine('search'), 'Restore default icons previews the original families');
+        this.$('#discard-settings').click();
+        check(IconLibrary.isLine('tasks') && this.$('#appearance-icon').value === 'smoke/appearance:sketch', 'Discarding icon changes restores the saved selection');
+        this.$('#appearance-reset').click();
+        await this.app.settings.saveSettings();
+        this.app.shell.render();
+        this.$('[data-pack-remove="2"]').click();
+        check(!this.$('#appearance-icon option[value="smoke/appearance:sketch"]') && document.querySelectorAll('[data-pack-refresh]').length === 3, 'Removing a repository also removes its packs from the selector');
+        this.$('#discard-settings').click();
+        AppearancePacks.mergeThemes(this.state.settingsDraft, this.app.packs.catalog);
+        const externalId = 'smoke/appearance:palettes:paper';
+        this.state.settingsDraft.themeId = externalId;
+        this.app.themes.drawThemes();
+        this.app.settings.showSettingsTab('themes');
+        check(this.$('.theme-choice.chosen .theme-kind').textContent === this.t("Repository theme") && this.$('#reset-theme'), 'Cached community palettes have namespace-safe identifiers and an original preset');
+        choose('smoke/appearance:sketch');
+        this.$('[data-pack-remove="3"]').click();
+        check(this.state.settingsDraft.themeId === externalId && this.state.settingsDraft.themes.some(theme => theme.id === externalId) && this.state.settingsDraft.iconPack === 'smoke/appearance:sketch' && IconLibrary.isLine('tasks'), 'Removing a theme reference keeps its palettes, active selection and icon packs from the same repository');
+        this.$('#discard-settings').click();
+        this.state.settingsDraft.iconPack = 'smoke/missing:pack';
+        this.app.packs.draw();
+        this.app.packs.preview(this.state.settingsDraft);
+        check(!IconLibrary.isLine('tasks') && this.$('#appearance-icon').value === 'smoke/missing:pack' && this.$('#toast').classList.contains('error') && this.$('#toast').textContent === this.t("The selected icon pack is unavailable. Default icons are used until its repository is refreshed."), 'An uncached icon selection falls back visibly without losing the saved reference');
+        this.$('#discard-settings').click();
+        this.app.settings.showSettingsTab('themes');
+      }
       {
         const original = this.state.updateState;
         const visible = selector => this.$(selector).getClientRects().length > 0;
@@ -1849,9 +1886,9 @@ export class SmokeTests extends Component {
         backgroundInput.dispatchEvent(new Event('input', { bubbles: true }));
         check(this.app.themePainter.windowChromeSent.background === '#f4f1e8' && this.app.themePainter.windowChromeSent.text === previewTheme.text, 'Title bar background follows the theme in real time');
       }
-      check(this.$('.theme-choice.chosen .theme-kind').textContent === this.t("Modified built-in") && !this.$('#delete-theme'), 'Default theme can be edited without deleting the built-in version');
+      check(this.$('.theme-choice.chosen .theme-kind').textContent === this.t(previewTheme.id === 'midnight' ? "Modified built-in" : "Modified repository theme") && !this.$('#delete-theme'), 'Official theme can be edited without deleting its original preset');
       this.$('#reset-theme').click();
-      check(accent() === previewTheme.accent && this.$('#theme-name').value === previewTheme.name && this.$('.theme-choice.chosen .theme-kind').textContent === this.t("Built-in"), 'Resetting the theme restores its original name and four colors');
+      check(accent() === previewTheme.accent && this.$('#theme-name').value === previewTheme.name && this.$('.theme-choice.chosen .theme-kind').textContent === this.t(previewTheme.id === 'midnight' ? "Built-in" : "Repository theme"), 'Resetting the theme restores its original name and four colors');
       document.querySelector('[data-theme-color="accent"]').value = '#12ab34';
       document.querySelector('[data-theme-color="accent"]').dispatchEvent(new Event('input', { bubbles: true }));
       this.$('#discard-settings').click();

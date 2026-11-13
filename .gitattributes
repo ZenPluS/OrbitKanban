@@ -1,1 +1,2 @@
 * text=auto
+resources/packs/*.json text eol=lf

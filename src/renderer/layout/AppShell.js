@@ -12,6 +12,7 @@ export class AppShell extends Component {
     for (const { id } of Typography.FONT_SIZE_PARTS) document.documentElement.style.setProperty(`--fs-${id}`, String(values[id] / 100));
   }
   #applyTheme() {
+    this.app.packs.preview(this.state.data.settings);
     const theme = this.state.data.settings.themes.find(t => t.id === this.state.data.settings.themeId);
     this.app.themePainter.paintTheme(theme);
     this.paintFontSizes(this.state.data.settings.fontSizes);
@@ -57,6 +58,7 @@ export class AppShell extends Component {
     if (this.state.view === 8) this.app.todoPage.render();
   }
   adoptSnapshot(snapshot) {
+    this.app.packs.adopt(snapshot.appearance, snapshot.data.settings);
     if (this.state.activeOrganizationId !== snapshot.activeOrganizationId) { this.state.columnFilters = { tasks: {}, issues: {} }; this.state.issueSearch = ''; this.app.todoPage.query = ''; this.state.taskSectionId = ''; this.state.taskSectionViewId = ''; this.state.standaloneView = null; }
     this.state.data = ArchiveValidator.validateData(snapshot.data);
     if (!this.hasColumn('status')) this.state.statusFilter = '';

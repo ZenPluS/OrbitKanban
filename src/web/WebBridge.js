@@ -100,6 +100,7 @@
       const bridge = this;
       return Object.freeze({
         mode: 'browser',
+        appearance: (operation = 'info', payload = {}) => this.#request('/api/appearance', { operation, payload }),
         load: id => this.#request(`/api/load${id || this.#organizationId ? `?org=${encodeURIComponent(id || this.#organizationId)}` : ''}`).then(this.#track),
         save: (data, id, organizationName, revision) => this.#request('/api/save', { data, organizationId: id, organizationName, revision }).then(this.#track),
         organization: (operation, payload, contextId) => this.#request('/api/organization', { operation, payload, organizationId: contextId ?? this.#organizationId }).then(this.#track),

@@ -1,0 +1,20 @@
+{
+  "format": "orbitkanban-official-packs",
+  "version": 1,
+  "sources": [
+    {
+      "kind": "icons",
+      "repository": "zenplus/orbit_icons",
+      "commit": "1648c0ef34ed78789d811ebb586dfc1117c871cb",
+      "file": "orbit-icons.json",
+      "sha256": "5ebd103a013086f1ddc55be4fcf18fe984026e6c79c9fe4e34b819538b1c7869"
+    },
+    {
+      "kind": "themes",
+      "repository": "zenplus/orbit_themes",
+      "commit": "d1d0615270b5b31ee2f92446ae2818a7ad9bc57d",
+      "file": "orbit-themes.json",
+      "sha256": "8a660a24fbc8e5ee229a66dd8901c79c344efef76d4db0d7cedf7d9367a56eca"
+    }
+  ]
+}

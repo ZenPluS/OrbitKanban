@@ -12,6 +12,7 @@ const AttachmentStore = require('../src/desktop/storage/AttachmentStore');
 const WebServer = require('../src/web/WebServer');
 
 let folder, store, attachments, server, cookie, firstOrg, secondOrg, openedAttachment;
+const appearanceCalls = [];
 
 function request(urlPath, { method = 'GET', headers = {}, body } = {}) {
   return new Promise((resolve, reject) => {
@@ -42,7 +43,7 @@ before(async () => {
     effortHours: 2, releaseDate: '', notes: '', hidden: false
   });
   await store.replace(archive);
-  server = new WebServer({ store, attachments, openAttachment: async filePath => { openedAttachment = filePath; }, appRoot: ROOT, tokenFolder: path.join(folder, 'runtime'), port: 0 });
+  server = new WebServer({ store, attachments, openAttachment: async filePath => { openedAttachment = filePath; }, appearance: async (operation, payload) => { appearanceCalls.push({ operation, payload }); return { sources: [] }; }, appRoot: ROOT, tokenFolder: path.join(folder, 'runtime'), port: 0 });
   await server.start();
 });
 after(async () => {
@@ -121,6 +122,17 @@ test('rejects DNS rebinding, cross-site requests, missing API header and foreign
   assert.equal((await post('/api/save', {}, { Origin: 'http://attacker.example' })).status, 403);
   const noOrigin = { ...api(), 'Content-Type': 'application/json' };
   assert.equal((await request('/api/save', { method: 'POST', body: {}, headers: noOrigin })).status, 403);
+});
+
+test('appearance requests require authentication and forward public repository operations to the app', async () => {
+  const body = { operation: 'refresh', payload: { kind: 'icons', repository: 'team/icons', sources: [{ kind: 'icons', repository: 'team/icons' }] } };
+  assert.equal((await request('/api/appearance', { method: 'POST', body })).status, 401);
+  assert.equal((await post('/api/appearance', body, { Origin: 'http://attacker.example' })).status, 403);
+  assert.equal(appearanceCalls.length, 0);
+  const result = await post('/api/appearance', body);
+  assert.equal(result.status, 200);
+  assert.deepEqual(JSON.parse(result.text), { sources: [] });
+  assert.deepEqual(appearanceCalls, [body]);
 });
 
 test('browser attachment APIs authenticate, constrain files to tasks and open with the system callback', async () => {

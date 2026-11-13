@@ -4,10 +4,10 @@
 
 | | |
 | --- | --- |
-| **Current version** | 3.7.0 |
+| **Current version** | 3.8.0 |
 | **Platform** | Windows 10 / 11, 64-bit |
 | **Distribution** | Single portable executable, `OrbitKanban-Portable.exe` |
-| **Network** | Not required. Used only for optional update checks against GitHub |
+| **Network** | Not required. Optional GitHub update checks and explicit icon/theme repository refresh |
 | **Downloads** | [GitHub Releases](https://github.com/ZenPluS/OrbitKanban/releases) |
 
 ## Table of contents
@@ -52,6 +52,7 @@
   - [Required fields](#required-fields)
 - [Appearance](#appearance)
   - [Themes](#themes)
+  - [Appearance repositories](#appearance-repositories)
   - [Themed app icon](#themed-app-icon)
   - [Color picker](#color-picker)
   - [Fonts](#fonts)
@@ -86,7 +87,7 @@
 - The task editor's **Attachments** section can be moved and resized in the form designer, or removed and restored from its field list.
 - **Custom columns** of twelve types, including links to any number of ticket platforms, websites and predecessor/successor references between tasks; every built-in column can also be removed.
 - **Form designer** for the task editor: drag fields into custom sections, size the window and mark fields as required, per organization.
-- **40 built-in themes**, custom themes, and palettes generated from an image or logo with WCAG AA contrast. The splash screen, the app logo and the window icon follow the theme too.
+- **Midnight plus 39 offline repository themes**, public GitHub icon/theme packs, custom themes, and palettes generated from an image or logo with WCAG AA contrast. The splash screen, the app logo and the window icon follow the theme too.
 - **Imports and exports**: CSV import with validation, Excel workbooks, and per-organization JSON exports.
 - **Browser access** from the same PC, with live sync across windows.
 - **Built-in guide** covering every feature, opened with `F1`.
@@ -470,12 +471,12 @@ Mark a field as **Required** in the field properties of the form designer, or wi
 
 ### Themes
 
-**Settings → Themes & atmosphere** offers a searchable gallery of **40 built-in themes**, 27 dark and 13 light, available in every organization:
+**Settings → Themes & atmosphere** offers a searchable gallery of **40 official themes**, 27 dark and 13 light, available offline in every organization. **Midnight** is the sole theme defined in code; the other 39 come from the packaged snapshot of [orbit_themes](https://github.com/ZenPluS/orbit_themes):
 
 - **Dark:** Midnight, Ocean, Aurora, Monokai, Dracula, Nord, Solarized Dark, Gruvbox Dark, Tokyo Night, One Dark, Material Ocean, GitHub Dark, Synthwave, Ayu Dark, Everforest, Catppuccin Mocha, Rosé Pine, Forest, Graphite, Obsidian, Deep Space, Blue Hour, Copper, Plum, Burgundy, Desert Night, Emerald.
 - **Light:** Daylight, Solarized Light, Gruvbox Light, GitHub Light, Paper, Pearl, Sandstone, Mist, Sage Light, Lavender Light, Rose Quartz, Iceberg, Mint.
 
-Every theme has four colors: background, surface, text and accent. Built-in palettes keep text at a contrast of at least 4.5:1 and the accent at least 3:1 against both background and surface. Built-in themes can be modified per organization and reset with **Restore built-in theme**. **Create theme** adds custom themes, which can be edited and deleted.
+Every theme has four colors: background, surface, text and accent. Official palettes keep text at a contrast of at least 4.5:1 and the accent at least 3:1 against both background and surface. Official and repository themes can be modified per organization and reset with **Restore theme preset**. **Create theme** adds custom themes, which can be edited and deleted.
 
 **Generate from an image.** Load an image and all four colors are extracted and assigned automatically:
 
@@ -522,9 +523,25 @@ Seven parts of the interface can be scaled independently in 5% steps, each with 
 
 The **Compact** (85%), **Standard** (100%), **Large** (115%) and **Extra large** (130%) presets set every part at once.
 
+### Appearance repositories
+
+**Settings → Appearance repositories** manages references separately for each organization:
+
+- The mandatory official sources are [orbit_icons](https://github.com/ZenPluS/orbit_icons) and [orbit_themes](https://github.com/ZenPluS/orbit_themes).
+- Add up to 20 public GitHub references, using `owner/repository` or its GitHub URL, and choose **Icons** or **Themes**. One repository can provide both kinds and several packs.
+- **Add repository** and **Refresh** anonymously download `orbit-icons.json` or `orbit-themes.json` from the repository's default branch. Startup never requires a network request. Requests are bounded, limited to 2 MB, and errors retain the last valid cache.
+- Select an **Icon pack** to override Orbit icons. Packs may replace only some icons; missing icons keep their defaults. **Restore default icons** resets the selection. An unavailable pack produces a warning and uses Orbit temporarily without deleting the selection.
+- Theme packs join the gallery. Community identifiers are namespaced by repository and pack. Refresh updates unchanged presets, but preserves your edited names and colors; **Restore theme preset** uses the latest downloaded original.
+- **Remove reference** stops using a community source without deleting its saved themes or changing the active palette. Official sources cannot be removed.
+- Changes preview immediately; **Save settings** keeps references, icon selection and palettes. Discard restores the saved appearance. Downloads remain cached even if you discard settings.
+
+The portable cache is in `data/appearance`. Verified official snapshots are shipped in `resources/packs`, with source commits and SHA-256 recorded in `sources.lock.json`, so first launch also works offline. Copy the executable **and the whole data folder** to carry community packs. JSON backups carry references, theme palettes and preset history, not cached icon bytes: on another computer, refresh an uncached icon repository once or copy `data/appearance`.
+
+Packages are declarative JSON, never remote code. Themes contain an ID, name and four hexadecimal colors. Icons use a bounded allowlist of vector shapes, numeric coordinates and controlled styles: scripts, raw SVG, external images, links and arbitrary CSS are rejected. Authoring formats and examples are documented in the two official repositories.
+
 ### Icons and controls
 
-The interface uses a single set of vector icons that work offline:
+The default interface uses the vector icons from **orbit_icons**, cached and available offline:
 
 - **Feature icons** (navigation, settings tabs, export types) use colored gradients that adapt to the active theme and keep at least 3:1 contrast.
 - **Command icons** (close, arrows, sort, filter) are line icons in the text color.
@@ -655,8 +672,8 @@ Versions earlier than 2.45.0 must be updated manually once. From 2.45.0 onward, 
 ## Privacy and security
 
 - **No telemetry and no accounts.** Data stays in the local `data` folder.
-- The only network traffic is the optional update check and download, which use GitHub's public API and download hosts. No tasks, issues, groups, themes, logos or local paths are sent.
-- Fonts, icons and images are local. Images used for theme generation are processed in memory only.
+- Network traffic is limited to optional app updates and explicit public appearance-repository downloads using GitHub. Repository identifiers are requested; no tasks, issues, groups, saved palettes, logos or local paths are uploaded.
+- Fonts and images are local; icon and theme packs are cached locally. Images used for theme generation are processed in memory only.
 - Rich text is sanitized: active content, remote images and unsupported HTML are removed. CSV descriptions are imported as plain text.
 - Browser access listens on 127.0.0.1 only and requires a secret key.
 - Update packages are verified with SHA-256. The verification protects download integrity but does not replace a code signature, so SmartScreen may still warn about the unsigned executable.
@@ -717,6 +734,7 @@ The code is object oriented: apart from entry points and preload scripts, every 
 | `src/web/` | Browser access: `WebServer` and the client `WebBridge` |
 | `index.html`, `styles.css` | Interface markup and styles |
 | `languages/` | Built-in language packs |
+| `resources/packs/` | Official offline icon/theme JSON snapshots and their source commit/hash lock |
 | `app-logo.svg`, `fonts/` | App logo, bundled WOFF2 fonts with sources and licenses |
 | `tools/` | Development scripts: `build.js` (`PortableBuild`), `make-splash.js` (`LauncherArtwork`), `smoke.js` (`SmokeRunner`), `check.js` (`SyntaxCheck`), `AppIcon`, `SplashImage` and `GitHubRelease` |
 | `build/` | Portable launcher customization (HTML splash screen host); generated fallback splash and icon files |
@@ -756,7 +774,7 @@ Tags are never moved. Bump the version before releasing new sources:
 npm version minor --no-git-tag-version --ignore-scripts
 ```
 
-For a specifically numbered release, use `npm version 3.7.0 --no-git-tag-version --ignore-scripts` instead. To update the local portable copy too, run the pipeline **without `-NoDeliver`** and close the app first. The script replaces only the executable, not `dist/data`.
+For a specifically numbered release, use `npm version 3.8.0 --no-git-tag-version --ignore-scripts` instead. To update the local portable copy too, run the pipeline **without `-NoDeliver`** and close the app first. The script replaces only the executable, not `dist/data`.
 
 The script refuses to reuse a tagged version for different sources. If a build or test fails, nothing is committed or pushed.
 
@@ -764,6 +782,7 @@ The script refuses to reuse a tagged version for different sources. If a build o
 
 | Version | Changes |
 | --- | --- |
+| **3.8.0** | External GitHub icon/theme repositories with portable offline cache, community packs, partial icon overrides and reset, Midnight-only embedded theme, preserved custom palettes |
 | **3.7.0** | Distinct pushpin states and pinned note areas, subtle editor focus, reversible geometric organization logo crops shared with startup |
 | **3.6.1** | Fix color picker interaction inside modals; simplify the sticky note editor with borderless fields and on-demand formatting tools |
 | **3.6.0** | Sticky note design with contrasting text and headers, drag-and-drop ordering and rich-text shortcuts for notes and checklist items |

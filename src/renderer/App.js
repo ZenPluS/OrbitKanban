@@ -54,6 +54,7 @@ import { LogoSettings } from './settings/LogoSettings.js';
 import { OptionListSettings } from './settings/OptionListSettings.js';
 import { NavigationSettings } from './settings/NavigationSettings.js';
 import { ThemeSettings } from './settings/ThemeSettings.js';
+import { PackSettings } from './settings/PackSettings.js';
 import { Toolbar } from './layout/Toolbar.js';
 import { SmokeTests } from './diagnostics/SmokeTests.js';
 
@@ -62,6 +63,7 @@ export class App extends Component {
     super();
     this.app = this;
     this.state = new AppState();
+    this.packs = new PackSettings(this);
     this.richText = new RichText(this);
     this.notifier = new Notifier(this);
     this.history = new ChangeHistory(this);

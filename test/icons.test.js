@@ -18,7 +18,7 @@ test('feature icons use the theme gradient families, line icons follow the text 
   const sprite = IconLibrary.spriteMarkup();
   for (const family of IconLibrary.families) assert.match(sprite, new RegExp(`<linearGradient id="ig-${family}"[^>]*>.*?var\\(--ig-${family}-1,#[0-9a-f]{6}\\).*?var\\(--ig-${family}-2,#[0-9a-f]{6}\\)`, 'i'));
   assert.equal(IconLibrary.icon('tasks'), '<svg class="ico ico-blue" aria-hidden="true" focusable="false"><use href="#i-tasks"/></svg>');
-  assert.equal(IconLibrary.icon('tag', 'violet'), '<svg class="ico ico-violet" aria-hidden="true" focusable="false"><use href="#i-tag"/></svg>');
+  assert.equal(IconLibrary.icon('tag', 'violet'), '<svg class="ico ico-violet" data-icon-family="violet" aria-hidden="true" focusable="false"><use href="#i-tag"/></svg>');
   assert.equal(IconLibrary.icon('tag', 'unknown'), IconLibrary.icon('tag'));
   assert.ok(IconLibrary.isLine('close') && !IconLibrary.isLine('tasks'));
   assert.match(IconLibrary.icon('close'), /class="ico ico-line"/);

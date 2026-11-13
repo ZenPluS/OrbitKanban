@@ -46,6 +46,7 @@ class OrganizationTransfer {
     if (parts.includes('settings')) {
       file.settings = {
         language: settings.language || 'it', logo: settings.logo || '', logoSource: settings.logoSource === undefined ? '' : settings.logoSource, logoShape: settings.logoShape === undefined ? 'none' : settings.logoShape,
+        packSources: structuredClone(settings.packSources || []), iconPack: settings.iconPack ?? 'default', packThemeBases: structuredClone(settings.packThemeBases || {}),
         navigation: structuredClone(settings.navigation), hoursPerDay: settings.hoursPerDay, fontSizes: { ...(settings.fontSizes || Typography.defaultFontSizes()) }, fontFamily: settings.fontFamily ?? Typography.DEFAULT_FONT_FAMILY,
         statuses: structuredClone(settings.statuses), urgencies: structuredClone(settings.urgencies),
         highlights: structuredClone(highlights), tags: structuredClone(settings.tags || []),
@@ -123,6 +124,9 @@ class OrganizationTransfer {
       const source = file.settings;
       const settings = {
         language: source.language, logo: source.logo ?? '', logoSource: source.logoSource === undefined ? '' : source.logoSource, logoShape: source.logoShape === undefined ? 'none' : source.logoShape,
+        ...(source.packSources === undefined ? {} : { packSources: structuredClone(source.packSources) }),
+        ...(source.iconPack === undefined ? {} : { iconPack: source.iconPack }),
+        ...(source.packThemeBases === undefined ? {} : { packThemeBases: structuredClone(source.packThemeBases) }),
         navigation: Array.isArray(source.navigation) ? OrganizationTransfer.#fileRecords(source.navigation, OrganizationTransfer.#RECORD_KEYS.section, "Invalid navigation sections.") : source.navigation, hoursPerDay: source.hoursPerDay,
         statuses: OrganizationTransfer.#fileRecords(source.statuses, OrganizationTransfer.#RECORD_KEYS.status, "Invalid or empty status list."),
         urgencies: OrganizationTransfer.#fileRecords(source.urgencies, OrganizationTransfer.#RECORD_KEYS.urgency, "Invalid or empty urgency list.")
@@ -222,6 +226,7 @@ class OrganizationTransfer {
       const status = OrganizationTransfer.#optionRemapper(settings.statuses, incoming.statuses), urgency = OrganizationTransfer.#optionRemapper(settings.urgencies, incoming.urgencies);
       for (const task of next.tasks) { task.statusId = status(task.statusId); task.urgencyId = urgency(task.urgencyId); }
       for (const key of ['language', 'navigation', 'hoursPerDay', 'statuses', 'urgencies']) settings[key] = incoming[key];
+      for (const key of ['packSources', 'iconPack', 'packThemeBases']) if (incoming[key] !== undefined) settings[key] = structuredClone(incoming[key]);
       if (incoming.fontSizes) settings.fontSizes = incoming.fontSizes;
       if (incoming.fontFamily !== undefined) settings.fontFamily = incoming.fontFamily;
       if (incoming.taskEditorLayout !== undefined) settings.taskEditorLayout = TaskLayout.remapTaskEditorLayout(settings, incoming.taskEditorLayout, maps.tasks.mapping);

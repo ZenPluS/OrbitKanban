@@ -50,7 +50,7 @@ class WorkspaceStore {
   #snapshot(organizationId) {
     const organization = this.#find(this.#resolve(organizationId));
     return {
-      ...this.#extras(),
+      ...this.#extras(organization.data.settings),
       data: structuredClone(organization.data), dataFolder: this.#dataFolder, revision: WorkspaceStore.revisionOf(organization),
       activeOrganizationId: organization.id, defaultOrganizationId: this.#current.activeOrganizationId,
       organizations: this.#current.organizations.map(({ id, name }) => ({ id, name }))
@@ -210,7 +210,7 @@ class WorkspaceStore {
       await this.#ensureLoaded();
       const organization = this.#find(organizationId);
       if (!organization) throw WorkspaceStore.#codedError('missing-organization', this.#translate(organizationId, "Organization not found."));
-      const file = OrganizationTransfer.organizationExport(organization, kind, { appVersion: String(this.#extras().appVersion || '') });
+      const file = OrganizationTransfer.organizationExport(organization, kind, { appVersion: String(this.#extras(organization.data.settings).appVersion || '') });
       return { fileName: OrganizationTransfer.organizationFileName(organization.name, kind, organization.data.settings.language), text: JSON.stringify(file, null, 2) };
     });
   }

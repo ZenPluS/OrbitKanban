@@ -73,10 +73,11 @@ class WebServer {
   #store; #appRoot; #tokenFolder; #requestedPort; #openDataFolder; #attachments; #openAttachment; #language; #languages;
   #server; #token; #actualPort; #indexHtml; #keepAlive;
   #streams = new Set();
+  #appearance;
   #staticCache = new Map();
   #staticFiles = new Map(WebServer.#FIXED_FILES);
 
-  constructor({ store, appRoot, tokenFolder, port = WebServer.DEFAULT_PORT, openDataFolder = async () => {}, attachments, openAttachment, language = () => 'it', languages = async () => WebServer.#builtInLanguages() }) {
+  constructor({ store, appRoot, tokenFolder, port = WebServer.DEFAULT_PORT, openDataFolder = async () => {}, attachments, openAttachment, language = () => 'it', languages = async () => WebServer.#builtInLanguages(), appearance }) {
     this.#store = store;
     this.#appRoot = appRoot;
     this.#tokenFolder = tokenFolder;
@@ -86,6 +87,7 @@ class WebServer {
     this.#openAttachment = openAttachment;
     this.#language = language;
     this.#languages = languages;
+    this.#appearance = appearance;
   }
 
   get port() { return this.#actualPort; }
@@ -206,6 +208,11 @@ class WebServer {
       } catch (error) { this.#attachmentFailure(error); }
     }
     if (route === 'GET /api/languages') return this.#json(res, 200, await this.#languages('info'));
+    if (route === 'POST /api/appearance') {
+      if (!this.#appearance) throw new Error(this.#say('Appearance repositories are not available.'));
+      const { operation, payload } = await this.#readBody(req);
+      return this.#json(res, 200, await this.#appearance(operation, payload));
+    }
     if (req.method !== 'POST') throw WebServer.#httpError('not-found', this.#say("Not found."));
     if (url.pathname === '/api/attachments/add') {
       if (!/^application\/octet-stream(?:\s*;|$)/i.test(req.headers['content-type'] || '')) throw WebServer.#httpError('forbidden', this.#say("Request not allowed."));
