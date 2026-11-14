@@ -4,7 +4,7 @@
 
 | | |
 | --- | --- |
-| **Current version** | 3.8.0 |
+| **Current version** | 3.8.1 |
 | **Platform** | Windows 10 / 11, 64-bit |
 | **Distribution** | Single portable executable, `OrbitKanban-Portable.exe` |
 | **Network** | Not required. Optional GitHub update checks and explicit icon/theme repository refresh |
@@ -71,6 +71,7 @@
 - [Troubleshooting](#troubleshooting)
 - [Development](#development)
   - [Prerequisites and scripts](#prerequisites-and-scripts)
+  - [Performance measurements](#performance-measurements)
   - [Project structure](#project-structure)
   - [Build, test and release](#build-test-and-release)
 - [Release history](#release-history)
@@ -702,6 +703,7 @@ npm start        # run the app from source (data is stored in the project's data
 npm test         # unit tests (node --test)
 npm run check    # syntax check of every script in src/ and tools/
 npm run smoke    # end-to-end UI smoke test on an isolated temporary workspace
+npm run performance # isolated desktop startup and interaction benchmark
 npm run icon     # generate app-logo.png and build/icon.ico from app-logo.svg
 npm run splash   # generate the launcher's fallback splash image and the app icons
 npm run dist     # build dist/OrbitKanban-Portable.exe
@@ -710,6 +712,33 @@ npm run dist     # build dist/OrbitKanban-Portable.exe
 The application version comes from `package.json` and is shown in the sidebar and splash screen. If the previous executable is still running, use `npm run dist -- --out dist-staging` to build without overwriting it.
 
 All source code, tests, scripts and documentation are in English. Interface text uses the English string as its key, and every new string needs an entry in both `languages/en.json` and `languages/it.json`.
+
+### Performance measurements
+
+```powershell
+npm run performance -- --tasks 1000 --runs 3
+npm run performance -- --tasks 250 --runs 3
+npm run performance -- --tasks 1000 --runs 1 --profile
+npm run performance -- --executable ".\dist-staging\3.8.1\win-unpacked\OrbitKanban.exe"
+```
+
+The runner launches the real desktop app with synthetic tasks and matching issues in a separate temporary workspace. It never uses the normal data folder, disables updater installation and automatic checks, uses an ephemeral browser-access port and cleans up after success or failure. Each run verifies that the task edit reached the on-disk archive. Task counts range from 10 to 10,000; runs range from 1 to 10.
+
+JSON output includes each run and median timings in milliseconds. Startup milestones are cumulative from desktop application construction; `launchToReady` starts just before spawning Electron. Interaction timings cover JavaScript and synchronous layout in a hidden window, **not displayed frames or perceived animation smoothness**. The first run includes workspace migration; later runs reuse that isolated archive and runtime cache. These are not cold-disk measurements. The optional profile reports the busiest renderer CPU functions. Run comparisons without concurrent builds or tests.
+
+Example source-build medians on the same Windows machine, three runs with 1,000 tasks and 1,000 issues, comparing 3.8.0 to 3.8.1:
+
+| Operation | Before | After |
+| --- | ---: | ---: |
+| Launch to renderer ready | 1,116 ms | 1,107 ms |
+| First search | 154 ms | 120 ms |
+| Search with more matches | 413 ms | 376 ms |
+| Clear search | 489 ms | 112 ms |
+| Sort | 481 ms | 397 ms |
+| Open task editor | 172 ms | 194 ms |
+| Save edited task notes | 990 ms | 506 ms |
+
+The main gains come from reusing unchanged table rows and controls and not rebuilding unchanged icon packs. Numeric sorting reuses its collator; exact text translations avoid fragment processing. There is **no meaningful startup improvement** in this sample, and editor opening is slightly slower; no speedup is claimed for either. Source measurements exclude portable extraction, so they do not establish launcher startup gains. Archive validation, conflict detection, atomic writes, backups and undo remain enabled.
 
 ### Project structure
 
@@ -730,13 +759,13 @@ The code is object oriented: apart from entry points and preload scripts, every 
 | `src/desktop/platform/` | `PortableLauncher` (portable paths, taskbar identity, shortcuts), `WindowChrome` (custom title bar), `WindowIcon` (themed window icon) and `IconFile` (ICO encoder and reader) |
 | `src/desktop/splash/` | `SplashScreen`, `SplashTheme` (saved splash screen colors and logo) and the splash screen page (`splash.html`, `splash.js`), shared with the portable launcher |
 | `src/desktop/update/` | `Updater` (check, download, verification), `UpdateLauncher` and `install-update.ps1` |
-| `src/desktop/diagnostics/` | End-to-end smoke tests of the desktop app, the browser access and the taskbar identity |
+| `src/desktop/diagnostics/` | End-to-end smoke tests of the desktop app, browser access and taskbar identity, plus isolated performance measurements |
 | `src/web/` | Browser access: `WebServer` and the client `WebBridge` |
 | `index.html`, `styles.css` | Interface markup and styles |
 | `languages/` | Built-in language packs |
 | `resources/packs/` | Official offline icon/theme JSON snapshots and their source commit/hash lock |
 | `app-logo.svg`, `fonts/` | App logo, bundled WOFF2 fonts with sources and licenses |
-| `tools/` | Development scripts: `build.js` (`PortableBuild`), `make-splash.js` (`LauncherArtwork`), `smoke.js` (`SmokeRunner`), `check.js` (`SyntaxCheck`), `AppIcon`, `SplashImage` and `GitHubRelease` |
+| `tools/` | Development scripts: `build.js` (`PortableBuild`), `make-splash.js` (`LauncherArtwork`), `smoke.js` (`SmokeRunner`), `performance.js` (`PerformanceRunner`), `check.js` (`SyntaxCheck`), `AppIcon`, `SplashImage` and `GitHubRelease` |
 | `build/` | Portable launcher customization (HTML splash screen host); generated fallback splash and icon files |
 | `build-and-push.ps1` | Build, test, commit, push and GitHub release pipeline |
 | `test/` | Unit tests, including layout validation and import/export in `task-layout.test.js` and required fields in `required-fields.test.js` |
@@ -774,7 +803,7 @@ Tags are never moved. Bump the version before releasing new sources:
 npm version minor --no-git-tag-version --ignore-scripts
 ```
 
-For a specifically numbered release, use `npm version 3.8.0 --no-git-tag-version --ignore-scripts` instead. To update the local portable copy too, run the pipeline **without `-NoDeliver`** and close the app first. The script replaces only the executable, not `dist/data`.
+For a specifically numbered release, use `npm version 3.8.1 --no-git-tag-version --ignore-scripts` instead. To update the local portable copy too, run the pipeline **without `-NoDeliver`** and close the app first. The script replaces only the executable, not `dist/data`.
 
 The script refuses to reuse a tagged version for different sources. If a build or test fails, nothing is committed or pushed.
 
@@ -782,6 +811,7 @@ The script refuses to reuse a tagged version for different sources. If a build o
 
 | Version | Changes |
 | --- | --- |
+| **3.8.1** | Incremental task-table rendering, preserved controls during sorting and unchanged-shell refreshes, icon pack reuse, shared numeric collator, independent startup I/O and repeatable isolated performance diagnostics |
 | **3.8.0** | External GitHub icon/theme repositories with portable offline cache, community packs, partial icon overrides and reset, Midnight-only embedded theme, preserved custom palettes |
 | **3.7.0** | Distinct pushpin states and pinned note areas, subtle editor focus, reversible geometric organization logo crops shared with startup |
 | **3.6.1** | Fix color picker interaction inside modals; simplify the sticky note editor with borderless fields and on-demand formatting tools |

@@ -3,6 +3,34 @@ import { Component } from '../core/Component.js';
 import { IssueMatcher, TaskLinks, TaskOrder } from '../shared.js';
 
 export class TaskRows extends Component {
+  #rowMarkup = new WeakMap();
+  invalidateRow(row) { this.#rowMarkup.delete(row); }
+  #drawRows(rows, columns) {
+    const body = this.$('#task-rows');
+    if (!rows.length) {
+      body.innerHTML = `<tr><td colspan="${columns + 2}" class="empty">${this.esc(this.t("No tasks found. Create a new task or change the filters."))}</td></tr>`;
+      return;
+    }
+    const existing = new Map([...body.children].map(element => [element.dataset.taskRow, element]));
+    const retained = new Map(), changed = [];
+    for (const row of rows) {
+      const previous = existing.get(row.id);
+      if (previous && this.#rowMarkup.get(previous) === row.html) retained.set(row.id, previous);
+      else changed.push(row.html);
+    }
+    const range = document.createRange();
+    range.selectNodeContents(body);
+    const fragment = range.createContextualFragment(changed.join(''));
+    for (const element of fragment.children) retained.set(element.dataset.taskRow, element);
+    for (const element of [...body.children]) if (retained.get(element.dataset.taskRow) !== element) element.remove();
+    let cursor = body.firstElementChild;
+    for (const row of rows) {
+      const element = retained.get(row.id);
+      if (cursor === element) cursor = cursor.nextElementSibling;
+      else body.insertBefore(element, cursor);
+      this.#rowMarkup.set(element, row.html);
+    }
+  }
   #taskCell(column, task, status, urgency, links, duplicateGroups = []) {
     const none = '<span class="muted">—</span>';
     switch (column) {
@@ -29,20 +57,22 @@ export class TaskRows extends Component {
   }
   drawTaskRows() {
     const duplicates = this.app.taskFilter.duplicatesOf(), issues = IssueMatcher.indexIssues(this.state.data.issues), tasks = this.app.taskList.sortedRows(this.app.taskFilter.filteredTasks(duplicates, issues)), columns = this.app.columns.shownColumns();
-    this.$('#task-rows').innerHTML = tasks.map(task => {
+    const reorderable = this.hasColumn('sequence');
+    const rows = tasks.map(task => {
       const status = this.statusOf(task), urgency = this.urgencyOf(task);
       const links = this.matchIssues(task, issues), marks = this.app.presenter.taskHighlights(task), mark = marks[0], duplicateGroups = duplicates.tasks.get(task.id) || [];
-      const classes = [status.highlight ? 'highlighted' : '', mark ? 'marked' : '', task.hidden ? 'hidden-row' : '', duplicateGroups.length ? 'duplicate-row' : '', this.state.selectedTasks.has(task.id) ? 'selected' : ''].filter(Boolean).join(' ');
+      const classes = [status.highlight ? 'highlighted' : '', mark ? 'marked' : '', task.hidden ? 'hidden-row' : '', duplicateGroups.length ? 'duplicate-row' : ''].filter(Boolean).join(' ');
       const markLabel = mark ? this.app.transfer.fillText("Highlight: {0}", marks.map(item => item.name).join(', ')) : this.t("Highlight row");
       const duplicateLabel = duplicateGroups.length ? [this.t("Possible duplicate"), ...this.app.taskFilter.taskDuplicateLines(task.id, duplicateGroups)].join('\n') : '';
       const duplicateFlag = duplicateGroups.length ? `<button type="button" class="icon-button dup-flag" data-dup-incident="${this.esc(duplicateGroups[0].incident)}" title="${this.esc(duplicateLabel + '\n' + this.t("Click to see only the tasks involved."))}" aria-label="${this.esc(duplicateLabel.replaceAll('\n', '. '))}">${this.ico('copy')}</button>` : '';
       const selectLabel = this.app.transfer.fillText("Select {0}", this.app.taskFilter.recordLabel(task));
       const attachmentCount = this.app.attachments.count(task.id), attachmentLabel = this.app.transfer.fillText("Manage attachments ({0})", attachmentCount);
-      return `<tr data-task-row="${this.esc(task.id)}" title="${this.esc(this.t("Double-click the row to edit."))}" class="${classes}" style="--row-color:${status.color};${this.app.presenter.highlightStyle(marks, status)}"><td class="select-cell"><label class="select-hit" title="${this.esc(selectLabel + '\n' + this.t("Shift + click to select a range."))}"><input type="checkbox" data-select-task="${this.esc(task.id)}" ${this.state.selectedTasks.has(task.id) ? 'checked' : ''} aria-label="${this.esc(selectLabel)}"></label></td>${columns.map(column => this.#taskCell(column, task, status, urgency, links, duplicateGroups)).join('')}<td class="row-actions">${duplicateFlag}<button type="button" class="icon-button attachment-button" data-task-attachments="${this.esc(task.id)}" title="${this.esc(attachmentLabel)}" aria-label="${this.esc(attachmentLabel)}">${this.ico('paperclip')}<span class="attachment-count">${attachmentCount}</span></button><button type="button" class="icon-button mark-button ${mark ? 'is-marked' : ''}" data-mark-task="${this.esc(task.id)}" title="${this.esc(markLabel)}" aria-label="${this.esc(markLabel)}" aria-haspopup="menu" aria-expanded="false"><i class="mark-dot"></i></button><button type="button" class="icon-button" data-toggle-task="${this.esc(task.id)}" title="${this.esc(this.t(task.hidden ? "Show task" : "Hide task"))}">${this.ico(task.hidden ? 'eye' : 'eye-off')}</button><button type="button" class="icon-button" data-edit-task="${this.esc(task.id)}" title="${this.esc(this.t("Edit task"))}">${this.ico('more')}</button></td></tr>`;
-    }).join('') || `<tr><td colspan="${columns.length + 2}" class="empty">${this.esc(this.t("No tasks found. Create a new task or change the filters."))}</td></tr>`;
+      const html = `<tr data-task-row="${this.esc(task.id)}" title="${this.esc(this.t("Double-click the row to edit."))}" class="${classes}" style="--row-color:${status.color};${this.app.presenter.highlightStyle(marks, status)}"><td class="select-cell">${reorderable ? this.app.sortable.dragHandle(this.app.taskFilter.recordLabel(task)) : ''}<label class="select-hit" title="${this.esc(selectLabel + '\n' + this.t("Shift + click to select a range."))}"><input type="checkbox" data-select-task="${this.esc(task.id)}" aria-label="${this.esc(selectLabel)}"></label></td>${columns.map(column => this.#taskCell(column, task, status, urgency, links, duplicateGroups)).join('')}<td class="row-actions">${duplicateFlag}<button type="button" class="icon-button attachment-button" data-task-attachments="${this.esc(task.id)}" title="${this.esc(attachmentLabel)}" aria-label="${this.esc(attachmentLabel)}">${this.ico('paperclip')}<span class="attachment-count">${attachmentCount}</span></button><button type="button" class="icon-button mark-button ${mark ? 'is-marked' : ''}" data-mark-task="${this.esc(task.id)}" title="${this.esc(markLabel)}" aria-label="${this.esc(markLabel)}" aria-haspopup="menu" aria-expanded="false"><i class="mark-dot"></i></button><button type="button" class="icon-button" data-toggle-task="${this.esc(task.id)}" title="${this.esc(this.t(task.hidden ? "Show task" : "Hide task"))}">${this.ico(task.hidden ? 'eye' : 'eye-off')}</button><button type="button" class="icon-button" data-edit-task="${this.esc(task.id)}" title="${this.esc(this.t("Edit task"))}">${this.ico('more')}</button></td></tr>`;
+      return { id: task.id, html };
+    });
+    this.#drawRows(rows, columns.length);
     this.app.attachments.refreshCounts();
-    if (this.hasColumn('sequence')) document.querySelectorAll('#task-rows .select-cell').forEach((cell, index) => cell.insertAdjacentHTML('afterbegin', this.app.sortable.dragHandle(this.app.taskFilter.recordLabel(tasks[index]))));
-    if (this.hasColumn('sequence')) this.app.sortable.sortable(this.$('#task-rows'), 'tr[data-task-row]', async (from, to) => {
+    if (reorderable) this.app.sortable.sortable(this.$('#task-rows'), 'tr[data-task-row]', async (from, to) => {
       try {
         await this.app.history.commit(next => TaskOrder.reorderTaskSequences(next.tasks, tasks.map(task => task.id), from, to));
         this.state.sort = [{ key: 'sequence', direction: 'asc' }];

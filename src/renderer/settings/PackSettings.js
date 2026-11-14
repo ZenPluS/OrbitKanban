@@ -6,19 +6,26 @@ export class PackSettings extends Component {
   busy = false;
   catalog = { sources: [] };
   #unavailable = '';
-  #renderedCatalog;
+  #iconKey = '';
+  #themeKey = '';
+  #renderedIcons;
   #renderedSelection;
   adopt(catalog, settings) {
     if (catalog) this.catalog = catalog;
+    this.#iconKey = JSON.stringify(this.catalog.sources.filter(source => source.kind === 'icons').map(({ repository, manifest }) => ({ repository, manifest })));
     const official = this.catalog.sources.find(source => source.kind === 'themes' && source.repository === AppearancePacks.OFFICIAL[1].repository);
-    if (official?.manifest) ThemeCatalog.setExternalThemes(AppearancePacks.validate(official.manifest, 'themes').packs.flatMap(pack => pack.themes));
+    const themeKey = JSON.stringify(official?.manifest);
+    if (official?.manifest && themeKey !== this.#themeKey) {
+      ThemeCatalog.setExternalThemes(AppearancePacks.validate(official.manifest, 'themes').packs.flatMap(pack => pack.themes));
+      this.#themeKey = themeKey;
+    }
     this.preview(settings);
   }
   preview(settings) {
     if (!this.catalog.sources.length) return;
-    if (this.#renderedCatalog === this.catalog && this.#renderedSelection === (settings.iconPack || 'default')) return;
+    if (this.#renderedIcons === this.#iconKey && this.#renderedSelection === (settings.iconPack || 'default')) return;
     const available = IconLibrary.configure(this.catalog, settings.iconPack || 'default', document);
-    this.#renderedCatalog = this.catalog;
+    this.#renderedIcons = this.#iconKey;
     this.#renderedSelection = settings.iconPack || 'default';
     if (!available && this.#unavailable !== settings.iconPack) {
       this.#unavailable = settings.iconPack;

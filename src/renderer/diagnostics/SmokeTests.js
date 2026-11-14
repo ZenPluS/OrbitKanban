@@ -61,6 +61,52 @@ export class SmokeTests extends Component {
       check(heightOf('#new-task') === heightOf('#columns-button') && heightOf('#columns-button') === heightOf('#reset-sort') && heightOf('#reset-sort') === heightOf('#saved-view-manage') && rowActionSizes.length && rowActionSizes.every(([width, height]) => width === height), 'Page buttons, toolbar buttons and row actions use the shared size scale');
       const iconSprite = document.getElementById('orbit-icon-sprite');
       check(iconSprite && IconLibrary.names().every(name => iconSprite.querySelector(`symbol#i-${name}`)) && document.querySelectorAll('#navigation .nav-icon svg.ico').length === this.state.data.settings.navigation.length && this.$('#settings-button svg.ico') && this.$('#new-task svg.ico') && this.$('#columns-button svg.ico') && !/[▤⌘◈▥⚙⌕↶↷↗＋◉◌⋯▽▾]/.test([...document.querySelectorAll('#navigation button, .topbar button, #content .page-heading button, #content .table-toolbar button, #task-rows td:last-child button')].map(button => button.textContent).join('')), 'Icons come from the shared sprite instead of text glyphs');
+      const packCatalog = this.app.packs.catalog, existingIcon = this.$('#new-task svg');
+      const unchangedCatalog = structuredClone(packCatalog);
+      unchangedCatalog.sources.forEach(source => { source.updatedAt = '2027-01-01T00:00:00.000Z'; });
+      this.app.packs.adopt(unchangedCatalog, this.state.data.settings);
+      check(document.getElementById('orbit-icon-sprite') === iconSprite && this.$('#new-task svg') === existingIcon, 'Unchanged pack contents retain the sprite and live icons across snapshot and cache metadata changes');
+      const changedCatalog = structuredClone(packCatalog);
+      changedCatalog.sources.find(source => source.kind === 'icons' && source.repository === AppearancePacks.OFFICIAL[0].repository).manifest.packs[0].icons.tasks.family = 'rose';
+      this.app.packs.adopt(changedCatalog, this.state.data.settings);
+      check(document.getElementById('orbit-icon-sprite') !== iconSprite && this.$('#navigation svg use[href="#i-tasks"]').parentElement.classList.contains('ico-rose'), 'Changed manifest contents refresh the sprite and existing icons');
+      this.app.packs.adopt(packCatalog, this.state.data.settings);
+      const originalSearch = this.$('#search'), originalRows = [...document.querySelectorAll('#task-rows tr[data-task-row]')];
+      this.$('#task-rows input[data-select-task]').click();
+      const selectedRowId = originalRows[0].dataset.taskRow, originalSort = structuredClone(this.state.sort);
+      originalSearch.focus(); originalSearch.setSelectionRange(0, 0);
+      this.$('[data-sort="sequence"]').click();
+      this.$('[data-sort="statusId"]').dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true }));
+      check(this.$('#search') === originalSearch && document.activeElement === originalSearch && originalSearch.selectionStart === 0 &&
+        originalRows.every(row => row.isConnected) && this.state.selectedTasks.has(selectedRowId) &&
+        this.$('[data-sort="sequence"] span').textContent === '1' && this.$('[data-sort="statusId"] span').textContent === '2', 'Multi-column sorting reuses rows and controls, retaining focus, selection and sort priorities');
+      this.state.sort = originalSort;
+      this.app.taskRows.clearSelection();
+      this.app.shell.render();
+      const unchangedRow = this.$('#task-rows tr[data-task-row]'), editedTask = this.state.data.tasks.find(task => task.id === originalRows[1].dataset.taskRow), originalNotes = editedTask.notes;
+      const retainedSearch = this.$('#search');
+      editedTask.notes = '<p>Incremental rendering check</p>';
+      this.app.shell.rerenderPreservingView();
+      check(this.$('#search') === retainedSearch && unchangedRow.isConnected &&
+        this.$(`[data-task-row="${CSS.escape(editedTask.id)}"] .notes-cell`).textContent === 'Incremental rendering check', 'Editing one task refreshes its cells without replacing unchanged rows or table controls');
+      editedTask.notes = originalNotes;
+      this.app.shell.render();
+      const originalCommit = this.app.history.commit, originalHighlighter = this.state.highlighter;
+      const rollbackRow = this.$('#task-rows tr[data-task-row]'), rollbackStyle = rollbackRow.style.cssText;
+      try {
+        this.app.history.commit = async () => { throw new Error('Expected highlight save failure'); };
+        this.state.highlighter = this.app.presenter.highlightsOf()[0].id;
+        this.app.rowMarks.paintRow(rollbackRow);
+        await this.app.rowMarks.markFlush;
+        check(this.$(`[data-task-row="${CSS.escape(rollbackRow.dataset.taskRow)}"]`).style.cssText === rollbackStyle && !this.app.rowMarks.pendingMarks.size, 'A failed optimistic highlight save redraws the original row instead of retaining unsaved styling');
+      } finally { this.app.history.commit = originalCommit; this.state.highlighter = originalHighlighter; this.app.rowMarks.drawHighlighter(); }
+      const tableTasks = this.state.data.tasks;
+      this.state.data.tasks = [];
+      this.app.taskRows.drawTaskRows();
+      check(this.$('#task-rows .empty') && !this.$('#task-rows tr[data-task-row]'), 'Incremental rendering removes old rows when the task list becomes empty');
+      this.state.data.tasks = tableTasks;
+      this.app.taskRows.drawTaskRows();
+      check(!this.$('#task-rows .empty') && document.querySelectorAll('#task-rows tr[data-task-row]').length === originalRows.length, 'Incremental rendering restores rows after an empty result without keeping the empty placeholder');
       const attachmentButton = this.$('#task-rows [data-task-attachments]');
       attachmentButton.click();
       await waitFor(() => this.$('#attachment-manager .attachment-empty') || this.$('#attachment-manager .attachment-list'));

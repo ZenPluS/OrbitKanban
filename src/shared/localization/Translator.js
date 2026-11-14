@@ -115,6 +115,7 @@ class Translator {
   static translate(text, language) {
     const { pattern, messages } = Translator.#dictionary(language);
     const source = String(text);
+    if (!source.includes('<') && messages.has(source)) return messages.get(source);
     if (!pattern) return source;
     const replaceText = value => value.replace(pattern, match => messages.get(match));
     return source.split(Translator.#htmlTokenPattern).map((part, index) => {

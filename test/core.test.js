@@ -307,6 +307,13 @@ test('multi-column sort uses each priority and numeric values', () => {
 test('unplanned release stays last even with descending sort', () => {
   assert.deepEqual(TaskOrder.sortTasks([{ releaseDate: '', sequence: 1 }, { releaseDate: '2027-01-01', sequence: 2 }], [{ key: 'releaseDate', direction: 'desc' }]).map(t => t.sequence), [2, 1]);
 });
+test('text sorting retains numeric collation, accents and empty values last', () => {
+  const tasks = ['TASK-10', '', 'TASK-2', 'TASK-1'].map((code, index) => ({ code, sequence: index + 1 }));
+  assert.deepEqual(TaskOrder.sortTasks(tasks, [{ key: 'code', direction: 'asc' }]).map(task => task.code), ['TASK-1', 'TASK-2', 'TASK-10', '']);
+  assert.deepEqual(TaskOrder.sortTasks(tasks, [{ key: 'code', direction: 'desc' }]).map(task => task.code), ['TASK-10', 'TASK-2', 'TASK-1', '']);
+  const accented = ['cafff', 'caff\u00e8', 'caffe'].map((code, index) => ({ code, sequence: index + 1 }));
+  assert.deepEqual(TaskOrder.sortTasks(accented, [{ key: 'code', direction: 'asc' }]).map(task => task.code), ['caffe', 'caff\u00e8', 'cafff']);
+});
 test('date colors are stable across views and archive reloads', () => {
   assert.equal(TaskOrder.dateColor('2027-01-01'), TaskOrder.dateColor('2027-01-01'));
   assert.notEqual(TaskOrder.dateColor('2027-01-01'), TaskOrder.dateColor('2027-01-02'));

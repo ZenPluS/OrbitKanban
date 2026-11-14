@@ -3,15 +3,28 @@ import { Component } from '../core/Component.js';
 import { ColumnLayout, ColumnSchema, TaskOrder } from '../shared.js';
 
 export class TaskList extends Component {
+  #views = new WeakMap();
+  #sortIndicator(key) {
+    const current = this.state.sort.find(entry => entry.key === key);
+    return current ? this.ico(current.direction === 'asc' ? 'arrow-up' : 'arrow-down') + (this.state.sort.length > 1 ? this.state.sort.indexOf(current) + 1 : '') : this.ico('sort');
+  }
+  #refreshSort() {
+    document.querySelectorAll('[data-sort]').forEach(button => { button.querySelector('span').innerHTML = this.#sortIndicator(button.dataset.sort); });
+    this.app.taskRows.drawTaskRows();
+  }
   sortedRows(tasks) {
     const highlights = this.app.presenter.highlightsOf();
+    const fields = ColumnSchema.fieldsOf(this.state.data.settings, 'tasks');
+    const choices = new Map(fields.filter(field => field.type === 'select').map(field => [field.id, new Map(ColumnSchema.choices(field).map((option, index) => [option.id, index]))]));
+    const statusRanks = new Map(this.state.data.settings.statuses.map((option, index) => [option.id, index]));
+    const urgencyRanks = new Map(this.state.data.settings.urgencies.map((option, index) => [option.id, index]));
     const ranked = tasks.map(t => {
       const selected = this.app.presenter.taskHighlights(t);
       const highlightRank = highlights.findIndex(h => selected.some(item => item.id === h.id));
       return { ...t,
-        ...Object.fromEntries(ColumnSchema.fieldsOf(this.state.data.settings, 'tasks').map(field => [field.id, field.type === 'select' ? (t.customFields?.[field.id] ? ColumnSchema.choices(field).findIndex(option => option.id === t.customFields[field.id]) : '') : t.customFields?.[field.id] ?? ''])),
-        urgencyRank: this.state.data.settings.urgencies.findIndex(s => s.id === t.urgencyId),
-        statusRank: this.state.data.settings.statuses.findIndex(s => s.id === t.statusId),
+        ...Object.fromEntries(fields.map(field => [field.id, field.type === 'select' ? (t.customFields?.[field.id] ? choices.get(field.id).get(t.customFields[field.id]) ?? -1 : '') : t.customFields?.[field.id] ?? ''])),
+        urgencyRank: urgencyRanks.get(t.urgencyId) ?? -1,
+        statusRank: statusRanks.get(t.statusId) ?? -1,
         highlightRank: highlightRank < 0 ? '' : highlightRank
       };
     });
@@ -33,15 +46,24 @@ export class TaskList extends Component {
       highlights.map(h => `<option value="${this.esc(h.id)}" ${h.id === this.state.highlightFilter ? 'selected' : ''}>● ${this.esc(h.name)}</option>`).join('');
     const savedViewOptions = `<option value="">${this.esc(this.t("Choose a view…"))}</option>` + (savedViews.length ? `<optgroup label="${this.esc(this.t("Saved views"))}">${savedViews.map(saved => `<option value="${this.esc(saved.id)}" ${saved.id === this.state.activeSavedViewId ? 'selected' : ''}>${this.esc(saved.name)}</option>`).join('')}</optgroup>` : '') + this.app.savedViews.releaseViewOptions();
     const headers = columns.map(id => {
-      const def = this.app.columns.columnDef(id), label = this.esc(def.header || (def.field ? def.name : this.t(def.name))), current = def.sort && this.state.sort.find(s => s.key === def.sort);
+      const def = this.app.columns.columnDef(id), label = this.esc(def.header || (def.field ? def.name : this.t(def.name)));
       const title = def.header ? ` title="${this.esc(this.t(def.name))}"` : '';
-      return `<th data-column="${id}"${title}><div class="column-heading">${def.sort ? this.ui`<button data-sort="${def.sort}" title="Click to sort; Shift+click for multi-column sorting">${label} <span>${current ? this.ico(current.direction === 'asc' ? 'arrow-up' : 'arrow-down') + (this.state.sort.length > 1 ? this.state.sort.indexOf(current) + 1 : '') : this.ico('sort')}</span></button>` : `<span>${label}</span>`}${this.app.columnFilterPanel.filterHeader(id, 'tasks')}</div></th>`;
+      return `<th data-column="${id}"${title}><div class="column-heading">${def.sort ? this.ui`<button data-sort="${def.sort}" title="Click to sort; Shift+click for multi-column sorting">${label} <span></span></button>` : `<span>${label}</span>`}${this.app.columnFilterPanel.filterHeader(id, 'tasks')}</div></th>`;
     }).join('');
-    this.$('#content').innerHTML = this.app.columns.heading(this.app.sections.title('tasks'), "All tasks, one direction. Plan your work and focus on upcoming releases.",
+    const markup = this.app.columns.heading(this.app.sections.title('tasks'), "All tasks, one direction. Plan your work and focus on upcoming releases.",
       this.app.csvImport.csvButton('tasks') + this.app.excel.excelButton() + this.ui`<button class="button primary" id="new-task">${this.ico('plus')}New task</button>`) + this.app.columns.stats() +
       this.ui`<section class="panel"><div class="table-toolbar"><div class="search-wrap"><span>${this.ico('search')}</span><input id="search" aria-label="Search tasks" placeholder="Search code, description, incident…" value="${this.esc(this.state.search)}"></div><div class="filters"><select id="status-filter" aria-label="Filter status">${this.app.presenter.optionList(this.state.data.settings.statuses, this.state.statusFilter, "All statuses")}</select><select id="highlight-filter" aria-label="Filter by highlight">${highlightOptions}</select><label class="toggle-label"><input id="show-hidden" type="checkbox" ${this.state.showHidden ? 'checked' : ''}> Hidden <span class="tiny-count">${hidden}</span></label><label class="toggle-label duplicate-toggle ${duplicateCount ? 'has-duplicates' : ''}" title="Show only tasks whose incident is also linked to other tasks, hidden ones included"><input id="duplicates-only" type="checkbox" ${this.state.duplicatesOnly ? 'checked' : ''} ${duplicateCount ? '' : 'disabled'}> Duplicates <span class="tiny-count">${duplicateCount}</span></label><div class="saved-view-tools"><select id="saved-view-select" aria-label="Load a saved view">${savedViewOptions}</select><button type="button" class="button subtle" id="saved-view-manage" aria-haspopup="dialog">Views</button></div><button class="button subtle" id="columns-button" aria-haspopup="dialog" title="Choose which columns to show and in what order">${this.ico('columns')}Columns</button><button class="button subtle" id="reset-sort" title="Reset to ascending release date">${this.ico('sort')}Release</button></div></div><div class="highlighter-bar"></div><div class="table-scroll"><table class="activity-table"><thead><tr><th class="select-col"><input type="checkbox" id="select-all" aria-label="Select all shown tasks" title="Select all shown tasks"></th>${headers}<th><span class="sr-only">Actions</span></th></tr></thead><tbody id="task-rows"></tbody></table></div><div class="table-footer"><span id="row-count"></span><span id="footer-hint">Shift + click a column for multi-column sorting</span><div class="bulk-bar" id="bulk-bar" role="toolbar" aria-label="Actions on the selected tasks" hidden><strong id="bulk-count"></strong><button type="button" class="button small primary" id="bulk-edit">${this.ico('edit')}Bulk edit…</button><button type="button" class="button small" id="bulk-excel">${this.ico('excel')}Export to Excel</button><button type="button" class="button small subtle" id="bulk-clear">Deselect</button></div></div></section><div class="hint"><span>${this.ico('sparkle')}</span> One archive, four perspectives. Issues, milestones and kanban update automatically.</div>`;
+    const settings = JSON.stringify([this.state.data.settings, this.state.columnFilters.tasks]);
+    const body = this.$('#task-rows'), previous = body && this.#views.get(body);
+    if (markup === previous?.markup && settings === previous.settings) {
+      this.app.rowMarks.drawHighlighter();
+      this.#refreshSort();
+      return;
+    }
+    this.$('#content').innerHTML = markup;
+    this.#views.set(this.$('#task-rows'), { markup, settings });
     this.app.rowMarks.drawHighlighter();
-    this.app.taskRows.drawTaskRows();
+    this.#refreshSort();
     this.$('.table-scroll').insertAdjacentHTML('beforebegin', this.app.columnFilterPanel.columnFilterBar('tasks'));
     this.app.columnFilterPanel.wireColumnFilters('tasks');
     this.app.csvImport.wireCsvImport('tasks');
@@ -59,13 +81,13 @@ export class TaskList extends Component {
     });
     this.$('#saved-view-manage').onclick = () => this.app.savedViews.openSavedViews();
     this.$('#columns-button').onclick = () => this.app.columnEditor.columnsDialog();
-    this.$('#reset-sort').onclick = () => { this.state.sort = [{ key: 'releaseDate', direction: 'asc' }]; this.app.savedViews.clearActiveSavedView(); this.renderTasks(); };
+    this.$('#reset-sort').onclick = () => { this.state.sort = [{ key: 'releaseDate', direction: 'asc' }]; this.app.savedViews.clearActiveSavedView(); this.#refreshSort(); };
     document.querySelectorAll('[data-sort]').forEach(button => button.onclick = event => {
       const key = button.dataset.sort, old = this.state.sort.find(s => s.key === key);
       const entry = { key, direction: old?.direction === 'asc' ? 'desc' : 'asc' };
       this.state.sort = event.shiftKey ? [...this.state.sort.filter(s => s.key !== key), entry] : [entry];
       this.app.savedViews.clearActiveSavedView();
-      this.renderTasks();
+      this.#refreshSort();
     });
     // While a highlighter is active, a click anywhere on a row colors it instead of opening links or the task.
     this.$('#task-rows').addEventListener('click', event => {

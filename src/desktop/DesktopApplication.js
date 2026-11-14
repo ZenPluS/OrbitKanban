@@ -28,6 +28,9 @@ class DesktopApplication {
   #customTitleBar = process.platform === 'win32';
   #windowChrome = null;
   #smoke = process.argv.includes('--smoke-test');
+  #performance = process.argv.includes('--performance-test');
+  #started = performance.now();
+  #startupTimings = {};
   #root; #dataFolder; #runtimeFolder; #launcher; #portableFile; #launcherReadyFile;
   #launcherReleased = false;
   #win; #splash; #revealTimer; #revealed = false; #resolveAppReady;
@@ -48,7 +51,7 @@ class DesktopApplication {
       app.commandLine.appendSwitch('force-device-scale-factor', '1');
       app.disableHardwareAcceleration();
     }
-    this.#root = this.#smoke ? (process.env.ORBITA_SMOKE_DIR || path.join(os.tmpdir(), `orbita-smoke-${process.pid}`)) :
+    this.#root = this.#performance ? this.#performanceRoot() : this.#smoke ? (process.env.ORBITA_SMOKE_DIR || path.join(os.tmpdir(), `orbita-smoke-${process.pid}`)) :
       (process.env.PORTABLE_EXECUTABLE_DIR || (app.isPackaged ? path.dirname(app.getPath('exe')) : appRoot));
     this.#dataFolder = path.join(this.#root, 'data');
     this.#runtimeFolder = path.join(this.#dataFolder, 'runtime');
@@ -67,12 +70,12 @@ class DesktopApplication {
     this.#splashTheme = new SplashTheme(this.#runtimeFolder);
     this.#windowIcon = new WindowIcon(this.#runtimeFolder);
     this.#updater = new Updater({
-      currentVersion: app.getVersion(), dataFolder: this.#dataFolder, portableFile: this.#smoke ? null : this.#portableFile,
+      currentVersion: app.getVersion(), dataFolder: this.#dataFolder, portableFile: this.#smoke || this.#performance ? null : this.#portableFile,
       install: update => this.#installUpdate(update)
     });
     this.#updater.on('change', info => { if (this.#win && !this.#win.isDestroyed()) this.#win.webContents.send('update-changed', info); });
     this.#webServer = new WebServer({
-      store: this.#store, appRoot, tokenFolder: this.#runtimeFolder, port: this.#smoke ? 0 : WebServer.DEFAULT_PORT,
+      store: this.#store, appRoot, tokenFolder: this.#runtimeFolder, port: this.#smoke || this.#performance ? 0 : WebServer.DEFAULT_PORT,
       openDataFolder: this.#smoke ? async () => {} : () => this.#openDataFolder(),
       attachments: this.#attachments,
       openAttachment: async filePath => {
@@ -103,6 +106,15 @@ class DesktopApplication {
   get splashTheme() { return this.#splashTheme; }
   get windowIcon() { return this.#windowIcon; }
   get windowIconApplied() { return this.#windowIconApplied; }
+  get startupTimings() { return { ...this.#startupTimings }; }
+  #performanceRoot() {
+    const folder = process.env.ORBITA_PERFORMANCE_DIR;
+    if (!folder || !path.isAbsolute(folder) || !path.basename(folder).startsWith('orbitkanban-performance-')) throw new Error('Performance tests require an isolated benchmark folder.');
+    return folder;
+  }
+  #startupMark(name) {
+    if (this.#performance) this.#startupTimings[name] = performance.now() - this.#started;
+  }
 
   #message(text, organizationId) { return this.#store.message(text, organizationId); }
   async #appearanceOperation(operation, payload = {}) {
@@ -137,9 +149,11 @@ class DesktopApplication {
   #revealMainWindow(reason) {
     if (this.#revealed) return;
     this.#revealed = true;
+    this.#startupMark('rendererReady');
+    if (this.#performance) this.#startupTimings.launchToReady = Date.now() - Number(process.env.ORBITA_PERFORMANCE_STARTED);
     clearTimeout(this.#revealTimer);
     this.#resolveAppReady(reason);
-    if (this.#smoke) {
+    if (this.#smoke || this.#performance) {
       this.releaseLauncher();
       return;
     }
@@ -340,6 +354,7 @@ class DesktopApplication {
     });
   }
   async #ready() {
+    this.#startupMark('electronReady');
     const smoke = this.#smoke, customTitleBar = this.#customTitleBar;
     const appLogo = nativeImage.createFromPath(path.join(this.#appRoot, 'app-logo.png'));
     if (appLogo.isEmpty()) throw new Error('The application icon is missing or invalid. Run npm run icon during development.');
@@ -347,16 +362,19 @@ class DesktopApplication {
     const themedIcon = process.platform === 'win32' && this.#windowIcon.read();
     const savedIcon = themedIcon ? nativeImage.createFromPath(themedIcon) : null;
     const icon = savedIcon && !savedIcon.isEmpty() ? savedIcon : appLogo;
-    this.#splash = this.#launcherReadyFile ? null : new SplashScreen({ BrowserWindow, screen, appRoot: this.#appRoot, title: Common.APP_NAME, icon, version: app.getVersion(), theme: this.#splashTheme.read(), show: !smoke });
-    try { await this.#languages.reload(); }
-    catch (error) { console.error('Additional languages could not be loaded:', error); }
+    this.#splash = this.#launcherReadyFile ? null : new SplashScreen({ BrowserWindow, screen, appRoot: this.#appRoot, title: Common.APP_NAME, icon, version: app.getVersion(), theme: this.#splashTheme.read(), show: !smoke && !this.#performance });
+    const languagesReady = this.#languages.reload().catch(error => { console.error('Additional languages could not be loaded:', error); }).then(() => this.#startupMark('languagesReady'));
+    const appearanceReady = this.#appearance.initialize().then(() => this.#startupMark('packsReady'));
+    await Promise.all([languagesReady, appearanceReady]);
     let settings;
-    await this.#appearance.initialize();
     try { settings = (await this.#store.load()).data.settings; }
     catch (error) { console.error('Workspace archive could not be preloaded:', error); }
-    if (settings) await this.saveSplashTheme(settings);
-    try { await this.#webServer.start(); }
-    catch (error) { console.error('Browser access did not start:', error); }
+    this.#startupMark('archiveReady');
+    await Promise.all([
+      settings ? this.saveSplashTheme(settings) : Promise.resolve(),
+      this.#webServer.start().catch(error => { console.error('Browser access did not start:', error); })
+    ]);
+    this.#startupMark('servicesReady');
     this.#windowChrome = customTitleBar ? WindowChrome.titleBarOverlay({ ...WindowChrome.themeColors(settings), height: WindowChrome.TITLE_BAR_HEIGHT.initial }) : null;
     const win = this.#win = new BrowserWindow({
       width: 1500, height: 960, minWidth: 1050, minHeight: 700, show: false,
@@ -365,6 +383,7 @@ class DesktopApplication {
       webPreferences: { preload: path.join(this.#appRoot, 'src', 'desktop', 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, additionalArguments: customTitleBar ? [WindowChrome.TITLE_BAR_ARGUMENT] : [] }
     });
     if (this.#launcher) win.setAppDetails(PortableLauncher.relaunchDetails(this.#launcher));
+    if (this.#performance) win.webContents.setBackgroundThrottling(false);
     // The default menu keeps its shortcuts, but Alt must not slide a native menu bar under the custom title bar.
     if (customTitleBar) win.setMenuBarVisibility(false);
     win.on('closed', () => this.#splash?.close());
@@ -378,13 +397,14 @@ class DesktopApplication {
     });
     win.webContents.on('will-navigate', event => event.preventDefault());
     await win.loadFile(path.join(this.#appRoot, 'index.html'));
-    if (!smoke) {
+    if (!smoke && !this.#performance) {
       this.#appReady.then(async () => {
         try { const state = await this.#updater.init(); if (state.supported && state.autoCheck) await this.#updater.check(); }
         catch (error) { console.error('Automatic update check failed:', error); }
       });
     }
     if (smoke) await require('./diagnostics/DesktopSmokeTest').run(this, appLogo);
+    if (this.#performance) await require('./diagnostics/PerformanceTest').run(this);
   }
 
   // Registers the IPC API and the application events; the window opens when Electron is ready.

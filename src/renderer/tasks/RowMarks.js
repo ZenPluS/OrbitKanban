@@ -28,6 +28,7 @@ export class RowMarks extends Component {
     bar.querySelector('[data-manage-highlights]').onclick = () => this.app.settings.openSettingsTab('highlights');
   }
   #applyRowMark(row, ids, task) {
+    this.app.taskRows.invalidateRow(row);
     const marks = this.app.presenter.highlightsOf().filter(highlight => ids.includes(highlight.id));
     const styles = this.app.presenter.highlightStyle(marks, this.statusOf(task));
     row.classList.toggle('marked', Boolean(marks.length));

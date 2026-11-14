@@ -38,6 +38,18 @@ test('template translation protects markup across split tags and leaves interpol
   ], ['checked', 'hidden'], 'it');
   assert.equal(html, '<label class="toggle-label"><input id="show-hidden" type="checkbox" checked> Nascoste <span title="Include nascoste" data-state="hidden">value</span></label>');
 });
+test('exact translations preserve markup protection and update after a pack override', () => {
+  withRegistry(() => {
+    Translator.register({ format: Translator.FORMAT, version: 1, code: 'en', name: 'English', messages: {
+      'Save task': 'Store task', '<button id="save">Save task</button>': 'Not markup'
+    } });
+    assert.equal(Translator.translate('Save task', 'en'), 'Store task');
+    assert.equal(Translator.translate('<button id="save">Save task</button>', 'en'), '<button id="save">Store task</button>');
+    Translator.register({ format: Translator.FORMAT, version: 1, code: 'en', name: 'English', messages: { 'Save task': 'Keep task' } });
+    assert.equal(Translator.translate('Save task', 'en'), 'Keep task');
+    assert.equal(Translator.translate('Action: Save task', 'en'), 'Action: Keep task');
+  });
+});
 test('text-size phrases translate without changing markup or placeholders', () => {
   assert.equal(Translator.translate('<h2>Text size</h2>', 'it'), '<h2>Dimensione del testo</h2>');
   assert.equal(Translator.translate('<label>Tables</label><small>Rows and columns of the task list and linked issues.</small>', 'it'), '<label>Tabelle</label><small>Righe e colonne della lista attività e delle issue collegate.</small>');

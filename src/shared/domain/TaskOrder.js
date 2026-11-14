@@ -4,6 +4,7 @@
 const Common = typeof module !== 'undefined' ? require('./Common') : globalThis.OrbitKanban.Domain.Common;
 
 class TaskOrder {
+  static #collator = new Intl.Collator('it', { numeric: true });
   static sortTasks(tasks, sort = [{ key: 'releaseDate', direction: 'asc' }]) {
     return [...tasks].sort((a, b) => {
       for (const { key, direction } of sort) {
@@ -11,7 +12,7 @@ class TaskOrder {
         if (av === bv) continue;
         if (av === '') return 1;
         if (bv === '') return -1;
-        const result = typeof av === 'number' ? av - bv : String(av).localeCompare(String(bv), 'it', { numeric: true });
+        const result = typeof av === 'number' ? av - bv : TaskOrder.#collator.compare(String(av), String(bv));
         if (result) return direction === 'desc' ? -result : result;
       }
       return a.sequence - b.sequence;
