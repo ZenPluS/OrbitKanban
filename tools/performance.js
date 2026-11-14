@@ -15,6 +15,7 @@ class PerformanceRunner {
     } });
     const count = Number(values.tasks), runs = Number(values.runs);
     if (!Number.isInteger(count) || count < 10 || count > 10000 || !Number.isInteger(runs) || runs < 1 || runs > 10) throw new Error('Use --tasks 10..10000 and --runs 1..10.');
+    const executable = values.executable ? path.resolve(values.executable) : require('electron');
     const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'orbitkanban-performance-')), reports = [];
     try {
       fs.mkdirSync(path.join(folder, 'data'));
@@ -32,12 +33,12 @@ class PerformanceRunner {
       for (let run = 0; run < runs; run++) {
         fs.rmSync(path.join(folder, 'performance-result.json'), { force: true });
         const args = [...(values.executable ? [] : ['.']), '--performance-test'];
-        const child = spawnSync(values.executable || require('electron'), args, {
+        const child = spawnSync(executable, args, {
           cwd: path.join(__dirname, '..'), encoding: 'utf8', timeout: 180000,
           env: { ...process.env, ORBITA_PERFORMANCE_DIR: folder, ORBITA_PERFORMANCE_STARTED: String(Date.now()), ORBITA_PERFORMANCE_PROFILE: values.profile ? '1' : '', TEMP: folder, TMP: folder, TMPDIR: folder }
         });
         if (child.error) throw child.error;
-        if (child.status !== 0) throw new Error(`Performance run failed: ${child.stderr}\n${child.stdout}`);
+        if (child.status !== 0) throw new Error(`Performance run failed (exit code ${child.status}, signal ${child.signal || 'none'}): ${child.stderr}\n${child.stdout}`);
         const report = JSON.parse(fs.readFileSync(path.join(folder, 'performance-result.json'), 'utf8'));
         const required = ['electronReady', 'languagesReady', 'packsReady', 'archiveReady', 'servicesReady', 'rendererReady', 'launchToReady', 'searchFirst', 'searchRepeat', 'searchClear', 'sort', 'openTask', 'saveTask'];
         if (!report.ok || report.tasks !== count || !required.every(key => Number.isFinite(report.metrics?.[key]) && report.metrics[key] >= 0)) throw new Error('Incomplete performance report.');

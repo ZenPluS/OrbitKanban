@@ -64,7 +64,7 @@ for (const outcome of ['success', 'launch-error', 'missing-report', 'invalid-met
         if (name === 'node:child_process') return {
           spawnSync(executable, args, options) {
             launches++;
-            assert.equal(executable, 'test-performance.exe');
+            assert.equal(executable, path.resolve('test-performance.exe'));
             assert.equal(args.join(' '), '--performance-test');
             folder = options.env.ORBITA_PERFORMANCE_DIR;
             assert.ok(path.isAbsolute(folder));
