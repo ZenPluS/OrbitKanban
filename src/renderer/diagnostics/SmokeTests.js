@@ -213,6 +213,31 @@ export class SmokeTests extends Component {
         await finishSidebarMotion();
         check(expanded() && localStorage.getItem('orbitkanban.sidebarCollapsed') === null, 'Interrupted sidebar motion settles in the last requested state');
       }
+      const sidebarGeometry = () => {
+        const rail = boxOf('#sidebar');
+        return ['.brand', '.brand-icon', '.organization-switcher', '#open-browser', '.workspace-label', '#navigation', '#guide-button', '#settings-button', '.local-card', '.version']
+          .flatMap(selector => [...sidebar.querySelectorAll(selector)])
+          .filter(element => element.getClientRects().length)
+          .map(element => { const rect = element.getBoundingClientRect(); return [rect.left - rail.left, rect.top - rail.top, rect.width, rect.height]; });
+      };
+      const sameSidebarGeometry = reference => {
+        const current = sidebarGeometry();
+        return current.length === reference.length && current.every((rect, index) => rect.every((value, dimension) => Math.abs(value - reference[index][dimension]) < 1.5));
+      };
+      const leftExpandedGeometry = sidebarGeometry();
+      sidebarToggle.click(); await finishSidebarMotion();
+      const leftCompactGeometry = sidebarGeometry();
+      sidebarToggle.click(); await finishSidebarMotion();
+      const sidebarScale = document.documentElement.style.getPropertyValue('--fs-sidebar'), scaledGeometry = [];
+      for (const scale of ['0.8', '1.3']) {
+        document.documentElement.style.setProperty('--fs-sidebar', scale);
+        const expanded = sidebarGeometry();
+        sidebarToggle.click(); await finishSidebarMotion();
+        const compact = sidebarGeometry();
+        sidebarToggle.click(); await finishSidebarMotion();
+        scaledGeometry.push({ scale, expanded, compact });
+      }
+      document.documentElement.style.setProperty('--fs-sidebar', sidebarScale);
       this.$('#settings-button').click();
       this.app.settings.showSettingsTab('navigation');
       const position = this.$('#sidebar-position');
@@ -223,12 +248,14 @@ export class SmokeTests extends Component {
       await waitFor(() => !this.state.saving && this.state.data.settings.sidebarPosition === 'right');
       const rightLayout = () => Math.abs(boxOf('#sidebar').right - innerWidth) < 1 && Math.abs(boxOf('main').left) < 1 && Math.abs(boxOf('main').right - boxOf('#sidebar').left) < 1;
       check(document.documentElement.classList.contains('sidebar-right') && rightLayout() && (await this.workspaceApi.load()).data.settings.sidebarPosition === 'right', 'Saving places the sidebar on the right and persists the organization setting');
+      check(sameSidebarGeometry(leftExpandedGeometry), 'Expanded sidebars have matching element positions and dimensions on both sides');
       if (this.app.themePainter.customTitleBar()) {
         const area = navigator.windowControlsOverlay.getTitlebarAreaRect(), brand = boxOf('.brand-icon');
         check(brand.top >= area.bottom && parseFloat(getComputedStyle(this.$('.topbar')).paddingRight) === 24, 'The right sidebar keeps its logo clear of native window controls');
       }
       sidebarToggle.click(); await finishSidebarMotion();
       check(rightLayout() && document.documentElement.classList.contains('sidebar-collapsed') && insideRail(this.$('#settings-button')), 'The right sidebar folds into a usable icon rail without overlapping the content');
+      check(sameSidebarGeometry(leftCompactGeometry), 'Compact sidebars have matching element positions and dimensions on both sides');
       if (this.app.themePainter.customTitleBar()) {
         const area = navigator.windowControlsOverlay.getTitlebarAreaRect(), controlsLeft = area.x + area.width;
         check(boxOf('.brand-icon').top >= area.bottom && boxOf('.topbar .avatar').right <= controlsLeft, 'The right icon rail and top bar stay clear of native window controls');
@@ -240,6 +267,15 @@ export class SmokeTests extends Component {
       }
       await finishSidebarMotion();
       check(rightLayout() && !document.documentElement.classList.contains('sidebar-collapsed'), 'The right sidebar expands without overlapping the content');
+      for (const { scale, expanded, compact } of scaledGeometry) {
+        document.documentElement.style.setProperty('--fs-sidebar', scale);
+        const expandedMatches = sameSidebarGeometry(expanded);
+        sidebarToggle.click(); await finishSidebarMotion();
+        const compactMatches = sameSidebarGeometry(compact);
+        sidebarToggle.click(); await finishSidebarMotion();
+        check(expandedMatches && compactMatches, `Both sidebar positions retain matching layouts at ${Number(scale) * 100}% text size`);
+      }
+      document.documentElement.style.setProperty('--fs-sidebar', sidebarScale);
       this.$('#sidebar-position').value = 'left'; this.$('#sidebar-position').dispatchEvent(new Event('change', { bubbles: true }));
       this.$('#save-settings').click();
       await waitFor(() => !this.state.saving && this.state.data.settings.sidebarPosition === 'left');

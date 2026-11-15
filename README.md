@@ -4,7 +4,7 @@
 
 | | |
 | --- | --- |
-| **Current version** | 3.11.0 |
+| **Current version** | 3.11.1 |
 | **Platform** | Windows 10 / 11, 64-bit |
 | **Distribution** | Single portable executable, `OrbitKanban-Portable.exe` |
 | **Network** | Not required. Optional GitHub update checks and explicit icon/theme/language repository refresh |
@@ -854,6 +854,7 @@ The script refuses to reuse a tagged version for different sources. If a build o
 
 | Version | Changes |
 | --- | --- |
+| **3.11.1** | Matching sidebar alignment on the left and right, including the compact rail and Windows title-bar clearance |
 | **3.11.0** | Configurable left or right sidebar per organization, including the compact icon rail |
 | **3.10.0** | Portable per-organization CSV import profiles with save/update/delete, restored parsing options, header-based or positional mapping, mandatory review for schema drift and settings/backup transfer support |
 | **3.9.0** | Public GitHub language repositories, official Italian offline snapshot and English contributor template, portable shared references/cache, explicit refresh and removal, retired local-folder loading without deleting existing files |

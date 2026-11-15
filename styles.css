@@ -2302,7 +2302,7 @@ tr.duplicate-row td:last-child {
   padding-top: 0;
 }
 .custom-titlebar .sidebar .brand {
-  padding-top: 33px;
+  padding-top: max(33px, env(titlebar-area-height, 0px) + 10px);
 }
 .custom-titlebar dialog,
 .custom-titlebar #tag-menu,
@@ -3481,9 +3481,6 @@ td .icon-button { width: calc(28px * var(--fs)); height: calc(28px * var(--fs));
 }
 .custom-titlebar.sidebar-right .topbar {
   padding-right: calc(24px + max(0px, 100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) - var(--sidebar-width)));
-}
-.custom-titlebar.sidebar-right .sidebar .brand {
-  padding-top: calc(env(titlebar-area-height, 0px) + 10px);
 }
 body { overflow-x: clip; }
 #update-restart-progress { padding: 18px 8px; max-width: 470px; }
