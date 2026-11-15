@@ -4,7 +4,7 @@
 
 | | |
 | --- | --- |
-| **Current version** | 3.11.1 |
+| **Current version** | 3.11.2 |
 | **Platform** | Windows 10 / 11, 64-bit |
 | **Distribution** | Single portable executable, `OrbitKanban-Portable.exe` |
 | **Network** | Not required. Optional GitHub update checks and explicit icon/theme/language repository refresh |
@@ -187,7 +187,7 @@ The menu under the **OrbitKanban** name in the sidebar switches the active organ
 
 All views share compact headers. Their tables, timeline and board fill the window and scroll internally while respecting the configured text sizes. On Windows the app draws its own title bar: drag the top bar or logo to move the window, and double-click to maximize or restore it. The minimize, maximize and close buttons follow the active theme.
 
-The **☰** button at the left of the top bar, or `Ctrl+B`, folds the sidebar into a column of icons so the views get more room. The icons keep their counters and show their names as tooltips, and the building icon still switches organization. Press the button again to expand the sidebar. The choice travels with the portable data in `data/runtime/`; with browser access, each browser keeps its own.
+The **☰** button in the top bar next to the sidebar, or `Ctrl+B`, folds the sidebar into a column of icons so the views get more room. The icons keep their counters and show their names as tooltips, and the building icon still switches organization. Press the button again to expand the sidebar. The choice travels with the portable data in `data/runtime/`; with browser access, each browser keeps its own.
 
 Opening and closing use a short, 180 ms transition. The view resizes once rather than recalculating the entire table width every frame; on the left it slides as one layer. Sidebar icons stay clipped inside their own panel, without separate moving offsets or stretching. The system's **reduced motion** preference disables the animation, and restoring the saved layout at startup is always instant.
 
@@ -854,6 +854,7 @@ The script refuses to reuse a tagged version for different sources. If a build o
 
 | Version | Changes |
 | --- | --- |
+| **3.11.2** | Continuous Windows title bar across the right sidebar and a sidebar toggle on the selected side |
 | **3.11.1** | Matching sidebar alignment on the left and right, including the compact rail and Windows title-bar clearance |
 | **3.11.0** | Configurable left or right sidebar per organization, including the compact icon rail |
 | **3.10.0** | Portable per-organization CSV import profiles with save/update/delete, restored parsing options, header-based or positional mapping, mandatory review for schema drift and settings/backup transfer support |

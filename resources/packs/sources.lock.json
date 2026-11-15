@@ -19,9 +19,9 @@
     {
       "kind": "languages",
       "repository": "zenplus/orbit_languages",
-      "commit": "807259cc08abbffa43b402d91a61282e16ff40c3",
+      "commit": "b7aa7c1fa51d3e9cac4ffe7991a6749a50dd4fee",
       "file": "orbit-languages.json",
-      "sha256": "99b975320c1660a1cd4ea369f355b6752a2d2d796c523ea226aa3b4a1c9f886b"
+      "sha256": "0a082b70ac9ac230415977d45f76e38098a1aedf9231dbc3162ebbbb689c0b11"
     }
   ]
 }

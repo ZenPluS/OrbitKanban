@@ -21,7 +21,7 @@ class GuideContent {
         ] },
         { title: 'Find your way around', items: [
           'The sidebar holds the organization menu, the sections of the seven view types, this **Guide** and **Settings**.',
-          'The menu button **☰** at the left of the top bar, or `Ctrl+B`, folds the sidebar into a column of icons so the views get more space. Hover an icon to see its name; the building icon still switches organization. Press the button again to expand the sidebar; the choice is remembered.',
+          'The menu button **☰** in the top bar, next to the sidebar, or `Ctrl+B`, folds the sidebar into a column of icons so the views get more space. Hover an icon to see its name; the building icon still switches organization. Press the button again to expand the sidebar; the choice is remembered.',
           'The top bar offers global search, undo and redo, and the archive status. **Open data folder** at the bottom shows where your data lives.',
           'Rename, reorder, remove or add the sections of each organization in **Settings → Navigation**.',
           'Press `F1` at any time to open this guide.'

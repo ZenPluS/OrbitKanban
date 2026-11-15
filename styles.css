@@ -3480,7 +3480,10 @@ td .icon-button { width: calc(28px * var(--fs)); height: calc(28px * var(--fs));
   margin-right: var(--sidebar-width);
 }
 .custom-titlebar.sidebar-right .topbar {
-  padding-right: calc(24px + max(0px, 100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) - var(--sidebar-width)));
+  position: relative;
+  z-index: 3;
+  width: 100vw;
+  background: var(--background);
 }
 body { overflow-x: clip; }
 #update-restart-progress { padding: 18px 8px; max-width: 470px; }
@@ -3499,6 +3502,10 @@ body { overflow-x: clip; }
   width: calc(32px * var(--fs));
   margin-right: 12px;
   padding: 0;
+}
+.sidebar-right #sidebar-toggle {
+  margin-right: 0;
+  margin-left: 4px;
 }
 .organization-icon {
   display: none;

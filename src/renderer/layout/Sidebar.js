@@ -13,8 +13,13 @@ export class Sidebar extends Component {
   sidebarAnimations = [];
   applySidebar() {
     const toggle = this.$('#sidebar-toggle'), select = this.$('#organization-select');
+    const right = this.state.data.settings.sidebarPosition === 'right';
     document.documentElement.classList.toggle('sidebar-collapsed', this.sidebarCollapsed);
-    document.documentElement.classList.toggle('sidebar-right', this.state.data.settings.sidebarPosition === 'right');
+    document.documentElement.classList.toggle('sidebar-right', right);
+    const toolbar = this.$(right ? '.topbar-right' : '.topbar-left');
+    if (toggle.parentElement !== toolbar) {
+      if (right) toolbar.append(toggle); else toolbar.prepend(toggle);
+    }
     toggle.setAttribute('aria-expanded', String(!this.sidebarCollapsed));
     toggle.setAttribute('aria-label', this.t("Sidebar"));
     toggle.title = this.t(this.sidebarCollapsed ? "Expand the sidebar (Ctrl+B)" : "Collapse the sidebar (Ctrl+B)");
@@ -40,7 +45,9 @@ export class Sidebar extends Component {
     if (!this.sidebarReducedMotion.matches) {
       // Reflow once, then move the content as one compositor layer. Icons never leave the clipped sidebar.
       const motion = { duration: 180, easing: 'cubic-bezier(0.2, 0, 0, 1)' };
-      this.sidebarAnimations.push(main.animate([{ transform: `translateX(${previousLeft - nextLeft}px)` }, { transform: 'translateX(0)' }], motion));
+      if (this.state.data.settings.sidebarPosition !== 'right') {
+        this.sidebarAnimations.push(main.animate([{ transform: `translateX(${previousLeft - nextLeft}px)` }, { transform: 'translateX(0)' }], motion));
+      }
       if (!this.sidebarCollapsed) {
         const right = this.state.data.settings.sidebarPosition === 'right';
         const hidden = Math.max(0, right ? sidebar.getBoundingClientRect().width - previousWidth : nextLeft - previousLeft);

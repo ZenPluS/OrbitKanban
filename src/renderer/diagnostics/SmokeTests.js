@@ -249,20 +249,31 @@ export class SmokeTests extends Component {
       const rightLayout = () => Math.abs(boxOf('#sidebar').right - innerWidth) < 1 && Math.abs(boxOf('main').left) < 1 && Math.abs(boxOf('main').right - boxOf('#sidebar').left) < 1;
       check(document.documentElement.classList.contains('sidebar-right') && rightLayout() && (await this.workspaceApi.load()).data.settings.sidebarPosition === 'right', 'Saving places the sidebar on the right and persists the organization setting');
       check(sameSidebarGeometry(leftExpandedGeometry), 'Expanded sidebars have matching element positions and dimensions on both sides');
+      check(sidebarToggle.parentElement === this.$('.topbar-right') && sidebarToggle === this.$('.topbar-right').lastElementChild && sidebarToggle.getAttribute('aria-expanded') === 'true' && boxOf('.topbar .avatar').right < sidebarToggle.getBoundingClientRect().left, 'The sidebar toggle moves to the right end of the toolbar');
+      const toggleBox = sidebarToggle.getBoundingClientRect(), toggleHit = document.elementFromPoint((toggleBox.left + toggleBox.right) / 2, (toggleBox.top + toggleBox.bottom) / 2);
+      check(toggleHit?.closest('#sidebar-toggle') === sidebarToggle && (!this.app.themePainter.customTitleBar() || getComputedStyle(sidebarToggle).getPropertyValue('-webkit-app-region') === 'no-drag'), 'The right sidebar toggle remains clickable over the sidebar');
       if (this.app.themePainter.customTitleBar()) {
         const area = navigator.windowControlsOverlay.getTitlebarAreaRect(), brand = boxOf('.brand-icon');
-        check(brand.top >= area.bottom && parseFloat(getComputedStyle(this.$('.topbar')).paddingRight) === 24, 'The right sidebar keeps its logo clear of native window controls');
+        const header = boxOf('.topbar'), toggle = sidebarToggle.getBoundingClientRect(), point = document.elementFromPoint(sidebar.getBoundingClientRect().left + 5, header.top + header.height / 2);
+        check(brand.top >= area.bottom && Math.abs(header.right - innerWidth) < 1 && Math.abs(toggle.right - (area.x + area.width - 24)) < 2 && point?.closest('.topbar'), 'The desktop top bar spans the right sidebar and uses the space before the native window controls');
+        document.documentElement.classList.remove('custom-titlebar');
+        const browserHeader = boxOf('.topbar'), browserToggle = sidebarToggle.getBoundingClientRect();
+        const browserLayout = Math.abs(browserHeader.right - boxOf('#sidebar').left) < 1 && Math.abs(browserHeader.right - browserToggle.right - 24) < 2;
+        document.documentElement.classList.add('custom-titlebar');
+        check(browserLayout, 'Without a native title bar the toggle remains next to the right sidebar');
       }
-      sidebarToggle.click(); await finishSidebarMotion();
+      const rightShortcut = pressCtrlB(document.body); await finishSidebarMotion();
       check(rightLayout() && document.documentElement.classList.contains('sidebar-collapsed') && insideRail(this.$('#settings-button')), 'The right sidebar folds into a usable icon rail without overlapping the content');
+      check(rightShortcut && sidebarToggle.getAttribute('aria-expanded') === 'false' && sidebarToggle.parentElement === this.$('.topbar-right'), 'Ctrl+B folds the right sidebar while its toggle stays accessible on the right');
       check(sameSidebarGeometry(leftCompactGeometry), 'Compact sidebars have matching element positions and dimensions on both sides');
       if (this.app.themePainter.customTitleBar()) {
         const area = navigator.windowControlsOverlay.getTitlebarAreaRect(), controlsLeft = area.x + area.width;
-        check(boxOf('.brand-icon').top >= area.bottom && boxOf('.topbar .avatar').right <= controlsLeft, 'The right icon rail and top bar stay clear of native window controls');
+        check(boxOf('.brand-icon').top >= area.bottom && Math.abs(boxOf('.topbar').right - innerWidth) < 1 && Math.abs(sidebarToggle.getBoundingClientRect().right - (controlsLeft - 24)) < 2, 'The full-width top bar and right icon rail stay clear of native window controls');
       }
       sidebarToggle.click();
-      if (this.app.sidebar.sidebarAnimations.length > 1) {
-        const clip = this.app.sidebar.sidebarAnimations[1].effect.getKeyframes()[0].clipPath;
+      const clipAnimation = this.app.sidebar.sidebarAnimations.find(animation => animation.effect.getKeyframes()[0].clipPath);
+      if (clipAnimation) {
+        const clip = clipAnimation.effect.getKeyframes()[0].clipPath;
         check(/^inset\(0(px)? 0(px)? 0(px)? [1-9]/.test(clip), 'The right sidebar expands from its right edge');
       }
       await finishSidebarMotion();
@@ -280,7 +291,7 @@ export class SmokeTests extends Component {
       this.$('#save-settings').click();
       await waitFor(() => !this.state.saving && this.state.data.settings.sidebarPosition === 'left');
       this.$('#navigation [data-view="0"]').click();
-      check(expanded() && !document.documentElement.classList.contains('sidebar-right'), 'Saving left restores the original sidebar layout');
+      check(expanded() && !document.documentElement.classList.contains('sidebar-right') && sidebarToggle.parentElement === this.$('.topbar-left') && sidebarToggle === this.$('.topbar-left').firstElementChild, 'Saving left restores the original sidebar and toolbar layout');
       this.app.taskDialog.taskDialog(this.state.data.tasks.find(task => !task.hidden));
       const editModal = this.$('#modal'), editBody = this.$('.task-edit-layout'), editWidth = editModal.clientWidth;
       const propertiesSection = this.$('#task-form [data-section="section-properties"]'), textSection = this.$('#task-form [data-section="section-text"]');
