@@ -31,8 +31,16 @@ class SmokeRunner {
       }));
     }
     fs.mkdirSync(path.join(folder, 'data', 'languages'));
-    fs.writeFileSync(path.join(folder, 'data', 'languages', 'de.json'), JSON.stringify({ format: 'orbitkanban-language', version: 1, code: 'de', name: 'Deutsch', locale: 'de-DE', messages: { Settings: 'Einstellungen', 'Save settings': 'Einstellungen speichern' } }));
+    fs.writeFileSync(path.join(folder, 'data', 'languages', 'fr.json'), JSON.stringify({ format: 'orbitkanban-language', version: 1, code: 'fr', name: 'Ignored local language' }));
     fs.writeFileSync(path.join(folder, 'data', 'languages', 'broken.json'), '{ broken');
+    const repository = 'smoke/languages';
+    fs.writeFileSync(path.join(folder, 'data', 'language-repositories.json'), JSON.stringify({ version: 1, sources: [{ kind: 'languages', repository }] }));
+    const cache = path.join(folder, 'data', 'language-cache');
+    fs.mkdirSync(cache);
+    fs.writeFileSync(path.join(cache, `${createHash('sha256').update('languages' + repository).digest('hex')}.json`), JSON.stringify({
+      format: 'orbitkanban-pack-cache', version: 1, kind: 'languages', repository, updatedAt: '2026-01-01T00:00:00.000Z',
+      manifest: { format: 'orbitkanban-languages', version: 1, languages: [{ format: 'orbitkanban-language', version: 1, code: 'de', name: 'Deutsch', locale: 'de-DE', messages: { Settings: 'Einstellungen', 'Save settings': 'Einstellungen speichern' } }] }
+    }));
   }
 
   static #verify(folder) {
@@ -40,8 +48,7 @@ class SmokeRunner {
     if (!report.ok || report.checks.length < SmokeRunner.#MIN_CHECKS) throw new Error('Smoke test report is incomplete.');
     const stored = ArchiveValidator.validateArchive(JSON.parse(fs.readFileSync(path.join(folder, 'data', 'workspace.json'), 'utf8')));
     if (stored.organizations.length !== 2 || !stored.organizations.every(o => o.data.settings.logo.startsWith('data:image/png;base64,'))) throw new Error('Multi-organization archive is incomplete.');
-    const template = fs.readFileSync(path.join(folder, 'data', 'languages', 'en.template.json'));
-    if (!template.equals(fs.readFileSync(path.join(SmokeRunner.#ROOT, 'languages', 'en.json')))) throw new Error('English language template was not written to the languages folder.');
+    if (fs.existsSync(path.join(folder, 'data', 'languages', 'en.template.json')) || !fs.existsSync(path.join(folder, 'data', 'languages', 'fr.json'))) throw new Error('Legacy language files were modified.');
     console.log(`Verified on-disk archive and backup: ${report.checks.length} UI checks passed.`);
   }
 

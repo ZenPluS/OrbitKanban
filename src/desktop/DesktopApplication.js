@@ -68,7 +68,7 @@ class DesktopApplication {
     app.setPath('sessionData', this.#runtimeFolder);
     app.setAppLogsPath(path.join(this.#dataFolder, 'logs'));
     this.#appearance = new AppearancePackStore({ dataFolder: this.#dataFolder });
-    this.#store = new WorkspaceStore({ dataFolder: this.#dataFolder, extras: settings => ({ appVersion: app.getVersion(), browserUrl: this.#webServer.url, appearance: this.#appearance.catalog(settings.packSources) }) });
+    this.#store = new WorkspaceStore({ dataFolder: this.#dataFolder, extras: settings => ({ appVersion: app.getVersion(), browserUrl: this.#webServer.url, languageRevision: this.#languages.revision, appearance: this.#appearance.catalog(settings.packSources) }) });
     this.#attachments = new AttachmentStore({ dataFolder: this.#dataFolder });
     this.#languages = new LanguageStore({ dataFolder: this.#dataFolder });
     this.#splashTheme = new SplashTheme(this.#runtimeFolder);
@@ -88,7 +88,7 @@ class DesktopApplication {
         if (error) throw new Error(error);
       },
       language: () => this.#store.language(),
-      languages: operation => this.#languageOperation(operation),
+      languages: (operation, payload) => this.#languageOperation(operation, payload),
       appearance: (operation, payload) => this.#appearanceOperation(operation, payload)
     });
   }
@@ -185,16 +185,8 @@ class DesktopApplication {
       return true;
     } catch (error) { this.#updateShutdown = false; throw error; }
   }
-  async #languageOperation(operation = 'info') {
-    if (operation === 'reload') return this.#languages.reload();
-    if (operation === 'open-folder') {
-      const folder = await this.#languages.prepareFolder();
-      if (!this.#smoke) {
-        const error = await shell.openPath(folder);
-        if (error) throw new Error(error);
-      }
-      return this.#languages.info();
-    }
+  async #languageOperation(operation = 'info', payload = {}) {
+    if (['add', 'refresh', 'remove'].includes(operation)) return this.#languages.change(operation, payload.repository);
     if (operation !== 'info') throw new Error(this.#message("Unsupported operation."));
     return this.#languages.info();
   }
@@ -348,7 +340,7 @@ class DesktopApplication {
       }
       return true;
     });
-    handle('languages', operation => this.#languageOperation(operation));
+    handle('languages', (operation, payload) => this.#languageOperation(operation, payload));
     handle('appearance', (operation, payload) => this.#appearanceOperation(operation, payload));
     handle('browser-access', async (operation, organizationId) => {
       if (!webServer.port) throw new Error(message("Browser access is not available."));

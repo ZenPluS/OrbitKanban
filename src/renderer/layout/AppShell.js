@@ -176,6 +176,7 @@ export class AppShell extends Component {
     const generation = this.state.adoptions, previousId = this.state.activeOrganizationId;
     try {
       const snapshot = await this.workspaceApi.load(previousId);
+      if (snapshot.languageRevision && snapshot.languageRevision !== this.state.languageInfo.revision) await this.app.languages.loadLanguages();
       if (generation === this.state.adoptions) this.#applyRemoteSnapshot(snapshot, previousId);
     } catch (error) {
       if (error.code !== 'offline') this.app.notifier.notify(error.message, true);

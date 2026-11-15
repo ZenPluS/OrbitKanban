@@ -49,7 +49,7 @@ class WebServer {
     return token;
   }
   static #builtInLanguages() {
-    return { folder: '', template: '', packs: Translator.packs(), languages: Translator.languages().map(language => ({ ...language, source: 'built-in' })), errors: [] };
+    return { repositories: [], packs: Translator.packs(), languages: Translator.languages().map(language => ({ ...language, source: language.code === 'en' ? 'built-in' : 'zenplus/orbit_languages' })), errors: [] };
   }
   static #listen(server, port) {
     return new Promise((resolve, reject) => {
@@ -242,7 +242,7 @@ class WebServer {
         return this.#json(res, 200, { ok: true });
       } catch (error) { this.#attachmentFailure(error); }
     }
-    if (url.pathname === '/api/languages') return this.#json(res, 200, await this.#languages(body.operation));
+    if (url.pathname === '/api/languages') return this.#json(res, 200, await this.#languages(body.operation, body.payload));
     if (url.pathname === '/api/open-data-folder') { await this.#openDataFolder(); return this.#json(res, 200, { ok: true }); }
     throw WebServer.#httpError('not-found', this.#say("Not found."));
   }

@@ -9,7 +9,7 @@ export class AppState {
   revision = ''; appVersion = ''; browserUrl = ''; online = true; refreshing = false; pendingChange = null; renderAfterModal = false; adoptions = 0; subscribed = false;
   HISTORY_LIMIT = 20; undoHistory = new Map(); redoHistory = new Map();
   activeSavedViewId = ''; backupRequest = 0;
-  languageInfo = { folder: '', template: '', languages: [], errors: [] };
+  languageInfo = { revision: '', repositories: [], languages: [], errors: [] };
   milestoneDay = '';
   updateState = { supported: false, phase: 'idle', autoCheck: true, version: '', percent: 0, error: '', releaseUrl: 'https://github.com/ZenPluS/OrbitKanban/releases' }; updateSubscribed = false;
   dismissedUpdateVersions = new Set();

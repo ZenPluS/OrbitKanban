@@ -94,7 +94,7 @@ class WebSmokeTests {
     check(other.activeOrganizationId === otherOrganization && other.revision && other.appVersion && await renderer('state.activeOrganizationId') === electronOrganization, 'Opening another organization in the browser does not change the app');
 
     const languages = JSON.parse((await WebSmokeTests.#request(port, '/api/languages', { headers: api })).text);
-    check(languages.languages.some(language => language.code === 'de' && language.source === 'added') && languages.packs.some(pack => pack.code === 'de' && pack.messages.Settings === 'Einstellungen') && languages.errors.some(error => error.file === 'broken.json'), 'Languages added from files are available in the browser');
+    check(languages.languages.some(language => language.code === 'de' && language.source === 'smoke/languages') && languages.packs.some(pack => pack.code === 'de' && pack.messages.Settings === 'Einstellungen') && languages.errors.length === 0 && !languages.languages.some(language => language.code === 'fr'), 'Cached repository languages are available in the browser while local language files are ignored');
     const events = await WebSmokeTests.#openEvents(port, cookie);
     await WebSmokeTests.#waitFor(() => events.events.some(event => event.type === 'ready'), 'ready event');
     check(events.status === 200 && events.type.startsWith('text/event-stream'), 'Real-time synchronization channel is active');

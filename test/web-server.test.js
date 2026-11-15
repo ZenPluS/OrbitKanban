@@ -239,14 +239,14 @@ test('languages are listed for the browser and operations are forwarded to the a
   const listed = await request('/api/languages', { headers: api() });
   assert.equal(listed.status, 200);
   const info = JSON.parse(listed.text);
-  assert.deepEqual(info.languages.map(({ code, source }) => [code, source]), [['en', 'built-in'], ['it', 'built-in']]);
+  assert.deepEqual(info.languages.map(({ code, source }) => [code, source]), [['en', 'built-in'], ['it', 'zenplus/orbit_languages']]);
   assert.ok(info.packs.find(pack => pack.code === 'en').messages['Save settings']);
   assert.equal((await request('/api/languages', { headers: { Cookie: cookie } })).status, 403);
   assert.equal((await request('/api/languages', { headers: { 'X-OrbitKanban': '1' } })).status, 401);
   const operations = [];
   const custom = new WebServer({
     store, appRoot: ROOT, tokenFolder: path.join(folder, 'runtime'), port: 0, language: () => 'en',
-    languages: async operation => { operations.push(operation); if (operation === 'explode') throw new Error('Unsupported operation.'); return { folder: 'languages', languages: [], packs: [], errors: [] }; }
+    languages: async (operation, payload) => { operations.push([operation, payload]); if (operation === 'explode') throw new Error('Unsupported operation.'); return { repositories: [], languages: [], packs: [], errors: [] }; }
   });
   await custom.start();
   try {
@@ -260,12 +260,12 @@ test('languages are listed for the browser and operations are forwarded to the a
       req.on('error', reject);
       req.end(body);
     });
-    assert.equal(JSON.parse((await call('/api/languages')).text).folder, 'languages');
-    assert.equal((await call('/api/languages', { body: { operation: 'reload' } })).status, 200);
+    assert.deepEqual(JSON.parse((await call('/api/languages')).text).repositories, []);
+    assert.equal((await call('/api/languages', { body: { operation: 'add', payload: { repository: 'sample/languages' } } })).status, 200);
     const failed = await call('/api/languages', { body: { operation: 'explode' } });
     assert.equal(failed.status, 400);
     assert.equal(JSON.parse(failed.text).error, 'Unsupported operation.');
-    assert.deepEqual(operations, ['info', 'reload', 'explode']);
+    assert.deepEqual(operations, [['info', undefined], ['add', { repository: 'sample/languages' }], ['explode', undefined]]);
     const denied = await new Promise((resolve, reject) => {
       http.get({ host: '127.0.0.1', port: custom.port, path: '/auth?token=wrong', headers: { Host: `127.0.0.1:${custom.port}` } }, res => {
         const chunks = [];

@@ -17,7 +17,7 @@ contextBridge.exposeInMainWorld('workspace', {
   attachmentAdd: (organizationId, taskId, files) => ipcRenderer.invoke('attachment-add', organizationId, taskId, [...files].map(file => webUtils.getPathForFile(file))),
   attachmentRemove: (organizationId, taskId, name) => ipcRenderer.invoke('attachment-remove', organizationId, taskId, name),
   attachmentOpen: (organizationId, taskId, name) => ipcRenderer.invoke('attachment-open', organizationId, taskId, name),
-  languages: (operation = 'info') => ipcRenderer.invoke('languages', operation),
+  languages: (operation = 'info', payload) => ipcRenderer.invoke('languages', operation, payload),
   appearance: (operation = 'info', payload = {}) => ipcRenderer.invoke('appearance', operation, payload),
   updates: (operation = 'info', value) => ipcRenderer.invoke('updates', operation, value),
   createShortcut: () => ipcRenderer.invoke('create-shortcut'),

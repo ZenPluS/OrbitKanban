@@ -9,7 +9,7 @@ const { IconLibrary } = require('../src/shared/graphics');
 const { ColumnSchema } = require('../src/shared/columns');
 const { NavigationSections } = require('../src/shared/domain');
 
-const pack = code => JSON.parse(fs.readFileSync(path.join(ROOT, 'languages', `${code}.json`), 'utf8'));
+const pack = code => code === 'it' ? require('../resources/packs/orbit-languages.json').languages.find(pack => pack.code === code) : JSON.parse(fs.readFileSync(path.join(ROOT, 'languages', `${code}.json`), 'utf8'));
 const en = pack('en');
 const it = pack('it');
 const lookup = (language, text) => language.terms[text] ?? language.messages[text];

@@ -2245,21 +2245,65 @@ export class SmokeTests extends Component {
       const secondLogo = this.state.settingsDraft.logo;
       this.app.settings.showSettingsTab('languages');
       const languagePanel = () => this.$('#languages-panel').textContent;
-      check(visibleSettingsPanels().join() === 'languages' && [...this.$('#language').options].map(option => option.value).join() === 'de,en,it' && this.$('#language').value === 'it' && this.$('#language-missing').hidden, 'Language tab shows built-in languages and languages added from files');
-      check(['Deutsch', this.t("Added from file"), this.t("Built-in"), this.t("Add a language"), 'en.template.json', this.t("Open languages folder"), this.t("Reload languages")].every(text => languagePanel().includes(text)) && this.$('#languages-folder').textContent.endsWith('languages'), "Language list, instructions, and folder are visible");
-      check(this.$('.language-errors') && this.$('.language-errors').textContent.includes('broken.json') && this.$('.language-errors').textContent.includes(this.t("Invalid JSON file.")), 'Invalid language files are reported without blocking the app');
+      check(visibleSettingsPanels().join() === 'languages' && [...this.$('#language').options].map(option => option.value).join() === 'de,en,it' && this.$('#language').value === 'it' && this.$('#language-missing').hidden, 'Language tab shows the source language, official Italian and cached repository languages');
+      check(['Deutsch', 'smoke/languages', 'zenplus/orbit_languages', this.t("Built-in"), this.t("Add a language"), this.t("Open official language repository"), this.t("Reload cached languages")].every(text => languagePanel().includes(text)), 'Repository language list, cache status and contribution instructions are visible');
+      check(!this.$('#open-languages-folder') && !this.$('#languages-folder') && !this.$('.language-errors') && !Translator.has('fr'), 'Local language files are neither loaded nor exposed as an import option');
       check(this.app.languages.languageOptions('fr').includes(this.app.transfer.fillText("{0} (not installed)", 'fr')) && !this.$('#identity-panel #language'), 'Uninstalled language is indicated and the selector is moved to the Languages tab');
-      await this.$('#open-languages-folder').onclick();
-      check(this.state.languageInfo.template.endsWith('en.template.json') && this.state.languageInfo.errors.length === 1, "Languages folder is prepared with the English template");
+      check(this.$('[data-language-refresh="zenplus/orbit_languages"]') && !this.$('[data-language-remove="zenplus/orbit_languages"]') && this.$('[data-language-remove="smoke/languages"]'), 'Official language repository can be refreshed but only community references can be removed');
       this.$('#language').value = 'de';
       this.$('#language').dispatchEvent(new Event('change', { bubbles: true }));
       await new Promise(resolve => setTimeout(resolve, 0));
       check(!this.$('#settings-tab-languages .settings-tab-dot').hidden && this.$('#settings-tab-identity .settings-tab-dot').hidden && this.$('#language-missing').hidden, 'Language change is flagged on the Languages tab');
       this.$('#save-settings').click();
       await waitFor(() => this.state.data.settings.language === 'de' && !this.state.saving);
-      check(document.documentElement.lang === 'de' && this.$('#current-tab').textContent === 'Einstellungen' && this.$('#save-settings').textContent === 'Einstellungen speichern' && this.$('#manage-organizations').textContent === 'Manage organizations' && this.$('#theme-count').textContent.endsWith('themes'), 'Language added from a file uses English for missing strings');
+      check(document.documentElement.lang === 'de' && this.$('#current-tab').textContent === 'Einstellungen' && this.$('#save-settings').textContent === 'Einstellungen speichern' && this.$('#manage-organizations').textContent === 'Manage organizations' && this.$('#theme-count').textContent.endsWith('themes'), 'Cached repository language uses English for missing strings');
       await this.$('#reload-languages').onclick();
-      check(this.$('#toast').textContent === 'Languages reloaded.' && this.$('#language').value === 'de' && this.$('#current-tab').textContent === 'Einstellungen' && this.state.settingsTab === 'languages', "Reloading languages updates the tab without losing the selection");
+      check(this.$('#toast').textContent === 'Language repositories updated.' && this.$('#language').value === 'de' && this.$('#current-tab').textContent === 'Einstellungen' && this.state.settingsTab === 'languages', 'Reloading cached languages updates the tab without losing the selection');
+      {
+        const languageApi = this.app.languages.workspaceApi, originalName = this.$('#organization-name').value;
+        const info = await languageApi.languages('info'), calls = [];
+        let finishRefresh, failRefresh = false;
+        try {
+          this.app.languages.workspaceApi = { languages: async (operation, payload) => {
+            calls.push([operation, payload?.repository]);
+            if (operation === 'add') {
+              info.repositories.push({ kind: 'languages', repository: payload.repository, official: false, manifest: {}, updatedAt: '2026-01-01T00:00:00.000Z' });
+              info.packs.push({ format: 'orbitkanban-language', version: 1, code: 'es', name: 'Español', locale: 'es-ES', messages: { Settings: 'Configuración' } });
+              info.languages.push({ code: 'es', name: 'Español', locale: 'es-ES', source: payload.repository });
+            }
+            if (operation === 'remove') info.repositories = info.repositories.filter(source => source.repository !== payload.repository);
+            if (operation === 'refresh') {
+              if (failRefresh) throw new Error('Expected language repository failure');
+              await new Promise(resolve => { finishRefresh = resolve; });
+            }
+            return structuredClone(info);
+          } };
+          this.$('#language-repository').value = 'demo/languages';
+          await this.$('#add-language-repository').onclick();
+          check(calls.some(([operation, repository]) => operation === 'add' && repository === 'demo/languages') && this.$('#language option[value="es"]') && this.$('[data-language-remove="demo/languages"]'), 'Adding a language repository registers its languages and offers reference removal');
+          const refreshing = this.$('[data-language-refresh="demo/languages"]').onclick();
+          await waitFor(() => Boolean(finishRefresh));
+          check(this.$('#add-language-repository').disabled && this.$('#reload-languages').disabled && this.$('#languages-details [role="status"]'), 'Repository download immediately disables duplicate actions and shows progress');
+          this.$('#organization-name').value = 'Pending language refresh';
+          this.$('#organization-name').dispatchEvent(new Event('input', { bubbles: true }));
+          this.$('#language').value = 'en';
+          this.$('#language').dispatchEvent(new Event('change', { bubbles: true }));
+          finishRefresh(); await refreshing;
+          check(this.$('#organization-name').value === 'Pending language refresh' && this.$('#language').value === 'en' && this.app.settings.settingsChanged(), 'Repository refresh preserves organization and language edits made while the download was pending');
+          await this.$('[data-language-remove="demo/languages"]').onclick();
+          check(!this.$('[data-language-remove="demo/languages"]') && this.$('#organization-name').value === 'Pending language refresh' && this.$('#language').value === 'en', 'Removing a language reference keeps unsaved settings intact');
+          failRefresh = true;
+          await this.$('[data-language-refresh="zenplus/orbit_languages"]').onclick();
+          check(this.$('#toast').classList.contains('error') && this.$('#toast').textContent === 'Expected language repository failure' && !this.$('#add-language-repository').disabled && Translator.has('de'), 'Failed repository refresh reports the error, retains translations and restores usable controls');
+        } finally {
+          this.app.languages.workspaceApi = languageApi;
+          await this.app.languages.loadLanguages();
+          this.$('#organization-name').value = originalName;
+          this.$('#organization-name').dispatchEvent(new Event('input', { bubbles: true }));
+          this.$('#language').innerHTML = this.app.languages.languageOptions('de');
+          this.$('#language').dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      }
       this.$('#language').value = 'en';
       this.$('#organization-name').value = 'English workspace';
       this.$('#save-settings').click();

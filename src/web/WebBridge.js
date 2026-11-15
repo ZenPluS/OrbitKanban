@@ -155,7 +155,7 @@
         },
         attachmentRemove: (organizationId, taskId, name) => this.#request('/api/attachments/remove', { organizationId, taskId, name }),
         attachmentOpen: (organizationId, taskId, name) => this.#request('/api/attachments/open', { organizationId, taskId, name }),
-        languages: (operation = 'info') => operation === 'info' ? this.#request('/api/languages') : this.#request('/api/languages', { operation }),
+        languages: (operation = 'info', payload) => operation === 'info' ? this.#request('/api/languages') : this.#request('/api/languages', { operation, payload }),
         onChange(callback) {
           const source = new EventSource('/api/events');
           source.addEventListener('ready', () => bridge.#setOnline(true));

@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const ROOT = path.join(__dirname, '..');
 const { Translator } = require('../src/shared/localization');
-const builtIn = code => JSON.parse(fs.readFileSync(path.join(ROOT, 'languages', `${code}.json`), 'utf8'));
+const builtIn = code => code === 'it' ? require('../resources/packs/orbit-languages.json').languages.find(pack => pack.code === code) : JSON.parse(fs.readFileSync(path.join(ROOT, 'languages', `${code}.json`), 'utf8'));
 const withRegistry = run => { try { run(); } finally { Translator.reset(); Translator.loadBuiltIn(); } };
 
 test('English is the source language and Italian translates source strings', () => {
@@ -37,6 +37,13 @@ test('template translation protects markup across split tags and leaves interpol
     '">value</span></label>'
   ], ['checked', 'hidden'], 'it');
   assert.equal(html, '<label class="toggle-label"><input id="show-hidden" type="checkbox" checked> Nascoste <span title="Include nascoste" data-state="hidden">value</span></label>');
+});
+test('translation quotes and ampersands cannot escape protected HTML attributes', () => {
+  withRegistry(() => {
+    Translator.register({ format: Translator.FORMAT, version: 1, code: 'de', name: 'Deutsch', messages: { Settings: 'A "quote" & team' } });
+    assert.equal(Translator.translate('<button title="Settings">Settings</button>', 'de'), '<button title="A &quot;quote&quot; &amp; team">A "quote" & team</button>');
+    assert.equal(Translator.translate('Settings', 'de'), 'A "quote" & team');
+  });
 });
 test('exact translations preserve markup protection and update after a pack override', () => {
   withRegistry(() => {
@@ -82,7 +89,7 @@ test('release, Excel and bulk-edit text preserves placeholders', () => {
   assert.equal(Translator.translate('Changes will be applied to {0}.', 'it'), 'Le modifiche verranno applicate a {0}.');
   assert.equal(Translator.translate('Choose at least one sheet to export.', 'it'), 'Scegli almeno un foglio da esportare.');
 });
-test('built-in packs use English keys and provide Italian translations', () => {
+test('English source and the official Italian snapshot have matching translation keys', () => {
   const en = builtIn('en'), it = builtIn('it');
   assert.deepEqual([en.code, en.name, it.code, it.name], ['en', 'English', 'it', 'Italiano']);
   for (const pack of [en, it]) assert.doesNotThrow(() => Translator.validatePack(pack));
@@ -119,7 +126,7 @@ test('added languages fall back to English and invalid codes use the source lang
   });
   assert.equal(Translator.has('de'), false);
 });
-test('language files can customize built-in packs without removing other translations', () => {
+test('repository language packs can customize defaults without removing other translations', () => {
   withRegistry(() => {
     Translator.register({ format: Translator.FORMAT, version: 1, code: 'en', name: 'English (team)', messages: { 'Save settings': 'Store settings', Cancel: '' } });
     assert.equal(Translator.translate('Save settings', 'en'), 'Store settings');

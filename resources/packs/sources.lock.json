@@ -15,6 +15,13 @@
       "commit": "d1d0615270b5b31ee2f92446ae2818a7ad9bc57d",
       "file": "orbit-themes.json",
       "sha256": "8a660a24fbc8e5ee229a66dd8901c79c344efef76d4db0d7cedf7d9367a56eca"
+    },
+    {
+      "kind": "languages",
+      "repository": "zenplus/orbit_languages",
+      "commit": "570cf5ec360c3ea76fb72f271c544024c200d92e",
+      "file": "orbit-languages.json",
+      "sha256": "3064ee1765a0e6662f8bbca023855a4113a4fd6ac1429d1bfea5254ac2b06c96"
     }
   ]
 }

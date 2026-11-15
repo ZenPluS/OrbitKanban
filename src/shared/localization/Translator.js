@@ -71,7 +71,7 @@ class Translator {
     }
     return new Map([...candidates].filter(([, source]) => source));
   }
-  // A pack for an already registered code is merged over it, so a file can customise a few texts.
+  // A pack for an already registered code can override just a few texts.
   static register(input, { replace = false } = {}) {
     const pack = Translator.validatePack(input);
     const sources = Translator.#legacySources();
@@ -117,10 +117,11 @@ class Translator {
     const source = String(text);
     if (!source.includes('<') && messages.has(source)) return messages.get(source);
     if (!pattern) return source;
-    const replaceText = value => value.replace(pattern, match => messages.get(match));
+    const replaceText = (value, attribute = false) => value.replace(pattern, match => attribute ?
+      messages.get(match).replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character])) : messages.get(match));
     return source.split(Translator.#htmlTokenPattern).map((part, index) => {
       if (index % 2 === 0) return replaceText(part);
-      return part.replace(Translator.#translatableAttributePattern, (_, prefix, quote, value) => `${prefix}${quote}${replaceText(value)}${quote}`);
+      return part.replace(Translator.#translatableAttributePattern, (_, prefix, quote, value) => `${prefix}${quote}${replaceText(value, true)}${quote}`);
     }).join('');
   }
   static translateTemplate(strings, values, language) {
@@ -152,13 +153,12 @@ class Translator {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  const fs = require('node:fs');
   const path = require('node:path');
   Translator.builtInFolder = path.join(__dirname, '..', '..', '..', 'languages');
   Translator.loadBuiltIn = () => {
-    for (const name of fs.readdirSync(Translator.builtInFolder).sort()) {
-      if (name.endsWith('.json') && Translator.validCode(name.slice(0, -5))) Translator.register(JSON.parse(fs.readFileSync(path.join(Translator.builtInFolder, name), 'utf8')), { replace: true });
-    }
+    Translator.register(require(path.join(Translator.builtInFolder, 'en.json')), { replace: true });
+    const snapshot = require('../../../resources/packs/orbit-languages.json');
+    for (const pack of snapshot.languages) Translator.register(pack, { replace: true });
   };
   Translator.loadBuiltIn();
   module.exports = Translator;

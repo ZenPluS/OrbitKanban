@@ -4,10 +4,10 @@
 
 | | |
 | --- | --- |
-| **Current version** | 3.8.2 |
+| **Current version** | 3.9.0 |
 | **Platform** | Windows 10 / 11, 64-bit |
 | **Distribution** | Single portable executable, `OrbitKanban-Portable.exe` |
-| **Network** | Not required. Optional GitHub update checks and explicit icon/theme repository refresh |
+| **Network** | Not required. Optional GitHub update checks and explicit icon/theme/language repository refresh |
 | **Downloads** | [GitHub Releases](https://github.com/ZenPluS/OrbitKanban/releases) |
 
 ## Table of contents
@@ -93,7 +93,7 @@
 - **Browser access** from the same PC, with live sync across windows.
 - **Built-in guide** covering every feature, opened with `F1`.
 - **Verified updates** from GitHub releases, with persistent in-app notifications and automatic rollback if an install fails.
-- **Translatable**: English and Italian are included, and more languages can be added with a JSON file.
+- **Translatable**: English fallback and an offline Italian snapshot are included; add public GitHub language repositories without rebuilding.
 
 ## Getting started
 
@@ -160,7 +160,8 @@ Everything OrbitKanban stores lives in the `data` folder next to the executable:
 | `data/workspace.json` | The workspace: all organizations, tasks, issues, groups, to-do cards, settings, themes and logos |
 | `data/workspace.json.bak` | The previous save |
 | `data/backups/` | Daily snapshots of the whole workspace; the 14 most recent are kept |
-| `data/languages/` | Optional translation files and the English template |
+| `data/language-repositories.json` | Public language repository references, shared by every organization |
+| `data/language-cache/` | Validated repository language packs for offline use |
 | `data/updates/` | Update preference, downloads and rollback copies |
 | `data/runtime/` | Cache, logs, the sidebar preference, the splash screen theme, the themed window icon and the browser access key |
 | `data/attachments/` | Task files, stored separately from workspace records |
@@ -556,21 +557,45 @@ Buttons follow one size scale:
 
 ## Languages and translations
 
-English and Italian are built in. **Settings → Language & translations** selects the organization language, which applies to the interface, dates and effort units. User content and custom names are never translated.
+English is the integrated source/fallback language. Italian is provided by the official [orbit_languages](https://github.com/ZenPluS/orbit_languages) repository, with a bundled offline snapshot. **Settings → Language & translations** selects the organization language, which applies to the interface, dates and effort units. User content and custom names are never translated.
 
 To add a language without rebuilding the app:
 
-1. Press **Open languages folder** to open `data/languages`, which contains `en.template.json`, the complete English pack.
-2. Copy it as `<code>.json`, for example `de.json`, and set `code`, `name` (shown in the menu) and `locale` (for dates and numbers, such as `de-DE`).
-3. Translate the **values only**. Keys are the English source text, and placeholders such as `{0}` and markers such as `**bold**` must be kept.
+1. Press **Open official language repository**, then copy `en.template.json` into your own public GitHub repository.
+2. Set `code`, `name` (shown in the menu) and `locale` (for dates and numbers, such as `de-DE`).
+3. Translate the **values only**, using plain text (no HTML). Keys are the English source text, and placeholders such as `{0}` and markers such as `**bold**` must be kept.
    - `messages` holds interface text;
    - `terms` holds default names, demo content and the guide;
    - `plurals` holds counted forms (`zero`, `one`, `two`, `few`, `many`, with `other` required).
 
    Missing values fall back to English, so translation can be gradual.
-4. Press **Reload languages**, choose the new language, and save.
+4. Put one or more complete language objects into `orbit-languages.json` at the repository root, on its default branch:
 
-A file named after a built-in language, such as `it.json`, overrides only the texts it contains. Invalid files (bad JSON, mismatched code, or larger than 2 MB) are listed under **Ignored language files** and skipped. Language files travel with the `data` folder.
+   ```json
+   {
+     "format": "orbitkanban-languages",
+     "version": 1,
+     "languages": [
+       {
+         "format": "orbitkanban-language",
+         "version": 1,
+         "code": "de",
+         "name": "Deutsch",
+         "locale": "de-DE",
+         "messages": { "Settings": "Einstellungen" },
+         "terms": {},
+         "plurals": {}
+       }
+     ]
+   }
+   ```
+5. In **Language repositories**, enter `owner/repository` or its public GitHub URL and press **Add repository**. Choose the language and save settings. Alternatively, contribute the translation to the official repository.
+
+Repository references apply to **every organization in this portable copy**, whereas the selected language remains organization-specific. Refresh is **manual**, not a background startup download. **Reload cached languages** rereads the already loaded catalog without accessing GitHub. References and validated cached packs travel with `data`; no account or GitHub token is required.
+
+Custom sources override matching language codes in reference order, after the official source. Removing a reference restores active/default translations for matching codes while keeping otherwise unavailable cached languages, so saved organizations can still reopen offline. Invalid manifests, duplicate language codes, network/rate-limit failures and files above 2 MB produce explicit errors without replacing the last valid cache.
+
+**Migration:** arbitrary files in `data/languages` are no longer read, and no local language-folder/template import is offered. Existing files are left untouched. Move a previous translation object into a public repository's `orbit-languages.json` to keep maintaining it. A saved language that is not installed stays selected and is marked as unavailable; its missing texts fall back to English.
 
 ## Import and export
 
@@ -691,7 +716,7 @@ Versions earlier than 2.45.0 must be updated manually once. From 2.45.0 onward, 
 | Saving fails with a write error | The folder is read-only, or the app is running from inside a ZIP archive. Move the executable and `data` to a writable folder. |
 | The browser shows **App not reachable** | The desktop app is closed. Start it and reload the tab. |
 | An update fails | The helper restores the previous executable automatically. Rollback files are in `data/updates`. You can also replace the executable manually. |
-| A language does not appear | Check **Ignored language files** in **Settings → Language & translations**. |
+| A language does not appear | Check the repository status in **Settings → Language & translations**, then **Refresh** its `orbit-languages.json`. Old local files are no longer loaded. |
 
 ## Development
 
@@ -713,7 +738,7 @@ npm run dist     # build dist/OrbitKanban-Portable.exe
 
 The application version comes from `package.json` and is shown in the sidebar and splash screen. If the previous executable is still running, use `npm run dist -- --out dist-staging` to build without overwriting it.
 
-All source code, tests, scripts and documentation are in English. Interface text uses the English string as its key, and every new string needs an entry in both `languages/en.json` and `languages/it.json`.
+All source code, tests, scripts and documentation are in English. Interface text uses the English string as its key. Every new string needs an English entry in `languages/en.json` and an Italian entry in the official language repository and bundled `resources/packs/orbit-languages.json` snapshot. Keep the official repository's English template and `resources/packs/sources.lock.json` aligned with those shipped assets.
 
 ### Performance measurements
 
@@ -755,20 +780,20 @@ The code is object oriented: apart from entry points and preload scripts, every 
 | `src/shared/domain/` | **Domain**: data model and defaults (`DataFactory`), validation and migrations (`ArchiveValidator`), organization transfer, task order, links, layout, navigation sections, limits, themes and typography |
 | `src/shared/columns/` | **Columns**: column schemas, layout, filters, validation, merging, required fields and platform links |
 | `src/shared/interop/` | **Interop**: CSV parsing and import, ZIP and Excel writers (no external dependencies) |
-| `src/shared/localization/` | **Localization**: the `Translator` engine |
+| `src/shared/localization/` | **Localization**: the `Translator` engine and declarative repository manifest validation (`LanguagePacks`) |
 | `src/shared/graphics/` | **Graphics**: icon set, color math, the theme generator and the themed app logo (`AppLogo`) |
 | `src/shared/guide/` | **Guide**: in-app guide content |
 | `src/renderer/` | Interface as ES modules: `App` builds every component on the shared `AppState`; components extend `Component` and are grouped by area (`tasks`, `issues`, `milestones`, `kanban`, `settings`, `columns`, `controls`, `dialogs`, `layout`, `appearance`, `transfer`, …). `TaskAttachments` manages the task file UI. `shared.js` imports the shared classes and `main.js` starts the app |
 | `src/desktop/` | Electron main process: `DesktopApplication` (windows, IPC, single instance), `preload.js` and the `main.js` entry point |
-| `src/desktop/storage/` | `WorkspaceStore` (atomic persistence, backups, organization transfer), `AttachmentStore` (portable task files) and `LanguageStore` (external language files) |
+| `src/desktop/storage/` | `WorkspaceStore` (atomic persistence, backups, organization transfer), `AttachmentStore` (portable task files), `LanguageStore` (global language references) and `RepositoryPackStore` (shared bounded GitHub download/offline cache for languages and appearance) |
 | `src/desktop/platform/` | `PortableLauncher` (portable paths, taskbar identity, shortcuts), `WindowChrome` (custom title bar), `WindowIcon` (themed window icon) and `IconFile` (ICO encoder and reader) |
 | `src/desktop/splash/` | `SplashScreen`, `SplashTheme` (saved splash screen colors and logo) and the splash screen page (`splash.html`, `splash.js`), shared with the portable launcher |
 | `src/desktop/update/` | `Updater` (check, download, verification), `UpdateLauncher` and `install-update.ps1` |
 | `src/desktop/diagnostics/` | End-to-end smoke tests of the desktop app, browser access and taskbar identity, plus isolated performance measurements |
 | `src/web/` | Browser access: `WebServer` and the client `WebBridge` |
 | `index.html`, `styles.css` | Interface markup and styles |
-| `languages/` | Built-in language packs |
-| `resources/packs/` | Official offline icon/theme JSON snapshots and their source commit/hash lock |
+| `languages/` | Integrated English source/fallback pack |
+| `resources/packs/` | Official offline icon/theme/language JSON snapshots and their source commit/hash lock |
 | `app-logo.svg`, `fonts/` | App logo, bundled WOFF2 fonts with sources and licenses |
 | `tools/` | Development scripts: `build.js` (`PortableBuild`), `make-splash.js` (`LauncherArtwork`), `smoke.js` (`SmokeRunner`), `performance.js` (`PerformanceRunner`), `check.js` (`SyntaxCheck`), `AppIcon`, `SplashImage` and `GitHubRelease` |
 | `build/` | Portable launcher customization (HTML splash screen host); generated fallback splash and icon files |
@@ -808,7 +833,7 @@ Tags are never moved. Bump the version before releasing new sources:
 npm version minor --no-git-tag-version --ignore-scripts
 ```
 
-For a specifically numbered release, use `npm version 3.8.2 --no-git-tag-version --ignore-scripts` instead. To update the local portable copy too, run the pipeline **without `-NoDeliver`** and close the app first. The script replaces only the executable, not `dist/data`.
+For a specifically numbered release, use `npm version 3.9.0 --no-git-tag-version --ignore-scripts` instead. To update the local portable copy too, run the pipeline **without `-NoDeliver`** and close the app first. The script replaces only the executable, not `dist/data`.
 
 The script refuses to reuse a tagged version for different sources. If a build or test fails, nothing is committed or pushed.
 
@@ -816,6 +841,7 @@ The script refuses to reuse a tagged version for different sources. If a build o
 
 | Version | Changes |
 | --- | --- |
+| **3.9.0** | Public GitHub language repositories, official Italian offline snapshot and English contributor template, portable shared references/cache, explicit refresh and removal, retired local-folder loading without deleting existing files |
 | **3.8.2** | Themed update confirmation and persistent installation/restart progress through renderer readiness; simpler sidebar compositor motion with paint-contained icons, rapid reversal and reduced-motion support |
 | **3.8.1** | Incremental task-table rendering, preserved controls during sorting and unchanged-shell refreshes, icon pack reuse, shared numeric collator, independent startup I/O and repeatable isolated performance diagnostics |
 | **3.8.0** | External GitHub icon/theme repositories with portable offline cache, community packs, partial icon overrides and reset, Midnight-only embedded theme, preserved custom palettes |

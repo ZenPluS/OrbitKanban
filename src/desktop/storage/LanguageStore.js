@@ -1,83 +1,94 @@
 'use strict';
-// User languages live in data/languages/<code>.json, next to the portable data.
-// A file for a built-in code customises it, any other valid code adds a new language.
+// Repository references apply to this portable copy. Cached packs remain usable offline.
 const fs = require('node:fs/promises');
 const path = require('node:path');
+const { createHash, randomUUID } = require('node:crypto');
 const { Translator } = require('../../shared/localization');
+const LanguagePacks = require('../../shared/localization/LanguagePacks');
+const RepositoryPackStore = require('./RepositoryPackStore');
 
 class LanguageStore {
-  static MAX_FILE_SIZE = 2 * 1024 * 1024;
-  static TEMPLATE_FILE = `${Translator.FALLBACK}.template.json`;
-
+  #cache;
+  #references = [];
   #sources = new Map();
-  #errors = [];
-
-  constructor({ dataFolder }) {
-    this.folder = path.join(dataFolder, 'languages');
-    this.template = path.join(this.folder, LanguageStore.TEMPLATE_FILE);
-  }
-  async #writeTemplate() {
-    const source = await fs.readFile(path.join(Translator.builtInFolder, `${Translator.FALLBACK}.json`));
-    const current = await fs.readFile(this.template).catch(() => null);
-    if (current?.equals(source)) return;
-    const temporary = `${this.template}.${process.pid}-${Date.now()}.tmp`;
-    await fs.writeFile(temporary, source);
-    try { await fs.rename(temporary, this.template); }
-    catch (error) { await fs.rm(temporary, { force: true }); throw error; }
-  }
-  async prepareFolder() {
-    await fs.mkdir(this.folder, { recursive: true });
-    await this.#writeTemplate();
-    return this.folder;
-  }
-  async #readUserFiles() {
-    const found = [], failed = [];
-    let names = [];
-    try { names = await fs.readdir(this.folder); }
-    catch (error) { if (error.code !== 'ENOENT') failed.push({ file: '', message: error.message }); }
-    const files = names.filter(name => /\.json$/i.test(name) && !/\.template\.json$/i.test(name)).sort((a, b) => a.localeCompare(b, 'en'));
-    for (const file of files) {
-      try {
-        const fullPath = path.join(this.folder, file);
-        const stat = await fs.stat(fullPath);
-        if (!stat.isFile()) continue;
-        if (stat.size > LanguageStore.MAX_FILE_SIZE) throw new Error("Language file too large.");
-        let pack;
-        try { pack = JSON.parse((await fs.readFile(fullPath, 'utf8')).replace(/^\uFEFF/, '')); }
-        catch { throw new Error("Invalid JSON file."); }
-        const { code } = Translator.validatePack(pack);
-        if (code.toLowerCase() !== file.slice(0, -5).toLowerCase()) throw new Error("The language code must match the file name.");
-        found.push({ file, pack });
-      } catch (error) { failed.push({ file, message: error.message }); }
-    }
-    return { found, failed };
+  #revision = '';
+  #busy = false;
+  #settingsError = '';
+  get revision() { return this.#revision; }
+  constructor(options) {
+    this.file = path.join(options.dataFolder, 'language-repositories.json');
+    this.#cache = new RepositoryPackStore({ ...options, definitions: LanguagePacks, folder: 'language-cache', label: 'language' });
   }
   info() {
+    const repositories = this.#cache.catalog(this.#references).sources;
     return {
-      folder: this.folder,
-      template: this.template,
-      packs: Translator.packs(),
+      revision: this.#revision, packs: Translator.packs(), repositories,
       languages: Translator.languages().map(language => ({ ...language, source: this.#sources.get(language.code) || 'built-in' })),
-      errors: this.#errors.map(error => ({ ...error }))
+      errors: [...repositories.filter(source => source.error).map(source => ({ repository: source.repository, message: source.error })), ...(this.#settingsError ? [{ message: this.#settingsError }] : [])]
     };
   }
-  // Files are read first and swapped in synchronously, so translations never see a half-loaded registry.
-  async reload() {
-    const { found, failed } = await this.#readUserFiles();
+  #adopt() {
+    const active = this.#cache.catalog(this.#references).sources;
+    const retained = this.#cache.cachedSources().filter(source => !active.some(item => item.repository === source.repository))
+      .flatMap(source => this.#cache.catalog([source]).sources.filter(item => item.repository === source.repository));
+    const activeCodes = new Set(active.flatMap(source => (source.manifest?.languages || []).map(pack => pack.code)));
     Translator.reset();
     Translator.loadBuiltIn();
-    const builtIn = new Set(Translator.languages().map(language => language.code));
-    const nextSources = new Map([...builtIn].map(code => [code, 'built-in']));
-    for (const { file, pack } of found) {
-      try {
-        const code = Translator.register(pack);
-        nextSources.set(code, builtIn.has(code) ? 'customized' : 'added');
-      } catch (error) { failed.push({ file, message: error.message }); }
+    this.#sources = new Map([['en', 'built-in'], ['it', LanguagePacks.OFFICIAL[0].repository]]);
+    // Keep installed translations available to saved organizations after removing a reference.
+    for (const source of retained) for (const pack of source.manifest?.languages || []) {
+      if (!Translator.has(pack.code) && !activeCodes.has(pack.code)) { Translator.register(pack); this.#sources.set(pack.code, source.repository); }
     }
-    this.#sources = nextSources;
-    this.#errors = failed;
+    for (const source of active) for (const pack of source.manifest?.languages || []) {
+      Translator.register(pack);
+      this.#sources.set(pack.code, source.repository);
+    }
+    this.#revision = createHash('sha256').update(JSON.stringify(Translator.packs())).digest('hex');
     return this.info();
   }
+  async reload() {
+    await this.#cache.initialize();
+    let references = [];
+    try {
+      const saved = JSON.parse(await fs.readFile(this.file, 'utf8'));
+      if (saved?.version !== 1 || !Array.isArray(saved.sources)) throw new Error('Invalid language repository settings.');
+      references = LanguagePacks.sources(saved.sources).filter(source => source.repository !== LanguagePacks.OFFICIAL[0].repository);
+    } catch (error) {
+      if (error.code !== 'ENOENT') {
+        this.#adopt();
+        this.#settingsError = 'Cannot read language repository settings.';
+        throw new Error(this.#settingsError, { cause: error });
+      }
+    }
+    this.#settingsError = '';
+    this.#references = references;
+    return this.#adopt();
+  }
+  async change(operation, repository) {
+    if (this.#settingsError) throw new Error(this.#settingsError);
+    if (this.#busy) throw new Error('Language repositories are loading.');
+    repository = LanguagePacks.repository(repository);
+    const official = LanguagePacks.OFFICIAL[0].repository;
+    const current = LanguagePacks.sources(this.#references);
+    if (!['add', 'refresh', 'remove'].includes(operation) || (operation !== 'add' && !current.some(source => source.repository === repository)) ||
+      (operation === 'remove' && repository === official)) throw new Error('Invalid language repository operation.');
+    const references = operation === 'remove' ? this.#references.filter(source => source.repository !== repository) :
+      operation === 'add' && !current.some(source => source.repository === repository) ? [...this.#references, { kind: 'languages', repository }] : this.#references;
+    LanguagePacks.sources(references);
+    this.#busy = true;
+    try {
+      if (operation !== 'remove') await this.#cache.refresh('languages', repository);
+      const temporary = `${this.file}.${randomUUID()}.tmp`;
+      try {
+        await fs.mkdir(path.dirname(this.file), { recursive: true });
+        await fs.writeFile(temporary, JSON.stringify({ version: 1, sources: references }), { flag: 'wx' });
+        await fs.rename(temporary, this.file);
+      } catch (error) {
+        throw new Error('Cannot save language repository settings.', { cause: error });
+      } finally { await fs.rm(temporary, { force: true }).catch(() => {}); }
+      this.#references = references;
+      return this.#adopt();
+    } finally { this.#busy = false; }
+  }
 }
-
 module.exports = LanguageStore;

@@ -339,8 +339,8 @@ class GuideContent {
           'Removing a section never deletes data. The first section opens when the app starts.'
         ] },
         { title: 'Language & translations', items: [
-          'Italian and English are built in, and the language is chosen for each organization.',
-          'To add a language, translate a copy of `en.template.json` in the `data/languages` folder and press **Reload languages**. Invalid files are listed and ignored.'
+          'English is the source language. Italian comes from the official repository with a bundled offline copy. Choose the interface language for each organization.',
+          'Add a public GitHub repository containing `orbit-languages.json` in **Language repositories** and press **Refresh** to download updates. Use the English template in the official repository to contribute a translation. Cached languages work offline.'
         ] }
       ]
     },
