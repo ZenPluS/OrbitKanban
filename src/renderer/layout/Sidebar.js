@@ -25,54 +25,27 @@ export class Sidebar extends Component {
   }
   toggleSidebar() {
     const focused = document.activeElement;
-    const layout = this.sidebarReducedMotion.matches ? [] : [
-      [this.$('#sidebar'), ['width', 'paddingLeft', 'paddingRight']],
-      [this.$('main'), ['width', 'marginLeft']],
-      [this.$('#toast'), ['left']]
-    ];
-    const propertiesOf = (element, properties) => {
-      const style = getComputedStyle(element);
-      return Object.fromEntries(properties.map(property => [property, style[property]]));
-    };
-    const beforeLayout = layout.map(([element, properties]) => propertiesOf(element, properties));
-    const moving = this.sidebarReducedMotion.matches ? [] : [
-      ...[...document.querySelectorAll('#navigation, #guide-button, #settings-button, #open-browser, .sidebar .version')].map(element => [element, 'y']),
-      ...[...document.querySelectorAll('.sidebar .nav-icon, .sidebar .nav-count, #open-browser .ico, #app-version')].map(element => [element, 'x']),
-      [this.$('.sidebar .brand-icon'), 'xy']
-    ];
-    const beforePositions = moving.map(([element]) => element.getBoundingClientRect());
-    // Capture the visible positions before cancelling, so a quick second click reverses smoothly.
+    const sidebar = this.$('#sidebar'), main = this.$('main');
+    const previousLeft = main.getBoundingClientRect().left;
     this.sidebarAnimations.forEach(animation => animation.cancel());
     this.sidebarAnimations = [];
     this.sidebarCollapsed = !this.sidebarCollapsed;
     try { if (this.sidebarCollapsed) localStorage.setItem(this.#SIDEBAR_COLLAPSED_KEY, '1'); else localStorage.removeItem(this.#SIDEBAR_COLLAPSED_KEY); } catch {}
-    this.applySidebar();
-    const motion = { duration: 220, easing: 'cubic-bezier(0.2, 0, 0, 1)' };
-    const afterLayout = layout.map(([element, properties]) => propertiesOf(element, properties));
-    if (!this.sidebarCollapsed && !this.sidebarReducedMotion.matches) {
-      // Reveal full-width labels through the growing sidebar instead of wrapping them while it opens.
-      const children = [...this.$('#sidebar').children].map(element => [element, getComputedStyle(element).width]);
-      this.sidebarAnimations.push(...children.map(([element, width]) => element.animate([{ minWidth: width }, { minWidth: width }], motion)));
-    }
-    this.sidebarAnimations.push(...layout.map(([element], index) => element.animate([beforeLayout[index], afterLayout[index]], motion)));
-    // Move icons without scaling them, and compensate for controls changing rows in the compact layout.
-    const afterPositions = moving.map(([element]) => element.getBoundingClientRect());
-    this.sidebarAnimations.push(...moving.map(([element, axes], index) => {
-      const x = axes.includes('x') ? beforePositions[index].left - afterPositions[index].left : 0;
-      const y = axes.includes('y') ? beforePositions[index].top - afterPositions[index].top : 0;
-      return element.animate([{ transform: `translate(${x}px, ${y}px)` }, { transform: 'translate(0, 0)' }], motion);
-    }));
-    if (!this.sidebarReducedMotion.matches) {
-      const labels = this.sidebarCollapsed ? '.sidebar .organization-icon' : '.sidebar .nav-label, .sidebar .brand > div:last-child, .sidebar .organization-switcher label, #organization-select, #manage-organizations, .sidebar .local-card';
-      const fade = this.sidebarCollapsed ? [{ opacity: 0 }, { opacity: 1 }] : [{ opacity: 0 }, { opacity: 0, offset: 0.8 }, { opacity: 1 }];
-      this.sidebarAnimations.push(...[...document.querySelectorAll(labels)].map(element => element.animate(fade, motion)));
-    }
-    // Controls that only exist in the full sidebar hand the focus to the menu button.
-    if (this.$('#sidebar').contains(focused) && !focused.getClientRects().length) this.$('#sidebar-toggle').focus({ preventScroll: true });
-    // The views change width without a window resize, so menus anchored to them follow the resize rules.
     const focusIn = selector => Boolean(document.querySelector(selector)?.contains(document.activeElement));
     this.app.tagMenu.closeTagMenu(focusIn('#tag-menu'));
     this.app.rowMarks.closeMarkMenu(focusIn('#mark-menu'));
+    this.applySidebar();
+    const nextLeft = main.getBoundingClientRect().left;
+    if (!this.sidebarReducedMotion.matches) {
+      // Reflow once, then move the content as one compositor layer. Icons never leave the clipped sidebar.
+      const motion = { duration: 180, easing: 'cubic-bezier(0.2, 0, 0, 1)' };
+      this.sidebarAnimations.push(main.animate([{ transform: `translateX(${previousLeft - nextLeft}px)` }, { transform: 'translateX(0)' }], motion));
+      if (!this.sidebarCollapsed) {
+        this.sidebarAnimations.push(sidebar.animate([{ clipPath: `inset(0 ${Math.max(0, nextLeft - previousLeft)}px 0 0)` }, { clipPath: 'inset(0 0 0 0)' }], motion));
+      }
+      this.sidebarAnimations.push(sidebar.animate([{ opacity: 0.4 }, { opacity: 1 }], motion));
+    }
+    if (sidebar.contains(focused) && !focused.getClientRects().length) this.$('#sidebar-toggle').focus({ preventScroll: true });
     this.app.colorPicker.positionColorPicker();
   }
   install() {

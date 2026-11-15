@@ -392,7 +392,8 @@ class GuideContent {
         { title: 'Check, download, install', desktop: true, items: [
           'In **Settings → App & updates** press **Check for updates**, or let the app check at startup.',
           'A detected update appears in a persistent banner in every view. **View update** opens the update settings; dismissing the banner keeps a shortcut in the top bar. The same version stays dismissed for this session, while a newer version is announced again.',
-          '**Download update** downloads the new version and verifies its SHA-256 checksum; **Install and restart** replaces the executable and reopens the app.'
+          '**Download update** downloads the new version and verifies its SHA-256 checksum; **Install and restart** replaces the executable and reopens the app.',
+          'Installation uses a themed confirmation and progress window. Progress stays visible until the restarted app is ready; errors stay visible with a Close action.'
         ] },
         { title: 'Your data is safe', items: [
           'The data folder stays where it is. Before installing, the previous executable and a copy of the archive are saved in `data/updates`.',

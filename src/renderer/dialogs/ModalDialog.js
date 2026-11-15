@@ -12,10 +12,16 @@ export class ModalDialog extends Component {
   confirmDialog(title, message, callback, afterClose) {
     if (this.$('#modal').open) this.$('#modal').close();
     this.openModal(this.ui`<div class="modal-heading"><h2>${this.esc(this.t(title))}</h2></div><p class="confirm-message">${this.esc(this.t(message))}</p><div class="modal-actions"><span class="spacer"></span><button class="button" data-close>Cancel</button><button class="button danger" id="confirm-action">Confirm</button></div>`);
-    this.$('#confirm-action').onclick = this.app.notifier.action(async () => {
-      await callback();
-      this.$('#modal').close();
-      if (afterClose) await afterClose();
+    const confirm = this.$('#confirm-action');
+    confirm.onclick = this.app.notifier.action(async () => {
+      if (confirm.disabled) return;
+      confirm.disabled = true;
+      const confirmation = this.$('#modal-content').firstElementChild;
+      try {
+        await callback();
+        if (this.$('#modal-content').firstElementChild === confirmation) this.$('#modal').close();
+        if (afterClose) await afterClose();
+      } finally { if (confirm.isConnected) confirm.disabled = false; }
     });
   }
   confirmOverlay(title, message, callback) {

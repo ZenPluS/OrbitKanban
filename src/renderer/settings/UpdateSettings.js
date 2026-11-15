@@ -67,14 +67,33 @@ export class UpdateSettings extends Component {
   }
   adoptUpdateState(state) {
     this.state.updateState = state;
+    if (state.phase === 'error' && this.$('#update-restart-progress')) this.$('#modal').close();
     this.#drawUpdateState();
     this.drawUpdateNotice();
+  }
+  #confirmInstall() {
+    this.app.modal.confirmDialog("Install the downloaded update?", "OrbitKanban and browser access will close. Saved data will be backed up and kept. Save any open editors in browser tabs before continuing.", async () => {
+      this.app.modal.openModal(this.ui`<section id="update-restart-progress" role="status" aria-live="polite" aria-busy="true"><div class="update-restart-icon">${this.ico('reset')}</div><h2>Preparing your update…</h2><p>Verifying the download and backing up your workspace. Keep this window open.</p><progress aria-label="Update installation progress"></progress><p class="muted">A themed progress window will stay visible until the app is ready again.</p></section>`);
+      const modal = this.$('#modal');
+      const preventCancel = event => event.preventDefault();
+      modal.addEventListener('cancel', preventCancel);
+      try {
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        this.adoptUpdateState(await this.workspaceApi.updates('install'));
+      } catch (error) {
+        modal.close();
+        throw error;
+      } finally { modal.removeEventListener('cancel', preventCancel); }
+    });
+    const confirm = this.$('#confirm-action');
+    confirm.textContent = this.t("Install and restart");
+    confirm.classList.replace('danger', 'primary');
   }
   wireUpdates() {
     this.#drawUpdateState();
     this.$('#update-check').onclick = this.app.notifier.action(async () => this.adoptUpdateState(await this.workspaceApi.updates('check')));
     this.$('#update-download').onclick = this.app.notifier.action(async () => this.adoptUpdateState(await this.workspaceApi.updates('download')));
-    this.$('#update-install').onclick = this.app.notifier.action(() => this.app.settings.withSavedSettings(async () => this.adoptUpdateState(await this.workspaceApi.updates('install'))));
+    this.$('#update-install').onclick = this.app.notifier.action(() => this.app.settings.withSavedSettings(() => this.#confirmInstall()));
     this.$('#update-auto').onchange = this.app.notifier.action(async () => {
       try { this.adoptUpdateState(await this.workspaceApi.updates('auto-check', this.$('#update-auto').checked)); }
       finally { this.#drawUpdateState(); }

@@ -3465,6 +3465,17 @@ td .icon-button { width: calc(28px * var(--fs)); height: calc(28px * var(--fs));
   }
 }
 /* Collapsible sidebar: the menu button in the top bar folds it into a column of icons */
+.sidebar {
+  overflow-x: hidden;
+  contain: paint;
+}
+body { overflow-x: clip; }
+#update-restart-progress { padding: 18px 8px; max-width: 470px; }
+#update-restart-progress h2 { margin: 18px 0 12px; }
+#update-restart-progress p { line-height: 1.65; }
+#update-restart-progress progress { width: 100%; height: 5px; margin: 14px 0; accent-color: var(--accent); }
+.update-restart-icon { color: var(--accent); }
+.update-restart-icon .ico { width: 36px; height: 36px; }
 .topbar-left {
   display: flex;
   align-items: center;

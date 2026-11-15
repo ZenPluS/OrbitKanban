@@ -8,8 +8,11 @@ class PerformanceTest {
     try {
       if (await application.appReady !== 'renderer') throw new Error('The performance workspace did not become ready.');
       const profile = process.env.ORBITA_PERFORMANCE_PROFILE === '1';
-      if (profile) {
+      const sidebar = process.env.ORBITA_PERFORMANCE_SIDEBAR === '1';
+      if (profile || sidebar) {
         win.webContents.debugger.attach('1.3');
+      }
+      if (profile) {
         await win.webContents.debugger.sendCommand('Profiler.enable');
         await win.webContents.debugger.sendCommand('Profiler.start');
       }
@@ -50,13 +53,36 @@ class PerformanceTest {
       const saved = await store.load();
       if (saved.data.tasks.find(task => task.id === result.taskId)?.notes !== result.notes) throw new Error('The performance edit was not persisted.');
       const report = { ok: true, tasks: saved.data.tasks.length, metrics: { ...application.startupTimings, ...result.metrics } };
+      if (sidebar) {
+        win.show();
+        win.focus();
+        await win.webContents.debugger.sendCommand('Performance.enable');
+        await new Promise(resolve => setTimeout(resolve, 300));
+        const before = await win.webContents.debugger.sendCommand('Performance.getMetrics');
+        const frames = await win.webContents.executeJavaScript(`(async () => {
+          const intervals = [];
+          let previous = performance.now(), running = true;
+          const frame = now => { intervals.push(now - previous); previous = now; if (running) requestAnimationFrame(frame); };
+          requestAnimationFrame(frame);
+          for (let i = 0; i < 6; i++) {
+            document.querySelector('#sidebar-toggle').click();
+            await new Promise(resolve => setTimeout(resolve, 400));
+          }
+          running = false;
+          return intervals;
+        })()`);
+        const after = await win.webContents.debugger.sendCommand('Performance.getMetrics');
+        const delta = name => after.metrics.find(metric => metric.name === name).value - before.metrics.find(metric => metric.name === name).value;
+        const sorted = frames.sort((a, b) => a - b);
+        report.sidebar = { toggles: 6, layoutCount: delta('LayoutCount'), layoutMs: Math.round(delta('LayoutDuration') * 10000) / 10, frames: frames.length, frameP95Ms: Math.round(sorted[Math.floor(sorted.length * 0.95)] * 10) / 10, maxFrameMs: Math.round(sorted.at(-1) * 10) / 10 };
+      }
       if (profile) {
         const { profile: cpu } = await win.webContents.debugger.sendCommand('Profiler.stop');
         report.cpu = cpu.nodes.filter(node => node.hitCount).sort((a, b) => b.hitCount - a.hitCount).slice(0, 20).map(node => ({
           name: node.callFrame.functionName, file: node.callFrame.url.split('/').slice(-2).join('/'), samples: node.hitCount
         }));
-        win.webContents.debugger.detach();
       }
+      if (profile || sidebar) win.webContents.debugger.detach();
       await fs.writeFile(path.join(root, 'performance-result.json'), JSON.stringify(report, null, 2));
       require('electron').app.exit(0);
     } catch (error) {

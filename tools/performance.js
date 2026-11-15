@@ -11,7 +11,7 @@ class PerformanceRunner {
   static run() {
     const { values } = parseArgs({ options: {
       tasks: { type: 'string', default: '1000' }, runs: { type: 'string', default: '3' },
-      executable: { type: 'string' }, profile: { type: 'boolean', default: false }
+      executable: { type: 'string' }, profile: { type: 'boolean', default: false }, sidebar: { type: 'boolean', default: false }
     } });
     const count = Number(values.tasks), runs = Number(values.runs);
     if (!Number.isInteger(count) || count < 10 || count > 10000 || !Number.isInteger(runs) || runs < 1 || runs > 10) throw new Error('Use --tasks 10..10000 and --runs 1..10.');
@@ -35,7 +35,7 @@ class PerformanceRunner {
         const args = [...(values.executable ? [] : ['.']), '--performance-test'];
         const child = spawnSync(executable, args, {
           cwd: path.join(__dirname, '..'), encoding: 'utf8', timeout: 180000,
-          env: { ...process.env, ORBITA_PERFORMANCE_DIR: folder, ORBITA_PERFORMANCE_STARTED: String(Date.now()), ORBITA_PERFORMANCE_PROFILE: values.profile ? '1' : '', TEMP: folder, TMP: folder, TMPDIR: folder }
+          env: { ...process.env, ORBITA_PERFORMANCE_DIR: folder, ORBITA_PERFORMANCE_STARTED: String(Date.now()), ORBITA_PERFORMANCE_PROFILE: values.profile ? '1' : '', ORBITA_PERFORMANCE_SIDEBAR: values.sidebar ? '1' : '', TEMP: folder, TMP: folder, TMPDIR: folder }
         });
         if (child.error) throw child.error;
         if (child.status !== 0) throw new Error(`Performance run failed (exit code ${child.status}, signal ${child.signal || 'none'}): ${child.stderr}\n${child.stdout}`);

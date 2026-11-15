@@ -33,6 +33,8 @@ class DesktopApplication {
   #startupTimings = {};
   #root; #dataFolder; #runtimeFolder; #launcher; #portableFile; #launcherReadyFile;
   #launcherReleased = false;
+  #updateReadyFile;
+  #rendererReady = false;
   #win; #splash; #revealTimer; #revealed = false; #resolveAppReady;
   #appReady = new Promise(resolve => { this.#resolveAppReady = resolve; });
   #store; #attachments; #languages; #updater; #webServer; #appearance;
@@ -54,6 +56,8 @@ class DesktopApplication {
     this.#root = this.#performance ? this.#performanceRoot() : this.#smoke ? (process.env.ORBITA_SMOKE_DIR || path.join(os.tmpdir(), `orbita-smoke-${process.pid}`)) :
       (process.env.PORTABLE_EXECUTABLE_DIR || (app.isPackaged ? path.dirname(app.getPath('exe')) : appRoot));
     this.#dataFolder = path.join(this.#root, 'data');
+    this.#updateReadyFile = UpdateLauncher.readyFile(process.env[UpdateLauncher.READY_VARIABLE], this.#root);
+    delete process.env[UpdateLauncher.READY_VARIABLE];
     this.#runtimeFolder = path.join(this.#dataFolder, 'runtime');
     this.#launcher = process.platform === 'win32' ? PortableLauncher.launcherPath({ packaged: app.isPackaged, executable: app.getPath('exe'), portableFile: process.env.PORTABLE_EXECUTABLE_FILE }) : null;
     this.#portableFile = this.#launcher && process.env.PORTABLE_EXECUTABLE_FILE ? this.#launcher : null;
@@ -145,9 +149,15 @@ class DesktopApplication {
     try { writeFileSync(this.#launcherReadyFile, '', { flag: 'wx' }); }
     catch (error) { if (error.code !== 'EEXIST') console.error('The launcher loading screen could not be closed:', error); }
   }
+  #acknowledgeUpdate() {
+    if (!this.#updateReadyFile || !this.#rendererReady || !this.#win || this.#win.isDestroyed() || !this.#win.isVisible()) return;
+    try { writeFileSync(this.#updateReadyFile, 'ready'); this.#updateReadyFile = null; }
+    catch (error) { console.error('Update restart readiness could not be signaled:', error); }
+  }
   // The main window stays hidden behind the loading screen until the renderer has drawn the workspace.
   #revealMainWindow(reason) {
-    if (this.#revealed) return;
+    if (reason === 'renderer') this.#rendererReady = true;
+    if (this.#revealed) { this.#acknowledgeUpdate(); return; }
     this.#revealed = true;
     this.#startupMark('rendererReady');
     if (this.#performance) this.#startupTimings.launchToReady = Date.now() - Number(process.env.ORBITA_PERFORMANCE_STARTED);
@@ -161,21 +171,16 @@ class DesktopApplication {
       if (this.#win && !this.#win.isDestroyed()) this.#win.show();
       this.#splash?.close();
       this.releaseLauncher();
+      this.#acknowledgeUpdate();
     }, SplashScreen.splashHoldTime(this.#splash?.shownAt, Date.now()));
   }
   async #installUpdate(update) {
-    const message = (text, organizationId) => this.#message(text, organizationId);
-    const answer = await dialog.showMessageBox(this.#win, {
-      type: 'question', buttons: [message("Cancel"), message("Install and restart")], defaultId: 0, cancelId: 0,
-      message: message("Install the downloaded update?"),
-      detail: message("OrbitKanban and browser access will close. Saved data will be backed up and kept. Save any open editors in browser tabs before continuing.")
-    });
-    if (answer.response !== 1) return false;
     this.#updateShutdown = true;
     try {
       await this.#store.idle();
       await this.#store.exportTo(path.join(update.directory, 'workspace-before-update.json'));
-      await UpdateLauncher.launchInstaller(update);
+      const { data } = await this.#store.load();
+      await UpdateLauncher.launchInstaller({ ...update, presentation: UpdateLauncher.presentation(data.settings, text => this.#message(text)) });
       app.quit();
       return true;
     } catch (error) { this.#updateShutdown = false; throw error; }

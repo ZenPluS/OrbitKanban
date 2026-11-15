@@ -4,7 +4,7 @@
 
 | | |
 | --- | --- |
-| **Current version** | 3.8.1 |
+| **Current version** | 3.8.2 |
 | **Platform** | Windows 10 / 11, 64-bit |
 | **Distribution** | Single portable executable, `OrbitKanban-Portable.exe` |
 | **Network** | Not required. Optional GitHub update checks and explicit icon/theme repository refresh |
@@ -187,7 +187,7 @@ All views share compact headers. Their tables, timeline and board fill the windo
 
 The **☰** button at the left of the top bar, or `Ctrl+B`, folds the sidebar into a column of icons so the views get more room. The icons keep their counters and show their names as tooltips, and the building icon still switches organization. Press the button again to expand the sidebar. The choice travels with the portable data in `data/runtime/`; with browser access, each browser keeps its own.
 
-Opening and closing use a short, 220 ms transition: the views resize with the sidebar, icons move without stretching, and labels fade back in. Clicking again reverses the motion immediately. The system's **reduced motion** preference disables the animation, and restoring the saved layout at startup is always instant.
+Opening and closing use a short, 180 ms transition. The view resizes once, then slides as one layer rather than recalculating the entire table width every frame. Sidebar icons stay clipped inside their own panel, without separate moving offsets or stretching. Clicking again reverses the content motion from its visible position. The system's **reduced motion** preference disables the animation, and restoring the saved layout at startup is always instant.
 
 ### Tasks
 
@@ -648,7 +648,9 @@ While the app is running, the same interface is available in a browser **on the 
 - **Check for updates** only checks and never downloads.
 - When a newer version is detected, a persistent, accent-colored banner appears in every desktop view, with a larger title and a prominent **View update** button. It opens **App & updates**, protecting unsaved settings. Dismissing it leaves a highlighted update badge with the version in the top bar (icon-only in narrower windows); the same version stays dismissed for the session, while a newer version is announced again. Downloading and installation are never triggered just by opening the notification.
 - **Download update** shows progress and verifies the size and SHA-256 digest published by GitHub. It accepts only the portable executable of this repository and HTTPS redirects to GitHub download hosts. Older versions, pre-releases and unverifiable packages are never installed.
-- **Install and restart** asks for confirmation and saves a full copy of the workspace. A small PowerShell helper then waits for the app to close, re-checks the hash, replaces the executable atomically and restarts the app. No administrator rights are needed.
+- **Install and restart** asks for confirmation in the app's themed dialog and immediately shows indeterminate preparation progress while the download is verified and a full workspace backup is saved.
+- A separate, rounded progress window uses the active organization's theme colors and language. It remains visible while a small PowerShell helper waits for the app to close, re-checks the hash, replaces the executable atomically and restarts the app. The window closes only after the new renderer reports ready **and its main window is visible**, not merely when a process starts. No administrator rights are needed.
+- If installation fails, the helper reports the error in the same themed window. Failure to launch the replacement triggers restoration of the previous executable. If the replacement starts but does not confirm readiness within two minutes, the helper shows an explicit startup warning instead of disappearing or replacing an executable that may still be running.
 - If the new version cannot start, the helper restores the previous executable and reports the error. The downloaded file, `previous.exe`, `workspace-before-update.json` and the install log stay in a per-update folder under `data/updates`. Delete those folders once the new version works; keep `settings.json`.
 - You can always update manually: close the app, replace the executable and keep `data`.
 
@@ -719,12 +721,15 @@ All source code, tests, scripts and documentation are in English. Interface text
 npm run performance -- --tasks 1000 --runs 3
 npm run performance -- --tasks 250 --runs 3
 npm run performance -- --tasks 1000 --runs 1 --profile
-npm run performance -- --executable ".\dist-staging\3.8.1\win-unpacked\OrbitKanban.exe"
+npm run performance -- --tasks 1000 --runs 1 --sidebar
+npm run performance -- --executable ".\dist-staging\3.8.2\win-unpacked\OrbitKanban.exe"
 ```
 
 The runner launches the real desktop app with synthetic tasks and matching issues in a separate temporary workspace. It never uses the normal data folder, disables updater installation and automatic checks, uses an ephemeral browser-access port and cleans up after success or failure. Each run verifies that the task edit reached the on-disk archive. Task counts range from 10 to 10,000; runs range from 1 to 10.
 
 JSON output includes each run and median timings in milliseconds. Startup milestones are cumulative from desktop application construction; `launchToReady` starts just before spawning Electron. Interaction timings cover JavaScript and synchronous layout in a hidden window, **not displayed frames or perceived animation smoothness**. The first run includes workspace migration; later runs reuse that isolated archive and runtime cache. These are not cold-disk measurements. The optional profile reports the busiest renderer CPU functions. Run comparisons without concurrent builds or tests.
+
+`--sidebar` briefly shows the isolated window and toggles the sidebar six times. Each report includes layout count/time and sampled animation-frame intervals. Keep the window visible: occlusion, remote desktops and background throttling can distort frame intervals, so these samples are diagnostic, not an FPS guarantee.
 
 Example source-build medians on the same Windows machine, three runs with 1,000 tasks and 1,000 issues, comparing 3.8.0 to 3.8.1:
 
@@ -803,7 +808,7 @@ Tags are never moved. Bump the version before releasing new sources:
 npm version minor --no-git-tag-version --ignore-scripts
 ```
 
-For a specifically numbered release, use `npm version 3.8.1 --no-git-tag-version --ignore-scripts` instead. To update the local portable copy too, run the pipeline **without `-NoDeliver`** and close the app first. The script replaces only the executable, not `dist/data`.
+For a specifically numbered release, use `npm version 3.8.2 --no-git-tag-version --ignore-scripts` instead. To update the local portable copy too, run the pipeline **without `-NoDeliver`** and close the app first. The script replaces only the executable, not `dist/data`.
 
 The script refuses to reuse a tagged version for different sources. If a build or test fails, nothing is committed or pushed.
 
@@ -811,6 +816,7 @@ The script refuses to reuse a tagged version for different sources. If a build o
 
 | Version | Changes |
 | --- | --- |
+| **3.8.2** | Themed update confirmation and persistent installation/restart progress through renderer readiness; simpler sidebar compositor motion with paint-contained icons, rapid reversal and reduced-motion support |
 | **3.8.1** | Incremental task-table rendering, preserved controls during sorting and unchanged-shell refreshes, icon pack reuse, shared numeric collator, independent startup I/O and repeatable isolated performance diagnostics |
 | **3.8.0** | External GitHub icon/theme repositories with portable offline cache, community packs, partial icon overrides and reset, Midnight-only embedded theme, preserved custom palettes |
 | **3.7.0** | Distinct pushpin states and pinned note areas, subtle editor focus, reversible geometric organization logo crops shared with startup |

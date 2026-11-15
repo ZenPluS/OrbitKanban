@@ -148,19 +148,22 @@ export class SmokeTests extends Component {
       const insideRail = element => { const box = element.getBoundingClientRect(), rail = boxOf('#sidebar'); return box.width > 1 && box.height > 1 && box.left >= rail.left - 0.5 && box.right <= rail.right + 0.5; };
       const labelHidden = element => element.getBoundingClientRect().width <= 1 && element.getBoundingClientRect().height <= 1;
       const pressCtrlB = target => { const event = new KeyboardEvent('keydown', { key: 'b', ctrlKey: true, bubbles: true, cancelable: true }); target.dispatchEvent(event); return event.defaultPrevented; };
-      const finishSidebarMotion = () => this.app.sidebar.sidebarAnimations.forEach(animation => animation.finish());
-      const seekSidebarMotion = time => this.app.sidebar.sidebarAnimations.forEach(animation => { animation.pause(); animation.currentTime = time; });
+      const finishSidebarMotion = async () => {
+        this.app.sidebar.sidebarAnimations.forEach(animation => animation.finish());
+      };
       check(expanded() && sidebarWidth > 150 && sidebarToggle.getAttribute('aria-controls') === 'sidebar' && sidebarToggle.getAttribute('aria-keyshortcuts') === 'Control+B' && sidebarToggle.getAttribute('aria-label') === this.t("Sidebar") && sidebarToggle.title === this.t("Collapse the sidebar (Ctrl+B)") && sidebarToggle.querySelector('use')?.getAttribute('href') === '#i-menu' && heightOf('#sidebar-toggle') === heightOf('#undo-button') && Math.round(boxOf('#sidebar-toggle').width) === heightOf('#sidebar-toggle') && boxOf('#sidebar-toggle').right < boxOf('.breadcrumb').left && (!this.app.themePainter.customTitleBar() || getComputedStyle(sidebarToggle).getPropertyValue('-webkit-app-region') === 'no-drag') && tooltipTargets().every(element => !element.hasAttribute('title')), 'Menu button sits in the top bar as a square tool before the breadcrumb');
-      const initialIcon = boxOf('#navigation .nav-icon');
       sidebarToggle.click();
-      if (!this.app.sidebar.sidebarReducedMotion.matches) {
-        seekSidebarMotion(0);
-        check(Math.abs(boxOf('#sidebar').width - sidebarWidth) < 1 && Math.abs(boxOf('#navigation .nav-icon').left - initialIcon.left) < 1 && Math.abs(boxOf('#navigation .nav-icon').top - initialIcon.top) < 1, 'Sidebar motion starts at the visible layout without jumping the icons');
-        seekSidebarMotion(110);
-        const middleWidth = boxOf('#sidebar').width, targetWidth = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--fs-sidebar')) * 68;
-        check(this.app.sidebar.sidebarAnimations.every(animation => animation.effect.getTiming().duration === 220) && middleWidth > targetWidth + 1 && middleWidth < sidebarWidth - 1 && Math.abs(boxOf('main').left - middleWidth) < 1 && Math.abs(boxOf('main').right - innerWidth) < 1 && Math.abs(parseFloat(getComputedStyle(this.$('#toast')).left) - (innerWidth + middleWidth) / 2) < 1 && Math.abs(boxOf('#navigation .nav-icon').width - initialIcon.width) < 1, 'Sidebar animates for 220ms with synchronized content and toast, without stretching icons');
+      if (this.app.sidebar.sidebarAnimations.length) {
+        const widthAtStart = boxOf('.table-scroll').width;
+        const motions = this.app.sidebar.sidebarAnimations;
+        motions.forEach(animation => animation.pause());
+        check(motions.length <= 3 && motions.every(animation => animation.effect.getKeyframes().every(frame => !['width', 'marginLeft', 'paddingLeft', 'paddingRight', 'minWidth'].some(key => key in frame))) &&
+          ![...document.querySelectorAll('.sidebar .nav-icon')].some(icon => icon.getAnimations().length), 'Sidebar motion uses at most three transform, clipping and opacity animations without animating table width or individual icons');
+        motions.forEach(animation => { animation.currentTime = 90; });
+        check(Math.abs(boxOf('.table-scroll').width - widthAtStart) < 1 && getComputedStyle(sidebar).contain.includes('paint') && getComputedStyle(sidebar).overflowX === 'hidden',
+          'Sidebar icons remain paint-contained while the table keeps the same width throughout the animation');
       }
-      finishSidebarMotion();
+      await finishSidebarMotion();
       const railWidth = boxOf('#sidebar').width;
       check(inRail() && sidebarToggle.title === this.t("Expand the sidebar (Ctrl+B)") && railWidth >= 48 && railWidth < sidebarWidth / 2 && Math.abs(boxOf('.table-scroll').width - tableWidth - (sidebarWidth - railWidth)) < 1 && sidebar.scrollWidth <= sidebar.clientWidth && localStorage.getItem('orbitkanban.sidebarCollapsed') === '1', 'Menu button folds the sidebar into a column of icons and gives the space to the list');
       const railButtons = [...document.querySelectorAll('#navigation .nav-button, #guide-button, #settings-button')], railCenter = (boxOf('#sidebar').left + boxOf('#sidebar').right) / 2;
@@ -184,34 +187,30 @@ export class SmokeTests extends Component {
       await tick();
       check(boldKept && dialogKept, 'Ctrl+B is left to rich text and ignored while a dialog is open');
       const expandedWithShortcut = pressCtrlB(document.body);
-      if (!this.app.sidebar.sidebarReducedMotion.matches) {
-        seekSidebarMotion(110);
-        check(boxOf('#sidebar').width > railWidth + 1 && boxOf('#sidebar').width < sidebarWidth - 1 && Math.abs(boxOf('main').left - boxOf('#sidebar').width) < 1 && Number(getComputedStyle(this.$('#navigation .nav-label')).opacity) > 0 && Number(getComputedStyle(this.$('#navigation .nav-label')).opacity) < 1, 'Expanding slides the sidebar back and fades in the labels');
-      }
-      finishSidebarMotion();
+      await finishSidebarMotion();
       check(expandedWithShortcut && expanded() && Math.abs(boxOf('.table-scroll').width - tableWidth) < 1 && localStorage.getItem('orbitkanban.sidebarCollapsed') === null && tooltipTargets().every(element => !element.hasAttribute('title')) && this.$('#manage-organizations').getClientRects().length > 0 && !labelHidden(this.$('#navigation .nav-label')), 'Ctrl+B expands the sidebar again and restores the layout');
       const navButton = this.$('#navigation .nav-button');
       navButton.focus();
       pressCtrlB(navButton);
-      finishSidebarMotion();
+      await finishSidebarMotion();
       const iconFocusKept = inRail() && document.activeElement === navButton;
       pressCtrlB(navButton);
-      finishSidebarMotion();
+      await finishSidebarMotion();
       this.$('#manage-organizations').focus();
       pressCtrlB(this.$('#manage-organizations'));
-      finishSidebarMotion();
+      await finishSidebarMotion();
       check(iconFocusKept && inRail() && document.activeElement === sidebarToggle, 'Folding keeps the focus on icons and moves it from hidden controls to the menu button');
       sidebarToggle.click();
-      finishSidebarMotion();
+      await finishSidebarMotion();
       check(expanded() && localStorage.getItem('orbitkanban.sidebarCollapsed') === null, 'Menu button expands the sidebar again');
       if (!this.app.sidebar.sidebarReducedMotion.matches) {
         sidebarToggle.click();
-        seekSidebarMotion(80);
-        const interruptedWidth = boxOf('#sidebar').width, interruptedIcon = boxOf('#navigation .nav-icon');
+        this.app.sidebar.sidebarAnimations.forEach(animation => { animation.pause(); animation.currentTime = 80; });
+        const interruptedLeft = boxOf('main').left;
         sidebarToggle.click();
-        seekSidebarMotion(0);
-        check(Math.abs(boxOf('#sidebar').width - interruptedWidth) < 1 && Math.abs(boxOf('#navigation .nav-icon').left - interruptedIcon.left) < 1 && Math.abs(boxOf('#navigation .nav-icon').top - interruptedIcon.top) < 1, 'Rapid toggles reverse the animation from its current position');
-        finishSidebarMotion();
+        this.app.sidebar.sidebarAnimations.forEach(animation => { animation.pause(); animation.currentTime = 0; });
+        check(Math.abs(boxOf('main').left - interruptedLeft) < 1, 'Rapid sidebar toggles reverse content motion from its currently visible position');
+        await finishSidebarMotion();
         check(expanded() && localStorage.getItem('orbitkanban.sidebarCollapsed') === null, 'Interrupted sidebar motion settles in the last requested state');
       }
       this.app.taskDialog.taskDialog(this.state.data.tasks.find(task => !task.hidden));
@@ -1888,6 +1887,29 @@ export class SmokeTests extends Component {
         check(visible('#update-progress') && this.$('#update-progress').value === 42 && this.$('#update-check').disabled && this.$('#update-auto').disabled && !visible('#update-download') && !visible('#update-install'), 'Download progress is accessible and blocks duplicate actions');
         this.app.updates.adoptUpdateState({ ...testState, phase: 'ready' });
         check(visible('#update-install') && !this.$('#update-install').disabled && !visible('#update-download') && !visible('#update-progress'), 'Only verified downloads offer install and restart');
+        const updateApi = this.app.updates.workspaceApi;
+        let installs = 0, rejectInstall;
+        try {
+          this.app.updates.workspaceApi = { updates: async operation => {
+            check(operation === 'install', 'The confirmation only requests installation of the already verified update');
+            installs++;
+            return new Promise((_resolve, reject) => { rejectInstall = reject; });
+          } };
+          this.$('#update-install').click(); await tick();
+          check(this.$('#modal').open && this.$('#confirm-action').classList.contains('primary') && this.$('.confirm-message').textContent === this.t("OrbitKanban and browser access will close. Saved data will be backed up and kept. Save any open editors in browser tabs before continuing."), 'Install confirmation uses the themed app dialog with a restart action and data safety warning');
+          this.$('#modal [data-close]').click();
+          check(!installs, 'Canceling the themed confirmation never starts the installer');
+          this.$('#update-install').click(); await tick();
+          const confirmInstall = this.$('#confirm-action');
+          confirmInstall.click(); confirmInstall.click();
+          await waitFor(() => installs === 1);
+          const cancelRestart = new Event('cancel', { cancelable: true });
+          this.$('#modal').dispatchEvent(cancelRestart);
+          check(this.$('#update-restart-progress progress') && this.$('#modal').open && cancelRestart.defaultPrevented && installs === 1, 'Installation immediately shows themed indeterminate progress, blocks duplicate confirmation and cannot be accidentally dismissed');
+          rejectInstall(new Error('Expected update helper startup failure'));
+          await waitFor(() => !this.$('#modal').open);
+          check(this.$('#toast').classList.contains('error') && this.$('#toast').textContent === 'Expected update helper startup failure', 'A helper launch failure returns control to the app with a visible error instead of leaving restart progress stuck');
+        } finally { this.app.updates.workspaceApi = updateApi; }
         this.app.updates.adoptUpdateState({ ...testState, phase: 'error', error: 'Update checksum or size does not match. Nothing was installed.' });
         check(!visible('#update-install') && this.$('#update-install').disabled && this.$('#update-status').textContent.includes(this.t('Update checksum or size does not match. Nothing was installed.')), 'Failed updates show the error without an install action');
         this.app.updates.adoptUpdateState(original);
