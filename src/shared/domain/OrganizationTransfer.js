@@ -19,6 +19,7 @@ const TaskGroups = typeof module !== 'undefined' ? require('./TaskGroups') : glo
 const TodoLists = typeof module !== 'undefined' ? require('./TodoLists') : globalThis.OrbitKanban.Domain.TodoLists;
 const ArchiveValidator = typeof module !== 'undefined' ? require('./ArchiveValidator') : globalThis.OrbitKanban.Domain.ArchiveValidator;
 const DataFactory = typeof module !== 'undefined' ? require('./DataFactory') : globalThis.OrbitKanban.Domain.DataFactory;
+const CsvImportProfiles = typeof module !== 'undefined' ? require('../interop/CsvImportProfiles') : globalThis.OrbitKanban.Interop.CsvImportProfiles;
 
 class OrganizationTransfer {
   static #ORGANIZATION_FILE_FORMAT = 'orbitkanban-organization';
@@ -51,6 +52,7 @@ class OrganizationTransfer {
         statuses: structuredClone(settings.statuses), urgencies: structuredClone(settings.urgencies),
         highlights: structuredClone(highlights), tags: structuredClone(settings.tags || []),
         taskColumns: ColumnLayout.listColumns(settings, 'tasks'), savedViews: structuredClone(settings.savedViews || []),
+        csvImportProfiles: structuredClone(settings.csvImportProfiles || []),
         deletedTaskColumns: [...ColumnSchema.deletedOf(settings, 'tasks')], deletedIssueColumns: [...ColumnSchema.deletedOf(settings, 'issues')],
         requiredTaskColumns: RequiredFields.requiredOf(settings, 'tasks'), requiredIssueColumns: RequiredFields.requiredOf(settings, 'issues'),
         taskFields: structuredClone(settings.taskFields || []), issueFields: structuredClone(settings.issueFields || []),
@@ -149,6 +151,7 @@ class OrganizationTransfer {
         settings.taskColumns = TaskColumns.normalizeTaskColumns(columns, settings.taskFields, settings.deletedTaskColumns);
       }
       if (source.savedViews !== undefined) settings.savedViews = structuredClone(source.savedViews);
+      if (source.csvImportProfiles !== undefined) settings.csvImportProfiles = structuredClone(CsvImportProfiles.validate(source.csvImportProfiles));
       Common.assert(Common.validLanguage(settings.language), "Unsupported language.");
       check(settings);
       result.settings = settings;
@@ -251,6 +254,7 @@ class OrganizationTransfer {
         ...(view.columnFilters && { columnFilters: ColumnMerger.remapValues(view.columnFilters, maps.tasks.mapping, maps.tasks.valueMappings, true) })
       }));
       NavigationSections.normalizeNavigation(settings);
+      if (incoming.csvImportProfiles !== undefined) settings.csvImportProfiles = CsvImportProfiles.remap(incoming.csvImportProfiles, maps);
       if (options.logo) {
         settings.logo = incoming.logo;
         settings.logoSource = incoming.logoSource;

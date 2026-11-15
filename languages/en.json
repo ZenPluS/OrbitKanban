@@ -1175,7 +1175,26 @@
     "The language manifest exceeds the 2 MB limit.": "The language manifest exceeds the 2 MB limit.",
     "Invalid language manifest response.": "Invalid language manifest response.",
     "Cannot read the GitHub language repository response.": "Cannot read the GitHub language repository response.",
-    "Cannot save the language cache.": "Cannot save the language cache."
+    "Cannot save the language cache.": "Cannot save the language cache.",
+    "Import profile": "Import profile",
+    "Profile name": "Profile name",
+    "Save new profile": "Save new profile",
+    "Update profile": "Update profile",
+    "Delete profile": "Delete profile",
+    "Confirm deletion": "Confirm deletion",
+    "Manual mapping": "Manual mapping",
+    "Profiles belong to this organization and travel with its portable data. Without headers, columns are matched by position.": "Profiles belong to this organization and travel with its portable data. Without headers, columns are matched by position.",
+    "The file headers or destination fields changed, or headers are ambiguous. Review every column before importing.": "The file headers or destination fields changed, or headers are ambiguous. Review every column before importing.",
+    "I reviewed the changed mapping": "I reviewed the changed mapping",
+    "The selected CSV import profile no longer exists.": "The selected CSV import profile no longer exists.",
+    "Enter a profile name (up to 60 characters).": "Enter a profile name (up to 60 characters).",
+    "A CSV import profile with this name already exists.": "A CSV import profile with this name already exists.",
+    "The CSV destination fields changed. Review the mapping.": "The CSV destination fields changed. Review the mapping.",
+    "You can save up to 30 CSV import profiles per organization.": "You can save up to 30 CSV import profiles per organization.",
+    "CSV import profile saved.": "CSV import profile saved.",
+    "CSV import profile deleted.": "CSV import profile deleted.",
+    "Review the changed CSV mapping before importing.": "Review the changed CSV mapping before importing.",
+    "Invalid CSV import profiles.": "Invalid CSV import profiles."
   },
   "terms": {
     "Appearance repositories": "Appearance repositories",
@@ -1441,7 +1460,6 @@
     "When importing, check the preview, then add and update or replace everything, in this organization or in a new one. Statuses and urgencies are matched by name.": "When importing, check the preview, then add and update or replace everything, in this organization or in a new one. Statuses and urgencies are matched by name.",
     "Import from CSV": "Import from CSV",
     "**Import CSV**, in both lists, adds rows from a .csv or .tsv file of up to 16 MB, 100 columns and 10,000 rows.": "**Import CSV**, in both lists, adds rows from a .csv or .tsv file of up to 16 MB, 100 columns and 10,000 rows.",
-    "Check separator, encoding and header row, map each column to a field and review the preview. Nothing is saved until every error is fixed.": "Check separator, encoding and header row, map each column to a field and review the preview. Nothing is saved until every error is fixed.",
     "Dates use YYYY-MM-DD or DD/MM/YYYY and multiple values are separated by `|`. The whole import can be undone with `Ctrl+Z`.": "Dates use YYYY-MM-DD or DD/MM/YYYY and multiple values are separated by `|`. The whole import can be undone with `Ctrl+Z`.",
     "The **Excel** button of every view exports the current situation to an .xlsx workbook with summary, tasks, issues, milestones and kanban sheets.": "The **Excel** button of every view exports the current situation to an .xlsx workbook with summary, tasks, issues, milestones and kanban sheets.",
     "Choose the tasks (as shown, all or selected), the columns and the sheets. Colors, links and real dates are kept.": "Choose the tasks (as shown, all or selected), the columns and the sheets. Colors, links and real dates are kept.",
@@ -1532,7 +1550,10 @@
     "Use the trash icon to delete a file permanently after confirming.": "Use the trash icon to delete a file permanently after confirming.",
     "The **Bulk edit** button of a card changes every task of the group, hidden ones included. Deleting a group keeps its tasks.": "The **Bulk edit** button of a card changes every task of the group, hidden ones included. Deleting a group keeps its tasks.",
     "English is the source language. Italian comes from the official repository with a bundled offline copy. Choose the interface language for each organization.": "English is the source language. Italian comes from the official repository with a bundled offline copy. Choose the interface language for each organization.",
-    "Add a public GitHub repository containing `orbit-languages.json` in **Language repositories** and press **Refresh** to download updates. Use the English template in the official repository to contribute a translation. Cached languages work offline.": "Add a public GitHub repository containing `orbit-languages.json` in **Language repositories** and press **Refresh** to download updates. Use the English template in the official repository to contribute a translation. Cached languages work offline."
+    "Add a public GitHub repository containing `orbit-languages.json` in **Language repositories** and press **Refresh** to download updates. Use the English template in the official repository to contribute a translation. Cached languages work offline.": "Add a public GitHub repository containing `orbit-languages.json` in **Language repositories** and press **Refresh** to download updates. Use the English template in the official repository to contribute a translation. Cached languages work offline.",
+    "Use **Save new profile** to keep a named mapping with its separator, encoding and header option. Select it in later imports, use **Update profile** to change it or click **Delete profile** twice to remove it. Profiles belong to the organization and travel with settings exports and backups.": "Use **Save new profile** to keep a named mapping with its separator, encoding and header option. Select it in later imports, use **Update profile** to change it or click **Delete profile** twice to remove it. Profiles belong to the organization and travel with settings exports and backups.",
+    "Profiles match header names even when columns move. Without headers they use positions. If headers or destination fields changed, review the mapping and tick **I reviewed the changed mapping** before importing.": "Profiles match header names even when columns move. Without headers they use positions. If headers or destination fields changed, review the mapping and tick **I reviewed the changed mapping** before importing.",
+    "Check separator, encoding and header row, map each column to a field and review the preview. No rows are imported until every error is fixed.": "Check separator, encoding and header row, map each column to a field and review the preview. No rows are imported until every error is fixed."
   },
   "plurals": {
     "theme": {

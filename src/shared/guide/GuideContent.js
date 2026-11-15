@@ -359,7 +359,9 @@ class GuideContent {
         ] },
         { title: 'Import from CSV', items: [
           '**Import CSV**, in both lists, adds rows from a .csv or .tsv file of up to 16 MB, 100 columns and 10,000 rows.',
-          'Check separator, encoding and header row, map each column to a field and review the preview. Nothing is saved until every error is fixed.',
+          'Check separator, encoding and header row, map each column to a field and review the preview. No rows are imported until every error is fixed.',
+          'Use **Save new profile** to keep a named mapping with its separator, encoding and header option. Select it in later imports, use **Update profile** to change it or click **Delete profile** twice to remove it. Profiles belong to the organization and travel with settings exports and backups.',
+          'Profiles match header names even when columns move. Without headers they use positions. If headers or destination fields changed, review the mapping and tick **I reviewed the changed mapping** before importing.',
           'Dates use YYYY-MM-DD or DD/MM/YYYY and multiple values are separated by `|`. The whole import can be undone with `Ctrl+Z`.'
         ] },
         { title: 'Export to Excel', items: [

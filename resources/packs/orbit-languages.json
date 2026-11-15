@@ -1179,7 +1179,26 @@
         "The language manifest exceeds the 2 MB limit.": "Il manifest delle lingue supera il limite di 2 MB.",
         "Invalid language manifest response.": "Risposta del manifest delle lingue non valida.",
         "Cannot read the GitHub language repository response.": "Impossibile leggere la risposta del repository GitHub delle lingue.",
-        "Cannot save the language cache.": "Impossibile salvare la cache delle lingue."
+        "Cannot save the language cache.": "Impossibile salvare la cache delle lingue.",
+        "Import profile": "Profilo di importazione",
+        "Profile name": "Nome del profilo",
+        "Save new profile": "Salva nuovo profilo",
+        "Update profile": "Aggiorna profilo",
+        "Delete profile": "Elimina profilo",
+        "Confirm deletion": "Conferma eliminazione",
+        "Manual mapping": "Mappatura manuale",
+        "Profiles belong to this organization and travel with its portable data. Without headers, columns are matched by position.": "I profili appartengono a questa organizzazione e viaggiano con i suoi dati portable. Senza intestazioni, le colonne vengono associate per posizione.",
+        "The file headers or destination fields changed, or headers are ambiguous. Review every column before importing.": "Le intestazioni del file o i campi di destinazione sono cambiati, oppure le intestazioni sono ambigue. Controlla ogni colonna prima di importare.",
+        "I reviewed the changed mapping": "Ho verificato la mappatura modificata",
+        "The selected CSV import profile no longer exists.": "Il profilo di importazione CSV selezionato non esiste più.",
+        "Enter a profile name (up to 60 characters).": "Inserisci un nome per il profilo (fino a 60 caratteri).",
+        "A CSV import profile with this name already exists.": "Esiste già un profilo di importazione CSV con questo nome.",
+        "The CSV destination fields changed. Review the mapping.": "I campi di destinazione CSV sono cambiati. Verifica la mappatura.",
+        "You can save up to 30 CSV import profiles per organization.": "Puoi salvare fino a 30 profili di importazione CSV per organizzazione.",
+        "CSV import profile saved.": "Profilo di importazione CSV salvato.",
+        "CSV import profile deleted.": "Profilo di importazione CSV eliminato.",
+        "Review the changed CSV mapping before importing.": "Verifica la mappatura CSV modificata prima di importare.",
+        "Invalid CSV import profiles.": "Profili di importazione CSV non validi."
       },
       "terms": {
         "Appearance repositories": "Repository di icone e temi",
@@ -1445,7 +1464,6 @@
         "When importing, check the preview, then add and update or replace everything, in this organization or in a new one. Statuses and urgencies are matched by name.": "Durante l'importazione controlla l'anteprima, poi aggiungi e aggiorna o sostituisci tutto, in questa organizzazione o in una nuova. Stati e urgenze vengono abbinati per nome.",
         "Import from CSV": "Importare da CSV",
         "**Import CSV**, in both lists, adds rows from a .csv or .tsv file of up to 16 MB, 100 columns and 10,000 rows.": "**Importa CSV**, in entrambe le liste, aggiunge righe da un file .csv o .tsv fino a 16 MB, 100 colonne e 10.000 righe.",
-        "Check separator, encoding and header row, map each column to a field and review the preview. Nothing is saved until every error is fixed.": "Controlla separatore, codifica e riga di intestazione, associa ogni colonna a un campo e verifica l'anteprima. Non viene salvato nulla finché ogni errore non è corretto.",
         "Dates use YYYY-MM-DD or DD/MM/YYYY and multiple values are separated by `|`. The whole import can be undone with `Ctrl+Z`.": "Le date usano AAAA-MM-GG o GG/MM/AAAA e i valori multipli sono separati da `|`. L'intera importazione si annulla con `Ctrl+Z`.",
         "The **Excel** button of every view exports the current situation to an .xlsx workbook with summary, tasks, issues, milestones and kanban sheets.": "Il pulsante **Excel** di ogni vista esporta la situazione attuale in una cartella di lavoro .xlsx con i fogli riepilogo, attività, issue, milestone e kanban.",
         "Choose the tasks (as shown, all or selected), the columns and the sheets. Colors, links and real dates are kept.": "Scegli le attività (come visualizzate, tutte o selezionate), le colonne e i fogli. Colori, link e date reali vengono mantenuti.",
@@ -1536,7 +1554,10 @@
         "Use the trash icon to delete a file permanently after confirming.": "Usa l'icona del cestino per eliminare definitivamente un file dopo la conferma.",
         "The **Bulk edit** button of a card changes every task of the group, hidden ones included. Deleting a group keeps its tasks.": "Il pulsante **Modifica multipla** di una scheda modifica tutte le attività del gruppo, comprese quelle nascoste. Eliminare un gruppo non elimina le sue attività.",
         "English is the source language. Italian comes from the official repository with a bundled offline copy. Choose the interface language for each organization.": "L’inglese è la lingua sorgente. L’italiano proviene dal repository ufficiale con una copia offline inclusa. Scegli la lingua dell’interfaccia per ogni organizzazione.",
-        "Add a public GitHub repository containing `orbit-languages.json` in **Language repositories** and press **Refresh** to download updates. Use the English template in the official repository to contribute a translation. Cached languages work offline.": "Aggiungi un repository GitHub pubblico contenente `orbit-languages.json` in **Repository delle lingue** e premi **Aggiorna** per scaricare gli aggiornamenti. Usa il modello inglese nel repository ufficiale per contribuire con una traduzione. Le lingue in cache funzionano offline."
+        "Add a public GitHub repository containing `orbit-languages.json` in **Language repositories** and press **Refresh** to download updates. Use the English template in the official repository to contribute a translation. Cached languages work offline.": "Aggiungi un repository GitHub pubblico contenente `orbit-languages.json` in **Repository delle lingue** e premi **Aggiorna** per scaricare gli aggiornamenti. Usa il modello inglese nel repository ufficiale per contribuire con una traduzione. Le lingue in cache funzionano offline.",
+        "Use **Save new profile** to keep a named mapping with its separator, encoding and header option. Select it in later imports, use **Update profile** to change it or click **Delete profile** twice to remove it. Profiles belong to the organization and travel with settings exports and backups.": "Usa **Salva nuovo profilo** per conservare una mappatura con nome, separatore, codifica e opzione intestazioni. Selezionala nelle importazioni successive, usa **Aggiorna profilo** per modificarla o fai clic due volte su **Elimina profilo** per rimuoverla. I profili appartengono all’organizzazione e viaggiano con esportazioni delle impostazioni e backup.",
+        "Profiles match header names even when columns move. Without headers they use positions. If headers or destination fields changed, review the mapping and tick **I reviewed the changed mapping** before importing.": "I profili associano i nomi delle intestazioni anche quando le colonne si spostano. Senza intestazioni usano le posizioni. Se le intestazioni o i campi di destinazione sono cambiati, verifica la mappatura e seleziona **Ho verificato la mappatura modificata** prima di importare.",
+        "Check separator, encoding and header row, map each column to a field and review the preview. No rows are imported until every error is fixed.": "Controlla separatore, codifica e intestazioni, associa ogni colonna a un campo e verifica l’anteprima. Nessuna riga viene importata finché tutti gli errori non sono risolti."
       },
       "plurals": {
         "theme": {

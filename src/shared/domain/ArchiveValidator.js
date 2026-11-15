@@ -18,11 +18,13 @@ const TaskGroups = typeof module !== 'undefined' ? require('./TaskGroups') : glo
 const TodoLists = typeof module !== 'undefined' ? require('./TodoLists') : globalThis.OrbitKanban.Domain.TodoLists;
 const AppearancePacks = typeof module !== 'undefined' ? require('./AppearancePacks') : globalThis.OrbitKanban.Domain.AppearancePacks;
 const LogoCrop = typeof module !== 'undefined' ? require('../graphics/LogoCrop') : globalThis.OrbitKanban.Graphics.LogoCrop;
+const CsvImportProfiles = typeof module !== 'undefined' ? require('../interop/CsvImportProfiles') : globalThis.OrbitKanban.Interop.CsvImportProfiles;
 
 class ArchiveValidator {
   static validateData(data) {
     Common.assert(data && data.version === 1, "Unsupported archive format.");
     const s = data.settings;
+    CsvImportProfiles.validate(s?.csvImportProfiles);
     AppearancePacks.validateSettings(s || {});
     ColumnCleanup.validateDeleted(s || {});
     RequiredFields.validateRequired(s || {});

@@ -1,8 +1,8 @@
 'use strict';
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { CsvParser, CsvImporter } = require('../src/shared/interop');
-const { DataFactory, ArchiveValidator } = require('../src/shared/domain');
+const { CsvParser, CsvImporter, CsvImportProfiles } = require('../src/shared/interop');
+const { DataFactory, ArchiveValidator, OrganizationTransfer } = require('../src/shared/domain');
 
 test('CSV detects comma, semicolon and tab outside quoted headers and strips BOM', () => {
   for (const separator of [',', ';', '\t']) {
@@ -10,6 +10,61 @@ test('CSV detects comma, semicolon and tab outside quoted headers and strips BOM
     assert.equal(result.delimiter, separator);
     assert.deepEqual(result.rows, [['code', 'description'], ['A', 'Hello, world; tab\tinside']]);
   }
+});
+
+const profileFor = (data, extra = {}, headers = ['Ticket', 'Release'], mapping = ['code', 'releaseDate']) =>
+  CsvImportProfiles.create({ id: 'csv-jira', name: 'Jira', kind: 'tasks', encoding: 'utf-8', separator: ';', firstRowHeader: true, ...extra }, headers, mapping, CsvImporter.destinations(data, extra.kind || 'tasks'));
+
+test('CSV profiles match reordered headers without using row contents and retain parsing options', () => {
+  const data = DataFactory.baseData('en'), profile = profileFor(data, { encoding: 'windows-1252', separator: 'tab' });
+  assert.deepEqual(CsvImportProfiles.apply(profile, ['RELEASE', ' ticket '], CsvImporter.destinations(data, 'tasks')), { mapping: ['releaseDate', 'code'], needsReview: false });
+  assert.deepEqual(profile.columns, [{ header: 'Ticket', target: 'code', type: 'text' }, { header: 'Release', target: 'releaseDate', type: 'date' }]);
+  assert.equal(profile.encoding, 'windows-1252');
+  assert.equal(profile.separator, 'tab');
+});
+
+test('CSV profiles require review for changed, ambiguous, removed or incompatible columns', () => {
+  const data = DataFactory.baseData('en'), profile = profileFor(data), fields = CsvImporter.destinations(data, 'tasks');
+  for (const headers of [['Ticket'], ['Ticket', 'Other'], ['Ticket', 'Release', 'Extra'], ['Ticket', 'Ticket']]) assert.equal(CsvImportProfiles.apply(profile, headers, fields).needsReview, true);
+  const missing = CsvImportProfiles.apply(profile, ['Ticket', 'Release'], fields.filter(field => field.id !== 'releaseDate'));
+  assert.deepEqual(missing, { mapping: ['code', ''], needsReview: true });
+  const changed = CsvImportProfiles.apply(profile, ['Ticket', 'Release'], fields.map(field => field.id === 'releaseDate' ? { ...field, type: 'text' } : field));
+  assert.deepEqual(changed, { mapping: ['code', ''], needsReview: true });
+});
+
+test('headerless CSV profiles use positions and reject an unexpected header mode', () => {
+  const data = DataFactory.baseData('en'), profile = profileFor(data, { firstRowHeader: false }), fields = CsvImporter.destinations(data, 'tasks');
+  assert.deepEqual(profile.columns.map(column => column.header), ['', '']);
+  assert.deepEqual(CsvImportProfiles.apply(profile, ['Column 1', 'Column 2'], fields), { mapping: ['code', 'releaseDate'], needsReview: false });
+  assert.equal(CsvImportProfiles.apply(profile, ['Column 1'], fields).needsReview, true);
+  assert.deepEqual(CsvImportProfiles.apply(profile, ['Ticket', 'Release'], fields, true), { mapping: ['', ''], needsReview: true });
+});
+
+test('CSV profiles reject duplicate names, destinations and invalid options while older archives remain valid', () => {
+  const data = DataFactory.baseData('en'), profile = profileFor(data);
+  delete data.settings.csvImportProfiles;
+  assert.doesNotThrow(() => ArchiveValidator.validateData(data));
+  for (const list of [
+    [profile, { ...profile, id: 'other', name: ' JIRA ' }],
+    [{ ...profile, encoding: 'other' }], [{ ...profile, separator: '|' }], [{ ...profile, name: '' }],
+    [{ ...profile, columns: [profile.columns[0], profile.columns[0]] }]
+  ]) { data.settings.csvImportProfiles = list; assert.throws(() => ArchiveValidator.validateData(data), /CSV import profiles/); }
+  data.settings.csvImportProfiles = [profile, { ...profile, id: 'issue-profile', kind: 'issues' }];
+  assert.doesNotThrow(() => ArchiveValidator.validateData(data));
+});
+
+test('CSV profiles travel with settings and backups, remap imported custom columns and survive older settings imports', () => {
+  const source = DataFactory.baseData('en'), current = DataFactory.baseData('en');
+  source.settings.taskFields = [{ id: 'custom-source', name: 'Ticket ID', type: 'text', options: [] }];
+  current.settings.taskFields = [{ id: 'custom-target', name: 'Ticket ID', type: 'text', options: [] }];
+  source.settings.csvImportProfiles = [profileFor(source, {}, ['Ticket'], ['custom-source'])];
+  const archive = ArchiveValidator.migrateArchive(source);
+  assert.deepEqual(ArchiveValidator.migrateArchive(JSON.parse(JSON.stringify(archive))).organizations[0].data.settings.csvImportProfiles, source.settings.csvImportProfiles);
+  const file = OrganizationTransfer.parseOrganizationFile(OrganizationTransfer.organizationExport({ name: 'Source', data: source }, 'settings'));
+  const imported = OrganizationTransfer.applyOrganizationImport(current, file, { settings: true });
+  assert.equal(imported.settings.csvImportProfiles[0].columns[0].target, 'custom-target');
+  delete file.settings.csvImportProfiles;
+  assert.deepEqual(OrganizationTransfer.applyOrganizationImport(imported, file, { settings: true }).settings.csvImportProfiles, imported.settings.csvImportProfiles);
 });
 test('CSV preserves multiline quoted cells, escaped quotes, empty cells and the last row', () => {
   assert.deepEqual(CsvParser.parseCsv('code;notes;other\nA;"Line 1\r\nLine ""2""";\nB;;last', ';').rows,

@@ -4,7 +4,7 @@
 
 | | |
 | --- | --- |
-| **Current version** | 3.9.0 |
+| **Current version** | 3.10.0 |
 | **Platform** | Windows 10 / 11, 64-bit |
 | **Distribution** | Single portable executable, `OrbitKanban-Portable.exe` |
 | **Network** | Not required. Optional GitHub update checks and explicit icon/theme/language repository refresh |
@@ -641,6 +641,16 @@ Accepted values:
 
 Descriptions and notes are imported as plain text, with line breaks preserved.
 
+#### Saved import profiles
+
+The CSV dialog can save up to **30 profiles per organization**, separately listed for tasks and linked issues. A profile stores a name, column mapping, separator (including automatic detection), encoding and whether the first row contains headers. It never stores CSV row contents.
+
+Configure the mapping and press **Save new profile**. In a later import, choose it under **Import profile** to restore those choices and rebuild the preview. **Update profile** replaces or renames the selected profile; **Delete profile** requires a second confirmation click and leaves the import dialog open.
+
+With headers, profiles match names case-insensitively even when columns are reordered. Without headers, they match positions. Added, missing, ambiguous or renamed headers, removed destination fields and changed field types trigger a warning and require **I reviewed the changed mapping** before importing. All row validation still applies; a profile never bypasses errors.
+
+Profiles live in organization settings in the portable archive, are included in full backups and settings/organization exports, and remap custom destination IDs when imported into another organization. Files from earlier versions without profiles preserve the receiving organization's existing profiles.
+
 ### Excel export
 
 The **Excel** button in every view and in the selection bar exports the current situation as an `.xlsx` workbook. You choose which tasks (as shown, all, or selected), which columns (visible or all) and which sheets to include:
@@ -841,6 +851,7 @@ The script refuses to reuse a tagged version for different sources. If a build o
 
 | Version | Changes |
 | --- | --- |
+| **3.10.0** | Portable per-organization CSV import profiles with save/update/delete, restored parsing options, header-based or positional mapping, mandatory review for schema drift and settings/backup transfer support |
 | **3.9.0** | Public GitHub language repositories, official Italian offline snapshot and English contributor template, portable shared references/cache, explicit refresh and removal, retired local-folder loading without deleting existing files |
 | **3.8.2** | Themed update confirmation and persistent installation/restart progress through renderer readiness; simpler sidebar compositor motion with paint-contained icons, rapid reversal and reduced-motion support |
 | **3.8.1** | Incremental task-table rendering, preserved controls during sorting and unchanged-shell refreshes, icon pack reuse, shared numeric collator, independent startup I/O and repeatable isolated performance diagnostics |
