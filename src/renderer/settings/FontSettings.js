@@ -5,7 +5,7 @@ import { TaskOrder, Typography } from '../shared.js';
 export class FontSettings extends Component {
   #fontSizeLabels = {
     base: ["General text", "Top bar, buttons, statistics, filters, settings and messages."],
-    sidebar: ["Sidebar", "Organization, views and details in the left column."],
+    sidebar: ["Sidebar", "Organization, views and details in the sidebar."],
     headings: ["Page headings", "Eyebrow, title and description at the top of each view."],
     tables: ["Tables", "Rows and columns of the task list and linked issues."],
     milestones: ["Milestone view", "Roadmap dates, milestones and cards."],

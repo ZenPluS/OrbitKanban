@@ -767,7 +767,7 @@ test('organization exports contain only the requested parts as independent copie
   assert.deepEqual(sections(files.data), ['data']);
   assert.deepEqual(sections(files.organization), ['themes', 'settings', 'data']);
   assert.deepEqual(files.themes.themes, { themeId: organization.data.settings.themeId, themes: organization.data.settings.themes });
-  assert.deepEqual(Object.keys(files.settings.settings).sort(), ['csvImportProfiles', 'deletedIssueColumns', 'deletedTaskColumns', 'fontFamily', 'fontSizes', 'highlights', 'hoursPerDay', 'iconPack', 'issueColumns', 'issueFields', 'language', 'logo', 'logoShape', 'logoSource', 'navigation', 'packSources', 'packThemeBases', 'requiredIssueColumns', 'requiredTaskColumns', 'savedViews', 'statuses', 'tags', 'taskColumns', 'taskEditorLayout', 'taskFields', 'urgencies']);
+  assert.deepEqual(Object.keys(files.settings.settings).sort(), ['csvImportProfiles', 'deletedIssueColumns', 'deletedTaskColumns', 'fontFamily', 'fontSizes', 'highlights', 'hoursPerDay', 'iconPack', 'issueColumns', 'issueFields', 'language', 'logo', 'logoShape', 'logoSource', 'navigation', 'packSources', 'packThemeBases', 'requiredIssueColumns', 'requiredTaskColumns', 'savedViews', 'sidebarPosition', 'statuses', 'tags', 'taskColumns', 'taskEditorLayout', 'taskFields', 'urgencies']);
   assert.deepEqual(files.settings.settings.highlights, organization.data.settings.highlights);
   assert.deepEqual(files.data.data.highlights, organization.data.settings.highlights);
   assert.deepEqual(files.settings.settings.fontSizes, Typography.defaultFontSizes());
@@ -780,6 +780,22 @@ test('organization exports contain only the requested parts as independent copie
   assert.notEqual(organization.data.tasks[0].code, 'CHANGED');
   assert.notEqual(organization.data.settings.themes[0].accent, '#000000');
   assert.throws(() => OrganizationTransfer.organizationExport(organization, 'backup'), /unsupported/i);
+});
+test('sidebar position is validated and travels with organization settings without changing legacy imports', () => {
+  const data = DataFactory.baseData('en');
+  assert.equal(data.settings.sidebarPosition, 'left');
+  delete data.settings.sidebarPosition;
+  assert.doesNotThrow(() => ArchiveValidator.validateData(data));
+  data.settings.sidebarPosition = 'right';
+  assert.equal(ArchiveValidator.migrateArchive(data).organizations[0].data.settings.sidebarPosition, 'right');
+  const file = OrganizationTransfer.organizationExport({ name: 'Source', data }, 'settings');
+  assert.equal(OrganizationTransfer.applyOrganizationImport(DataFactory.baseData('en'), OrganizationTransfer.parseOrganizationFile(file), { settings: true }).settings.sidebarPosition, 'right');
+  delete file.settings.sidebarPosition;
+  assert.equal(OrganizationTransfer.applyOrganizationImport(data, OrganizationTransfer.parseOrganizationFile(file), { settings: true }).settings.sidebarPosition, 'right');
+  data.settings.sidebarPosition = 'center';
+  assert.throws(() => ArchiveValidator.validateData(data), /Invalid sidebar position/);
+  file.settings.sidebarPosition = 'center';
+  assert.throws(() => OrganizationTransfer.parseOrganizationFile(file), /Invalid sidebar position/);
 });
 test('organization file names are portable slugs with the localized part and date', () => {
   assert.equal(OrganizationTransfer.organizationFileName('Àcme Srl / Team #1', 'themes', 'it', '2026-05-20'), 'OrbitKanban-acme-srl-team-1-temi-2026-05-20.json');

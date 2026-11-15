@@ -27,7 +27,7 @@ class DataFactory {
       { id: Common.id(), name: T("Low"), color: '#77a6c9' }
     ];
     const settings = {
-      language, logo: '', logoSource: '', logoShape: 'none', navigation: NavigationSections.defaultSections(language),
+      language, logo: '', logoSource: '', logoShape: 'none', sidebarPosition: 'left', navigation: NavigationSections.defaultSections(language),
       hoursPerDay: 8, fontSizes: Typography.defaultFontSizes(), fontFamily: Typography.DEFAULT_FONT_FAMILY, statuses, urgencies, highlights: ThemeCatalog.defaultHighlights(language), tags: [], taskColumns: TaskColumns.defaultTaskColumns(), themeId: 'midnight',
       themes: ThemeCatalog.availableThemes(), savedViews: [], csvImportProfiles: [], taskFields: [], issueFields: [], issueColumns: ColumnLayout.normalizeIssueColumns(),
       packSources: [], iconPack: 'default', packThemeBases: Object.fromEntries(ThemeCatalog.availableThemes().filter(theme => theme.id !== 'midnight').map(theme => [theme.id, { ...theme }])),

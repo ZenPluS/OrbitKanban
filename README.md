@@ -4,7 +4,7 @@
 
 | | |
 | --- | --- |
-| **Current version** | 3.10.0 |
+| **Current version** | 3.11.0 |
 | **Platform** | Windows 10 / 11, 64-bit |
 | **Distribution** | Single portable executable, `OrbitKanban-Portable.exe` |
 | **Network** | Not required. Optional GitHub update checks and explicit icon/theme/language repository refresh |
@@ -81,6 +81,7 @@
 - **Truly portable.** The executable and a `data` folder next to it are the whole installation, with automatic daily backups.
 - **Seven view types**: Tasks, Linked issues, Milestones, Kanban, Views, Group activities and To-do lists. The sidebar sections can be renamed, reordered, removed or added per organization, and a task-based section can show a saved view.
 - **Collapsible sidebar** that folds into a column of icons (**☰** or `Ctrl+B`) to give the views more room.
+- **Sidebar position** can be set to the left or right independently for each organization.
 - **Automatic issue matching.** Incidents and problems recorded in Linked issues are resolved onto tasks by their portal code.
 - **Multiple organizations**, each with its own data, settings, logo, theme and language.
 - **Flexible lists**: multi-level sorting, drag-and-drop ordering, per-column filters, saved views, row highlights, tags, duplicate detection, bulk edit of every field, and undo/redo.
@@ -188,7 +189,7 @@ All views share compact headers. Their tables, timeline and board fill the windo
 
 The **☰** button at the left of the top bar, or `Ctrl+B`, folds the sidebar into a column of icons so the views get more room. The icons keep their counters and show their names as tooltips, and the building icon still switches organization. Press the button again to expand the sidebar. The choice travels with the portable data in `data/runtime/`; with browser access, each browser keeps its own.
 
-Opening and closing use a short, 180 ms transition. The view resizes once, then slides as one layer rather than recalculating the entire table width every frame. Sidebar icons stay clipped inside their own panel, without separate moving offsets or stretching. Clicking again reverses the content motion from its visible position. The system's **reduced motion** preference disables the animation, and restoring the saved layout at startup is always instant.
+Opening and closing use a short, 180 ms transition. The view resizes once rather than recalculating the entire table width every frame; on the left it slides as one layer. Sidebar icons stay clipped inside their own panel, without separate moving offsets or stretching. The system's **reduced motion** preference disables the animation, and restoring the saved layout at startup is always instant.
 
 ### Tasks
 
@@ -251,6 +252,8 @@ The compact card editor keeps the title, note and checklist borderless. Use **Fo
 Use the pushpin to pin or unpin a note. Pinned notes have a filled upright pin and a labeled area above the other cards; unpinned notes have an outlined tilted pin. Active editor fields show only a thin underline instead of a prominent frame.
 
 ### Navigation sections
+
+In **Settings → Navigation**, choose **Sidebar position** and save to put the sidebar on the left or right. This choice belongs to the organization, travels with its settings and backup, and defaults to the left for older archives. The compact icon rail works on either side.
 
 The sidebar lists the **sections** of the organization. Each section opens one of the seven view types under its own name. **Settings → Navigation** shows all sections in menu order:
 
@@ -851,6 +854,7 @@ The script refuses to reuse a tagged version for different sources. If a build o
 
 | Version | Changes |
 | --- | --- |
+| **3.11.0** | Configurable left or right sidebar per organization, including the compact icon rail |
 | **3.10.0** | Portable per-organization CSV import profiles with save/update/delete, restored parsing options, header-based or positional mapping, mandatory review for schema drift and settings/backup transfer support |
 | **3.9.0** | Public GitHub language repositories, official Italian offline snapshot and English contributor template, portable shared references/cache, explicit refresh and removal, retired local-folder loading without deleting existing files |
 | **3.8.2** | Themed update confirmation and persistent installation/restart progress through renderer readiness; simpler sidebar compositor motion with paint-contained icons, rapid reversal and reduced-motion support |

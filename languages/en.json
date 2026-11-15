@@ -1194,7 +1194,13 @@
     "CSV import profile saved.": "CSV import profile saved.",
     "CSV import profile deleted.": "CSV import profile deleted.",
     "Review the changed CSV mapping before importing.": "Review the changed CSV mapping before importing.",
-    "Invalid CSV import profiles.": "Invalid CSV import profiles."
+    "Invalid CSV import profiles.": "Invalid CSV import profiles.",
+    "Sidebar position": "Sidebar position",
+    "Left": "Left",
+    "Right": "Right",
+    "Saved for this organization and applied when you save settings.": "Saved for this organization and applied when you save settings.",
+    "Invalid sidebar position.": "Invalid sidebar position.",
+    "Organization, views and details in the sidebar.": "Organization, views and details in the sidebar."
   },
   "terms": {
     "Appearance repositories": "Appearance repositories",
@@ -1553,7 +1559,8 @@
     "Add a public GitHub repository containing `orbit-languages.json` in **Language repositories** and press **Refresh** to download updates. Use the English template in the official repository to contribute a translation. Cached languages work offline.": "Add a public GitHub repository containing `orbit-languages.json` in **Language repositories** and press **Refresh** to download updates. Use the English template in the official repository to contribute a translation. Cached languages work offline.",
     "Use **Save new profile** to keep a named mapping with its separator, encoding and header option. Select it in later imports, use **Update profile** to change it or click **Delete profile** twice to remove it. Profiles belong to the organization and travel with settings exports and backups.": "Use **Save new profile** to keep a named mapping with its separator, encoding and header option. Select it in later imports, use **Update profile** to change it or click **Delete profile** twice to remove it. Profiles belong to the organization and travel with settings exports and backups.",
     "Profiles match header names even when columns move. Without headers they use positions. If headers or destination fields changed, review the mapping and tick **I reviewed the changed mapping** before importing.": "Profiles match header names even when columns move. Without headers they use positions. If headers or destination fields changed, review the mapping and tick **I reviewed the changed mapping** before importing.",
-    "Check separator, encoding and header row, map each column to a field and review the preview. No rows are imported until every error is fixed.": "Check separator, encoding and header row, map each column to a field and review the preview. No rows are imported until every error is fixed."
+    "Check separator, encoding and header row, map each column to a field and review the preview. No rows are imported until every error is fixed.": "Check separator, encoding and header row, map each column to a field and review the preview. No rows are imported until every error is fixed.",
+    "Choose **Sidebar position** in **Settings → Navigation** to place the sidebar on the left or right for this organization. Save settings to apply it.": "Choose **Sidebar position** in **Settings → Navigation** to place the sidebar on the left or right for this organization. Save settings to apply it."
   },
   "plurals": {
     "theme": {

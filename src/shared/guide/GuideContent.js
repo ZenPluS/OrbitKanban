@@ -332,6 +332,7 @@ class GuideContent {
           'Set the organization name and the hours of an effort day. Changing the hours per day changes only how effort is displayed.'
         ] },
         { title: 'Navigation', items: [
+          'Choose **Sidebar position** in **Settings → Navigation** to place the sidebar on the left or right for this organization. Save settings to apply it.',
           'In **Settings → Navigation** choose the sections of the sidebar: drag them or use the arrows to change their order, rename them, remove them or add new ones, up to 12.',
           'Each section opens one of six types: tasks, linked issues, milestones, kanban, views or group activities. A type can have several sections, and a type without sections leaves the menu. **Guide** and **Settings** always stay at the bottom.',
           'The **Views** section lists all saved views and automatic release views. Open one to apply it to the task list, even if its menu section was removed. Release views include hidden tasks.',

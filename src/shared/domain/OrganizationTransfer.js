@@ -48,7 +48,7 @@ class OrganizationTransfer {
       file.settings = {
         language: settings.language || 'it', logo: settings.logo || '', logoSource: settings.logoSource === undefined ? '' : settings.logoSource, logoShape: settings.logoShape === undefined ? 'none' : settings.logoShape,
         packSources: structuredClone(settings.packSources || []), iconPack: settings.iconPack ?? 'default', packThemeBases: structuredClone(settings.packThemeBases || {}),
-        navigation: structuredClone(settings.navigation), hoursPerDay: settings.hoursPerDay, fontSizes: { ...(settings.fontSizes || Typography.defaultFontSizes()) }, fontFamily: settings.fontFamily ?? Typography.DEFAULT_FONT_FAMILY,
+        navigation: structuredClone(settings.navigation), sidebarPosition: settings.sidebarPosition ?? 'left', hoursPerDay: settings.hoursPerDay, fontSizes: { ...(settings.fontSizes || Typography.defaultFontSizes()) }, fontFamily: settings.fontFamily ?? Typography.DEFAULT_FONT_FAMILY,
         statuses: structuredClone(settings.statuses), urgencies: structuredClone(settings.urgencies),
         highlights: structuredClone(highlights), tags: structuredClone(settings.tags || []),
         taskColumns: ColumnLayout.listColumns(settings, 'tasks'), savedViews: structuredClone(settings.savedViews || []),
@@ -134,6 +134,7 @@ class OrganizationTransfer {
         urgencies: OrganizationTransfer.#fileRecords(source.urgencies, OrganizationTransfer.#RECORD_KEYS.urgency, "Invalid or empty urgency list.")
       };
       if (source.fontFamily !== undefined) settings.fontFamily = source.fontFamily;
+      if (source.sidebarPosition !== undefined) settings.sidebarPosition = source.sidebarPosition;
       if (source.taskEditorLayout !== undefined) settings.taskEditorLayout = structuredClone(source.taskEditorLayout);
       if (source.fontSizes !== undefined) {
         Common.assert(source.fontSizes && typeof source.fontSizes === 'object' && !Array.isArray(source.fontSizes), "Invalid text sizes.");
@@ -229,6 +230,7 @@ class OrganizationTransfer {
       const status = OrganizationTransfer.#optionRemapper(settings.statuses, incoming.statuses), urgency = OrganizationTransfer.#optionRemapper(settings.urgencies, incoming.urgencies);
       for (const task of next.tasks) { task.statusId = status(task.statusId); task.urgencyId = urgency(task.urgencyId); }
       for (const key of ['language', 'navigation', 'hoursPerDay', 'statuses', 'urgencies']) settings[key] = incoming[key];
+      if (incoming.sidebarPosition !== undefined) settings.sidebarPosition = incoming.sidebarPosition;
       for (const key of ['packSources', 'iconPack', 'packThemeBases']) if (incoming[key] !== undefined) settings[key] = structuredClone(incoming[key]);
       if (incoming.fontSizes) settings.fontSizes = incoming.fontSizes;
       if (incoming.fontFamily !== undefined) settings.fontFamily = incoming.fontFamily;

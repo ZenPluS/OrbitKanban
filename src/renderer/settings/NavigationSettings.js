@@ -10,13 +10,14 @@ export class NavigationSettings extends Component {
   }
   navigationPanel() {
     const types = NavigationSections.TYPES.map(type => `<option value="${type}">${this.esc(this.#typeName(type))}</option>`).join('');
-    return this.ui`<section class="panel settings-section full" id="navigation-panel"><h2>Navigation</h2><p class="section-description">Choose the sections of the sidebar, their names and their order. Guide and Settings always stay at the bottom.</p><div class="section-list" id="section-list"></div>
+    return this.ui`<section class="panel settings-section full" id="navigation-panel"><h2>Navigation</h2><p class="section-description">Choose the sections of the sidebar, their names and their order. Guide and Settings always stay at the bottom.</p><div class="form-grid"><label class="field">Sidebar position<select id="sidebar-position"><option value="left" ${(this.state.settingsDraft.sidebarPosition ?? 'left') === 'left' ? 'selected' : ''}>Left</option><option value="right" ${this.state.settingsDraft.sidebarPosition === 'right' ? 'selected' : ''}>Right</option></select><small>Saved for this organization and applied when you save settings.</small></label></div><div class="section-list" id="section-list"></div>
     <form id="add-section" class="section-add"><h3>New section</h3><div class="section-add-fields"><label class="field">Section type<select name="type" id="new-section-type">${types}</select></label><label class="field">Section name<input name="name" id="new-section-name" maxlength="60" autocomplete="off"></label><label class="field">Saved view<select name="viewId" id="new-section-view"></select></label><button type="submit" class="button" id="add-section-button">${this.ico('plus')}Add section</button></div><small class="muted">A saved view limits the tasks a list, milestone or kanban section shows. Leave the name empty to use the name of the view type.</small></form>
     <p class="muted">Removing a section never deletes tasks or issues: you can add it again at any time. The first section opens when the app starts.</p></section>`;
   }
   drawNavigation() {
     const container = this.$('#section-list'), list = this.state.settingsDraft?.navigation;
     if (!container || !list) return;
+    this.$('#sidebar-position').onchange = event => { this.state.settingsDraft.sidebarPosition = event.target.value; };
     const refresh = () => { this.drawNavigation(); this.app.settings.refreshSettingsState(); };
     container.innerHTML = list.map((section, index) => {
       const icon = this.app.sections.iconOf(section.type), type = this.#typeName(section.type);

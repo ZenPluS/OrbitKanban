@@ -213,6 +213,38 @@ export class SmokeTests extends Component {
         await finishSidebarMotion();
         check(expanded() && localStorage.getItem('orbitkanban.sidebarCollapsed') === null, 'Interrupted sidebar motion settles in the last requested state');
       }
+      this.$('#settings-button').click();
+      this.app.settings.showSettingsTab('navigation');
+      const position = this.$('#sidebar-position');
+      position.value = 'right'; position.dispatchEvent(new Event('change', { bubbles: true }));
+      await tick();
+      check(!document.documentElement.classList.contains('sidebar-right') && !this.$('#unsaved-banner').hidden && !this.$('#settings-tab-navigation .settings-tab-dot').hidden, 'Sidebar position remains a draft until settings are saved');
+      this.$('#save-settings').click();
+      await waitFor(() => !this.state.saving && this.state.data.settings.sidebarPosition === 'right');
+      const rightLayout = () => Math.abs(boxOf('#sidebar').right - innerWidth) < 1 && Math.abs(boxOf('main').left) < 1 && Math.abs(boxOf('main').right - boxOf('#sidebar').left) < 1;
+      check(document.documentElement.classList.contains('sidebar-right') && rightLayout() && (await this.workspaceApi.load()).data.settings.sidebarPosition === 'right', 'Saving places the sidebar on the right and persists the organization setting');
+      if (this.app.themePainter.customTitleBar()) {
+        const area = navigator.windowControlsOverlay.getTitlebarAreaRect(), brand = boxOf('.brand-icon');
+        check(brand.top >= area.bottom && parseFloat(getComputedStyle(this.$('.topbar')).paddingRight) === 24, 'The right sidebar keeps its logo clear of native window controls');
+      }
+      sidebarToggle.click(); await finishSidebarMotion();
+      check(rightLayout() && document.documentElement.classList.contains('sidebar-collapsed') && insideRail(this.$('#settings-button')), 'The right sidebar folds into a usable icon rail without overlapping the content');
+      if (this.app.themePainter.customTitleBar()) {
+        const area = navigator.windowControlsOverlay.getTitlebarAreaRect(), controlsLeft = area.x + area.width;
+        check(boxOf('.brand-icon').top >= area.bottom && boxOf('.topbar .avatar').right <= controlsLeft, 'The right icon rail and top bar stay clear of native window controls');
+      }
+      sidebarToggle.click();
+      if (this.app.sidebar.sidebarAnimations.length > 1) {
+        const clip = this.app.sidebar.sidebarAnimations[1].effect.getKeyframes()[0].clipPath;
+        check(/^inset\(0(px)? 0(px)? 0(px)? [1-9]/.test(clip), 'The right sidebar expands from its right edge');
+      }
+      await finishSidebarMotion();
+      check(rightLayout() && !document.documentElement.classList.contains('sidebar-collapsed'), 'The right sidebar expands without overlapping the content');
+      this.$('#sidebar-position').value = 'left'; this.$('#sidebar-position').dispatchEvent(new Event('change', { bubbles: true }));
+      this.$('#save-settings').click();
+      await waitFor(() => !this.state.saving && this.state.data.settings.sidebarPosition === 'left');
+      this.$('#navigation [data-view="0"]').click();
+      check(expanded() && !document.documentElement.classList.contains('sidebar-right'), 'Saving left restores the original sidebar layout');
       this.app.taskDialog.taskDialog(this.state.data.tasks.find(task => !task.hidden));
       const editModal = this.$('#modal'), editBody = this.$('.task-edit-layout'), editWidth = editModal.clientWidth;
       const propertiesSection = this.$('#task-form [data-section="section-properties"]'), textSection = this.$('#task-form [data-section="section-text"]');

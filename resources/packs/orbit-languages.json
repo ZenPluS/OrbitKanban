@@ -1198,7 +1198,13 @@
         "CSV import profile saved.": "Profilo di importazione CSV salvato.",
         "CSV import profile deleted.": "Profilo di importazione CSV eliminato.",
         "Review the changed CSV mapping before importing.": "Verifica la mappatura CSV modificata prima di importare.",
-        "Invalid CSV import profiles.": "Profili di importazione CSV non validi."
+        "Invalid CSV import profiles.": "Profili di importazione CSV non validi.",
+        "Sidebar position": "Posizione della barra laterale",
+        "Left": "Sinistra",
+        "Right": "Destra",
+        "Saved for this organization and applied when you save settings.": "Salvata per questa organizzazione e applicata quando salvi le impostazioni.",
+        "Invalid sidebar position.": "Posizione della barra laterale non valida.",
+        "Organization, views and details in the sidebar.": "Organizzazione, viste e dettagli nella barra laterale."
       },
       "terms": {
         "Appearance repositories": "Repository di icone e temi",
@@ -1557,7 +1563,8 @@
         "Add a public GitHub repository containing `orbit-languages.json` in **Language repositories** and press **Refresh** to download updates. Use the English template in the official repository to contribute a translation. Cached languages work offline.": "Aggiungi un repository GitHub pubblico contenente `orbit-languages.json` in **Repository delle lingue** e premi **Aggiorna** per scaricare gli aggiornamenti. Usa il modello inglese nel repository ufficiale per contribuire con una traduzione. Le lingue in cache funzionano offline.",
         "Use **Save new profile** to keep a named mapping with its separator, encoding and header option. Select it in later imports, use **Update profile** to change it or click **Delete profile** twice to remove it. Profiles belong to the organization and travel with settings exports and backups.": "Usa **Salva nuovo profilo** per conservare una mappatura con nome, separatore, codifica e opzione intestazioni. Selezionala nelle importazioni successive, usa **Aggiorna profilo** per modificarla o fai clic due volte su **Elimina profilo** per rimuoverla. I profili appartengono all’organizzazione e viaggiano con esportazioni delle impostazioni e backup.",
         "Profiles match header names even when columns move. Without headers they use positions. If headers or destination fields changed, review the mapping and tick **I reviewed the changed mapping** before importing.": "I profili associano i nomi delle intestazioni anche quando le colonne si spostano. Senza intestazioni usano le posizioni. Se le intestazioni o i campi di destinazione sono cambiati, verifica la mappatura e seleziona **Ho verificato la mappatura modificata** prima di importare.",
-        "Check separator, encoding and header row, map each column to a field and review the preview. No rows are imported until every error is fixed.": "Controlla separatore, codifica e intestazioni, associa ogni colonna a un campo e verifica l’anteprima. Nessuna riga viene importata finché tutti gli errori non sono risolti."
+        "Check separator, encoding and header row, map each column to a field and review the preview. No rows are imported until every error is fixed.": "Controlla separatore, codifica e intestazioni, associa ogni colonna a un campo e verifica l’anteprima. Nessuna riga viene importata finché tutti gli errori non sono risolti.",
+        "Choose **Sidebar position** in **Settings → Navigation** to place the sidebar on the left or right for this organization. Save settings to apply it.": "Scegli **Posizione della barra laterale** in **Impostazioni → Navigazione** per posizionare la barra a sinistra o a destra per questa organizzazione. Salva le impostazioni per applicare la modifica."
       },
       "plurals": {
         "theme": {

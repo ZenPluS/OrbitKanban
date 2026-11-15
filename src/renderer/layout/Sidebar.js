@@ -14,6 +14,7 @@ export class Sidebar extends Component {
   applySidebar() {
     const toggle = this.$('#sidebar-toggle'), select = this.$('#organization-select');
     document.documentElement.classList.toggle('sidebar-collapsed', this.sidebarCollapsed);
+    document.documentElement.classList.toggle('sidebar-right', this.state.data.settings.sidebarPosition === 'right');
     toggle.setAttribute('aria-expanded', String(!this.sidebarCollapsed));
     toggle.setAttribute('aria-label', this.t("Sidebar"));
     toggle.title = this.t(this.sidebarCollapsed ? "Expand the sidebar (Ctrl+B)" : "Collapse the sidebar (Ctrl+B)");
@@ -26,7 +27,7 @@ export class Sidebar extends Component {
   toggleSidebar() {
     const focused = document.activeElement;
     const sidebar = this.$('#sidebar'), main = this.$('main');
-    const previousLeft = main.getBoundingClientRect().left;
+    const previousLeft = main.getBoundingClientRect().left, previousWidth = sidebar.getBoundingClientRect().width;
     this.sidebarAnimations.forEach(animation => animation.cancel());
     this.sidebarAnimations = [];
     this.sidebarCollapsed = !this.sidebarCollapsed;
@@ -41,7 +42,10 @@ export class Sidebar extends Component {
       const motion = { duration: 180, easing: 'cubic-bezier(0.2, 0, 0, 1)' };
       this.sidebarAnimations.push(main.animate([{ transform: `translateX(${previousLeft - nextLeft}px)` }, { transform: 'translateX(0)' }], motion));
       if (!this.sidebarCollapsed) {
-        this.sidebarAnimations.push(sidebar.animate([{ clipPath: `inset(0 ${Math.max(0, nextLeft - previousLeft)}px 0 0)` }, { clipPath: 'inset(0 0 0 0)' }], motion));
+        const right = this.state.data.settings.sidebarPosition === 'right';
+        const hidden = Math.max(0, right ? sidebar.getBoundingClientRect().width - previousWidth : nextLeft - previousLeft);
+        const clip = right ? `inset(0 0 0 ${hidden}px)` : `inset(0 ${hidden}px 0 0)`;
+        this.sidebarAnimations.push(sidebar.animate([{ clipPath: clip }, { clipPath: 'inset(0 0 0 0)' }], motion));
       }
       this.sidebarAnimations.push(sidebar.animate([{ opacity: 0.4 }, { opacity: 1 }], motion));
     }

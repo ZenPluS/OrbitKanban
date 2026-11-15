@@ -30,6 +30,7 @@ class ArchiveValidator {
     RequiredFields.validateRequired(s || {});
     Common.assert(s && (s.appName === undefined || (typeof s.appName === 'string' && s.appName.trim().length > 0 && s.appName.length <= 100)), "Invalid organization name.");
     NavigationSections.validateNavigation(s.navigation);
+    Common.assert(s.sidebarPosition === undefined || ['left', 'right'].includes(s.sidebarPosition), "Invalid sidebar position.");
     Common.assert(Number.isFinite(s.hoursPerDay) && s.hoursPerDay > 0 && s.hoursPerDay <= 24, "Hours per day must be greater than 0 and no more than 24.");
     const uniqueIds = (items) => new Set(items.map(x => x.id)).size === items.length;
     const text = v => typeof v === 'string';

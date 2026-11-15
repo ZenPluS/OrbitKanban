@@ -3469,6 +3469,22 @@ td .icon-button { width: calc(28px * var(--fs)); height: calc(28px * var(--fs));
   overflow-x: hidden;
   contain: paint;
 }
+.sidebar-right .sidebar {
+  left: auto;
+  right: 0;
+  border-right: 0;
+  border-left: 1px solid var(--border);
+}
+.sidebar-right body > main {
+  margin-left: 0;
+  margin-right: var(--sidebar-width);
+}
+.custom-titlebar.sidebar-right .topbar {
+  padding-right: calc(24px + max(0px, 100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) - var(--sidebar-width)));
+}
+.custom-titlebar.sidebar-right .sidebar .brand {
+  padding-top: calc(env(titlebar-area-height, 0px) + 10px);
+}
 body { overflow-x: clip; }
 #update-restart-progress { padding: 18px 8px; max-width: 470px; }
 #update-restart-progress h2 { margin: 18px 0 12px; }
