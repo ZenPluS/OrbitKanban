@@ -43,9 +43,9 @@ export class Sidebar extends Component {
     this.applySidebar();
     const nextLeft = main.getBoundingClientRect().left;
     if (!this.sidebarReducedMotion.matches) {
-      // Reflow once, then move the content as one compositor layer. Icons never leave the clipped sidebar.
+      // Reflow once; the desktop title bar stays fixed while the sidebar remains clipped.
       const motion = { duration: 180, easing: 'cubic-bezier(0.2, 0, 0, 1)' };
-      if (this.state.data.settings.sidebarPosition !== 'right') {
+      if (this.state.data.settings.sidebarPosition !== 'right' && !this.app.themePainter.customTitleBar()) {
         this.sidebarAnimations.push(main.animate([{ transform: `translateX(${previousLeft - nextLeft}px)` }, { transform: 'translateX(0)' }], motion));
       }
       if (!this.sidebarCollapsed) {

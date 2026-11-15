@@ -3479,11 +3479,14 @@ td .icon-button { width: calc(28px * var(--fs)); height: calc(28px * var(--fs));
   margin-left: 0;
   margin-right: var(--sidebar-width);
 }
-.custom-titlebar.sidebar-right .topbar {
+.custom-titlebar .topbar {
   position: relative;
   z-index: 3;
   width: 100vw;
   background: var(--background);
+}
+.custom-titlebar:not(.sidebar-right) .topbar {
+  margin-left: calc(-1 * var(--sidebar-width));
 }
 body { overflow-x: clip; }
 #update-restart-progress { padding: 18px 8px; max-width: 470px; }

@@ -151,7 +151,15 @@ export class SmokeTests extends Component {
       const finishSidebarMotion = async () => {
         this.app.sidebar.sidebarAnimations.forEach(animation => animation.finish());
       };
+      const leftTitlebarSpansSidebar = () => {
+        const header = boxOf('.topbar'), button = sidebarToggle.getBoundingClientRect();
+        const target = document.elementFromPoint((button.left + button.right) / 2, (button.top + button.bottom) / 2);
+        return Math.abs(header.left) < 1 && Math.abs(header.right - innerWidth) < 1 &&
+          button.left < boxOf('#sidebar').right && target?.closest('#sidebar-toggle') === sidebarToggle &&
+          boxOf('.brand-icon').top >= header.bottom;
+      };
       check(expanded() && sidebarWidth > 150 && sidebarToggle.getAttribute('aria-controls') === 'sidebar' && sidebarToggle.getAttribute('aria-keyshortcuts') === 'Control+B' && sidebarToggle.getAttribute('aria-label') === this.t("Sidebar") && sidebarToggle.title === this.t("Collapse the sidebar (Ctrl+B)") && sidebarToggle.querySelector('use')?.getAttribute('href') === '#i-menu' && heightOf('#sidebar-toggle') === heightOf('#undo-button') && Math.round(boxOf('#sidebar-toggle').width) === heightOf('#sidebar-toggle') && boxOf('#sidebar-toggle').right < boxOf('.breadcrumb').left && (!this.app.themePainter.customTitleBar() || getComputedStyle(sidebarToggle).getPropertyValue('-webkit-app-region') === 'no-drag') && tooltipTargets().every(element => !element.hasAttribute('title')), 'Menu button sits in the top bar as a square tool before the breadcrumb');
+      if (this.app.themePainter.customTitleBar()) check(leftTitlebarSpansSidebar(), 'The desktop title bar spans the expanded left sidebar and its toggle is clickable');
       sidebarToggle.click();
       if (this.app.sidebar.sidebarAnimations.length) {
         const widthAtStart = boxOf('.table-scroll').width;
@@ -162,10 +170,20 @@ export class SmokeTests extends Component {
         motions.forEach(animation => { animation.currentTime = 90; });
         check(Math.abs(boxOf('.table-scroll').width - widthAtStart) < 1 && getComputedStyle(sidebar).contain.includes('paint') && getComputedStyle(sidebar).overflowX === 'hidden',
           'Sidebar icons remain paint-contained while the table keeps the same width throughout the animation');
+        if (this.app.themePainter.customTitleBar()) check(leftTitlebarSpansSidebar(), 'The full-width title bar stays fixed while the left sidebar animates');
       }
       await finishSidebarMotion();
       const railWidth = boxOf('#sidebar').width;
       check(inRail() && sidebarToggle.title === this.t("Expand the sidebar (Ctrl+B)") && railWidth >= 48 && railWidth < sidebarWidth / 2 && Math.abs(boxOf('.table-scroll').width - tableWidth - (sidebarWidth - railWidth)) < 1 && sidebar.scrollWidth <= sidebar.clientWidth && localStorage.getItem('orbitkanban.sidebarCollapsed') === '1', 'Menu button folds the sidebar into a column of icons and gives the space to the list');
+      if (this.app.themePainter.customTitleBar()) {
+        check(leftTitlebarSpansSidebar(), 'The desktop title bar spans the compact left sidebar without obscuring its logo');
+        const baseScale = document.documentElement.style.getPropertyValue('--fs-base');
+        document.documentElement.style.setProperty('--fs-base', '1.3');
+        await waitFor(leftTitlebarSpansSidebar);
+        check(leftTitlebarSpansSidebar(), 'The compact left sidebar stays below the full-width title bar at large text sizes');
+        document.documentElement.style.setProperty('--fs-base', baseScale);
+        await waitFor(leftTitlebarSpansSidebar);
+      }
       const railButtons = [...document.querySelectorAll('#navigation .nav-button, #guide-button, #settings-button')], railCenter = (boxOf('#sidebar').left + boxOf('#sidebar').right) / 2;
       check(railButtons.length === this.state.data.settings.navigation.length + 2 && railButtons.every(button => { const icon = button.querySelector('.nav-icon'), box = icon.getBoundingClientRect(), label = button.querySelector('.nav-label'); return insideRail(icon) && Math.abs((box.left + box.right) / 2 - railCenter) < 2 && labelHidden(label) && button.title === (button.id === 'guide-button' ? this.term("Open the guide (F1)") : label.textContent); }) && this.$('#navigation .nav-button').title === this.state.data.settings.navigation[0].name && this.$('#settings-button').title === this.t("Settings") && [...document.querySelectorAll('.brand > div:last-child, .local-card')].every(element => !element.getClientRects().length) && insideRail(this.$('.brand-icon')) && insideRail(this.$('#app-version')), 'Column keeps every view icon, the guide and settings, with their names as tooltips');
       const taskBadge = this.$('#navigation .nav-count'), listIcon = this.$('#navigation .nav-icon').getBoundingClientRect();
@@ -209,7 +227,8 @@ export class SmokeTests extends Component {
         const interruptedLeft = boxOf('main').left;
         sidebarToggle.click();
         this.app.sidebar.sidebarAnimations.forEach(animation => { animation.pause(); animation.currentTime = 0; });
-        check(Math.abs(boxOf('main').left - interruptedLeft) < 1, 'Rapid sidebar toggles reverse content motion from its currently visible position');
+        if (this.app.themePainter.customTitleBar()) check(leftTitlebarSpansSidebar(), 'Rapid sidebar toggles keep the full-width desktop title bar in place');
+        else check(Math.abs(boxOf('main').left - interruptedLeft) < 1, 'Rapid sidebar toggles reverse content motion from its currently visible position');
         await finishSidebarMotion();
         check(expanded() && localStorage.getItem('orbitkanban.sidebarCollapsed') === null, 'Interrupted sidebar motion settles in the last requested state');
       }
