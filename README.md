@@ -4,7 +4,7 @@
 
 | | |
 | --- | --- |
-| **Current version** | 3.11.3 |
+| **Current version** | 3.12.0 |
 | **Platform** | Windows 10 / 11, 64-bit |
 | **Distribution** | Single portable executable, `OrbitKanban-Portable.exe` |
 | **Network** | Not required. Optional GitHub update checks and explicit icon/theme/language repository refresh |
@@ -21,7 +21,7 @@
 - [In-app guide](#in-app-guide)
 - [Portable data and backups](#portable-data-and-backups)
 - [Organizations](#organizations)
-- [The seven view types](#the-seven-view-types)
+- [The eight view types](#the-eight-view-types)
   - [Tasks](#tasks)
   - [Linked issues](#linked-issues)
   - [Milestones](#milestones)
@@ -29,6 +29,7 @@
   - [Views](#views)
   - [Group activities](#group-activities)
   - [To-do lists](#to-do-lists)
+  - [KPIs](#kpis)
   - [Navigation sections](#navigation-sections)
 - [Working with the lists](#working-with-the-lists)
   - [Sorting and manual order](#sorting-and-manual-order)
@@ -79,7 +80,7 @@
 ## Highlights
 
 - **Truly portable.** The executable and a `data` folder next to it are the whole installation, with automatic daily backups.
-- **Seven view types**: Tasks, Linked issues, Milestones, Kanban, Views, Group activities and To-do lists. The sidebar sections can be renamed, reordered, removed or added per organization, and a task-based section can show a saved view.
+- **Eight view types**: Tasks, Linked issues, Milestones, Kanban, Views, Group activities, To-do lists and KPIs. The sidebar sections can be renamed, reordered, removed or added per organization, and a task-based section can show a saved view.
 - **Collapsible sidebar** that folds into a column of icons (**☰** or `Ctrl+B`) to give the views more room.
 - **Sidebar position** can be set to the left or right independently for each organization.
 - **Automatic issue matching.** Incidents and problems recorded in Linked issues are resolved onto tasks by their portal code.
@@ -183,7 +184,7 @@ The menu under the **OrbitKanban** name in the sidebar switches the active organ
 
 **Upload logo and generate theme** accepts PNG, JPEG, WebP, GIF and BMP files up to 15 MB. The logo is converted to PNG, scaled to at most 512 px per side and embedded in the workspace, so the original file is no longer needed. Its colors generate a **Theme from logo**. Text and accent are adjusted to WCAG AA contrast, and surfaces are separated from the background, so even monochrome logos produce a readable theme. The theme is previewed immediately and kept with **Save settings**. **Remove logo** restores the default symbol without deleting the theme. The application name is always OrbitKanban and is not configurable.
 
-## The seven view types
+## The eight view types
 
 All views share compact headers. Their tables, timeline and board fill the window and scroll internally while respecting the configured text sizes. On Windows the app draws its own title bar: drag the top bar or logo to move the window, and double-click to maximize or restore it. The minimize, maximize and close buttons follow the active theme.
 
@@ -251,15 +252,21 @@ The compact card editor keeps the title, note and checklist borderless. Use **Fo
 
 Use the pushpin to pin or unpin a note. Pinned notes have a filled upright pin and a labeled area above the other cards; unpinned notes have an outlined tilted pin. Active editor fields show only a thin underline instead of a prominent frame.
 
+### KPIs
+
+The KPIs section shows the number of non-hidden tasks, their distinct release dates, total effort and highlighted tasks. It uses the active organization and updates with its data; list searches, filters and saved views do not affect it. Release dates include past dates. A KPI is hidden if its required built-in columns have been removed.
+
+Existing organizations receive a KPI section once when the sidebar has room. If the menu is full, or if the section is removed or replaced by an imported menu, add it from **Settings → Navigation**.
+
 ### Navigation sections
 
 In **Settings → Navigation**, choose **Sidebar position** and save to put the sidebar on the left or right. This choice belongs to the organization, travels with its settings and backup, and defaults to the left for older archives. The compact icon rail works on either side.
 
-The sidebar lists the **sections** of the organization. Each section opens one of the seven view types under its own name. **Settings → Navigation** shows all sections in menu order:
+The sidebar lists the **sections** of the organization. Each section opens one of the eight view types under its own name. **Settings → Navigation** shows all sections in menu order:
 
 - rename a section, or move it up and down to change the menu order;
 - remove a section: only the menu entry disappears, tasks and issues are never deleted;
-- **Add section** creates a new section of any of the seven types, up to 12 sections. An empty name uses the name of the view type.
+- **Add section** creates a new section of any of the eight types, up to 12 sections. An empty name uses the name of the view type.
 
 A Tasks, Milestones or Kanban section can be bound to a [saved view](#search-column-filters-and-views). A bound Tasks section applies the view each time it opens. A bound Milestones or Kanban section shows only the tasks of that view, hidden tasks included, and its header shows a **View** label with the view name. For example, *Kanban Security* can show only security tasks while the plain *Kanban* section shows everything. Deleting a saved view releases the sections bound to it.
 
@@ -592,6 +599,7 @@ To add a language without rebuilding the app:
      ]
    }
    ```
+
 5. In **Language repositories**, enter `owner/repository` or its public GitHub URL and press **Add repository**. Choose the language and save settings. Alternatively, contribute the translation to the official repository.
 
 Repository references apply to **every organization in this portable copy**, whereas the selected language remains organization-specific. Refresh is **manual**, not a background startup download. **Reload cached languages** rereads the already loaded catalog without accessing GitHub. References and validated cached packs travel with `data`; no account or GitHub token is required.
@@ -854,6 +862,7 @@ The script refuses to reuse a tagged version for different sources. If a build o
 
 | Version | Changes |
 | --- | --- |
+| **3.12.0** | Dedicated KPI section for organization-wide task statistics, with portable navigation migration |
 | **3.11.3** | Continuous Windows title bar across both left and right sidebars, including the compact rail |
 | **3.11.2** | Continuous Windows title bar across the right sidebar and a sidebar toggle on the selected side |
 | **3.11.1** | Matching sidebar alignment on the left and right, including the compact rail and Windows title-bar clearance |

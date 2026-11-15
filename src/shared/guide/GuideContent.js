@@ -20,7 +20,7 @@ class GuideContent {
           'Do not run two copies on the same data folder at the same time.'
         ] },
         { title: 'Find your way around', items: [
-          'The sidebar holds the organization menu, the sections of the seven view types, this **Guide** and **Settings**.',
+          'The sidebar holds the organization menu, the sections of the eight view types, this **Guide** and **Settings**.',
           'The menu button **☰** in the top bar, next to the sidebar, or `Ctrl+B`, folds the sidebar into a column of icons so the views get more space. Hover an icon to see its name; the building icon still switches organization. Press the button again to expand the sidebar; the choice is remembered.',
           'The top bar offers global search, undo and redo, and the archive status. **Open data folder** at the bottom shows where your data lives.',
           'Rename, reorder, remove or add the sections of each organization in **Settings → Navigation**.',
@@ -86,6 +86,10 @@ class GuideContent {
         { title: 'Hide rows', items: [
           'The eye button hides a row from the list without deleting it. Tick **Hidden** to show hidden rows again.',
           'Hidden tasks still appear in the milestones and in the kanban, marked **Hidden in list**.'
+        ] },
+        { title: 'KPIs', items: [
+          'The **KPIs** section shows visible tasks, distinct release dates, total effort and highlighted tasks for the organization. Hidden tasks and list filters do not affect these figures.',
+          'Distinct release dates include past dates. A KPI is hidden when its required columns have been removed.'
         ] }
       ]
     },

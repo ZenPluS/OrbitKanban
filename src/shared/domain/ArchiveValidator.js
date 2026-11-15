@@ -88,6 +88,7 @@ class ArchiveValidator {
     Common.assert(data.issues.every(x => ['id', 'code', 'incident', 'problem'].every(k => text(x[k])) && x.id), "Invalid issue list.");
     if (data.groups !== undefined) TaskGroups.validateGroups(data.groups);
     if (data.todos !== undefined) TodoLists.validate(data.todos);
+    Common.assert(data.kpiNavigationInitialized === undefined || data.kpiNavigationInitialized === true, "Invalid navigation sections.");
     ColumnValidator.validateCustomData(data);
     return data;
   }
@@ -124,6 +125,10 @@ class ArchiveValidator {
       if (organization.data.todos === undefined) {
         NavigationSections.addMissingType(organization.data.settings, 'todos');
         organization.data.todos = [];
+      }
+      if (organization.data.kpiNavigationInitialized === undefined) {
+        NavigationSections.addMissingType(organization.data.settings, 'kpis');
+        organization.data.kpiNavigationInitialized = true;
       }
       TaskGroups.prune(organization.data);
       organization.data.settings.language ??= 'it';

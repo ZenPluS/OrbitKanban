@@ -83,6 +83,9 @@
     "Tasks and issues are replaced; groups and cards are replaced if present in the file.": "Tasks and issues are replaced; groups and cards are replaced if present in the file.",
     "All current tasks and issues will be deleted and replaced; groups and cards will also be replaced if present in the file.": "All current tasks and issues will be deleted and replaced; groups and cards will also be replaced if present in the file.",
     "Clear workspace data": "Clear workspace data",
+    "KPIs": "KPIs",
+    "A summary of non-hidden tasks in this organization. List filters do not affect these figures.": "A summary of non-hidden tasks in this organization. List filters do not affect these figures.",
+    "distinct dates": "distinct dates",
     "To-do lists": "To-do lists",
     "All cards": "All cards",
     "Keep notes and checklists together in this organization.": "Keep notes and checklists together in this organization.",
@@ -1203,6 +1206,10 @@
     "Organization, views and details in the sidebar.": "Organization, views and details in the sidebar."
   },
   "terms": {
+    "KPIs": "KPIs",
+    "The sidebar holds the organization menu, the sections of the eight view types, this **Guide** and **Settings**.": "The sidebar holds the organization menu, the sections of the eight view types, this **Guide** and **Settings**.",
+    "The **KPIs** section shows visible tasks, distinct release dates, total effort and highlighted tasks for the organization. Hidden tasks and list filters do not affect these figures.": "The **KPIs** section shows visible tasks, distinct release dates, total effort and highlighted tasks for the organization. Hidden tasks and list filters do not affect these figures.",
+    "Distinct release dates include past dates. A KPI is hidden when its required columns have been removed.": "Distinct release dates include past dates. A KPI is hidden when its required columns have been removed.",
     "Appearance repositories": "Appearance repositories",
     "Midnight is the only theme defined in code. The other 39 official themes come from orbit_themes and are included as an offline snapshot. Create your own from four colors: background, surface, text and accent.": "Midnight is the only theme defined in code. The other 39 official themes come from orbit_themes and are included as an offline snapshot. Create your own from four colors: background, surface, text and accent.",
     "Official and repository themes can be edited for each organization and brought back with **Restore theme preset**; your own themes can be edited and deleted.": "Official and repository themes can be edited for each organization and brought back with **Restore theme preset**; your own themes can be edited and deleted.",

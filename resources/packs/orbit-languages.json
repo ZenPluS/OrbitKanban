@@ -87,6 +87,9 @@
         "Tasks and issues are replaced; groups and cards are replaced if present in the file.": "Le attività e le issue vengono sostituite; i gruppi e le schede vengono sostituiti se presenti nel file.",
         "All current tasks and issues will be deleted and replaced; groups and cards will also be replaced if present in the file.": "Tutte le attività e le issue correnti saranno eliminate e sostituite; anche i gruppi e le schede saranno sostituiti se presenti nel file.",
         "Clear workspace data": "Cancella dati dello spazio di lavoro",
+        "KPIs": "KPI",
+        "A summary of non-hidden tasks in this organization. List filters do not affect these figures.": "Un riepilogo delle attività non nascoste di questa organizzazione. I filtri della lista non modificano questi valori.",
+        "distinct dates": "date distinte",
         "To-do lists": "Liste da fare",
         "All cards": "Tutte le schede",
         "Keep notes and checklists together in this organization.": "Raccogli note e checklist in questa organizzazione.",
@@ -1207,6 +1210,10 @@
         "Organization, views and details in the sidebar.": "Organizzazione, viste e dettagli nella barra laterale."
       },
       "terms": {
+        "KPIs": "KPI",
+        "The sidebar holds the organization menu, the sections of the eight view types, this **Guide** and **Settings**.": "La barra laterale contiene il menu delle organizzazioni, le sezioni degli otto tipi di vista, questa **Guida** e le **Impostazioni**.",
+        "The **KPIs** section shows visible tasks, distinct release dates, total effort and highlighted tasks for the organization. Hidden tasks and list filters do not affect these figures.": "La sezione **KPI** mostra attività visibili, date di release distinte, effort totale e attività evidenziate dell'organizzazione. Le attività nascoste sono escluse e i filtri della lista non modificano i valori.",
+        "Distinct release dates include past dates. A KPI is hidden when its required columns have been removed.": "Le date di release distinte includono quelle passate. Un KPI viene nascosto quando le colonne necessarie sono state rimosse.",
         "Appearance repositories": "Repository di icone e temi",
         "Midnight is the only theme defined in code. The other 39 official themes come from orbit_themes and are included as an offline snapshot. Create your own from four colors: background, surface, text and accent.": "Midnight è l’unico tema definito nel codice. Gli altri 39 temi ufficiali provengono da orbit_themes e sono inclusi in una copia offline. Puoi creare un tema usando quattro colori: sfondo, superficie, testo e accento.",
         "Official and repository themes can be edited for each organization and brought back with **Restore theme preset**; your own themes can be edited and deleted.": "I temi ufficiali e quelli delle repository possono essere modificati per ogni organizzazione e ripristinati con **Ripristina palette originale**; i temi creati da te possono essere modificati ed eliminati.",

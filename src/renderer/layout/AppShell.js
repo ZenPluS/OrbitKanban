@@ -27,7 +27,7 @@ export class AppShell extends Component {
     this.app.rowMarks.closeMarkMenu();
     this.app.tagMenu.closeTagMenu();
     this.app.sections.resolve();
-    const content = this.$('#content'), nextView = ['tasks', 'issues', 'milestones', 'kanban', 'settings', 'guide', 'views', 'groups', 'todos'][this.state.view];
+    const content = this.$('#content'), nextView = ['tasks', 'issues', 'milestones', 'kanban', 'settings', 'guide', 'views', 'groups', 'todos', 'kpis'][this.state.view];
     if (content.dataset.workspaceView !== nextView) content.scrollTop = 0;
     content.dataset.workspaceView = nextView;
     this.#applyTheme();
@@ -56,6 +56,7 @@ export class AppShell extends Component {
     if (this.state.view === 6) this.app.viewsPage.renderViews();
     if (this.state.view === 7) this.app.groupsPage.renderGroups();
     if (this.state.view === 8) this.app.todoPage.render();
+    if (this.state.view === 9) this.app.kpiPage.render();
   }
   adoptSnapshot(snapshot) {
     this.app.packs.adopt(snapshot.appearance, snapshot.data.settings);
