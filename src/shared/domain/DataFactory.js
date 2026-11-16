@@ -34,7 +34,7 @@ class DataFactory {
       requiredTaskColumns: [...RequiredFields.DEFAULT_REQUIRED.tasks], requiredIssueColumns: [...RequiredFields.DEFAULT_REQUIRED.issues]
     };
     settings.taskEditorLayout = TaskLayout.normalizeTaskEditorLayout(settings);
-    return { version: 1, settings, tasks: [], issues: [], groups: [], todos: [], kpiNavigationInitialized: true };
+    return { version: 1, settings, tasks: [], issues: [], groups: [], todos: [] };
   }
   // Demo milestones fall every other Wednesday from January 2026 to January 2029. Releases up to the day the demo is
   // created are completed, the next one is under way and the later ones are planned.

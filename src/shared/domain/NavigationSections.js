@@ -5,9 +5,9 @@ const Common = typeof module !== 'undefined' ? require('./Common') : globalThis.
 
 class NavigationSections {
   // Settings and Guide keep their existing page numbers (4 and 5).
-  static VIEW_IDS = { tasks: 0, issues: 1, milestones: 2, kanban: 3, views: 6, groups: 7, todos: 8, kpis: 9 };
+  static VIEW_IDS = { tasks: 0, issues: 1, milestones: 2, kanban: 3, views: 6, groups: 7, todos: 8 };
   static TYPES = Object.keys(NavigationSections.VIEW_IDS);
-  static DEFAULT_NAMES = { tasks: "Tasks", issues: "Linked issues", milestones: "Milestones", kanban: 'Kanban', views: "Views", groups: "Group activities", todos: "To-do lists", kpis: "KPIs" };
+  static DEFAULT_NAMES = { tasks: "Tasks", issues: "Linked issues", milestones: "Milestones", kanban: 'Kanban', views: "Views", groups: "Group activities", todos: "To-do lists" };
   // Types that show tasks, so a saved view can filter them.
   static FILTERABLE = ['tasks', 'milestones', 'kanban'];
   static LIMIT = 12;
@@ -36,6 +36,12 @@ class NavigationSections {
       (section.viewId === undefined || (NavigationSections.FILTERABLE.includes(section.type) && typeof section.viewId === 'string' && section.viewId && section.viewId.length <= 200))) &&
       new Set(list.map(section => section.id)).size === list.length, "Invalid navigation sections.");
     return list;
+  }
+  static removeRetiredSections(settings) {
+    const list = settings?.navigation;
+    if (!Array.isArray(list) || !list.some(section => section?.type === 'kpis')) return;
+    settings.navigation = list.filter(section => section?.type !== 'kpis');
+    if (!settings.navigation.length) settings.navigation = NavigationSections.defaultSections(settings.language).filter(section => section.type === 'tasks');
   }
   // A section whose saved view was deleted shows every task again.
   static normalizeNavigation(settings) {

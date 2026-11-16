@@ -112,6 +112,7 @@ class OrganizationTransfer {
     if (parts.includes('settings')) {
       TaskLinks.upgradeLegacyLink(file.settings, [], { language: fileLanguage });
       NavigationSections.upgradeLegacyTabNames(file.settings);
+      NavigationSections.removeRetiredSections(file.settings);
     }
     // Without the settings the template is unknown: the codes are kept so the template of the receiving column can complete them.
     if (parts.includes('data')) TaskLinks.upgradeLegacyLink(file.data, file.data.tasks, { language: fileLanguage, template: legacyTemplate ?? '', fillCodes: !parts.includes('settings') || Boolean(legacyTemplate) });

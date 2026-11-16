@@ -1,17 +1,10 @@
-// View headings, statistics and the built-in and custom column definitions.
+// View headings and the built-in and custom column definitions.
 import { Component } from '../core/Component.js';
 import { ColumnSchema } from '../shared.js';
 
 export class ColumnCatalog extends Component {
   heading(title, subtitle, buttons = '') {
     return `<section class="page-heading"><div><h1>${this.esc(title)}<span class="title-dot">.</span></h1><p>${this.esc(this.t(subtitle))}</p></div><div class="heading-actions">${buttons}</div></section>`;
-  }
-  stats() {
-    const tasks = this.app.presenter.visibleTasks();
-    const releases = new Set(tasks.map(t => t.releaseDate).filter(Boolean));
-    const hours = tasks.reduce((sum, t) => sum + t.effortHours, 0);
-    const highlighted = tasks.filter(t => this.app.presenter.highlightOf(t) || this.state.data.settings.statuses.find(s => s.id === t.statusId)?.highlight).length;
-    return this.ui`<div class="stats"><div class="stat"><span>Visible tasks <span class="stat-icon">${this.ico('tasks')}</span></span><strong>${tasks.length}<small>in your workspace</small></strong></div><div class="stat"><span>Planned releases <span class="stat-icon mint">${this.ico('diamond')}</span></span><strong>${releases.size}<small>distinct dates</small></strong></div><div class="stat"><span>Total effort <span class="stat-icon peach">${this.ico('clock')}</span></span><strong title="${hours.toLocaleString(this.locale())} total hours">${this.app.presenter.effort(hours)}<small>${hours.toLocaleString(this.locale())} total hours</small></strong></div><div class="stat"><span>Highlighted <span class="stat-icon pink">${this.ico('flame')}</span></span><strong>${highlighted}<small>keep an eye on these</small></strong></div></div>`;
   }
   taskColumnDefs = {
     sequence: { name: "Sequence", header: '#', sort: 'sequence' },

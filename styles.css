@@ -1677,20 +1677,6 @@ main {
   gap: 10px;
   margin: 0;
 }
-#kpi-page .stats {
-  margin-top: 20px;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
-}
-#kpi-page .stat {
-  min-height: 110px;
-  padding: 20px;
-}
-#kpi-page .stat[hidden] {
-  display: none;
-}
-#kpi-page .stat-icon {
-  display: inline-flex;
-}
 .stat {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

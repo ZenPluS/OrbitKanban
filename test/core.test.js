@@ -198,17 +198,17 @@ test('demo data is localized and only added to new organizations on request', ()
   const demo = DataFactory.createOrganization('Demo', 'en', '', undefined, true);
   assert.ok(demo.data.tasks.length > 200 && demo.data.issues.length > 100);
 });
-test('navigation sections default to eight views, validate their limits and upgrade legacy tab names', () => {
+test('navigation sections default to seven views, validate their limits and upgrade legacy tab names', () => {
   assert.deepEqual(NavigationSections.defaultSections('en'), [
     { id: 'tasks', type: 'tasks', name: 'Tasks' }, { id: 'issues', type: 'issues', name: 'Linked issues' },
     { id: 'milestones', type: 'milestones', name: 'Milestones' }, { id: 'kanban', type: 'kanban', name: 'Kanban' },
-    { id: 'views', type: 'views', name: 'Views' }, { id: 'groups', type: 'groups', name: 'Group activities' }, { id: 'todos', type: 'todos', name: 'To-do lists' }, { id: 'kpis', type: 'kpis', name: 'KPIs' }
+    { id: 'views', type: 'views', name: 'Views' }, { id: 'groups', type: 'groups', name: 'Group activities' }, { id: 'todos', type: 'todos', name: 'To-do lists' }
   ]);
   assert.equal(DataFactory.baseData('it').settings.navigation[0].name, Common.term('Tasks', 'it'));
   assert.equal(DataFactory.baseData('it').settings.navigation[4].name, 'Viste');
   assert.equal(DataFactory.baseData('it').settings.navigation[5].name, 'Gruppi di attività');
-  assert.deepEqual(NavigationSections.TYPES.map(NavigationSections.typeIndex), [0, 1, 2, 3, 6, 7, 8, 9]);
-  assert.deepEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(NavigationSections.typeOf), ['tasks', 'issues', 'milestones', 'kanban', undefined, undefined, 'views', 'groups', 'todos', 'kpis']);
+  assert.deepEqual(NavigationSections.TYPES.map(NavigationSections.typeIndex), [0, 1, 2, 3, 6, 7, 8]);
+  assert.deepEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(NavigationSections.typeOf), ['tasks', 'issues', 'milestones', 'kanban', undefined, undefined, 'views', 'groups', 'todos', undefined]);
   const section = index => ({ id: `s-${index}`, type: NavigationSections.TYPES[index % 6], name: `Section ${index}` });
   assert.equal(NavigationSections.validateNavigation([section(1)]).length, 1);
   assert.equal(NavigationSections.validateNavigation(Array.from({ length: 12 }, (_, i) => section(i))).length, 12);
@@ -224,7 +224,7 @@ test('navigation sections default to eight views, validate their limits and upgr
   delete legacy.settings.navigation;
   legacy.settings.tabNames = ['List', 'Links', 'Roadmap', 'Board'];
   const upgraded = ArchiveValidator.migrateArchive(structuredClone(legacy)).organizations[0].data.settings;
-  assert.deepEqual(upgraded.navigation.map(item => [item.id, item.type, item.name]), [['tasks', 'tasks', 'List'], ['issues', 'issues', 'Links'], ['milestones', 'milestones', 'Roadmap'], ['kanban', 'kanban', 'Board'], ['views', 'views', 'Viste'], ['groups', 'groups', 'Gruppi di attività'], ['todos', 'todos', 'Liste da fare'], ['kpis', 'kpis', 'KPI']]);
+  assert.deepEqual(upgraded.navigation.map(item => [item.id, item.type, item.name]), [['tasks', 'tasks', 'List'], ['issues', 'issues', 'Links'], ['milestones', 'milestones', 'Roadmap'], ['kanban', 'kanban', 'Board'], ['views', 'views', 'Viste'], ['groups', 'groups', 'Gruppi di attività'], ['todos', 'todos', 'Liste da fare']]);
   assert.ok(!('tabNames' in upgraded));
   const invalidLegacy = structuredClone(legacy);
   invalidLegacy.settings.tabNames[0] = null;
@@ -260,27 +260,32 @@ test('navigation sections can be reordered, removed, repeated and bound to saved
   const legacyFile = OrganizationTransfer.organizationExport({ name: 'Source', data: DataFactory.baseData('en') }, 'settings');
   delete legacyFile.settings.navigation;
   legacyFile.settings.tabNames = ['A', 'B', 'C', 'D'];
-  assert.deepEqual(OrganizationTransfer.parseOrganizationFile(legacyFile).settings.navigation.map(item => item.name), ['A', 'B', 'C', 'D', 'Views', 'Group activities', 'To-do lists', 'KPIs']);
+  assert.deepEqual(OrganizationTransfer.parseOrganizationFile(legacyFile).settings.navigation.map(item => item.name), ['A', 'B', 'C', 'D', 'Views', 'Group activities', 'To-do lists']);
   const broken = structuredClone(file);
   broken.settings.navigation = [];
   assert.throws(() => OrganizationTransfer.parseOrganizationFile(broken), /at least one navigation section/);
 });
-test('existing organizations receive a KPI section once without overriding customized or full menus', () => {
-  const old = DataFactory.baseData('en');
-  delete old.kpiNavigationInitialized;
-  old.settings.navigation = [{ id: 'kpis', type: 'tasks', name: 'My tasks' }];
+test('retired KPI sections are removed from archives and imports without changing data or other sections', () => {
+  const old = DataFactory.demoData('en');
+  old.kpiNavigationInitialized = true;
+  const kept = [{ id: 'kpis', type: 'tasks', name: 'My tasks' }, { id: 'board', type: 'kanban', name: 'My board' }];
+  old.settings.navigation = [kept[0], { id: 'dashboard', type: 'kpis', name: 'Dashboard' }, kept[1]];
   const archive = ArchiveValidator.migrateArchive(old);
   const data = archive.organizations[0].data;
-  assert.deepEqual(data.settings.navigation.map(section => [section.id, section.type]), [['kpis', 'tasks'], ['kpis-2', 'kpis']]);
-  data.settings.navigation.pop();
-  assert.deepEqual(ArchiveValidator.migrateArchive(archive).organizations[0].data.settings.navigation, [{ id: 'kpis', type: 'tasks', name: 'My tasks' }]);
-  const full = DataFactory.baseData('en');
-  delete full.kpiNavigationInitialized;
-  full.settings.navigation = Array.from({ length: 12 }, (_, index) => ({ id: `section-${index}`, type: 'tasks', name: `Section ${index}` }));
-  const upgraded = ArchiveValidator.migrateArchive(full);
-  assert.equal(upgraded.organizations[0].data.settings.navigation.length, 12);
-  upgraded.organizations[0].data.settings.navigation.pop();
-  assert.equal(ArchiveValidator.migrateArchive(upgraded).organizations[0].data.settings.navigation.length, 11);
+  assert.deepEqual(data.settings.navigation, kept);
+  assert.ok(!('kpiNavigationInitialized' in data));
+  for (const key of ['tasks', 'issues', 'groups', 'todos']) assert.deepEqual(data[key], old[key]);
+  assert.deepEqual(ArchiveValidator.migrateArchive(archive), archive);
+  const file = OrganizationTransfer.organizationExport({ name: 'Source', data: old }, 'settings');
+  const parsed = OrganizationTransfer.parseOrganizationFile(file);
+  assert.deepEqual(parsed.settings.navigation, kept);
+  assert.deepEqual(OrganizationTransfer.applyOrganizationImport(DataFactory.baseData('en'), parsed, { settings: true }).settings.navigation, kept);
+  old.settings.navigation = [{ id: 'only-kpi', type: 'kpis', name: 'Dashboard' }];
+  file.settings.navigation = structuredClone(old.settings.navigation);
+  const fallback = [{ id: 'tasks', type: 'tasks', name: 'Tasks' }];
+  assert.deepEqual(ArchiveValidator.migrateArchive(old).organizations[0].data.settings.navigation, fallback);
+  assert.deepEqual(OrganizationTransfer.parseOrganizationFile(file).settings.navigation, fallback);
+  assert.throws(() => NavigationSections.validateNavigation(old.settings.navigation), /Invalid navigation sections/);
 });
 test('automatic associations are case-insensitive, many-to-many and deduplicated', () => {
   const issues = [

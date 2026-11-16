@@ -19,6 +19,30 @@ async function tempStore(options = {}) {
 }
 const task = (data, code) => ({ id: `task-${code}`, code, sequence: data.tasks.length + 1, description: '', urgencyId: data.settings.urgencies[0].id, statusId: data.settings.statuses[0].id, effortHours: 4, releaseDate: '', notes: '', hidden: false });
 
+test('opening a 3.12 workspace persists KPI removal and preserves its archive backup', async () => {
+  const { store, dataFolder, cleanup } = await tempStore();
+  try {
+    await store.load();
+    const file = path.join(dataFolder, 'workspace.json');
+    const old = JSON.parse(await fs.readFile(file, 'utf8'));
+    for (const organization of old.organizations) {
+      organization.data.kpiNavigationInitialized = true;
+      organization.data.settings.navigation.unshift({ id: 'kpis', type: 'kpis', name: 'KPI' });
+      organization.data.tasks.push(task(organization.data, 'KEEP'));
+    }
+    await fs.writeFile(file, JSON.stringify(old), 'utf8');
+    const reopened = new WorkspaceStore({ dataFolder });
+    const snapshot = await reopened.load();
+    assert.ok(snapshot.data.settings.navigation.every(section => section.type !== 'kpis'));
+    assert.equal(snapshot.data.tasks[0].code, 'KEEP');
+    const persisted = JSON.parse(await fs.readFile(file, 'utf8'));
+    assert.ok(!('kpiNavigationInitialized' in persisted.organizations[0].data));
+    assert.deepEqual(persisted.organizations[0].data.settings.navigation, snapshot.data.settings.navigation);
+    assert.deepEqual(JSON.parse(await fs.readFile(`${file}.bak`, 'utf8')), old);
+    assert.deepEqual((await new WorkspaceStore({ dataFolder }).load()).data, snapshot.data);
+  } finally { await cleanup(); }
+});
+
 test('custom columns, all value types, colors and fonts survive a fresh store and organization switches', async () => {
   const { store, dataFolder, cleanup } = await tempStore();
   try {

@@ -62,27 +62,7 @@ export class SmokeTests extends Component {
       const iconSprite = document.getElementById('orbit-icon-sprite');
       check(iconSprite && IconLibrary.names().every(name => iconSprite.querySelector(`symbol#i-${name}`)) && document.querySelectorAll('#navigation .nav-icon svg.ico').length === this.state.data.settings.navigation.length && this.$('#settings-button svg.ico') && this.$('#new-task svg.ico') && this.$('#columns-button svg.ico') && !/[▤⌘◈▥⚙⌕↶↷↗＋◉◌⋯▽▾]/.test([...document.querySelectorAll('#navigation button, .topbar button, #content .page-heading button, #content .table-toolbar button, #task-rows td:last-child button')].map(button => button.textContent).join('')), 'Icons come from the shared sprite instead of text glyphs');
       check(!this.$('#content .stats'), 'The activity list no longer contains KPI cards');
-      this.state.search = 'no-matching-task-for-kpi-check';
-      await this.app.sections.open('kpis');
-      const visibleTasks = this.app.presenter.visibleTasks(), kpiCards = () => [...document.querySelectorAll('#kpi-page .stat')];
-      check(this.state.view === 9 && kpiCards().length === 4 && Number(kpiCards()[0].querySelector('strong').firstChild.textContent) === visibleTasks.length &&
-        Number(kpiCards()[1].querySelector('strong').firstChild.textContent) === new Set(visibleTasks.map(task => task.releaseDate).filter(Boolean)).size &&
-        kpiCards()[2].querySelector('strong').firstChild.textContent === this.app.presenter.effort(visibleTasks.reduce((sum, task) => sum + task.effortHours, 0)) &&
-        Number(kpiCards()[3].querySelector('strong').firstChild.textContent) === visibleTasks.filter(task => this.app.presenter.highlightOf(task) || this.state.data.settings.statuses.find(status => status.id === task.statusId)?.highlight).length,
-      'The KPI section shows organization-wide figures independently of activity filters');
-      check(this.$('#content').scrollWidth <= this.$('#content').clientWidth + 1 && this.$('#kpi-page h1').textContent.startsWith(this.term('KPIs')), 'The KPI page fits the viewport and uses the localized section name');
-      const kpiTask = visibleTasks[0];
-      kpiTask.hidden = true;
-      this.app.shell.render();
-      check(Number(kpiCards()[0].querySelector('strong').firstChild.textContent) === visibleTasks.length - 1, 'KPI figures update when task visibility changes');
-      kpiTask.hidden = false;
-      const deletedColumns = this.state.data.settings.deletedTaskColumns;
-      this.state.data.settings.deletedTaskColumns = ['releaseDate', 'effort', 'highlight', 'status'];
-      this.app.shell.render();
-      check(kpiCards().slice(1).every(card => card.hidden && getComputedStyle(card).display === 'none'), 'KPIs with removed source columns are hidden');
-      if (deletedColumns === undefined) delete this.state.data.settings.deletedTaskColumns; else this.state.data.settings.deletedTaskColumns = deletedColumns;
-      this.state.search = '';
-      await this.app.sections.open('tasks');
+      check(!this.$('#navigation [data-view="9"]'), 'The sidebar has no retired KPI section');
       const packCatalog = this.app.packs.catalog, existingIcon = this.$('#new-task svg');
       const unchangedCatalog = structuredClone(packCatalog);
       unchangedCatalog.sources.forEach(source => { source.updatedAt = '2027-01-01T00:00:00.000Z'; });
@@ -1026,7 +1006,7 @@ export class SmokeTests extends Component {
         check(!this.$('#navigation-panel').hidden && sectionRows().join() === sectionIds().join() && document.querySelectorAll('#section-list select[data-section-view]').length === 3 && !this.$('#section-list [data-section-row="issues"] select') && this.$('#section-list [data-section-move="tasks:-1"]').disabled && [...this.$('#section-list [data-section-view="kanban"]').options].some(option => option.value === sectionView.id), 'Navigation settings list every section, with a saved view only for sections that show tasks');
         this.$('#section-list [data-section-move="kanban:-1"]').click();
         await tick();
-        check(sectionRows().join() === 'tasks,issues,kanban,milestones,views,groups,todos,kpis' && !this.$('#unsaved-banner').hidden && !this.$('#settings-tab-navigation .settings-tab-dot').hidden && this.$('#settings-tab-identity .settings-tab-dot').hidden, 'Moving a section reorders it and flags the Navigation tab');
+        check(sectionRows().join() === 'tasks,issues,kanban,milestones,views,groups,todos' && !this.$('#unsaved-banner').hidden && !this.$('#settings-tab-navigation .settings-tab-dot').hidden && this.$('#settings-tab-identity .settings-tab-dot').hidden, 'Moving a section reorders it and flags the Navigation tab');
         this.$('#section-list [data-section-remove="issues"]').click();
         setValue('#section-list [data-section-name="kanban"]', 'Smoke board');
         setValue('#new-section-type', 'issues', 'change');
@@ -1040,28 +1020,28 @@ export class SmokeTests extends Component {
         this.$('#new-section-view').value = sectionView.id;
         this.$('#add-section').requestSubmit();
         const draftSections = this.state.settingsDraft.navigation;
-        check(sectionRows().length === 9 && !sectionRows().includes('issues') && draftSections.slice(7).map(section => [section.type, section.name, section.viewId].join()).join('|') === `kanban,Smoke filtered board,${sectionView.id}|tasks,Smoke filtered list,${sectionView.id}` && this.$('#section-list [data-section-row]:last-child [data-section-name]') === document.activeElement, 'Sections are removed and added with their type, name and saved view');
+        check(sectionRows().length === 8 && !sectionRows().includes('issues') && draftSections.slice(6).map(section => [section.type, section.name, section.viewId].join()).join('|') === `kanban,Smoke filtered board,${sectionView.id}|tasks,Smoke filtered list,${sectionView.id}` && this.$('#section-list [data-section-row]:last-child [data-section-name]') === document.activeElement, 'Sections are removed and added with their type, name and saved view');
         setValue('#new-section-type', 'views', 'change');
-        check(this.$('#new-section-view').disabled && this.$('#new-section-type').options.length === 8 && [...this.$('#new-section-type').options].some(option => option.value === 'kpis'), 'All eight section types can be created, with an unfiltered Views catalog');
+        check(this.$('#new-section-view').disabled && this.$('#new-section-type').options.length === 7 && ![...this.$('#new-section-type').options].some(option => option.value === 'kpis'), 'Seven section types can be created, without the retired KPI section');
         this.$('#add-section').requestSubmit();
         const addedCatalog = draftSections.at(-1);
         check(addedCatalog.type === 'views' && addedCatalog.name === this.t("Views") && !addedCatalog.viewId, 'A new Views section uses its translated default name');
         this.$(`[data-section-remove="${addedCatalog.id}"]`).click();
-        draftSections.push(...Array.from({ length: 3 }, (_, index) => ({ id: `smoke-extra-${index}`, type: 'milestones', name: `Extra ${index}` })));
+        draftSections.push(...Array.from({ length: 4 }, (_, index) => ({ id: `smoke-extra-${index}`, type: 'milestones', name: `Extra ${index}` })));
         this.app.navigationSettings.drawNavigation();
         check(this.$('#add-section-button').disabled && sectionRows().length === NavigationSections.LIMIT, 'No more than 12 sections can be added');
-        draftSections.splice(9);
+        draftSections.splice(8);
         this.app.navigationSettings.drawNavigation();
         setValue('#section-list [data-section-name="kanban"]', ' ');
         this.app.settings.showSettingsTab('themes');
         this.$('#save-settings').click();
         await waitFor(() => this.$('#toast').textContent.includes(this.t("Each navigation section needs a name of 1 to 60 characters.")) && !this.state.saving);
-        check(this.state.settingsTab === 'navigation' && this.state.data.settings.navigation.length === 8, 'A section without a name is not saved and its tab opens');
+        check(this.state.settingsTab === 'navigation' && this.state.data.settings.navigation.length === 7, 'A section without a name is not saved and its tab opens');
         setValue('#section-list [data-section-name="kanban"]', 'Smoke board');
         this.$('#save-settings').click();
-        await waitFor(() => !this.state.saving && this.state.data.settings.navigation.length === 9);
+        await waitFor(() => !this.state.saving && this.state.data.settings.navigation.length === 8);
         const filteredBoard = this.state.data.settings.navigation.find(section => section.name === 'Smoke filtered board'), filteredList = this.state.data.settings.navigation.find(section => section.name === 'Smoke filtered list');
-        check(navButtons().map(button => button.dataset.section).join() === sectionIds().join() && !this.$('#navigation [data-view="1"]') && navButtons().map(button => button.dataset.view).join() === '0,3,2,6,7,8,9,3,0' && navButtons()[1].querySelector('.nav-label').textContent === 'Smoke board', 'The sidebar follows the order of the sections and drops removed ones');
+        check(navButtons().map(button => button.dataset.section).join() === sectionIds().join() && !this.$('#navigation [data-view="1"]') && navButtons().map(button => button.dataset.view).join() === '0,3,2,6,7,8,3,0' && navButtons()[1].querySelector('.nav-label').textContent === 'Smoke board', 'The sidebar follows the order of the sections and drops removed ones');
         this.$(`#navigation [data-section="${filteredBoard.id}"]`).click();
         await waitFor(() => this.state.sectionId === filteredBoard.id);
         check(this.state.view === 3 && this.$(`#navigation [data-section="${filteredBoard.id}"]`).classList.contains('active') && !this.$('#navigation [data-section="kanban"]').classList.contains('active') && this.$('#current-tab').textContent === 'Smoke filtered board' && this.$('.section-view-chip')?.textContent.includes('Smoke section view') && viewTasks.length > 0 && viewTasks.length < this.state.data.tasks.length && cards() === viewTasks.length, 'A board section bound to a saved view shows only its tasks');
@@ -1135,7 +1115,7 @@ export class SmokeTests extends Component {
         this.app.history.clearHistory(this.state.activeOrganizationId);
         this.$('#modal').open && this.$('#modal').close();
         this.app.shell.render();
-        check(sectionIds().join() === NavigationSections.TYPES.join() && navButtons().length === 8, 'Navigation test sections leave no data behind');
+        check(sectionIds().join() === NavigationSections.TYPES.join() && navButtons().length === 7, 'Navigation test sections leave no data behind');
       }
       {
         await this.app.sections.open('todos');
@@ -2728,7 +2708,7 @@ export class SmokeTests extends Component {
       check(this.state.data.settings.fontSizes.kanban === 120 && rootSize('kanban') === '1.2', "Text sizes are imported with the full organization");
       const settingsSource = baseData('en');
       settingsSource.settings.statuses = [{ id: 'smoke-status-a', name: this.state.data.settings.statuses[0].name.toUpperCase(), color: '#3366ff', highlight: false }, { id: 'smoke-status-b', name: 'Shipped', color: '#33aa66', highlight: true }];
-      settingsSource.settings.navigation.forEach((section, index) => { section.name = ['Imported tasks', 'Imported issues', 'Imported milestones', 'Imported board', 'Imported views', 'Imported groups', 'Imported to-dos', 'Imported KPIs'][index]; });
+      settingsSource.settings.navigation.forEach((section, index) => { section.name = ['Imported tasks', 'Imported issues', 'Imported milestones', 'Imported board', 'Imported views', 'Imported groups', 'Imported to-dos'][index]; });
       settingsSource.settings.logo = secondLogo;
       settingsSource.settings.fontSizes.tables = 110;
       const settingsFile = organizationExport({ name: 'Remote settings', data: settingsSource }, 'settings', { appVersion: this.state.appVersion });
@@ -2742,7 +2722,7 @@ export class SmokeTests extends Component {
       check(settingsForm.textContent.includes(this.t("Language, navigation sections, hours per day, text sizes, statuses, urgencies, highlighters, tags, list columns and platform links. Replaces current settings.")), "Settings import indicates the text sizes");
       settingsForm.requestSubmit();
       await waitFor(() => !this.$('#modal').open && !this.state.saving && this.state.data.settings.language === 'en');
-      check(firstStatusTasks.length > 0 && firstStatusTasks.every(id => this.state.data.tasks.find(t => t.id === id).statusId === 'smoke-status-a') && this.state.data.tasks.every(t => ['smoke-status-a', 'smoke-status-b'].includes(t.statusId)) && this.state.data.settings.logo === fullFile.settings.logo && this.state.data.settings.navigation.map(section => section.name).join() === 'Imported tasks,Imported issues,Imported milestones,Imported board,Imported views,Imported groups,Imported to-dos,Imported KPIs' && this.$('#navigation [data-view="3"] .nav-label').textContent === 'Imported board' && this.$('#navigation [data-view="6"] .nav-label').textContent === 'Imported views' && this.$('#navigation [data-view="7"] .nav-label').textContent === 'Imported groups' && this.state.data.settings.taskFields.some(field => field.type === 'platform' && field.name === 'Link to platform' && field.template === "https://imported.example.com/browse/{code}"), "Settings are imported with statuses remapped, logo unchanged, and the old portal template as a platform column");
+      check(firstStatusTasks.length > 0 && firstStatusTasks.every(id => this.state.data.tasks.find(t => t.id === id).statusId === 'smoke-status-a') && this.state.data.tasks.every(t => ['smoke-status-a', 'smoke-status-b'].includes(t.statusId)) && this.state.data.settings.logo === fullFile.settings.logo && this.state.data.settings.navigation.map(section => section.name).join() === 'Imported tasks,Imported issues,Imported milestones,Imported board,Imported views,Imported groups,Imported to-dos' && this.$('#navigation [data-view="3"] .nav-label').textContent === 'Imported board' && this.$('#navigation [data-view="6"] .nav-label').textContent === 'Imported views' && this.$('#navigation [data-view="7"] .nav-label').textContent === 'Imported groups' && this.state.data.settings.taskFields.some(field => field.type === 'platform' && field.name === 'Link to platform' && field.template === "https://imported.example.com/browse/{code}"), "Settings are imported with statuses remapped, logo unchanged, and the old portal template as a platform column");
       check(this.state.data.settings.fontSizes.tables === 110 && this.state.data.settings.fontSizes.kanban === 100 && rootSize('tables') === '1.1' && rootSize('kanban') === '1', "Text sizes are replaced by the imported settings");
       check(document.documentElement.lang === 'en' && this.$('#current-tab').textContent === 'Settings' && this.$('#transfer-panel').textContent.includes('Export and import organization') && this.$('#transfer-panel').textContent.includes('Export everything') && this.$('#import-organization').textContent.includes('Import from file') && this.$('#toast').textContent === 'Import completed.', 'Export and import section is translated using the imported language');
       check(this.$('#font-size-panel h2').textContent === 'Text size' && this.$('label[for="font-size-tables"]').textContent === 'Tables' && this.$('[data-font-preset="130"]').textContent.includes('Extra large') && this.$('#font-size-tables').value === '110', 'Text size section is translated into English');

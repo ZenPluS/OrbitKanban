@@ -23,7 +23,6 @@ import { SavedViews } from './tasks/SavedViews.js';
 import { ViewsPage } from './tasks/ViewsPage.js';
 import { GroupsPage } from './groups/GroupsPage.js';
 import { TodoPage } from './todos/TodoPage.js';
-import { KpiPage } from './tasks/KpiPage.js';
 import { GroupEditor } from './groups/GroupEditor.js';
 import { TaskRows } from './tasks/TaskRows.js';
 import { TaskAttachments } from './tasks/TaskAttachments.js';
@@ -87,7 +86,6 @@ export class App extends Component {
     this.viewsPage = new ViewsPage(this);
     this.groupsPage = new GroupsPage(this);
     this.todoPage = new TodoPage(this);
-    this.kpiPage = new KpiPage(this);
     this.groupEditor = new GroupEditor(this);
     this.taskRows = new TaskRows(this);
     this.attachments = new TaskAttachments(this);

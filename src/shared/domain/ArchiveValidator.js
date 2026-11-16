@@ -88,7 +88,6 @@ class ArchiveValidator {
     Common.assert(data.issues.every(x => ['id', 'code', 'incident', 'problem'].every(k => text(x[k])) && x.id), "Invalid issue list.");
     if (data.groups !== undefined) TaskGroups.validateGroups(data.groups);
     if (data.todos !== undefined) TodoLists.validate(data.todos);
-    Common.assert(data.kpiNavigationInitialized === undefined || data.kpiNavigationInitialized === true, "Invalid navigation sections.");
     ColumnValidator.validateCustomData(data);
     return data;
   }
@@ -98,6 +97,7 @@ class ArchiveValidator {
     if (archive.version === 1) {
       TaskLinks.upgradeLegacyLink(archive.settings, archive.tasks, { language: archive.settings?.language ?? 'it' });
       NavigationSections.upgradeLegacyTabNames(archive.settings);
+      NavigationSections.removeRetiredSections(archive.settings);
       ArchiveValidator.validateData(archive);
       const organizationId = Common.id();
       return ArchiveValidator.validateArchive({
@@ -116,7 +116,9 @@ class ArchiveValidator {
     for (const organization of archive.organizations) {
       TaskLinks.upgradeLegacyLink(organization.data?.settings, organization.data?.tasks, { language: organization.data?.settings?.language ?? 'it' });
       NavigationSections.upgradeLegacyTabNames(organization.data?.settings);
+      NavigationSections.removeRetiredSections(organization.data?.settings);
       ArchiveValidator.validateData(organization.data);
+      delete organization.data.kpiNavigationInitialized;
       // Organizations saved before 3.2 get the group activities section once; the empty list marks them as upgraded.
       if (organization.data.groups === undefined) {
         NavigationSections.addMissingType(organization.data.settings, 'groups');
@@ -125,10 +127,6 @@ class ArchiveValidator {
       if (organization.data.todos === undefined) {
         NavigationSections.addMissingType(organization.data.settings, 'todos');
         organization.data.todos = [];
-      }
-      if (organization.data.kpiNavigationInitialized === undefined) {
-        NavigationSections.addMissingType(organization.data.settings, 'kpis');
-        organization.data.kpiNavigationInitialized = true;
       }
       TaskGroups.prune(organization.data);
       organization.data.settings.language ??= 'it';
