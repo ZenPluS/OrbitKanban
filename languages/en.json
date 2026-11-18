@@ -6,6 +6,9 @@
   "locale": "en-GB",
   "notes": "English is the source language. Keep message, term, and plural keys in English; translate only values. Empty or missing values fall back to English. Preserve placeholders such as {0}. Guide texts are terms: keep the **bold** and `key` markers, and write key names such as Shift or Enter as in their own terms.",
   "messages": {
+    "Pin column": "Pin column",
+    "Unpin column": "Unpin column",
+    "Pinned columns stay on the left while the other columns scroll. Their relative order is preserved.": "Pinned columns stay on the left while the other columns scroll. Their relative order is preserved.",
     "Preparing your update…": "Preparing your update…",
     "Verifying the download and backing up your workspace. Keep this window open.": "Verifying the download and backing up your workspace. Keep this window open.",
     "Update installation progress": "Update installation progress",
@@ -1206,6 +1209,7 @@
     "Organization, views and details in the sidebar.": "Organization, views and details in the sidebar."
   },
   "terms": {
+    "Use **Pin column** to keep a column on the left during horizontal scrolling. Pins work in both lists, follow their configured relative order and are kept in settings and saved task views. **Unpin column** releases a column; restoring defaults clears pins.": "Use **Pin column** to keep a column on the left during horizontal scrolling. Pins work in both lists, follow their configured relative order and are kept in settings and saved task views. **Unpin column** releases a column; restoring defaults clears pins.",
     "KPIs": "KPIs",
     "The sidebar holds the organization menu, the sections of the eight view types, this **Guide** and **Settings**.": "The sidebar holds the organization menu, the sections of the eight view types, this **Guide** and **Settings**.",
     "The **KPIs** section shows visible tasks, distinct release dates, total effort and highlighted tasks for the organization. Hidden tasks and list filters do not affect these figures.": "The **KPIs** section shows visible tasks, distinct release dates, total effort and highlighted tasks for the organization. Hidden tasks and list filters do not affect these figures.",

@@ -26,6 +26,7 @@ export class IssueList extends Component {
         return self.ui`<tr data-issue-row="${self.esc(i.id)}" class="${group ? 'duplicate-row' : ''}" title="Double-click the row to edit.">${columns.map(id => cells[id] || self.app.cells.customCell(i, self.app.columns.columnDef(id, 'issues').field, 'issues')).join('')}<td><button class="button small" data-issue="${i.id}">Edit</button></td></tr>`;
       }).join('') || self.ui`<tr><td colspan="${columns.length + 1}" class="empty">No associations. Add a portal code with an incident and/or problem.</td></tr>`;
       self.app.cells.wireChoicePickers();
+      self.app.pinnedColumns.apply('issues');
       document.querySelectorAll('[data-issue]').forEach(b => b.onclick = () => self.issueDialog(self.state.data.issues.find(i => i.id === b.dataset.issue)));
       document.querySelectorAll('#issue-rows [data-dup-issue]').forEach(b => b.onclick = () => {
         self.$('#issue-search').value = b.dataset.dupIssue;

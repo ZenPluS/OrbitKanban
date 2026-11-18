@@ -99,6 +99,7 @@ export class TaskRows extends Component {
     }));
     document.querySelectorAll('[data-mark-task]').forEach(b => b.onclick = () => this.app.rowMarks.openMarkMenu(b));
     if (!this.hasColumn('highlight')) document.querySelectorAll('[data-mark-task]').forEach(button => button.remove());
+    this.app.pinnedColumns.apply('tasks');
     document.querySelectorAll('#task-rows [data-dup-incident]').forEach(b => b.onclick = () => this.#showTaskDuplicates(b.dataset.dupIncident));
   }
   // Lists every task sharing the incident, hidden ones included, so duplicates can be compared side by side.

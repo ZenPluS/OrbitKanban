@@ -7,6 +7,44 @@ const { CsvImporter } = require('../src/shared/interop');
 const field = (type, name = type) => ({ id: `custom-${type}`, name, type, options: ['select', 'multiselect'].includes(type) ? ['One', 'Two'] : [] });
 const task = data => ({ id: 't', code: 'A', sequence: 1, description: '', notes: '', releaseDate: '', statusId: data.settings.statuses[0].id, urgencyId: data.settings.urgencies[0].id, effortHours: 0, hidden: false });
 
+test('pinned columns retain their relative order, visibility and portable settings', () => {
+  const data = DataFactory.baseData('en');
+  data.settings.taskFields = [field('text')];
+  data.settings.taskColumns = [
+    { id: 'sequence', visible: true }, { id: 'code', visible: true, pinned: true },
+    { id: 'description', visible: false, pinned: true }, { id: 'custom-text', visible: true, pinned: true }
+  ];
+  data.settings.issueColumns = [{ id: 'problem', visible: true, pinned: true }, { id: 'code', visible: true }];
+  const columns = ColumnLayout.listColumns(data.settings, 'tasks');
+  assert.deepEqual(ColumnLayout.shownColumns(columns).slice(0, 3), ['code', 'custom-text', 'sequence']);
+  assert.ok(!ColumnLayout.shownColumns(columns).includes('description'));
+  data.settings.savedViews = [{ id: 'pinned-view', name: 'Pinned', search: '', statusFilter: '', highlightFilter: '', showHidden: false, duplicatesOnly: false,
+    columns, sort: [{ key: 'releaseDate', direction: 'asc' }] }];
+  const migrated = ArchiveValidator.migrateArchive(data).organizations[0].data;
+  assert.deepEqual(ColumnLayout.listColumns(migrated.settings, 'tasks'), columns);
+  const file = OrganizationTransfer.parseOrganizationFile(OrganizationTransfer.organizationExport({ name: 'Source', data }, 'settings'));
+  const imported = OrganizationTransfer.applyOrganizationImport(DataFactory.baseData('en'), file, { settings: true });
+  assert.deepEqual(ColumnLayout.listColumns(imported.settings, 'tasks'), columns);
+  assert.equal(imported.settings.issueColumns.find(column => column.id === 'problem').pinned, true);
+  assert.equal(imported.settings.savedViews[0].columns.find(column => column.id === 'code').pinned, true);
+  assert.ok(ColumnLayout.listColumns(data.settings, 'tasks', []).every(column => !column.pinned));
+});
+test('invalid pin flags are rejected in task, issue and saved-view columns and imported files', () => {
+  for (const pinned of ['true', 1, null, {}]) {
+    for (const key of ['taskColumns', 'issueColumns']) {
+      const data = DataFactory.baseData();
+      data.settings[key] = [{ id: 'code', visible: true, pinned }];
+      assert.throws(() => ArchiveValidator.validateData(data), /Invalid list columns/);
+      const file = OrganizationTransfer.organizationExport({ name: 'Source', data: DataFactory.baseData() }, 'settings');
+      file.settings[key] = [{ id: 'code', visible: true, pinned }];
+      assert.throws(() => OrganizationTransfer.parseOrganizationFile(file), /Invalid list columns/);
+    }
+    const data = DataFactory.baseData();
+    data.settings.savedViews = [{ columns: [{ id: 'code', visible: true, pinned }] }];
+    assert.throws(() => ArchiveValidator.validateData(data), /Invalid list columns/);
+  }
+});
+
 test('every default column can be deleted without returning on reload or organization import', () => {
   for (const kind of ['tasks', 'issues']) for (const field of ColumnSchema.BUILTIN_FIELDS[kind]) {
     const data = DataFactory.baseData();

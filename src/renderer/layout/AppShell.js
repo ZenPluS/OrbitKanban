@@ -23,6 +23,7 @@ export class AppShell extends Component {
     this.app.logoPainter.paintLogo(theme, organization);
   }
   render() {
+    this.app.pinnedColumns.disconnect();
     this.app.colorPicker.closeColorPicker();
     this.app.rowMarks.closeMarkMenu();
     this.app.tagMenu.closeTagMenu();

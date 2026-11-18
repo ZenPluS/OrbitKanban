@@ -56,6 +56,9 @@ class ArchiveValidator {
     const issueColumnIds = ColumnSchema.schemaOf(s, 'issues').map(field => field.id);
     const filterTypes = { sequence: 'number', effort: 'effort', releaseDate: 'date', ...Object.fromEntries((s.taskFields || []).map(field => [field.id, field.type])) };
     const sortKeys = ColumnLayout.sortKeys(s);
+    for (const columns of [s.taskColumns, s.issueColumns, ...(Array.isArray(s.savedViews) ? s.savedViews.map(view => view?.columns) : [])]) {
+      Common.assert(!Array.isArray(columns) || columns.every(column => column && (column.pinned === undefined || typeof column.pinned === 'boolean')), "Invalid list columns.");
+    }
     Common.assert(s.taskColumns === undefined || (Array.isArray(s.taskColumns) && s.taskColumns.every(c => c && text(c.id) && c.id && typeof c.visible === 'boolean') && uniqueIds(s.taskColumns) && (!taskColumnIds.length || s.taskColumns.some(c => c.visible && taskColumnIds.includes(c.id)))), "Invalid list columns.");
     Common.assert(s.issueColumns === undefined || (Array.isArray(s.issueColumns) && s.issueColumns.every(c => c && text(c.id) && typeof c.visible === 'boolean') && uniqueIds(s.issueColumns) && (!issueColumnIds.length || s.issueColumns.some(c => c.visible && issueColumnIds.includes(c.id)))), "Invalid list columns.");
     Common.assert(s.savedViews === undefined || (Array.isArray(s.savedViews) && s.savedViews.length <= Limits.SAVED_VIEW_LIMIT && s.savedViews.every(view =>

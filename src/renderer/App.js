@@ -16,6 +16,7 @@ import { SectionNavigator } from './layout/SectionNavigator.js';
 import { SettingsController } from './settings/SettingsController.js';
 import { OrganizationManager } from './organizations/OrganizationManager.js';
 import { ColumnCatalog } from './columns/ColumnCatalog.js';
+import { PinnedColumns } from './columns/PinnedColumns.js';
 import { CustomCells } from './columns/CustomCells.js';
 import { ColumnFilterPanel } from './columns/ColumnFilterPanel.js';
 import { TaskList } from './tasks/TaskList.js';
@@ -79,6 +80,7 @@ export class App extends Component {
     this.settings = new SettingsController(this);
     this.organizationManager = new OrganizationManager(this);
     this.columns = new ColumnCatalog(this);
+    this.pinnedColumns = new PinnedColumns(this);
     this.cells = new CustomCells(this);
     this.columnFilterPanel = new ColumnFilterPanel(this);
     this.taskList = new TaskList(this);

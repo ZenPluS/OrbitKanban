@@ -32,7 +32,7 @@ class OrganizationTransfer {
     urgency: ['id', 'name', 'color'],
     highlight: ['id', 'name', 'color'],
     section: ['id', 'type', 'name', 'viewId'],
-    column: ['id', 'visible'],
+    column: ['id', 'visible', 'pinned'],
     task: ['id', 'code', 'sequence', 'description', 'notes', 'releaseDate', 'statusId', 'urgencyId', 'effortHours', 'hidden', 'highlightId', 'additionalHighlightIds', 'tagIds', 'customFields'],
     issue: ['id', 'code', 'incident', 'problem', 'customFields'],
     group: ['id', 'name', 'color', 'description', 'taskIds'],
@@ -149,7 +149,7 @@ class OrganizationTransfer {
       for (const kind of ['tasks', 'issues']) ColumnValidator.validateFields(ColumnSchema.fieldsOf(settings, kind), kind);
       if (source.taskColumns !== undefined) {
         const columns = OrganizationTransfer.#fileRecords(source.taskColumns, OrganizationTransfer.#RECORD_KEYS.column, "Invalid list columns.");
-        Common.assert(columns.every(column => typeof column.id === 'string' && typeof column.visible === 'boolean'), "Invalid list columns.");
+        Common.assert(columns.every(column => typeof column.id === 'string' && typeof column.visible === 'boolean' && (column.pinned === undefined || typeof column.pinned === 'boolean')), "Invalid list columns.");
         settings.taskColumns = TaskColumns.normalizeTaskColumns(columns, settings.taskFields, settings.deletedTaskColumns);
       }
       if (source.savedViews !== undefined) settings.savedViews = structuredClone(source.savedViews);

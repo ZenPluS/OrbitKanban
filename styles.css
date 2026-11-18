@@ -1452,6 +1452,42 @@ button.reference-chip:focus-visible {
 .column-row.is-off {
   opacity: 0.6;
 }
+.column-pin.is-pinned {
+  color: var(--accent);
+  --pin-fill: currentColor;
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+}
+.table-scroll .pinned-column {
+  position: sticky;
+  z-index: 3;
+  background: var(--surface);
+}
+.table-scroll th.pinned-column {
+  z-index: 5;
+  background: color-mix(in srgb, var(--surface) 88%, var(--background));
+}
+.table-scroll .pinned-edge {
+  box-shadow: inset -1px 0 var(--border), 3px 0 5px -3px var(--border);
+}
+.table-scroll tbody tr:hover td.pinned-column {
+  background: color-mix(in srgb, var(--text) 2%, var(--surface));
+}
+.activity-table tr.highlighted td.pinned-column {
+  background: color-mix(in srgb, var(--row-color) 7%, var(--surface));
+}
+.activity-table tr.highlighted:hover td.pinned-column {
+  background: color-mix(in srgb, var(--row-color) 12%, var(--surface));
+}
+.activity-table tr.marked td.pinned-column,
+.activity-table tr.marked:hover td.pinned-column {
+  background: var(--mark-background), var(--surface);
+}
+.activity-table tbody tr.selected td.pinned-column {
+  background: color-mix(in srgb, var(--accent) 9%, var(--surface));
+}
+.activity-table tbody tr.selected.marked td.pinned-column {
+  background: var(--mark-background), color-mix(in srgb, var(--accent) 9%, var(--surface));
+}
 .column-row .icon-button {
   padding: 3px 7px;
   font-size: calc(15px * var(--fs));

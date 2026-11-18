@@ -10,6 +10,9 @@
       "locale": "it-IT",
       "notes": "English is the source language of OrbitKanban. Keep message, term, and plural keys in English; translate their values into Italian. Preserve placeholders such as {0}.",
       "messages": {
+        "Pin column": "Fissa colonna",
+        "Unpin column": "Sblocca colonna",
+        "Pinned columns stay on the left while the other columns scroll. Their relative order is preserved.": "Le colonne fissate restano a sinistra mentre le altre scorrono. Il loro ordine relativo viene mantenuto.",
         "Preparing your update…": "Preparazione dell’aggiornamento…",
         "Verifying the download and backing up your workspace. Keep this window open.": "Verifica del download e backup dei dati in corso. Mantieni aperta questa finestra.",
         "Update installation progress": "Avanzamento installazione aggiornamento",
@@ -1210,6 +1213,7 @@
         "Organization, views and details in the sidebar.": "Organizzazione, viste e dettagli nella barra laterale."
       },
       "terms": {
+        "Use **Pin column** to keep a column on the left during horizontal scrolling. Pins work in both lists, follow their configured relative order and are kept in settings and saved task views. **Unpin column** releases a column; restoring defaults clears pins.": "Usa **Fissa colonna** per mantenere una colonna a sinistra durante lo scorrimento orizzontale. Le colonne fissate funzionano in entrambe le liste, seguono il loro ordine relativo e vengono salvate nelle impostazioni e nelle viste delle attività. **Sblocca colonna** libera una colonna; il ripristino delle colonne predefinite rimuove i blocchi.",
         "KPIs": "KPI",
         "The sidebar holds the organization menu, the sections of the eight view types, this **Guide** and **Settings**.": "La barra laterale contiene il menu delle organizzazioni, le sezioni degli otto tipi di vista, questa **Guida** e le **Impostazioni**.",
         "The **KPIs** section shows visible tasks, distinct release dates, total effort and highlighted tasks for the organization. Hidden tasks and list filters do not affect these figures.": "La sezione **KPI** mostra attività visibili, date di release distinte, effort totale e attività evidenziate dell'organizzazione. Le attività nascoste sono escluse e i filtri della lista non modificano i valori.",

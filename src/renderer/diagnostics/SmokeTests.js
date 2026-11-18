@@ -63,6 +63,78 @@ export class SmokeTests extends Component {
       check(iconSprite && IconLibrary.names().every(name => iconSprite.querySelector(`symbol#i-${name}`)) && document.querySelectorAll('#navigation .nav-icon svg.ico').length === this.state.data.settings.navigation.length && this.$('#settings-button svg.ico') && this.$('#new-task svg.ico') && this.$('#columns-button svg.ico') && !/[▤⌘◈▥⚙⌕↶↷↗＋◉◌⋯▽▾]/.test([...document.querySelectorAll('#navigation button, .topbar button, #content .page-heading button, #content .table-toolbar button, #task-rows td:last-child button')].map(button => button.textContent).join('')), 'Icons come from the shared sprite instead of text glyphs');
       check(!this.$('#content .stats'), 'The activity list no longer contains KPI cards');
       check(!this.$('#navigation [data-view="9"]'), 'The sidebar has no retired KPI section');
+      {
+        const baseline = structuredClone(this.state.data);
+        const frame = () => new Promise(resolve => requestAnimationFrame(resolve));
+        this.$('#columns-button').click();
+        this.$('[data-column-pin="code"]').click();
+        this.$('[data-column-pin="status"]').click();
+        check(this.$('[data-column-pin="code"]').getAttribute('aria-pressed') === 'true', 'Column pins expose their selected state to assistive technology');
+        this.$('#columns-apply').click();
+        await waitFor(() => !this.state.saving && !this.$('#modal').open);
+        let table = this.$('.activity-table'), scroll = table.closest('.table-scroll');
+        scroll.style.maxWidth = '620px';
+        await frame();
+        const code = table.querySelector('th[data-column="code"]'), status = table.querySelector('th[data-column="status"]');
+        check([...table.querySelectorAll('th[data-column]')].slice(0, 2).map(header => header.dataset.column).join() === 'code,status' &&
+          code.classList.contains('pinned-column') && status.classList.contains('pinned-column'), 'Arbitrary task columns are grouped on the left when pinned');
+        const left = code.getBoundingClientRect().left, statusLeft = status.getBoundingClientRect().left;
+        const unpinned = table.querySelector('th[data-column="sequence"]'), originalLeft = unpinned.getBoundingClientRect().left;
+        scroll.scrollLeft = 260;
+        await frame();
+        check(scroll.scrollLeft > 100 && Math.abs(code.getBoundingClientRect().left - left) < 2 && Math.abs(status.getBoundingClientRect().left - statusLeft) < 2 &&
+          unpinned.getBoundingClientRect().left < originalLeft - 100, 'Horizontal scrolling moves normal columns while pinned headers stay visible');
+        const row = table.querySelector('tbody tr[data-task-row]');
+        check(Math.abs(row.cells[1].getBoundingClientRect().left - left) < 2 && Math.abs(row.cells[2].getBoundingClientRect().left - statusLeft) < 2 &&
+          getComputedStyle(row.cells[1]).backgroundColor !== 'rgba(0, 0, 0, 0)', 'Pinned body cells align with their headers and have an opaque background');
+        code.style.minWidth = '240px';
+        await frame(); await frame();
+        check(Math.abs(status.getBoundingClientRect().left - code.getBoundingClientRect().right) < 2, 'Pinned offsets follow changing column widths without overlap');
+        scroll.scrollTop = 150;
+        await frame();
+        check(Math.abs(code.getBoundingClientRect().top - scroll.getBoundingClientRect().top) < 3, 'Pinned column headers also remain fixed during vertical scrolling');
+        const stored = (await this.workspaceApi.load()).data.settings.taskColumns;
+        check(['code', 'status'].every(id => stored.find(column => column.id === id)?.pinned), 'Task column pins persist in the portable archive');
+        await this.app.savedViews.saveSavedView('Smoke pinned columns');
+        const pinnedView = this.state.data.settings.savedViews.find(view => view.name === 'Smoke pinned columns');
+        this.app.taskRows.drawTaskRows();
+        check(this.$('#task-rows tr[data-task-row] td:nth-child(2)').classList.contains('pinned-column'), 'Incremental row rendering retains column pins');
+        this.$('#columns-button').click();
+        this.$('[data-column-pin="code"]').click();
+        this.$('[data-column-pin="status"]').click();
+        this.$('#columns-apply').click();
+        await waitFor(() => !this.state.saving && !this.$('#modal').open);
+        check(!this.$('.activity-table .pinned-column'), 'Unpinning restores the original column order and scrolling behavior');
+        await this.app.savedViews.applySavedView(pinnedView.id);
+        check(this.$('.activity-table th[data-column="code"]').classList.contains('pinned-column') &&
+          this.$('.activity-table th[data-column="status"]').classList.contains('pinned-column'), 'Saved views restore pinned columns together with their layout');
+        this.$('#columns-button').click();
+        this.$('#columns-default').click();
+        this.$('#columns-apply').click();
+        await waitFor(() => !this.state.saving && !this.$('#modal').open);
+        check(!this.$('.activity-table .pinned-column'), 'Restoring default columns clears column pins');
+        await this.app.sections.openType('issues');
+        this.$('#issue-columns-button').click();
+        this.$('[data-column-pin="problem"]').click();
+        this.$('#columns-apply').click();
+        await waitFor(() => !this.state.saving && !this.$('#modal').open);
+        table = this.$('#issue-rows').closest('table'); scroll = table.closest('.table-scroll');
+        scroll.style.maxWidth = '450px';
+        table.style.minWidth = '1400px';
+        await frame();
+        const problem = table.querySelector('th[data-column="problem"]'), problemLeft = problem.getBoundingClientRect().left;
+        scroll.scrollLeft = 200;
+        await frame();
+        check(scroll.scrollLeft > 100 && problem.cellIndex === 0 && Math.abs(problem.getBoundingClientRect().left - problemLeft) < 2 &&
+          Math.abs(this.$('#issue-rows tr[data-issue-row] td').getBoundingClientRect().left - problemLeft) < 2, 'Issue columns can also be pinned and stay visible during horizontal scrolling');
+        this.$('#issue-search').value = 'no-matching-pinned-issue';
+        this.$('#issue-search').dispatchEvent(new Event('input'));
+        check(this.$('#issue-rows .empty') && !this.$('#issue-rows .pinned-column'), 'Empty filtered results do not turn spanning cells into pinned columns');
+        this.state.issueSearch = '';
+        await this.app.history.commit(baseline);
+        this.app.history.clearHistory(this.state.activeOrganizationId);
+        await this.app.sections.openType('tasks');
+      }
       const packCatalog = this.app.packs.catalog, existingIcon = this.$('#new-task svg');
       const unchangedCatalog = structuredClone(packCatalog);
       unchangedCatalog.sources.forEach(source => { source.updatedAt = '2027-01-01T00:00:00.000Z'; });

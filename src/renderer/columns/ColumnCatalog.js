@@ -1,6 +1,6 @@
 // View headings and the built-in and custom column definitions.
 import { Component } from '../core/Component.js';
-import { ColumnSchema } from '../shared.js';
+import { ColumnLayout, ColumnSchema } from '../shared.js';
 
 export class ColumnCatalog extends Component {
   heading(title, subtitle, buttons = '') {
@@ -33,6 +33,6 @@ export class ColumnCatalog extends Component {
     const def = this.columnDef(id, kind);
     return def?.field ? def.name : this.t(def?.name || id);
   }
-  shownColumns = () => this.configuredColumns().filter(column => column.visible).map(column => column.id);
-  shownIssueColumns = () => this.configuredColumns('issues').filter(column => column.visible).map(column => column.id);
+  shownColumns = () => ColumnLayout.shownColumns(this.configuredColumns());
+  shownIssueColumns = () => ColumnLayout.shownColumns(this.configuredColumns('issues'));
 }

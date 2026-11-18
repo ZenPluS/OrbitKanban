@@ -12,13 +12,17 @@ class ColumnLayout {
     const keys = ColumnLayout.sortKeys(settings), key = keys.includes('releaseDate') ? 'releaseDate' : keys[0];
     return key ? [{ key, direction: 'asc' }] : [];
   };
+  static shownColumns(columns) {
+    const visible = columns.filter(column => column.visible);
+    return [...visible.filter(column => column.pinned), ...visible.filter(column => !column.pinned)].map(column => column.id);
+  }
   static normalizeColumns(columns, defaults, fields = [], deleted = []) {
     const all = [...defaults.filter(column => !deleted.includes(column.id)), ...fields.map(field => ({ id: field.id, visible: true }))], ids = all.map(column => column.id);
     if (!Array.isArray(columns)) return all;
     const result = [], seen = new Set();
     for (const column of columns) {
       if (!column || !ids.includes(column.id) || seen.has(column.id)) continue;
-      result.push({ id: column.id, visible: column.visible !== false }); seen.add(column.id);
+      result.push({ id: column.id, visible: column.visible !== false, ...(column.pinned === true ? { pinned: true } : {}) }); seen.add(column.id);
     }
     all.forEach((column, index) => {
       if (seen.has(column.id)) return;

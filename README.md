@@ -4,7 +4,7 @@
 
 | | |
 | --- | --- |
-| **Current version** | 3.13.0 |
+| **Current version** | 3.14.0 |
 | **Platform** | Windows 10 / 11, 64-bit |
 | **Distribution** | Single portable executable, `OrbitKanban-Portable.exe` |
 | **Network** | Not required. Optional GitHub update checks and explicit icon/theme/language repository refresh |
@@ -343,6 +343,8 @@ Incidents and problems come from Linked issues, and successors from the predeces
 ## Columns
 
 Use **Columns** in each list toolbar, or **Settings → List columns**, to show, hide and reorder columns by drag and drop or with the arrow buttons. **Restore defaults** brings back the initial layout. Hiding a column never deletes data, and the row actions column is always visible. **Highlight** is an optional task column that is hidden by default.
+
+Use the **Pin column** pushpin to keep any built-in or custom column visible during horizontal scrolling, in both Tasks and Linked issues. Pinned columns appear together on the left in their configured relative order, while unpinned columns scroll normally. Click **Unpin column** to release one. Hidden columns keep their pin for when they are shown again; **Restore defaults** clears pins. Pins belong to the organization, travel with settings exports and backups, and are included in saved task views.
 
 ### Custom columns
 
@@ -855,6 +857,7 @@ The script refuses to reuse a tagged version for different sources. If a build o
 
 | Version | Changes |
 | --- | --- |
+| **3.14.0** | Pinnable task and issue columns with adaptive sticky offsets, saved-view support and portable settings |
 | **3.13.0** | Removed the KPI section; existing archives and settings imports drop its menu entries without losing work. Views and Excel exports remain available for external charts and pivot tables |
 | **3.12.0** | Dedicated KPI section for organization-wide task statistics, with portable navigation migration |
 | **3.11.3** | Continuous Windows title bar across both left and right sidebars, including the compact rail |
