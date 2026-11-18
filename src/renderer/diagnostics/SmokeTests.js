@@ -65,8 +65,10 @@ export class SmokeTests extends Component {
       check(!this.$('#navigation [data-view="9"]'), 'The sidebar has no retired KPI section');
       {
         const baseline = structuredClone(this.state.data);
+        const originalColumnOrder = this.app.columns.shownColumns().join();
         const frame = () => new Promise(resolve => requestAnimationFrame(resolve));
         this.$('#columns-button').click();
+        this.$('[data-column-pin="sequence"]').click();
         this.$('[data-column-pin="code"]').click();
         this.$('[data-column-pin="status"]').click();
         check(this.$('[data-column-pin="code"]').getAttribute('aria-pressed') === 'true', 'Column pins expose their selected state to assistive technology');
@@ -75,36 +77,57 @@ export class SmokeTests extends Component {
         let table = this.$('.activity-table'), scroll = table.closest('.table-scroll');
         scroll.style.maxWidth = '620px';
         await frame();
-        const code = table.querySelector('th[data-column="code"]'), status = table.querySelector('th[data-column="status"]');
-        check([...table.querySelectorAll('th[data-column]')].slice(0, 2).map(header => header.dataset.column).join() === 'code,status' &&
-          code.classList.contains('pinned-column') && status.classList.contains('pinned-column'), 'Arbitrary task columns are grouped on the left when pinned');
+        const sequence = table.querySelector('th[data-column="sequence"]'), code = table.querySelector('th[data-column="code"]'), status = table.querySelector('th[data-column="status"]');
+        check([...table.querySelectorAll('th[data-column]')].map(header => header.dataset.column).join() === originalColumnOrder &&
+          code.classList.contains('pinned-column') && status.classList.contains('pinned-column'), 'Pinning separated task columns preserves the full configured column order');
         const left = code.getBoundingClientRect().left, statusLeft = status.getBoundingClientRect().left;
-        const unpinned = table.querySelector('th[data-column="sequence"]'), originalLeft = unpinned.getBoundingClientRect().left;
-        scroll.scrollLeft = 260;
+        const sequenceLeft = sequence.getBoundingClientRect().left;
+        const unpinned = table.querySelector('th[data-column="description"]'), originalLeft = unpinned.getBoundingClientRect().left;
+        const gap = statusLeft - code.getBoundingClientRect().right;
+        const partialScroll = Math.min(80, gap / 2);
+        scroll.scrollLeft = partialScroll;
         await frame();
-        check(scroll.scrollLeft > 100 && Math.abs(code.getBoundingClientRect().left - left) < 2 && Math.abs(status.getBoundingClientRect().left - statusLeft) < 2 &&
-          unpinned.getBoundingClientRect().left < originalLeft - 100, 'Horizontal scrolling moves normal columns while pinned headers stay visible');
+        check(partialScroll > 10 && Math.abs(code.getBoundingClientRect().left - left) < 2 && Math.abs(sequence.getBoundingClientRect().left - sequenceLeft) < 2 &&
+          Math.abs(status.getBoundingClientRect().left - (statusLeft - scroll.scrollLeft)) < 2,
+        'Separated pinned columns scroll in their original positions until reaching the earlier pins');
+        scroll.scrollLeft = gap + 80;
+        await frame();
+        check(scroll.scrollLeft >= gap && Math.abs(code.getBoundingClientRect().left - left) < 2 &&
+          Math.abs(status.getBoundingClientRect().left - code.getBoundingClientRect().right) < 2 &&
+          unpinned.getBoundingClientRect().left < originalLeft - 100, 'Later pinned columns dock beside earlier pins only after the intervening columns scroll away');
         const row = table.querySelector('tbody tr[data-task-row]');
-        check(Math.abs(row.cells[1].getBoundingClientRect().left - left) < 2 && Math.abs(row.cells[2].getBoundingClientRect().left - statusLeft) < 2 &&
-          getComputedStyle(row.cells[1]).backgroundColor !== 'rgba(0, 0, 0, 0)', 'Pinned body cells align with their headers and have an opaque background');
+        check(Math.abs(row.cells[code.cellIndex].getBoundingClientRect().left - left) < 2 &&
+          Math.abs(row.cells[status.cellIndex].getBoundingClientRect().left - status.getBoundingClientRect().left) < 2 &&
+          getComputedStyle(row.cells[code.cellIndex]).backgroundColor !== 'rgba(0, 0, 0, 0)', 'Pinned body cells align with their headers and have an opaque background');
+        scroll.scrollLeft = partialScroll;
+        await frame();
+        check(Math.abs(status.getBoundingClientRect().left - (statusLeft - scroll.scrollLeft)) < 2,
+          'Reverse scrolling releases later pins back into the original column flow');
+        scroll.scrollLeft = 0;
+        await frame();
+        check(Math.abs(status.getBoundingClientRect().left - statusLeft) < 2 && Math.abs(unpinned.getBoundingClientRect().left - originalLeft) < 2,
+          'Scrolling back to the beginning restores the exact original column positions');
         code.style.minWidth = '240px';
         await frame(); await frame();
+        scroll.scrollLeft = scroll.scrollWidth;
+        await frame();
         check(Math.abs(status.getBoundingClientRect().left - code.getBoundingClientRect().right) < 2, 'Pinned offsets follow changing column widths without overlap');
         scroll.scrollTop = 150;
         await frame();
         check(Math.abs(code.getBoundingClientRect().top - scroll.getBoundingClientRect().top) < 3, 'Pinned column headers also remain fixed during vertical scrolling');
         const stored = (await this.workspaceApi.load()).data.settings.taskColumns;
-        check(['code', 'status'].every(id => stored.find(column => column.id === id)?.pinned), 'Task column pins persist in the portable archive');
+        check(['sequence', 'code', 'status'].every(id => stored.find(column => column.id === id)?.pinned), 'Task column pins persist in the portable archive');
         await this.app.savedViews.saveSavedView('Smoke pinned columns');
         const pinnedView = this.state.data.settings.savedViews.find(view => view.name === 'Smoke pinned columns');
         this.app.taskRows.drawTaskRows();
         check(this.$('#task-rows tr[data-task-row] td:nth-child(2)').classList.contains('pinned-column'), 'Incremental row rendering retains column pins');
         this.$('#columns-button').click();
+        this.$('[data-column-pin="sequence"]').click();
         this.$('[data-column-pin="code"]').click();
         this.$('[data-column-pin="status"]').click();
         this.$('#columns-apply').click();
         await waitFor(() => !this.state.saving && !this.$('#modal').open);
-        check(!this.$('.activity-table .pinned-column'), 'Unpinning restores the original column order and scrolling behavior');
+        check(!this.$('.activity-table .pinned-column'), 'Unpinning releases sticky columns without changing their order');
         await this.app.savedViews.applySavedView(pinnedView.id);
         check(this.$('.activity-table th[data-column="code"]').classList.contains('pinned-column') &&
           this.$('.activity-table th[data-column="status"]').classList.contains('pinned-column'), 'Saved views restore pinned columns together with their layout');
@@ -123,10 +146,15 @@ export class SmokeTests extends Component {
         table.style.minWidth = '1400px';
         await frame();
         const problem = table.querySelector('th[data-column="problem"]'), problemLeft = problem.getBoundingClientRect().left;
-        scroll.scrollLeft = 200;
+        const start = scroll.getBoundingClientRect().left;
+        check(problem.cellIndex === 2, 'Pinning a middle issue column does not move it before earlier columns');
+        scroll.scrollLeft = problemLeft - start + 80;
         await frame();
-        check(scroll.scrollLeft > 100 && problem.cellIndex === 0 && Math.abs(problem.getBoundingClientRect().left - problemLeft) < 2 &&
-          Math.abs(this.$('#issue-rows tr[data-issue-row] td').getBoundingClientRect().left - problemLeft) < 2, 'Issue columns can also be pinned and stay visible during horizontal scrolling');
+        check(scroll.scrollLeft > 100 && Math.abs(problem.getBoundingClientRect().left - start) < 2 &&
+          Math.abs(this.$('#issue-rows tr[data-issue-row]').cells[problem.cellIndex].getBoundingClientRect().left - start) < 2, 'Issue columns dock at the left edge only when reached by horizontal scrolling');
+        scroll.scrollLeft = 0;
+        await frame();
+        check(Math.abs(problem.getBoundingClientRect().left - problemLeft) < 2, 'Issue pins also return to their original position when scrolling back');
         this.$('#issue-search').value = 'no-matching-pinned-issue';
         this.$('#issue-search').dispatchEvent(new Event('input'));
         check(this.$('#issue-rows .empty') && !this.$('#issue-rows .pinned-column'), 'Empty filtered results do not turn spanning cells into pinned columns');

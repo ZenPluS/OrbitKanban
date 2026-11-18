@@ -240,7 +240,7 @@ class GuideContent {
       topics: [
         { title: 'Show, hide and reorder', items: [
           '**Columns** above each list, or **Settings → List columns**, shows or hides columns and changes their order by dragging. Hiding a column never deletes data.',
-          'Use **Pin column** to keep a column on the left during horizontal scrolling. Pins work in both lists, follow their configured relative order and are kept in settings and saved task views. **Unpin column** releases a column; restoring defaults clears pins.',
+          'Use **Pin column** without changing the column order. Each pinned column scrolls normally until it reaches the left edge, beside any earlier pinned columns, and returns to its original position when scrolling back. Pins work in both lists and are kept in settings and saved task views. **Unpin column** releases a column; restoring defaults clears pins.',
           '**Highlight** is available but hidden at first. **Restore default columns** brings back the initial layout.'
         ] },
         { title: 'Custom columns', items: [

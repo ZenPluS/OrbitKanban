@@ -7,7 +7,9 @@ const { CsvImporter } = require('../src/shared/interop');
 const field = (type, name = type) => ({ id: `custom-${type}`, name, type, options: ['select', 'multiselect'].includes(type) ? ['One', 'Two'] : [] });
 const task = data => ({ id: 't', code: 'A', sequence: 1, description: '', notes: '', releaseDate: '', statusId: data.settings.statuses[0].id, urgencyId: data.settings.urgencies[0].id, effortHours: 0, hidden: false });
 
-test('pinned columns retain their relative order, visibility and portable settings', () => {
+test('pinned columns retain their original positions, visibility and portable settings', () => {
+  const example = ['A', 'B', 'C', 'D', 'E', 'F'].map(id => ({ id, visible: true, pinned: ['A', 'B', 'E'].includes(id) }));
+  assert.deepEqual(ColumnLayout.shownColumns(example), ['A', 'B', 'C', 'D', 'E', 'F']);
   const data = DataFactory.baseData('en');
   data.settings.taskFields = [field('text')];
   data.settings.taskColumns = [
@@ -16,7 +18,7 @@ test('pinned columns retain their relative order, visibility and portable settin
   ];
   data.settings.issueColumns = [{ id: 'problem', visible: true, pinned: true }, { id: 'code', visible: true }];
   const columns = ColumnLayout.listColumns(data.settings, 'tasks');
-  assert.deepEqual(ColumnLayout.shownColumns(columns).slice(0, 3), ['code', 'custom-text', 'sequence']);
+  assert.deepEqual(ColumnLayout.shownColumns(columns).filter(id => ['sequence', 'code', 'custom-text'].includes(id)), ['sequence', 'code', 'custom-text']);
   assert.ok(!ColumnLayout.shownColumns(columns).includes('description'));
   data.settings.savedViews = [{ id: 'pinned-view', name: 'Pinned', search: '', statusFilter: '', highlightFilter: '', showHidden: false, duplicatesOnly: false,
     columns, sort: [{ key: 'releaseDate', direction: 'asc' }] }];

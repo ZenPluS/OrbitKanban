@@ -12,10 +12,7 @@ class ColumnLayout {
     const keys = ColumnLayout.sortKeys(settings), key = keys.includes('releaseDate') ? 'releaseDate' : keys[0];
     return key ? [{ key, direction: 'asc' }] : [];
   };
-  static shownColumns(columns) {
-    const visible = columns.filter(column => column.visible);
-    return [...visible.filter(column => column.pinned), ...visible.filter(column => !column.pinned)].map(column => column.id);
-  }
+  static shownColumns = columns => columns.filter(column => column.visible).map(column => column.id);
   static normalizeColumns(columns, defaults, fields = [], deleted = []) {
     const all = [...defaults.filter(column => !deleted.includes(column.id)), ...fields.map(field => ({ id: field.id, visible: true }))], ids = all.map(column => column.id);
     if (!Array.isArray(columns)) return all;
