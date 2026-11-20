@@ -21,7 +21,6 @@ export class PinnedColumns extends Component {
       for (const cell of row.cells) {
         const index = cell.cellIndex, sticky = cell.colSpan === 1 && indexes.includes(index);
         cell.classList.toggle('pinned-column', sticky);
-        cell.classList.toggle('pinned-edge', sticky && index === indexes.at(-1));
         if (sticky) cell.style.left = `var(--pinned-left-${index})`; else cell.style.removeProperty('left');
       }
     }

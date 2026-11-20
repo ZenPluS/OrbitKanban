@@ -4,7 +4,7 @@
 
 | | |
 | --- | --- |
-| **Current version** | 3.14.1 |
+| **Current version** | 3.14.2 |
 | **Platform** | Windows 10 / 11, 64-bit |
 | **Distribution** | Single portable executable, `OrbitKanban-Portable.exe` |
 | **Network** | Not required. Optional GitHub update checks and explicit icon/theme/language repository refresh |
@@ -857,6 +857,7 @@ The script refuses to reuse a tagged version for different sources. If a build o
 
 | Version | Changes |
 | --- | --- |
+| **3.14.2** | Fix highlight stripe alignment and premature separators on pinned columns |
 | **3.14.1** | Preserve column order when pinning: later pins dock progressively during scrolling and return naturally when scrolling back |
 | **3.14.0** | Pinnable task and issue columns with adaptive sticky offsets, saved-view support and portable settings |
 | **3.13.0** | Removed the KPI section; existing archives and settings imports drop its menu entries without losing work. Views and Excel exports remain available for external charts and pivot tables |

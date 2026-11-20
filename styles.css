@@ -1181,10 +1181,10 @@ input[type=radio] {
   white-space: nowrap;
 }
 .activity-table tr.marked {
-  background: var(--mark-background);
+  background: var(--mark-background) fixed;
 }
 .activity-table tr.marked:hover {
-  background: var(--mark-background);
+  background: var(--mark-background) fixed;
 }
 .activity-table tr.marked td:first-child {
   box-shadow: inset 4px 0 var(--mark);
@@ -1224,10 +1224,10 @@ input[type=radio] {
   background: color-mix(in srgb, var(--row-color) 12%, var(--surface));
 }
 .activity-table tr.marked td.row-actions {
-  background: var(--mark-background), var(--surface);
+  background: var(--mark-background) fixed, var(--surface);
 }
 .activity-table tr.marked:hover td.row-actions {
-  background: var(--mark-background), var(--surface);
+  background: var(--mark-background) fixed, var(--surface);
 }
 .mark-button {
   display: inline-flex;
@@ -1466,9 +1466,6 @@ button.reference-chip:focus-visible {
   z-index: 5;
   background: color-mix(in srgb, var(--surface) 88%, var(--background));
 }
-.table-scroll .pinned-edge {
-  box-shadow: inset -1px 0 var(--border), 3px 0 5px -3px var(--border);
-}
 .table-scroll tbody tr:hover td.pinned-column {
   background: color-mix(in srgb, var(--text) 2%, var(--surface));
 }
@@ -1480,13 +1477,13 @@ button.reference-chip:focus-visible {
 }
 .activity-table tr.marked td.pinned-column,
 .activity-table tr.marked:hover td.pinned-column {
-  background: var(--mark-background), var(--surface);
+  background: var(--mark-background) fixed, var(--surface);
 }
 .activity-table tbody tr.selected td.pinned-column {
   background: color-mix(in srgb, var(--accent) 9%, var(--surface));
 }
 .activity-table tbody tr.selected.marked td.pinned-column {
-  background: var(--mark-background), color-mix(in srgb, var(--accent) 9%, var(--surface));
+  background: var(--mark-background) fixed, color-mix(in srgb, var(--accent) 9%, var(--surface));
 }
 .column-row .icon-button {
   padding: 3px 7px;
@@ -2087,13 +2084,13 @@ tr.duplicate-row td:last-child {
   background: color-mix(in srgb, var(--accent) 9%, var(--surface));
 }
 .activity-table tbody tr.selected.marked {
-  background: var(--mark-background), color-mix(in srgb, var(--accent) 9%, var(--surface));
+  background: var(--mark-background) fixed, color-mix(in srgb, var(--accent) 9%, var(--surface));
 }
 .activity-table tbody tr.selected.marked td {
   background: transparent;
 }
 .activity-table tbody tr.selected.marked td.row-actions {
-  background: var(--mark-background), color-mix(in srgb, var(--accent) 9%, var(--surface));
+  background: var(--mark-background) fixed, color-mix(in srgb, var(--accent) 9%, var(--surface));
 }
 .table-footer.has-selection {
   background: color-mix(in srgb, var(--accent) 7%, transparent);

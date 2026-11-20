@@ -99,6 +99,20 @@ export class SmokeTests extends Component {
         check(Math.abs(row.cells[code.cellIndex].getBoundingClientRect().left - left) < 2 &&
           Math.abs(row.cells[status.cellIndex].getBoundingClientRect().left - status.getBoundingClientRect().left) < 2 &&
           getComputedStyle(row.cells[code.cellIndex]).backgroundColor !== 'rgba(0, 0, 0, 0)', 'Pinned body cells align with their headers and have an opaque background');
+        const rowClass = row.className, rowStyle = row.getAttribute('style');
+        row.classList.add('marked');
+        row.style.cssText += `;${this.app.presenter.highlightStyle([{ color: '#ff0000' }, { color: '#00ff00' }], { highlight: false })}`;
+        const painted = [row, row.cells[code.cellIndex], row.cells[status.cellIndex], row.querySelector('.row-actions')];
+        check(painted.every(cell => getComputedStyle(cell).backgroundImage.includes('repeating-linear-gradient') &&
+          getComputedStyle(cell).backgroundAttachment.split(',')[0] === 'fixed') &&
+          getComputedStyle(row.cells[status.cellIndex]).boxShadow === 'none',
+        'Highlighted rows share a continuous stripe origin across pinned and action cells without a premature pin edge');
+        row.classList.add('selected');
+        check(painted.every(cell => getComputedStyle(cell).backgroundAttachment.split(',')[0] === 'fixed' &&
+          getComputedStyle(cell).backgroundColor === getComputedStyle(row).backgroundColor),
+        'Selected highlighted rows keep aligned stripes and an opaque matching background on pinned cells');
+        row.className = rowClass;
+        row.setAttribute('style', rowStyle);
         scroll.scrollLeft = partialScroll;
         await frame();
         check(Math.abs(status.getBoundingClientRect().left - (statusLeft - scroll.scrollLeft)) < 2,
