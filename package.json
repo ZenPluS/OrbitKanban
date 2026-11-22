@@ -1,6 +1,6 @@
 {
   "name": "orbitkanban-portable",
-  "version": "3.14.2",
+  "version": "3.14.3",
   "description": "A fully local workspace for tasks, issues, milestones, and Kanban.",
   "main": "src/desktop/main.js",
   "author": "OrbitKanban",
@@ -10,6 +10,7 @@
     "icon": "electron tools/make-splash.js --icon-only",
     "prestart": "npm run icon",
     "start": "electron .",
+    "pretest": "npm run icon",
     "test": "node --test",
     "performance": "node tools/performance.js",
     "check": "node tools/check.js",

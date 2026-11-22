@@ -5,6 +5,8 @@
 .DESCRIPTION
     All project paths are resolved from $PSScriptRoot; no workstation path is required.
     It can be invoked from another current directory with a relative path to this script.
+    With -BuildOnly, remote, credential and tag checks and all publishing steps are skipped.
+    Local source checks, tests, the portable build and optional delivery still run.
     Sequence (any build or test failure stops the script before the commit):
       1. Git checks: active branch, reachable remote, no operation in progress, branch not behind the remote,
          no file that must stay unversioned among the changes (data, builds, dependencies, executables, files over 5 MB).
@@ -29,6 +31,8 @@
     Does not copy the tested executable to dist.
 .PARAMETER NoCoAuthor
     Does not add the Copilot Co-authored-by trailer to the commit message.
+.PARAMETER BuildOnly
+    Builds and tests locally without remote checks, credentials, commits, tags, pushes or GitHub releases.
 
 .EXAMPLE
     npm version 3.2.1 --no-git-tag-version --ignore-scripts
@@ -43,7 +47,8 @@ param(
     [string]$Message,
     [string]$Remote = 'origin',
     [switch]$NoDeliver,
-    [switch]$NoCoAuthor
+    [switch]$NoCoAuthor,
+    [switch]$BuildOnly
 )
 
 Set-StrictMode -Version 3.0
@@ -194,9 +199,11 @@ try {
     if ([IO.Path]::GetFullPath($top).TrimEnd('\') -ne $root) { throw "The script must live in the repository root ($top)." }
     $branch = Invoke-Git 'symbolic-ref', '--short', '-q', 'HEAD' -AllowFailure
     if (-not $branch) { throw 'HEAD is not on a branch (detached HEAD): switch to a branch before publishing.' }
-    $remoteUrl = Invoke-Git 'remote', 'get-url', $Remote
-    $releaseHelper = Join-Path $root 'tools\GitHubRelease.js'
-    Invoke-Native 'node' @($releaseHelper, '--remote', $remoteUrl, '--check')
+    if (-not $BuildOnly) {
+        $remoteUrl = Invoke-Git 'remote', 'get-url', $Remote
+        $releaseHelper = Join-Path $root 'tools\GitHubRelease.js'
+        Invoke-Native 'node' @($releaseHelper, '--remote', $remoteUrl, '--check')
+    }
     foreach ($marker in 'MERGE_HEAD', 'CHERRY_PICK_HEAD', 'REVERT_HEAD', 'rebase-merge', 'rebase-apply') {
         if (Test-Path -LiteralPath ([IO.Path]::Combine($root, (Invoke-Git 'rev-parse', '--git-path', $marker)))) {
             throw "A Git operation is in progress ($marker): complete or abort it before publishing."
@@ -204,13 +211,15 @@ try {
     }
     if (Invoke-Git 'diff', '--name-only', '--diff-filter=U') { throw 'There are unresolved Git conflicts.' }
 
-    Write-Host "Updating references from $Remote ($remoteUrl)..."
-    $null = Invoke-Git 'fetch', '--quiet', '--no-tags', $Remote
-    $upstream = "refs/remotes/$Remote/$branch"
-    $hasUpstream = [bool](Invoke-Git 'rev-parse', '-q', '--verify', $upstream -AllowFailure)
-    if ($hasUpstream) {
-        $behind = [int](Invoke-Git 'rev-list', '--count', "HEAD..$upstream")
-        if ($behind -gt 0) { throw ('Branch {0} is {1} commit(s) behind {2}/{0}: integrate the remote changes first (git pull --rebase).' -f $branch, $behind, $Remote) }
+    if (-not $BuildOnly) {
+        Write-Host "Updating references from $Remote ($remoteUrl)..."
+        $null = Invoke-Git 'fetch', '--quiet', '--no-tags', $Remote
+        $upstream = "refs/remotes/$Remote/$branch"
+        $hasUpstream = [bool](Invoke-Git 'rev-parse', '-q', '--verify', $upstream -AllowFailure)
+        if ($hasUpstream) {
+            $behind = [int](Invoke-Git 'rev-list', '--count', "HEAD..$upstream")
+            if ($behind -gt 0) { throw ('Branch {0} is {1} commit(s) behind {2}/{0}: integrate the remote changes first (git pull --rebase).' -f $branch, $behind, $Remote) }
+        }
     }
 
     $version = [string](Get-Content -LiteralPath (Join-Path $root 'package.json') -Raw | ConvertFrom-Json).version
@@ -219,16 +228,18 @@ try {
     $testedTree = Get-WorktreeTree
     $changes = @(Get-ChangedEntries $testedTree)
     Assert-PublishableChanges $changes
-    $localTag = Invoke-Git 'rev-parse', '-q', '--verify', "refs/tags/$tag^{commit}" -AllowFailure
-    $remoteTag = Get-RemoteTagCommit $tag
-    if ($localTag -and $remoteTag -and $localTag -ne $remoteTag) { throw "The local tag $tag does not match the remote: resolve the conflict without overwriting the published tag." }
-    if ($remoteTag) {
-        $null = Invoke-Git 'fetch', '--quiet', '--no-tags', $Remote, "refs/tags/$tag"
-        $tagTree = Invoke-Git 'rev-parse', 'FETCH_HEAD^{tree}'
-    } elseif ($localTag) {
-        $tagTree = Invoke-Git 'rev-parse', "$localTag^{tree}"
-    } else { $tagTree = $null }
-    if ($tagTree -and $tagTree -ne $testedTree) { throw "Tag $tag contains different sources: bump the version (npm version patch --no-git-tag-version --ignore-scripts) before publishing a new release." }
+    if (-not $BuildOnly) {
+        $localTag = Invoke-Git 'rev-parse', '-q', '--verify', "refs/tags/$tag^{commit}" -AllowFailure
+        $remoteTag = Get-RemoteTagCommit $tag
+        if ($localTag -and $remoteTag -and $localTag -ne $remoteTag) { throw "The local tag $tag does not match the remote: resolve the conflict without overwriting the published tag." }
+        if ($remoteTag) {
+            $null = Invoke-Git 'fetch', '--quiet', '--no-tags', $Remote, "refs/tags/$tag"
+            $tagTree = Invoke-Git 'rev-parse', 'FETCH_HEAD^{tree}'
+        } elseif ($localTag) {
+            $tagTree = Invoke-Git 'rev-parse', "$localTag^{tree}"
+        } else { $tagTree = $null }
+        if ($tagTree -and $tagTree -ne $testedTree) { throw "Tag $tag contains different sources: bump the version (npm version patch --no-git-tag-version --ignore-scripts) before publishing a new release." }
+    }
     Write-Host ('Branch {0}, version {1}, {2} modified files.' -f $branch, $version, $changes.Count)
     foreach ($entry in $changes) { Write-Host ('  {0} {1}' -f $entry.Status, $entry.Path) }
 
@@ -263,8 +274,17 @@ try {
         $delivered = Copy-TestedExecutable -Source $launcher -Version $version
     }
 
-    Write-Step 'Commit'
     if ((Get-WorktreeTree) -ne $testedTree) { throw 'Project files changed during build and tests: run the script again to test the current version.' }
+    if ($BuildOnly) {
+        Write-Host ''
+        Write-Host ('Completed in {0:hh\:mm\:ss}: build and tests succeeded. No commit, tag, push or release was made.' -f ((Get-Date) - $startedAt)) -ForegroundColor Green
+        Write-Host ('  Version:    {0}' -f $version)
+        if ($delivered) { Write-Host ('  Executable: {0} (SHA-256 {1})' -f $delivered.Path, $delivered.Sha256) }
+        else { Write-Host ('  Executable: {0} (not copied to dist)' -f $launcher) }
+        return
+    }
+
+    Write-Step 'Commit'
     if ($testedTree -eq (Get-HeadTree)) {
         Write-Host 'No source changes: creating an empty commit to record the verified build.'
     }

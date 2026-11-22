@@ -4,7 +4,7 @@
 
 | | |
 | --- | --- |
-| **Current version** | 3.14.2 |
+| **Current version** | 3.14.3 |
 | **Platform** | Windows 10 / 11, 64-bit |
 | **Distribution** | Single portable executable, `OrbitKanban-Portable.exe` |
 | **Network** | Not required. Optional GitHub update checks and explicit icon/theme/language repository refresh |
@@ -743,7 +743,7 @@ Node.js with npm is required only to develop or build. Recipients of the executa
 ```powershell
 npm ci           # install dependencies
 npm start        # run the app from source (data is stored in the project's data folder)
-npm test         # unit tests (node --test)
+npm test         # unit tests (node --test), after generating the app icon
 npm run check    # syntax check of every script in src/ and tools/
 npm run smoke    # end-to-end UI smoke test on an isolated temporary workspace
 npm run performance # isolated desktop startup and interaction benchmark
@@ -840,8 +840,11 @@ The script:
 | `-NoDeliver` | Skip copying to `dist`, while still publishing the release |
 | `-NoCoAuthor` | Omit the Copilot `Co-authored-by` trailer |
 | `-Remote` | Use a remote other than `origin` |
+| `-BuildOnly` | Run local checks, tests, build and delivery without remote checks, credentials, commits, tags, pushes or releases |
 
-The remote must be on github.com. Credentials come from `GH_TOKEN`/`GITHUB_TOKEN` or Git Credential Manager and need **Contents: write** permission. They are never written to files or passed as command arguments.
+For a local build without publishing, use `.\build-and-push.ps1 -BuildOnly`. Add `-NoDeliver` to leave the executable in `dist-staging\<version>` without copying it to `dist`. Git, Node.js, npm and installed project dependencies are still required; the local repository and source consistency checks remain enabled.
+
+For publishing, the remote must be on github.com. Credentials come from `GH_TOKEN`/`GITHUB_TOKEN` or Git Credential Manager and need **Contents: write** permission. They are never written to files or passed as command arguments.
 
 Tags are never moved. Bump the version before releasing new sources:
 
@@ -851,12 +854,13 @@ npm version minor --no-git-tag-version --ignore-scripts
 
 For a specifically numbered release, use `npm version 3.9.0 --no-git-tag-version --ignore-scripts` instead. To update the local portable copy too, run the pipeline **without `-NoDeliver`** and close the app first. The script replaces only the executable, not `dist/data`.
 
-The script refuses to reuse a tagged version for different sources. If a build or test fails, nothing is committed or pushed.
+When publishing, the script refuses to reuse a tagged version for different sources; `-BuildOnly` allows local builds of those changes without moving tags. If a build or test fails, nothing is committed or pushed.
 
 ## Release history
 
 | Version | Changes |
 | --- | --- |
+| **3.14.3** | Generate app icons before unit tests on clean checkouts; add a local-only build mode and VS Code build task without publishing |
 | **3.14.2** | Fix highlight stripe alignment and premature separators on pinned columns |
 | **3.14.1** | Preserve column order when pinning: later pins dock progressively during scrolling and return naturally when scrolling back |
 | **3.14.0** | Pinnable task and issue columns with adaptive sticky offsets, saved-view support and portable settings |
