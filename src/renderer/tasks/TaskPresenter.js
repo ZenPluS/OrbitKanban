@@ -41,13 +41,11 @@ export class TaskPresenter extends Component {
     if (!marks.length) return '';
     const colors = marks.map(mark => mark.color);
     const backgroundColors = status?.highlight ? [status.color, ...colors] : colors;
-    const gradient = (items, tint) => `linear-gradient(90deg, ${items.map((color, index) => {
+    const gradient = (items, tint) => `linear-gradient(${tint ? 180 : 90}deg, ${items.map((color, index) => {
       const value = tint ? `color-mix(in srgb, ${color} 16%, transparent)` : color;
       return `${value} ${index * 100 / items.length}% ${(index + 1) * 100 / items.length}%`;
     }).join(', ')})`;
-    const background = backgroundColors.length === 1 ? gradient(backgroundColors, true)
-      : `repeating-linear-gradient(135deg, ${backgroundColors.map((color, index) =>
-        `color-mix(in srgb, ${color} 16%, transparent) ${index * 10}px ${(index + 1) * 10}px`).join(', ')})`;
+    const background = gradient(backgroundColors, true);
     return `--mark:${colors[0]};--mark-colors:${gradient(colors, false)};--mark-background:${background}`;
   }
   tagsOf = task => (this.hasColumn('tags') ? this.state.data.settings.tags || [] : []).filter(tag => task.tagIds?.includes(tag.id));

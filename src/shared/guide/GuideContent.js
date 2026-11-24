@@ -138,7 +138,7 @@ class GuideContent {
           'The selection survives searches, filters and sorting. **Deselect** or `Esc` clears it.'
         ] },
         { title: 'Bulk edit', items: [
-          '**Bulk edit** lists the selected tasks and the fields to change. Every field starts as **Keep unchanged**.',
+          '**Bulk edit** uses the task editor layout. Check a field to change it; unchecked fields stay unchanged. Expand **Tasks involved** to review the selection.',
           'You can change every field of the editor: portal code, status, urgency, highlight, effort, visibility, release date (set, shift or remove), description and notes (replace, add at the end or clear), custom columns, tags and groups. **Sequence** can be renumbered in list order.',
           'Incidents and problems come from the associations and successors from the predecessor columns, so they are not edited here. Required fields cannot be emptied.',
           '**Delete…** removes the ticked tasks after a confirmation. In the milestones, the pencil of each release opens bulk edit for its tasks.'

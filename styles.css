@@ -1181,10 +1181,10 @@ input[type=radio] {
   white-space: nowrap;
 }
 .activity-table tr.marked {
-  background: var(--mark-background) fixed;
+  background: var(--mark-background) border-box;
 }
 .activity-table tr.marked:hover {
-  background: var(--mark-background) fixed;
+  background: var(--mark-background) border-box;
 }
 .activity-table tr.marked td:first-child {
   box-shadow: inset 4px 0 var(--mark);
@@ -1224,10 +1224,10 @@ input[type=radio] {
   background: color-mix(in srgb, var(--row-color) 12%, var(--surface));
 }
 .activity-table tr.marked td.row-actions {
-  background: var(--mark-background) fixed, var(--surface);
+  background: var(--mark-background) border-box, var(--surface);
 }
 .activity-table tr.marked:hover td.row-actions {
-  background: var(--mark-background) fixed, var(--surface);
+  background: var(--mark-background) border-box, var(--surface);
 }
 .mark-button {
   display: inline-flex;
@@ -1477,13 +1477,13 @@ button.reference-chip:focus-visible {
 }
 .activity-table tr.marked td.pinned-column,
 .activity-table tr.marked:hover td.pinned-column {
-  background: var(--mark-background) fixed, var(--surface);
+  background: var(--mark-background) border-box, var(--surface);
 }
 .activity-table tbody tr.selected td.pinned-column {
   background: color-mix(in srgb, var(--accent) 9%, var(--surface));
 }
 .activity-table tbody tr.selected.marked td.pinned-column {
-  background: var(--mark-background) fixed, color-mix(in srgb, var(--accent) 9%, var(--surface));
+  background: var(--mark-background) border-box, color-mix(in srgb, var(--accent) 9%, var(--surface));
 }
 .column-row .icon-button {
   padding: 3px 7px;
@@ -2084,13 +2084,13 @@ tr.duplicate-row td:last-child {
   background: color-mix(in srgb, var(--accent) 9%, var(--surface));
 }
 .activity-table tbody tr.selected.marked {
-  background: var(--mark-background) fixed, color-mix(in srgb, var(--accent) 9%, var(--surface));
+  background: var(--mark-background) border-box, color-mix(in srgb, var(--accent) 9%, var(--surface));
 }
 .activity-table tbody tr.selected.marked td {
   background: transparent;
 }
 .activity-table tbody tr.selected.marked td.row-actions {
-  background: var(--mark-background) fixed, color-mix(in srgb, var(--accent) 9%, var(--surface));
+  background: var(--mark-background) border-box, color-mix(in srgb, var(--accent) 9%, var(--surface));
 }
 .table-footer.has-selection {
   background: color-mix(in srgb, var(--accent) 7%, transparent);
@@ -2189,6 +2189,113 @@ tr.duplicate-row td:last-child {
 .bulk-fields {
   margin-top: 16px;
   gap: 14px 20px;
+}
+.bulk-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 0 22px 18px;
+}
+.bulk-help {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: calc(13px * var(--fs));
+}
+.bulk-targets > summary {
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: calc(13px * var(--fs));
+}
+#bulk-target-count {
+  margin-left: 8px;
+  color: var(--muted);
+}
+.bulk-form .task-edit-layout {
+  padding: 0;
+  overflow: visible;
+}
+.bulk-edit-field,
+.bulk-field-controls {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.bulk-edit-field > legend {
+  margin-bottom: 6px;
+  padding: 0;
+}
+.bulk-enable {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+}
+.bulk-enable input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  flex: none;
+}
+.bulk-field-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+.bulk-field-controls:disabled {
+  opacity: .65;
+}
+.bulk-field-controls [hidden] {
+  display: none;
+}
+.bulk-edit-field.is-enabled > legend {
+  color: var(--accent);
+}
+.bulk-field-controls .bulk-inline {
+  flex-wrap: wrap;
+}
+.bulk-field-controls .bulk-inline > select {
+  flex-basis: 100%;
+}
+.bulk-rich-editor,
+.bulk-rich-editor > .field {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.bulk-rich-editor .field-label {
+  display: none;
+}
+.bulk-form .bulk-summary {
+  flex: none;
+  margin: 0;
+  padding: 8px 22px 0;
+}
+.bulk-form .bulk-extra {
+  padding-top: 12px;
+}
+.bulk-choice-actions {
+  display: flex;
+  gap: 3px;
+  flex: none;
+}
+.bulk-choice-actions button {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: calc(12px * var(--fs));
+  padding: 4px 6px;
+  cursor: pointer;
+}
+.bulk-choice-actions button[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  color: var(--text);
 }
 .bulk-inline {
   display: flex;
@@ -2741,13 +2848,13 @@ td.custom-cell > span {
   background: var(--surface);
   padding: 12px 0;
 }
-#modal:has(#task-form) {
+#modal:has(.task-form) {
   width: fit-content;
   max-width: 96vw;
   max-height: 94vh;
   overflow: hidden;
 }
-#modal:has(#task-form) #modal-content {
+#modal:has(.task-form) #modal-content {
   padding: 0;
 }
 /* The form designer sets the width and an optional fixed height; auto height grows with the content up to the viewport. */

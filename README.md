@@ -4,7 +4,7 @@
 
 | | |
 | --- | --- |
-| **Current version** | 3.14.3 |
+| **Current version** | 3.14.4 |
 | **Platform** | Windows 10 / 11, 64-bit |
 | **Distribution** | Single portable executable, `OrbitKanban-Portable.exe` |
 | **Network** | Not required. Optional GitHub update checks and explicit icon/theme/language repository refresh |
@@ -299,7 +299,7 @@ The round button at the end of a row hides the task **from the task list only**,
 There are two independent ways to make rows stand out:
 
 - **Status highlight (automatic).** The ★ next to a status highlights every task in that status.
-- **Highlighters (manual).** These are named colors, up to 16 per organization, such as *Attention*, *Blocking* or *Ready*. A task can have several: the row displays repeating diagonal stripes for each color and also its automatic status color, if enabled. You can apply them in any of these ways:
+- **Highlighters (manual).** These are named colors, up to 16 per organization, such as *Attention*, *Blocking* or *Ready*. A task can have several: the row displays horizontal color bands for each color and also its automatic status color, if enabled. The bands belong to the row, so scrolling does not slide a pattern behind the text, including pinned columns and row actions. You can apply them in any of these ways:
   - pick a color in the **Highlighter** bar and click rows to toggle that color (**Eraser** removes all manual colors; `Esc` stops highlighting);
   - use the ● menu at the end of a row to toggle individual colors or clear them all;
   - choose multiple colors in the **Highlight** field in the task editor.
@@ -320,7 +320,7 @@ The **incident** is the duplicate key, compared like portal codes. Rows with onl
 
 Select tasks with the checkboxes. `Shift+click` selects a range, and the header checkbox selects every visible task. The selection survives searches, filters and view changes; **Deselect** or `Esc` clears it.
 
-**Bulk edit…** opens a dialog listing the selected tasks. You can exclude individual tasks, or narrow the list by status with the chips. Every field of the task editor is available, and each starts as **— Keep unchanged —**, so only what you choose changes:
+**Bulk edit…** uses the same dimensions, columns, sections and rich-text panels as the single-task editor. Check the label of each field you want to change; unchecked fields are disabled and stay unchanged, even if you previously entered a value. Expand **Tasks involved** to exclude individual tasks or narrow the selection by status. Fields left off the single-task form, tags and groups remain available under **Other fields**. Add/remove buttons replace the per-option dropdowns for tags, groups and multiple-choice fields; click a selected operation again to cancel it. The available operations are:
 
 - portal code, status, urgency and highlight;
 - sequence: renumber the checked tasks in list order from a starting number;
@@ -860,6 +860,7 @@ When publishing, the script refuses to reuse a tagged version for different sour
 
 | Version | Changes |
 | --- | --- |
+| **3.14.4** | Stable row-local highlight bands during scrolling, including pinned columns; bulk edit follows the task editor layout with explicit field selection and compact add/remove controls; updated Italian translations |
 | **3.14.3** | Generate app icons before unit tests on clean checkouts; add a local-only build mode and VS Code build task without publishing |
 | **3.14.2** | Fix highlight stripe alignment and premature separators on pinned columns |
 | **3.14.1** | Preserve column order when pinning: later pins dock progressively during scrolling and return naturally when scrolling back |

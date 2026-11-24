@@ -1,6 +1,6 @@
 // Bulk edit of the selected tasks.
 import { Component } from '../core/Component.js';
-import { ColumnCleanup, ColumnSchema, ColumnValidator, PlatformLinks, RequiredFields, TaskOrder } from '../shared.js';
+import { ColumnCleanup, ColumnSchema, ColumnValidator, PlatformLinks, RequiredFields, TaskLayout, TaskOrder } from '../shared.js';
 
 export class BulkEdit extends Component {
   #shiftDate = (date, days) => {
@@ -35,7 +35,7 @@ export class BulkEdit extends Component {
     ColumnValidator.validateValue(value, field);
     return value;
   }
-  // Turns the bulk form into a list of edits; fields left on "do not change" are skipped.
+  // Disabled fieldsets are absent from FormData, so unchecked fields never change.
   #bulkPlan(form, order) {
     const fields = new FormData(form), steps = [], required = [], modeOf = id => fields.get(`mode:${id}`) || '';
     const add = (id, name, step, empty) => { steps.push(step); if (this.#required(id)) required.push({ name, empty }); };
@@ -120,22 +120,26 @@ export class BulkEdit extends Component {
     });
     return { steps, required, highlight: Boolean(mark) };
   }
-  #modeField(id, label, options, controls, full = false) {
+  #field(id, label, controls, classes = '') {
     const key = this.esc(id);
-    return `<div class="field ${full ? 'full ' : ''}bulk-mode-field"><label for="bulk-mode-${key}">${this.esc(label)}</label><div class="bulk-inline"><select id="bulk-mode-${key}" name="mode:${key}" data-bulk-mode><option value="">${this.esc(this.t("— Keep unchanged —"))}</option>${options.map(([value, text]) => `<option value="${value}">${this.esc(this.t(text))}</option>`).join('')}</select>${controls}</div></div>`;
+    return `<fieldset class="field bulk-edit-field ${classes}" data-form-field="${key}"><legend><label class="bulk-enable"><input type="checkbox" data-bulk-enable="${key}" aria-label="${this.esc(this.t("Apply"))}: ${this.esc(label)}"><span>${this.esc(label)}</span></label></legend><fieldset class="bulk-field-controls" disabled>${controls}</fieldset></fieldset>`;
+  }
+  #modeField(id, label, options, controls, full = false, name = `mode:${id}`) {
+    const key = this.esc(id);
+    return this.#field(id, label, `<div class="bulk-inline"><select id="${id === 'releaseDate' ? 'bulk-release-mode' : `bulk-mode-${key}`}" name="${this.esc(name)}" aria-label="${this.esc(label)}" data-bulk-mode>${options.map(([value, text]) => `<option value="${value}">${this.esc(this.t(text))}</option>`).join('')}</select>${controls}</div>`, `bulk-mode-field${full ? ' full' : ''}`);
   }
   #clearOption = id => this.#required(id) ? [] : [['clear', "Clear"]];
   #richField(id, label, editorId) {
     const key = this.esc(id);
-    return `<div class="field full bulk-rich"><label for="bulk-mode-${key}">${this.esc(label)}</label><select id="bulk-mode-${key}" name="mode:${key}" data-bulk-mode><option value="">${this.esc(this.t("— Keep unchanged —"))}</option><option value="replace">${this.esc(this.t("Replace the text"))}</option><option value="append">${this.esc(this.t("Add at the end"))}</option>${this.#required(id) ? '' : `<option value="clear">${this.esc(this.t("Clear"))}</option>`}</select><div class="bulk-rich-editor" data-bulk-show="replace append" hidden>${this.app.fieldEditors.editor(editorId, "Text to apply", '')}</div></div>`;
+    return this.#field(id, label, `<select id="bulk-mode-${key}" name="mode:${key}" aria-label="${this.esc(label)}" data-bulk-mode><option value="replace">${this.esc(this.t("Replace the text"))}</option><option value="append">${this.esc(this.t("Add at the end"))}</option>${this.#required(id) ? '' : `<option value="clear">${this.esc(this.t("Clear"))}</option>`}</select><div class="bulk-rich-editor" data-bulk-show="replace append">${this.app.fieldEditors.editor(editorId, "Text to apply", '')}</div>`, 'full bulk-rich');
   }
   #choiceRows(rows) {
-    return rows.map(({ name, html, label }) => `<label class="bulk-tag">${html}<select name="${this.esc(name)}" aria-label="${this.esc(label)}"><option value="">—</option><option value="add">${this.esc(this.t("＋ Add"))}</option><option value="remove">${this.esc(this.t("− Remove"))}</option></select></label>`).join('');
+    return rows.map(({ name, html, label }) => `<div class="bulk-tag">${html}<input type="hidden" name="${this.esc(name)}" value=""><span class="bulk-choice-actions">${[['add', "＋ Add"], ['remove', "− Remove"]].map(([value, text]) => `<button type="button" data-bulk-choice="${this.esc(name)}" data-action="${value}" aria-pressed="false" aria-label="${this.esc(this.t(text))}: ${this.esc(label)}">${this.esc(this.t(text))}</button>`).join('')}</span></div>`).join('');
   }
   #customControl(field) {
-    const id = this.esc(field.id), keep = `<option value="">${this.esc(this.t("— Keep unchanged —"))}</option>`, clear = `<option value="__clear">${this.esc(this.t("Clear"))}</option>`;
-    if (field.type === 'select') return `<label class="field">${this.esc(field.name)}<select name="value:${id}">${keep}${this.#required(field.id) ? '' : clear}${ColumnSchema.choices(field).map(option => `<option value="${this.esc(option.id)}">${this.esc(option.name)}</option>`).join('')}</select></label>`;
-    if (field.type === 'boolean') return `<label class="field">${this.esc(field.name)}<select name="value:${id}">${keep}<option value="true">${this.esc(this.t("Yes"))}</option><option value="false">${this.esc(this.t('No'))}</option>${clear}</select></label>`;
+    const id = this.esc(field.id), clear = `<option value="__clear">${this.esc(this.t("Clear"))}</option>`;
+    if (field.type === 'select') return this.#field(field.id, field.name, `<select name="value:${id}" aria-label="${this.esc(field.name)}">${ColumnSchema.choices(field).map(option => `<option value="${this.esc(option.id)}">${this.esc(option.name)}</option>`).join('')}${this.#required(field.id) ? '' : clear}</select>`);
+    if (field.type === 'boolean') return this.#field(field.id, field.name, `<select name="value:${id}" aria-label="${this.esc(field.name)}"><option value="true">${this.esc(this.t("Yes"))}</option><option value="false">${this.esc(this.t('No'))}</option>${this.#required(field.id) ? '' : clear}</select>`);
     const type = field.type === 'date' ? 'date' : ['number', 'effort'].includes(field.type) ? 'number' : 'text';
     const attributes = type === 'number' ? `step="any"${field.type === 'effort' ? ' min="0"' : ''}` : type === 'text' ? 'maxlength="2000" autocomplete="off" spellcheck="false"' : '';
     const hint = field.type === 'effort' ? this.t("Value in hours") : this.app.transfer.fillText("New value of {0}", field.name);
@@ -164,10 +168,28 @@ export class BulkEdit extends Component {
       });
     });
   }
+  #layout(form) {
+    const settings = this.state.data.settings, layout = TaskLayout.normalizeTaskEditorLayout(settings);
+    const body = form.querySelector('.task-edit-layout'), fields = new Map([...body.children].map(element => [element.dataset.formField, element]));
+    const columns = this.app.taskForm.buildTaskLayoutColumns(layout, settings, id => fields.get(id));
+    body.append(...columns.map(column => column.element));
+    const remaining = [...fields.values()].filter(element => element.parentElement === body);
+    if (remaining.length) {
+      const extra = document.createElement('section');
+      extra.className = 'task-form-section bulk-extra';
+      extra.innerHTML = `<h3 class="task-form-section-title">${this.esc(this.t("Other fields"))}</h3>`;
+      extra.append(...remaining);
+      if (columns.length) columns[0].element.append(extra);
+      else body.append(extra);
+    }
+    body.style.gridTemplateColumns = columns.length ? this.app.taskForm.taskLayoutTemplate(columns) : 'minmax(0, 1fr)';
+    form.style.setProperty('--task-form-width', `${layout.width}px`);
+    if (layout.height) form.style.setProperty('--task-form-height', `${layout.height}px`);
+    form.classList.toggle('fixed-height', layout.height > 0);
+  }
   bulkDialog(ids, context = '') {
     const settings = this.state.data.settings, wanted = new Set(ids), tasks = this.app.taskList.sortedRows(this.state.data.tasks.filter(task => wanted.has(task.id))), tags = settings.tags || [];
     if (!tasks.length) { this.app.notifier.notify("Select at least one task.", true); return; }
-    const keep = `<option value="">${this.esc(this.t("— Keep unchanged —"))}</option>`;
     const statuses = settings.statuses.filter(status => tasks.some(task => task.statusId === status.id));
     const items = tasks.map(task => {
       const status = this.statusOf(task);
@@ -182,24 +204,26 @@ export class BulkEdit extends Component {
     const compact = custom.filter(field => !['richtext', 'multiselect', 'parent'].includes(field.type)).map(field => this.#customControl(field)).join('');
     const rich = (this.hasColumn('description') ? this.#richField('description', this.app.columns.columnName('description'), 'bulk-description-editor') : '') + (this.hasColumn('notes') ? this.#richField('notes', this.app.columns.columnName('notes'), 'bulk-notes-editor') : '') + custom.filter(field => field.type === 'richtext').map(field => this.#richField(field.id, field.name, `bulk-editor-${field.id}`)).join('');
     const references = custom.filter(field => field.type === 'parent').map(field => this.#referenceField(field)).join('');
-    const choices = custom.filter(field => field.type === 'multiselect').map(field => `<fieldset class="field full bulk-tags bulk-choices"><legend>${this.esc(field.name)}</legend><div class="bulk-tag-grid">${this.#choiceRows(ColumnSchema.choices(field).map((option, index) => ({ name: `choice:${field.id}:${index}`, html: this.app.presenter.pill(option.name, option.color, 'tag-pill'), label: `${field.name}: ${option.name}` })))}</div></fieldset>`).join('');
-    const groupRows = groups.length ? `<fieldset class="field full bulk-tags bulk-groups"><legend>${this.esc(this.app.sections.nameOf('groups'))}</legend><div class="bulk-tag-grid">${this.#choiceRows(groups.map(group => ({ name: `group:${group.id}`, html: this.app.presenter.pill(group.name, group.color, 'tag-pill'), label: this.app.transfer.fillText("Group {0}", group.name) })))}</div></fieldset>` : '';
-    this.app.modal.openModal(this.ui`<form id="bulk-form" novalidate><div class="modal-heading"><div><div class="eyebrow">${this.esc(this.app.sections.nameOf('tasks'))}</div><h2>${this.esc(this.t("Bulk edit"))}</h2></div><button type="button" class="icon-button" data-close aria-label="Close">${this.ico('close')}</button></div>${context ? `<p class="section-description">${this.esc(context)}</p>` : ''}
-    <section class="bulk-targets" aria-labelledby="bulk-targets-title"><div class="bulk-targets-head"><strong id="bulk-targets-title">Tasks involved</strong><span class="bulk-quick">${statuses.length > 1 ? statuses.map(status => `<button type="button" class="bulk-status-chip" data-bulk-status="${this.esc(status.id)}" style="--pill:${this.esc(status.color)}" title="${this.esc(this.app.transfer.fillText("Select only: {0}", status.name))}">${this.esc(status.name)}</button>`).join('') : ''}<button type="button" class="unsaved-link" data-bulk-all="1">Select all</button><button type="button" class="unsaved-link" data-bulk-all="0">Deselect all</button></span></div><div class="bulk-list">${items}</div></section>
-    <div class="form-grid bulk-fields">
+    const choices = custom.filter(field => field.type === 'multiselect').map(field => this.#field(field.id, field.name, `<div class="bulk-tag-grid">${this.#choiceRows(ColumnSchema.choices(field).map((option, index) => ({ name: `choice:${field.id}:${index}`, html: this.app.presenter.pill(option.name, option.color, 'tag-pill'), label: `${field.name}: ${option.name}` })))}</div>`, 'full bulk-choices')).join('');
+    const groupRows = groups.length ? this.#field('groups', this.app.sections.nameOf('groups'), `<div class="bulk-tag-grid">${this.#choiceRows(groups.map(group => ({ name: `group:${group.id}`, html: this.app.presenter.pill(group.name, group.color, 'tag-pill'), label: this.app.transfer.fillText("Group {0}", group.name) })))}</div>`, 'full bulk-groups') : '';
+    this.app.modal.openModal(this.ui`<form id="bulk-form" class="task-form bulk-form" novalidate><div class="modal-heading"><div><div class="eyebrow">${this.esc(this.app.sections.nameOf('tasks'))}</div><h2>${this.esc(this.t("Bulk edit"))}</h2></div><button type="button" class="icon-button" data-close aria-label="Close">${this.ico('close')}</button></div><div class="bulk-body">${context ? `<p class="section-description">${this.esc(context)}</p>` : ''}
+    <p class="bulk-help">${this.esc(this.t("Check the fields to change. Unchecked fields stay unchanged."))}</p>
+    <details class="bulk-targets"><summary>Tasks involved <span id="bulk-target-count"></span></summary><div class="bulk-targets-head"><span class="bulk-quick">${statuses.length > 1 ? statuses.map(status => `<button type="button" class="bulk-status-chip" data-bulk-status="${this.esc(status.id)}" style="--pill:${this.esc(status.color)}" title="${this.esc(this.app.transfer.fillText("Select only: {0}", status.name))}">${this.esc(status.name)}</button>`).join('') : ''}<button type="button" class="unsaved-link" data-bulk-all="1">Select all</button><button type="button" class="unsaved-link" data-bulk-all="0">Deselect all</button></span></div><div class="bulk-list">${items}</div></details>
+    <div class="task-edit-layout bulk-fields">
       ${code}${sequence}
-      ${this.hasColumn('status') ? this.ui`<label class="field">Status<select name="statusId">${keep}${this.app.presenter.optionList(settings.statuses, '')}</select></label>` : ''}
-      ${this.hasColumn('urgency') ? this.ui`<label class="field">Urgency<select name="urgencyId">${keep}${this.app.presenter.optionList(settings.urgencies, '')}</select></label>` : ''}
-      ${this.hasColumn('releaseDate') ? this.ui`<div class="field"><label for="bulk-release-mode">${this.esc(this.app.columns.columnName('releaseDate'))}</label><div class="bulk-inline"><select id="bulk-release-mode" name="releaseMode">${keep}<option value="set">Set a date</option><option value="shift">Move by N days</option><option value="clear">Remove the date (unscheduled)</option></select><input type="date" name="releaseDate" aria-label="New release date" hidden><input type="number" name="shiftDays" step="1" value="7" aria-label="Days to move (negative to bring forward)" title="Days to move (negative to bring forward)" hidden></div><small id="bulk-release-hint"></small></div>` : ''}
-      ${this.hasColumn('highlight') ? this.ui`<label class="field">Highlight<select name="highlightId">${keep}<option value="__none">No highlight</option>${this.app.presenter.optionList(this.app.presenter.highlightsOf(), '')}</select></label>` : ''}
+      ${this.hasColumn('status') ? this.#field('status', this.app.columns.columnName('status'), `<select name="statusId" aria-label="${this.esc(this.app.columns.columnName('status'))}">${this.app.presenter.optionList(settings.statuses, '')}</select>`) : ''}
+      ${this.hasColumn('urgency') ? this.#field('urgency', this.app.columns.columnName('urgency'), `<select name="urgencyId" aria-label="${this.esc(this.app.columns.columnName('urgency'))}">${this.app.presenter.optionList(settings.urgencies, '')}</select>`) : ''}
+      ${this.hasColumn('releaseDate') ? this.#modeField('releaseDate', this.app.columns.columnName('releaseDate'), [['set', "Set a date"], ['shift', "Move by N days"], ...this.#clearOption('releaseDate')], this.ui`<input type="date" name="releaseDate" aria-label="New release date" data-bulk-show="set"><input type="number" name="shiftDays" step="1" value="7" aria-label="Days to move (negative to bring forward)" data-bulk-show="shift" hidden><small id="bulk-release-hint"></small>`, false, 'releaseMode') : ''}
+      ${this.hasColumn('highlight') ? this.#field('highlight', this.app.columns.columnName('highlight'), `<select name="highlightId" aria-label="${this.esc(this.app.columns.columnName('highlight'))}">${this.app.presenter.optionList(this.app.presenter.highlightsOf(), '')}${this.#required('highlight') ? '' : `<option value="__none">${this.esc(this.t("No highlight"))}</option>`}</select>`) : ''}
       ${effort}
-      <label class="field">Visibility in the list<select name="hidden">${keep}<option value="hide">Hide from the list</option><option value="show">Show in the list</option></select></label>
+      ${this.#field('hidden', this.t("Visibility in the list"), this.ui`<select name="hidden" aria-label="Visibility in the list"><option value="hide">Hide from the list</option><option value="show">Show in the list</option></select>`)}
       ${compact}${rich}${references}
-      ${tags.length && this.hasColumn('tags') ? this.ui`<fieldset class="field full bulk-tags"><legend>Tags</legend><div class="bulk-tag-grid">${tagRows}</div></fieldset>` : ''}
+      ${tags.length && this.hasColumn('tags') ? this.#field('tags', this.t("Tags"), `<div class="bulk-tag-grid">${tagRows}</div>`, 'full bulk-tags') : ''}
       ${choices}${groupRows}
-    </div><p class="bulk-summary" id="bulk-summary" aria-live="polite"></p>
+    </div></div><p class="bulk-summary" id="bulk-summary" aria-live="polite"></p>
     <div class="modal-actions"><button type="button" class="button danger" id="bulk-delete">Delete…</button><span class="spacer"></span><button type="button" class="button" data-close>Cancel</button><button type="submit" class="button primary" id="bulk-apply">Apply</button></div></form>`);
     const form = this.$('#bulk-form'), boxes = [...form.querySelectorAll('input[name="taskIds"]')];
+    this.#layout(form);
     this.app.fieldEditors.wireEditors();
     this.#wireReferencePickers(form);
     // Bulk edit cannot empty a mandatory field.
@@ -211,6 +235,14 @@ export class BulkEdit extends Component {
     const chosen = () => new Set(boxes.filter(box => box.checked).map(box => box.value));
     const order = () => boxes.filter(box => box.checked).map(box => box.value);
     const summarize = () => {
+      form.querySelectorAll('[data-bulk-enable]').forEach(toggle => {
+        const container = toggle.closest('[data-form-field]'), controls = container.querySelector('.bulk-field-controls');
+        controls.disabled = !toggle.checked;
+        controls.inert = !toggle.checked;
+        container.classList.toggle('is-enabled', toggle.checked);
+        controls.querySelectorAll('[data-bulk-mode]').forEach(select => { select.hidden = !toggle.checked || select.options.length === 1; });
+        controls.querySelectorAll('.editable').forEach(editor => { editor.contentEditable = String(toggle.checked); editor.setAttribute('aria-disabled', String(!toggle.checked)); });
+      });
       const ids = chosen(), mode = form.elements.releaseMode?.value;
       let pending = 0;
       try { pending = this.#bulkPlan(form, order()).steps.length; } catch { pending = 1; }
@@ -222,10 +254,17 @@ export class BulkEdit extends Component {
       this.$('#bulk-summary').textContent = !ids.size ? this.t("Select at least one task.") : pending ? this.app.transfer.fillText("Changes will be applied to {0}.", this.plural(ids.size, "tasks")) : this.app.transfer.fillText("{0} ready: choose what to change.", this.plural(ids.size, "tasks"));
       this.$('#bulk-apply').disabled = !ids.size || !pending;
       this.$('#bulk-delete').disabled = !ids.size;
+      this.$('#bulk-target-count').textContent = this.app.transfer.fillText("{0} selected", ids.size);
+      form.querySelectorAll('[data-bulk-choice]').forEach(button => button.setAttribute('aria-pressed', String(form.elements[button.dataset.bulkChoice].value === button.dataset.action)));
       form.querySelectorAll('[data-bulk-status]').forEach(chip => chip.setAttribute('aria-pressed', String(boxes.every(box => box.checked === (box.dataset.status === chip.dataset.bulkStatus)))));
     };
     form.addEventListener('input', summarize);
     form.addEventListener('change', summarize);
+    form.querySelectorAll('[data-bulk-choice]').forEach(button => button.onclick = () => {
+      const input = form.elements[button.dataset.bulkChoice];
+      input.value = input.value === button.dataset.action ? '' : button.dataset.action;
+      summarize();
+    });
     form.querySelectorAll('[data-bulk-all]').forEach(button => button.onclick = () => { boxes.forEach(box => { box.checked = button.dataset.bulkAll === '1'; }); summarize(); });
     form.querySelectorAll('[data-bulk-status]').forEach(chip => chip.onclick = () => { boxes.forEach(box => { box.checked = box.dataset.status === chip.dataset.bulkStatus; }); summarize(); });
     summarize();

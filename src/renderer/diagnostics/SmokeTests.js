@@ -103,14 +103,15 @@ export class SmokeTests extends Component {
         row.classList.add('marked');
         row.style.cssText += `;${this.app.presenter.highlightStyle([{ color: '#ff0000' }, { color: '#00ff00' }], { highlight: false })}`;
         const painted = [row, row.cells[code.cellIndex], row.cells[status.cellIndex], row.querySelector('.row-actions')];
-        check(painted.every(cell => getComputedStyle(cell).backgroundImage.includes('repeating-linear-gradient') &&
-          getComputedStyle(cell).backgroundAttachment.split(',')[0] === 'fixed') &&
+        check(painted.every(cell => getComputedStyle(cell).backgroundImage.includes('linear-gradient') &&
+          getComputedStyle(cell).backgroundAttachment.split(',')[0] === 'scroll' &&
+          getComputedStyle(cell).backgroundOrigin.split(',')[0] === 'border-box') &&
           getComputedStyle(row.cells[status.cellIndex]).boxShadow === 'none',
-        'Highlighted rows share a continuous stripe origin across pinned and action cells without a premature pin edge');
+        'Highlight bands belong to the row rather than the viewport, including pinned and action cells');
         row.classList.add('selected');
-        check(painted.every(cell => getComputedStyle(cell).backgroundAttachment.split(',')[0] === 'fixed' &&
+        check(painted.every(cell => getComputedStyle(cell).backgroundAttachment.split(',')[0] === 'scroll' &&
           getComputedStyle(cell).backgroundColor === getComputedStyle(row).backgroundColor),
-        'Selected highlighted rows keep aligned stripes and an opaque matching background on pinned cells');
+        'Selected highlighted rows keep local bands and an opaque matching background on pinned cells');
         row.className = rowClass;
         row.setAttribute('style', rowStyle);
         scroll.scrollLeft = partialScroll;
@@ -677,6 +678,7 @@ export class SmokeTests extends Component {
         check(this.state.data.tasks.length === baseline.tasks.length + 1 && this.state.data.tasks.at(-1).code === '' && this.state.data.tasks.at(-1).statusId === '', 'New tasks can be saved without default columns');
         this.app.bulkEdit.bulkDialog([taskId]);
         check(!this.$('#bulk-form [name="statusId"]') && !this.$('#bulk-form [name="releaseMode"]') && !this.$('#bulk-form [name="highlightId"]'), 'Bulk edit excludes deleted-column controls');
+        this.$('#bulk-form [data-bulk-enable="hidden"]').click();
         this.$('#bulk-form').elements.hidden.value = 'hide';
         this.$('#bulk-form').requestSubmit(); await waitFor(() => !this.state.saving && !this.$('#modal').open);
         this.state.view = 1; this.app.shell.render(); this.app.issues.issueDialog(this.state.data.issues.find(issue => issue.id === issueId));
@@ -1716,24 +1718,24 @@ export class SmokeTests extends Component {
       const manyMarks = Array.from({ length: 16 }, (_, index) => ({ color: `#${index.toString(16).padStart(6, '0')}` }));
       const manyMarkStyle = this.app.presenter.highlightStyle(manyMarks, { highlight: false });
       check(!singleMarkStyle.includes('repeating-linear-gradient') &&
-        manyMarkStyle.includes('repeating-linear-gradient(135deg') &&
-        manyMarks.every(mark => manyMarkStyle.includes(mark.color)) && manyMarkStyle.includes('150px 160px'),
-      'One highlight remains solid and all 16 colors fit in the repeating stripe pattern');
+        manyMarkStyle.includes('linear-gradient(180deg') &&
+        manyMarks.every(mark => manyMarkStyle.includes(mark.color)) && manyMarkStyle.includes('93.75% 100%'),
+      'One highlight remains solid and all 16 colors fit within row-local bands');
       check(smokeTask().highlightId === firstMark.id && smokeTask().additionalHighlightIds.includes(paint.id) &&
         (await this.workspaceApi.load()).data.tasks.find(task => task.id === smokeTask().id).additionalHighlightIds.includes(paint.id) &&
         smokeRow().style.getPropertyValue('--mark-background').includes(firstMark.color) &&
         smokeRow().style.getPropertyValue('--mark-background').includes(paint.color) &&
-        getComputedStyle(smokeRow()).backgroundImage.includes('repeating-linear-gradient(135deg'), 'Painting a second highlight displays both colors in repeating diagonal stripes');
+        getComputedStyle(smokeRow()).backgroundImage.includes('linear-gradient('), 'Painting a second highlight displays both colors in row-local bands');
       const autoStatus = { highlight: true, color: '#123456' };
-      check(this.app.presenter.highlightStyle(this.app.presenter.taskHighlights(smokeTask()), autoStatus).includes('repeating-linear-gradient(135deg') &&
+      check(this.app.presenter.highlightStyle(this.app.presenter.taskHighlights(smokeTask()), autoStatus).includes('linear-gradient(180deg') &&
         this.app.presenter.highlightStyle(this.app.presenter.taskHighlights(smokeTask()), autoStatus).includes(autoStatus.color) &&
         new DOMParser().parseFromString(this.app.milestones.miniTask(smokeTask()), 'text/html').querySelectorAll('.mark-chip').length === 2,
       'Automatic status color combines with manual colors and cards display both labels');
       smokeRow().querySelector('[data-select-task]').click();
-      check(getComputedStyle(smokeRow()).backgroundImage.includes('repeating-linear-gradient(135deg') &&
+      check(getComputedStyle(smokeRow()).backgroundImage.includes('linear-gradient(') &&
         getComputedStyle(smokeRow().cells[1]).backgroundImage === 'none' &&
-        getComputedStyle(smokeRow().querySelector('.row-actions')).backgroundImage.includes('repeating-linear-gradient(135deg'),
-      'Selected rows keep continuous diagonal stripes with a highlighted sticky action cell');
+        getComputedStyle(smokeRow().querySelector('.row-actions')).backgroundImage.includes('linear-gradient('),
+      'Selected rows keep continuous bands with a highlighted sticky action cell');
       smokeRow().querySelector('[data-select-task]').click();
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
       smokeRow().querySelector('[data-mark-task]').click();
@@ -1836,9 +1838,19 @@ export class SmokeTests extends Component {
       this.$('#select-all').click();
       this.$('#bulk-edit').click();
       const bulkForm = () => this.$('#bulk-form'), bulkBox = code => bulkForm().querySelector(`input[name="taskIds"][value="${CSS.escape(this.state.data.tasks.find(task => task.code === code).id)}"]`);
+      const bulkEnable = id => { const toggle = bulkForm().querySelector(`[data-bulk-enable="${CSS.escape(id)}"]`); if (!toggle.checked) toggle.click(); };
       check(this.$('#modal').open && bulkForm() && bulkForm().querySelectorAll('input[name="taskIds"]:checked').length === 3 && this.$('#bulk-apply').disabled && this.$('#bulk-summary').textContent === this.app.transfer.fillText("{0} ready: choose what to change.", this.plural(3, "tasks")), "Bulk edit lists the affected tasks");
+      check(bulkForm().classList.contains('task-form') && bulkForm().querySelector('.task-form-column') &&
+        !bulkForm().querySelector('option[value=""]') && !bulkForm().querySelector('.bulk-targets').open &&
+        !new FormData(bulkForm()).has('statusId') && this.$('#bulk-description-editor').contentEditable === 'false',
+      'Bulk edit shares the task layout, folds task selection and excludes unchecked fields instead of unchanged dropdowns');
+      bulkEnable('notes');
+      this.$('#bulk-notes-editor').innerHTML = '<p>Must not be applied</p>';
+      bulkForm().querySelector('[data-bulk-enable="notes"]').click();
+      check(!new FormData(bulkForm()).has('mode:notes') && this.$('#bulk-apply').disabled, 'Unchecking a populated bulk field excludes it from the edit plan');
       const bulkTag = (this.state.data.settings.tags || [])[0], bulkStatus = this.state.data.settings.statuses[1], bulkMark = this.app.presenter.highlightsOf()[0];
       bulkBox('BULK-2').click();
+      ['status', 'releaseDate', 'highlight', 'tags'].forEach(bulkEnable);
       bulkForm().elements.statusId.value = bulkStatus.id;
       bulkForm().elements.releaseMode.value = 'shift';
       bulkForm().elements.highlightId.value = bulkMark.id;
@@ -1849,17 +1861,40 @@ export class SmokeTests extends Component {
       await waitFor(() => !this.state.saving && !this.$('#modal').open);
       const [bulkOne, bulkTwo, bulkThree] = bulkTasks(), savedBulk = (await this.workspaceApi.load()).data.tasks.filter(task => task.code.startsWith('BULK-'));
       check([bulkOne, bulkThree].every(task => task.statusId === bulkStatus.id && task.highlightId === bulkMark.id && task.tagIds.includes(bulkTag.id)) && bulkOne.releaseDate === '2031-03-21' && bulkThree.releaseDate === '' && bulkTwo.statusId === this.state.data.settings.statuses[0].id && bulkTwo.releaseDate === '2031-03-14' && !bulkTwo.tagIds.length && savedBulk.filter(task => task.statusId === bulkStatus.id).length === 2, "Bulk edit applies status, release date, highlight, and tags only to selected tasks");
+      check(bulkTasks().every(task => task.notes === ''), 'Unchecked rich text is preserved even after entering a replacement');
       check(this.$('#toast').textContent === this.app.transfer.fillText("Bulk edit applied: {0} updated.", this.plural(2, "tasks")) && this.state.selectedTasks.size === 3 && document.querySelectorAll('#task-rows tr.selected').length === 3, 'Bulk edit result and selection are preserved');
+      {
+        const settings = this.state.data.settings, originalLayout = settings.taskEditorLayout;
+        const layout = TaskLayout.normalizeTaskEditorLayout(settings);
+        layout.width = 1040; layout.height = 640;
+        layout.columns.reverse();
+        for (const column of layout.columns) for (const section of column.sections) section.fields = section.fields.filter(field => field.id !== 'code');
+        if (!layout.unplaced.includes('code')) layout.unplaced.push('code');
+        settings.taskEditorLayout = layout;
+        try {
+          this.$('#bulk-edit').click();
+          check(bulkForm().classList.contains('fixed-height') && bulkForm().style.getPropertyValue('--task-form-width') === '1040px' &&
+            bulkForm().style.getPropertyValue('--task-form-height') === '640px' &&
+            bulkForm().querySelector('.task-form-column [data-form-field="description"]') &&
+            bulkForm().querySelector('.bulk-extra [data-form-field="code"]'),
+          'Bulk edit respects customized dimensions and text-first layouts while keeping unplaced fields reachable');
+        } finally {
+          this.$('#modal').close();
+          if (originalLayout === undefined) delete settings.taskEditorLayout; else settings.taskEditorLayout = originalLayout;
+        }
+      }
       this.$('#bulk-edit').click();
       bulkForm().requestSubmit();
       await tick();
       check(this.$('#modal').open && this.$('#toast').textContent === this.t("Choose at least one field to change."), "Bulk edit is blocked when no fields are selected");
+      bulkEnable('releaseDate');
       bulkForm().elements.releaseMode.value = 'set';
       bulkForm().dispatchEvent(new Event('change'));
       bulkForm().requestSubmit();
       await tick();
       check(this.$('#modal').open && !bulkForm().elements.releaseDate.hidden && this.$('#toast').textContent === this.t("Choose the new release date."), "A new release date is required for bulk editing");
-      bulkForm().elements.releaseMode.value = '';
+      bulkForm().querySelector('[data-bulk-enable="releaseDate"]').click();
+      bulkEnable('hidden');
       bulkForm().elements.hidden.value = 'hide';
       bulkForm().requestSubmit();
       await waitFor(() => !this.state.saving && !this.$('#modal').open);
@@ -1867,7 +1902,7 @@ export class SmokeTests extends Component {
       // Bulk edit of every exposed field, groups included.
       await this.app.history.commit(next => { (next.groups ||= []).push({ id: 'smoke-bulk-group', name: 'Smoke bulk group', color: '#3b82f6', description: '', taskIds: [] }); });
       this.$('#bulk-edit').click();
-      const bulkMode = (id, value) => { bulkForm().elements[`mode:${id}`].value = value; }, bulkGroup = () => this.state.data.groups.find(group => group.id === 'smoke-bulk-group');
+      const bulkMode = (id, value) => { bulkEnable(id); bulkForm().elements[`mode:${id}`].value = value; }, bulkGroup = () => this.state.data.groups.find(group => group.id === 'smoke-bulk-group');
       check(['code', 'sequence', 'effort', 'description', 'notes'].every(id => bulkForm().elements[`mode:${id}`]) && this.$('#bulk-description-editor') && this.$('#bulk-notes-editor') && bulkForm().elements['group:smoke-bulk-group'] && !bulkForm().elements['mode:incident'] && !bulkForm().elements['mode:problem'], "Bulk edit exposes every editable field, description, notes and groups included");
       bulkMode('description', 'append'); bulkMode('notes', 'replace'); bulkMode('effort', 'set'); bulkMode('sequence', 'renumber');
       bulkForm().dispatchEvent(new Event('change'));
@@ -1879,14 +1914,21 @@ export class SmokeTests extends Component {
       this.$('#bulk-notes-editor').innerHTML = '<p><strong>Bulk notes</strong></p>';
       bulkForm().elements.effortDays.value = '1'; bulkForm().elements.effortHours.value = '2';
       bulkForm().elements['value:sequence'].value = '990101';
-      bulkForm().elements['group:smoke-bulk-group'].value = 'add';
+      bulkEnable('groups');
+      const groupAdd = bulkForm().querySelector('[data-bulk-choice="group:smoke-bulk-group"][data-action="add"]');
+      groupAdd.click();
+      check(groupAdd.getAttribute('aria-pressed') === 'true' && bulkForm().elements['group:smoke-bulk-group'].value === 'add', 'Bulk membership buttons expose the chosen operation');
+      groupAdd.click();
+      check(bulkForm().elements['group:smoke-bulk-group'].value === '', 'Clicking a chosen membership operation again leaves it unchanged');
+      groupAdd.click();
       bulkForm().requestSubmit();
       await waitFor(() => !this.state.saving && !this.$('#modal').open);
       check(bulkTasks().every((task, index) => this.app.richText.plain(task.description).includes(`Bulk ${index + 1}`) && this.app.richText.plain(task.description).includes('Bulk appended') && this.app.richText.plain(task.notes) === 'Bulk notes' && task.notes.includes('<strong>') && task.effortHours === this.state.data.settings.hoursPerDay + 2 && task.sequence === 990101 + index && task.hidden) && bulkGroup().taskIds.join() === bulkTasks().map(task => task.id).join() && this.state.selectedTasks.size === 3, "Bulk edit changes description, notes, effort, sequence and groups");
       this.$('#bulk-edit').click();
       bulkBox('BULK-1').click(); bulkBox('BULK-2').click();
       bulkMode('description', 'clear'); bulkMode('notes', 'clear');
-      bulkForm().elements['group:smoke-bulk-group'].value = 'remove';
+      bulkEnable('groups');
+      bulkForm().querySelector('[data-bulk-choice="group:smoke-bulk-group"][data-action="remove"]').click();
       bulkForm().dispatchEvent(new Event('change'));
       check(this.$('#bulk-description-editor').closest('[data-bulk-show]').hidden && this.$('#bulk-summary').textContent === this.app.transfer.fillText("Changes will be applied to {0}.", this.plural(1, "tasks")), "Clearing text in bulk needs no editor");
       bulkForm().requestSubmit();
@@ -1958,6 +2000,7 @@ export class SmokeTests extends Component {
       check(document.querySelectorAll('.page-heading [data-excel-export]').length === 1 && document.querySelectorAll('.milestone-heading [data-bulk-release]').length === document.querySelectorAll('.milestone-column').length, "Bulk edit and Excel are available from milestones");
       document.querySelector('[data-bulk-release="2031-03-21"]').click();
       check(bulkForm() && [...bulkForm().querySelectorAll('input[name="taskIds"]')].map(box => box.value).join() === bulkOne.id && bulkForm().querySelector('.bulk-item.is-hidden') && this.$('#bulk-form .section-description').textContent === this.app.transfer.fillText("Tasks of the {0} release, hidden ones included.", this.app.presenter.formatDate('2031-03-21')), "Milestone editor includes its tasks, including hidden ones");
+      bulkEnable('releaseDate');
       bulkForm().elements.releaseMode.value = 'set';
       bulkForm().elements.releaseDate.value = '2031-04-01';
       bulkForm().requestSubmit();
